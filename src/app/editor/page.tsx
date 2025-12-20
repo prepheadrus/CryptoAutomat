@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useCallback } from "react";
-import ReactFlow, {
+import {
+  ReactFlow,
   Controls,
   Background,
   applyNodeChanges,
