@@ -1,12 +1,23 @@
 'use client';
 
+import React, { useRef, useEffect } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { GitBranch } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
-export function LogicNode({ data }: NodeProps) {
+export function LogicNode({ data, id }: NodeProps<{ label: string, onDataChange?: () => any, operator?: string, value?: number }>) {
+    const operatorRef = useRef(data.operator || 'lt');
+    const valueRef = useRef(data.value || 30);
+
+    useEffect(() => {
+        data.onDataChange = () => ({
+            operator: operatorRef.current,
+            value: valueRef.current,
+        });
+    }, [data]);
+
   return (
     <div className="bg-slate-800 border-2 border-slate-400 border-l-4 border-l-purple-500 rounded-lg shadow-xl w-64 text-white">
       <div className="p-3 border-b border-slate-700">
@@ -17,9 +28,9 @@ export function LogicNode({ data }: NodeProps) {
       </div>
       <div className="p-3 space-y-4">
         <div className="space-y-2">
-            <Label htmlFor="operator">Operatör</Label>
-            <Select defaultValue="lt">
-                <SelectTrigger id="operator" className="bg-slate-700 border-slate-600 text-white">
+            <Label htmlFor={`${id}-operator`}>Operatör</Label>
+            <Select defaultValue={operatorRef.current} onValueChange={(value) => (operatorRef.current = value)}>
+                <SelectTrigger id={`${id}-operator`} className="bg-slate-700 border-slate-600 text-white">
                     <SelectValue placeholder="Operatör seçin" />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-600 text-white">
@@ -30,8 +41,8 @@ export function LogicNode({ data }: NodeProps) {
             </Select>
         </div>
          <div className="space-y-2">
-            <Label htmlFor="value">Değer</Label>
-            <Input id="value" type="number" defaultValue={30} className="bg-slate-700 border-slate-600 text-white" />
+            <Label htmlFor={`${id}-value`}>Değer</Label>
+            <Input id={`${id}-value`} type="number" defaultValue={valueRef.current} onChange={(e) => (valueRef.current = parseInt(e.target.value, 10))} className="bg-slate-700 border-slate-600 text-white" />
         </div>
       </div>
       <Handle type="target" position={Position.Left} className="!bg-purple-400 w-3 h-3" />

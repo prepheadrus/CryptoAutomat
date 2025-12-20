@@ -35,9 +35,9 @@ const nodeTypes = {
 };
 
 const initialNodes: Node[] = [
-  { id: "1", type: "indicator", position: { x: 100, y: 100 }, data: { label: 'RSI İndikatörü' } },
-  { id: "2", type: "logic", position: { x: 400, y: 100 }, data: { label: 'Değer 30 dan küçükse' } },
-  { id: "3", type: "action", position: { x: 700, y: 100 }, data: { label: '100 USDT Al' } },
+  { id: "1", type: "indicator", position: { x: 100, y: 100 }, data: { label: 'RSI İndikatörü', indicatorType: 'RSI', period: 14 } },
+  { id: "2", type: "logic", position: { x: 400, y: 100 }, data: { label: 'Değer 30 dan küçükse', operator: 'lt', value: 30 } },
+  { id: "3", type: "action", position: { x: 700, y: 100 }, data: { label: '100 USDT Al', actionType: 'BUY', amount: 100 } },
 ];
 
 const initialEdges: Edge[] = [
@@ -53,9 +53,24 @@ export default function EditorPage() {
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) =>
-      setNodes((nds) => applyNodeChanges(changes, nds)),
+      setNodes((nds) => {
+        const updatedNodes = applyNodeChanges(changes, nds);
+        // Handle data updates from custom nodes
+        changes.forEach(change => {
+            if (change.type === 'select' && change.selected === false) {
+                 const node = updatedNodes.find(n => n.id === change.id);
+                 if (node && node.data.onDataChange) {
+                    const data = node.data.onDataChange();
+                    const finalNodes = updatedNodes.map(n => n.id === node.id ? {...n, data: {...n.data, ...data}} : n)
+                    setNodes(finalNodes)
+                 }
+            }
+        })
+        return updatedNodes;
+      }),
     [setNodes]
   );
+
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) =>
       setEdges((eds) => applyEdgeChanges(changes, eds)),
@@ -91,24 +106,35 @@ export default function EditorPage() {
   };
   
   const handleCompile = () => {
-    try {
-      const jsonStrategy = compileStrategy(nodes, edges);
-      console.log(jsonStrategy);
+    // A simple way to trigger data update on nodes before compiling
+    // In a real app, you might want a more robust state management
+    const updatedNodes = nodes.map(n => {
+        if (n.data.onDataChange) {
+            return {...n, data: {...n.data, ...n.data.onDataChange()}}
+        }
+        return n;
+    })
+    setNodes(updatedNodes);
+
+    const result = compileStrategy(updatedNodes, edges);
+    console.log(result);
+
+    if (result.valid) {
       toast({
         title: "Strateji Başarıyla Derlendi",
         description: (
           <ScrollArea className="h-40 mt-2">
             <pre className="mt-2 w-[340px] rounded-md bg-black/80 p-4">
-              <code className="text-white">{jsonStrategy}</code>
+              <code className="text-white">{JSON.stringify(result.strategy, null, 2)}</code>
             </pre>
           </ScrollArea>
         ),
       });
-    } catch (error) {
+    } else {
       toast({
         variant: "destructive",
         title: "Derleme Başarısız",
-        description: (error as Error).message,
+        description: result.message,
       });
     }
   };
