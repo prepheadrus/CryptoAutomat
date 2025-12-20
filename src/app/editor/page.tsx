@@ -19,7 +19,7 @@ import "@xyflow/react/dist/style.css";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { compileStrategy } from "@/lib/compiler";
-import { Code, GitBranch, Rss, CircleDollarSign, TrendingUp, Filter, Save, Share2 } from "lucide-react";
+import { Code, GitBranch, Rss, CircleDollarSign, TrendingUp, Filter, Save } from "lucide-react";
 import { IndicatorNode } from "@/components/editor/nodes/IndicatorNode";
 import { LogicNode } from "@/components/editor/nodes/LogicNode";
 import { ActionNode } from "@/components/editor/nodes/ActionNode";
@@ -52,8 +52,9 @@ export default function EditorPage() {
   const onNodesChange = useCallback(
     (changes: NodeChange[]) =>
       setNodes((nds) => {
+        // This is a workaround to update node data from custom node internal state
+        // A more robust solution would be to use a state management library
         const updatedNodes = applyNodeChanges(changes, nds);
-        // Handle data updates from custom nodes
         changes.forEach(change => {
             if (change.type === 'select' && change.selected === false) {
                  const node = updatedNodes.find(n => n.id === change.id);
@@ -104,17 +105,7 @@ export default function EditorPage() {
   };
   
   const handleCompile = () => {
-    // A simple way to trigger data update on nodes before compiling
-    // In a real app, you might want a more robust state management
-    const updatedNodes = nodes.map(n => {
-        if (n.data.onDataChange) {
-            return {...n, data: {...n.data, ...n.data.onDataChange()}}
-        }
-        return n;
-    })
-    setNodes(updatedNodes);
-
-    const result = compileStrategy(updatedNodes, edges);
+    const result = compileStrategy(nodes, edges);
     console.log("Compile Result:", result);
 
     if (result.valid) {
@@ -138,7 +129,7 @@ export default function EditorPage() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-57px)] -m-4 md:-m-6 border-t">
+    <div className="flex h-full w-full border-t">
       {/* Left Panel: Toolbar */}
       <aside className="w-72 border-r bg-muted/30 p-4 space-y-4 flex flex-col">
         <Card>

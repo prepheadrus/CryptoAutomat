@@ -26,6 +26,7 @@ import Link from "next/link";
 import { Separator } from "./ui/separator";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import type { ImagePlaceholder } from "@/lib/placeholder-images";
+import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/", icon: LayoutDashboard, label: "Özet Panel" },
@@ -40,7 +41,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen">
+      <div className="flex h-screen overflow-hidden">
         <Sidebar>
           <SidebarHeader>
             <div className="flex items-center gap-2.5">
@@ -91,12 +92,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </SidebarFooter>
         </Sidebar>
-        <div className="flex flex-col flex-1">
-          <header className="flex items-center justify-between h-14 px-4 border-b md:justify-end">
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <header className="flex items-center justify-between h-14 shrink-0 px-4 border-b md:justify-end">
             <SidebarTrigger className="md:hidden" />
             <p className="text-sm text-muted-foreground">Algo Trading Platform</p>
           </header>
-          <main className="flex-1 p-4 overflow-auto md:p-6 bg-background">
+          <main className={cn(
+              "flex-1 overflow-auto bg-background",
+              // Remove padding for the editor page to allow it to fill the entire space
+              pathname !== '/editor' && "p-4 md:p-6"
+            )}>
             {children}
           </main>
         </div>
