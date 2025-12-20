@@ -13,11 +13,13 @@ import {
   MarkerType,
   Node,
 } from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Terminal } from 'lucide-react';
 import { IndicatorNode } from '@/components/editor/nodes/IndicatorNode';
 import { LogicNode } from '@/components/editor/nodes/LogicNode';
 import { ActionNode } from '@/components/editor/nodes/ActionNode';
+import { cn } from '@/lib/utils';
 
 const nodeTypes = {
   indicator: IndicatorNode,
@@ -50,6 +52,7 @@ export default function StrategyEditorPage() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [isCompiling, setIsCompiling] = useState(false);
+  const [logs, setLogs] = useState<string[]>(['> [SİSTEM] Editör başlatıldı. Test için hazır.']);
 
   const onConnect = useCallback(
     (params: Connection | Edge) => setEdges((eds) => addEdge({ ...params, animated: true, markerEnd: { type: MarkerType.ArrowClosed } }, eds)),
@@ -72,8 +75,9 @@ export default function StrategyEditorPage() {
     setNodes((nds) => nds.concat(newNode));
   };
 
-  const handleCompileAndRun = async () => {
+  const handleRunStrategy = async () => {
     setIsCompiling(true);
+    setLogs(prev => [...prev, '> [İSTEK] Strateji testi başlatılıyor...']);
     try {
       const response = await fetch('/api/run-bot', {
         method: 'POST',
@@ -89,58 +93,76 @@ export default function StrategyEditorPage() {
         throw new Error(data.message || 'Bilinmeyen bir test hatası oluştu.');
       }
       
-      // Başarılı sonucu kullanıcıya göster
-      window.alert(`[BAŞARILI] ${data.message}`);
+      setLogs(prev => [...prev, `> [BAŞARILI] ${data.message}`]);
 
     } catch (error) {
-       // Hata durumunu kullanıcıya göster
-       window.alert(`[HATA] ${(error as Error).message}`);
+       const errorMessage = (error as Error).message;
+       setLogs(prev => [...prev, `> [HATA] ${errorMessage}`]);
     } finally {
       setIsCompiling(false);
     }
   };
 
   return (
-    <div className="w-full h-full flex flex-col">
-      <div className="flex-1 relative bg-slate-950">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          nodeTypes={nodeTypes}
-          fitView
-          className="bg-slate-950"
-        >
-          <Background color="#334155" gap={20} size={1} />
-          <Controls />
-        </ReactFlow>
+    <div className="w-full h-full relative">
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        nodeTypes={nodeTypes}
+        fitView
+        className="bg-background"
+      >
+        <Background color="#334155" gap={20} size={1} />
+        <Controls />
+      </ReactFlow>
 
-        <div className="absolute top-4 left-4 z-10 bg-card border p-2 rounded-lg shadow-xl flex flex-col gap-2 w-56">
-            <h3 className="font-bold px-2 py-1 text-sm">Araç Kutusu</h3>
-            <Button variant="outline" size="sm" onClick={() => addNode('indicator')}>
-                📊 İndikatör Ekle
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => addNode('logic')}>
-                ⚡ Mantık/Koşul Ekle
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => addNode('action')}>
-                💰 İşlem (Al/Sat) Ekle
-            </Button>
+      {/* Floating UI Panels */}
+      <div className="absolute top-4 left-4 z-10 bg-card/80 backdrop-blur-sm border p-2 rounded-lg shadow-xl flex flex-col gap-2 w-56">
+          <h3 className="font-bold px-2 py-1 text-sm text-foreground">Araç Kutusu</h3>
+          <Button variant="outline" size="sm" onClick={() => addNode('indicator')}>
+              📊 İndikatör Ekle
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => addNode('logic')}>
+              ⚡ Mantık/Koşul Ekle
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => addNode('action')}>
+              💰 İşlem (Al/Sat) Ekle
+          </Button>
+      </div>
+
+      <div className="absolute top-4 right-4 z-10 flex gap-2">
+          <Button onClick={handleRunStrategy} disabled={isCompiling}>
+               {isCompiling ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Çalıştırılıyor...</>
+              ) : (
+                  "▶ Stratejiyi Test Et"
+              )}
+          </Button>
+           <Button variant="secondary">Kaydet</Button>
+      </div>
+      
+      {/* Floating Log Panel */}
+      <div className="absolute bottom-0 left-0 right-0 h-48 z-10 bg-black/80 backdrop-blur-sm border-t border-slate-700 text-white font-mono">
+        <div className="p-3 border-b border-slate-700 flex items-center gap-2">
+          <Terminal className="h-5 w-5"/>
+          <h3 className="font-bold text-sm">Sistem Kayıtları</h3>
         </div>
-
-        <div className="absolute top-4 right-4 z-10 flex gap-2">
-            <Button onClick={handleCompileAndRun} disabled={isCompiling}>
-                 {isCompiling ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Çalıştırılıyor...</>
-                ) : (
-                    "▶ Stratejiyi Test Et"
-                )}
-            </Button>
-             <Button variant="secondary">Kaydet</Button>
+        <div className="p-4 text-sm overflow-y-auto h-[calc(100%-49px)]">
+          {logs.map((log, index) => (
+            <p key={index} className={cn(
+              log.includes('[HATA]') && 'text-red-400',
+              log.includes('[BAŞARILI]') && 'text-green-400',
+              log.includes('[İSTEK]') && 'text-yellow-400',
+            )}>
+              {log}
+            </p>
+          ))}
         </div>
       </div>
     </div>
   );
-}
+
+    
