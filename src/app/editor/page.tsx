@@ -12,11 +12,15 @@ import {
   Edge,
   MarkerType
 } from '@xyflow/react';
+import { useToast } from "@/hooks/use-toast"
+import { Button } from '@/components/ui/button';
+import { compileStrategy } from '@/lib/compiler';
+
 
 // !!! EN ÖNEMLİ KISIM: BU SATIR OLMAZSA KUTULAR GÖRÜNMEZ !!!
 import '@xyflow/react/dist/style.css';
 
-// Özel düğümlerimizi içe aktarıyoruz
+// Özel düğümlerimizi içe aktarıyoruz (NAMED IMPORT OLARAK)
 import { IndicatorNode } from '@/components/editor/nodes/IndicatorNode';
 import { LogicNode } from '@/components/editor/nodes/LogicNode';
 import { ActionNode } from '@/components/editor/nodes/ActionNode';
@@ -33,95 +37,67 @@ const initialNodes = [
   { 
     id: '1', 
     type: 'indicator', 
-    position: { x: 50, y: 50 }, 
-    data: { label: 'RSI İndikatörü' } 
+    position: { x: 50, y: 150 }, 
+    data: { label: 'RSI İndikatörü', indicatorType: 'rsi', period: 14 } 
+  },
+  {
+    id: '2',
+    type: 'logic',
+    position: { x: 350, y: 150 },
+    data: { label: 'Koşul', operator: 'lt', value: 30 }
   },
   { 
-    id: '2', 
-    type: 'action', 
-    position: { x: 400, y: 50 }, 
-    data: { label: 'Alış Emri' } 
+    id: '3', 
+    type: 'action',
+    position: { x: 650, y: 150 }, 
+    data: { label: 'Alış Emri', actionType: 'buy', amount: 100 } 
   },
 ];
 
 export default function StrategyEditorPage() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const { toast } = useToast();
 
   // Bağlantı yapıldığında çalışır
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true, markerEnd: { type: MarkerType.ArrowClosed } }, eds)),
+    (params: Connection | Edge) => setEdges((eds) => addEdge({ ...params, animated: true, markerEnd: { type: MarkerType.ArrowClosed } }, eds)),
     [setEdges],
   );
 
   // Yeni düğüm ekleme fonksiyonu
-  const addNode = (type: string) => {
-    const id = Math.random().toString();
+  const addNode = (type: string, label: string) => {
+    const id = (nodes.length + 1).toString();
     const newNode = {
       id,
       type,
-      position: { x: Math.random() * 400, y: Math.random() * 400 }, // Rastgele konum
-      data: { label: `Yeni ${type}` },
+      position: { x: Math.random() * 400 + 100, y: Math.random() * 400 + 100 },
+      data: { label },
     };
     setNodes((nds) => nds.concat(newNode));
   };
 
-  // Derleme (Simülasyon)
+  // Derleme fonksiyonu
   const handleCompile = () => {
-    if (nodes.length === 0) {
-      alert("Hata: Tuval boş! Lütfen düğüm ekleyin.");
-      return;
+    const result = compileStrategy(nodes, edges);
+    
+    if (result.valid) {
+      console.log("Derlenmiş Strateji:", result.strategy);
+      toast({
+        title: "Başarılı!",
+        description: result.message,
+      });
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Derleme Hatası",
+        description: result.message,
+      });
     }
-    console.log("Strateji Verisi:", { nodes, edges });
-    alert(`Başarılı! ${nodes.length} düğüm ve ${edges.length} bağlantı ile strateji derlendi.`);
   };
 
   return (
-    // Ana Kapsayıcı: Ekranı kaplar, Flex yapısı ile yan yana dizer
-    <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-slate-950">
-      
-      {/* SOL PANEL: Araçlar */}
-      <aside className="w-64 flex-shrink-0 border-r border-slate-800 bg-slate-900/50 p-4 flex flex-col gap-4 overflow-y-auto z-10">
-        <div>
-          <h2 className="text-lg font-bold text-slate-100 mb-1">Araçlar</h2>
-          <p className="text-xs text-slate-400">Düğüm eklemek için tıklayın.</p>
-        </div>
-        
-        <div className="flex flex-col gap-3">
-          <button 
-            onClick={() => addNode('indicator')}
-            className="flex items-center gap-2 p-3 bg-blue-900/30 border border-blue-800 hover:bg-blue-900/50 text-blue-200 rounded-lg transition-all text-sm font-medium text-left"
-          >
-            📊 İndikatör Ekle
-          </button>
-          
-          <button 
-            onClick={() => addNode('logic')}
-            className="flex items-center gap-2 p-3 bg-purple-900/30 border border-purple-800 hover:bg-purple-900/50 text-purple-200 rounded-lg transition-all text-sm font-medium text-left"
-          >
-            ⚡ Mantık/Koşul Ekle
-          </button>
-          
-          <button 
-            onClick={() => addNode('action')}
-            className="flex items-center gap-2 p-3 bg-green-900/30 border border-green-800 hover:bg-green-900/50 text-green-200 rounded-lg transition-all text-sm font-medium text-left"
-          >
-            💰 İşlem (Al/Sat) Ekle
-          </button>
-        </div>
-
-        <div className="mt-auto pt-4 border-t border-slate-800">
-          <button 
-            onClick={handleCompile}
-            className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-bold shadow-lg transition-colors"
-          >
-            ▶ Stratejiyi Derle
-          </button>
-        </div>
-      </aside>
-
-      {/* SAĞ PANEL: Çizim Alanı (Canvas) */}
-      <main className="flex-1 h-full relative">
+    <div className="w-full h-[calc(100vh-4rem)] relative bg-slate-950">
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -132,11 +108,30 @@ export default function StrategyEditorPage() {
           fitView
           className="bg-slate-950"
         >
-          {/* Izgara ve Kontroller */}
           <Background color="#334155" gap={20} size={1} />
-          <Controls className="bg-slate-800 border-slate-700 fill-slate-300" />
+          <Controls />
         </ReactFlow>
-      </main>
+
+        {/* Yüzen Araç Paneli (Sol Üst) */}
+        <div className="absolute top-4 left-4 z-10 bg-card border p-2 rounded-lg shadow-xl flex flex-col gap-2 w-56">
+            <h3 className="font-bold px-2 py-1 text-sm">Araç Kutusu</h3>
+            <Button variant="outline" size="sm" onClick={() => addNode('indicator', 'Yeni İndikatör')}>
+                📊 İndikatör Ekle
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => addNode('logic', 'Yeni Koşul')}>
+                ⚡ Mantık/Koşul Ekle
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => addNode('action', 'Yeni İşlem')}>
+                💰 İşlem (Al/Sat) Ekle
+            </Button>
+        </div>
+
+        {/* Yüzen Aksiyon Paneli (Sağ Üst) */}
+        <div className="absolute top-4 right-4 z-10 flex gap-2">
+            <Button onClick={handleCompile}>
+                ▶ Stratejiyi Derle
+            </Button>
+        </div>
     </div>
   );
 }
