@@ -11,49 +11,49 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 export default function SettingsPage() {
     return (
         <div className="space-y-6">
-            <h1 className="text-3xl font-headline font-bold">Settings</h1>
+            <h1 className="text-3xl font-headline font-bold">Ayarlar</h1>
             
             <Tabs defaultValue="exchanges" className="w-full">
                 <TabsList className="grid w-full grid-cols-3 max-w-2xl">
                     <TabsTrigger value="exchanges">
-                        <KeyRound className="mr-2 h-4 w-4"/> Exchange Keys
+                        <KeyRound className="mr-2 h-4 w-4"/> Borsa Anahtarları
                     </TabsTrigger>
                     <TabsTrigger value="notifications">
-                        <Bell className="mr-2 h-4 w-4"/> Notifications
+                        <Bell className="mr-2 h-4 w-4"/> Bildirimler
                     </TabsTrigger>
                     <TabsTrigger value="account">
-                        <User className="mr-2 h-4 w-4"/> Account
+                        <User className="mr-2 h-4 w-4"/> Hesap
                     </TabsTrigger>
                 </TabsList>
                 <TabsContent value="exchanges">
                     <Card>
                         <CardHeader>
-                            <CardTitle className="font-headline">Exchange API Keys</CardTitle>
+                            <CardTitle className="font-headline">Borsa API Anahtarları</CardTitle>
                             <CardDescription>
-                                Connect your exchange accounts. Your keys are stored encrypted at rest.
+                                Borsa hesaplarınızı bağlayın. Anahtarlarınız şifreli olarak saklanır.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
                             <div className="space-y-4 p-4 border rounded-lg">
                                 <h3 className="font-semibold">Binance</h3>
                                 <div className="space-y-2">
-                                    <Label htmlFor="binance-api-key">API Key</Label>
-                                    <Input id="binance-api-key" placeholder="Your Binance API Key" defaultValue="********************" />
+                                    <Label htmlFor="binance-api-key">API Anahtarı</Label>
+                                    <Input id="binance-api-key" placeholder="Binance API Anahtarınız" defaultValue="********************" />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="binance-secret-key">Secret Key</Label>
-                                    <Input id="binance-secret-key" type="password" placeholder="Your Binance Secret Key" defaultValue="********************" />
+                                    <Label htmlFor="binance-secret-key">Gizli Anahtar</Label>
+                                    <Input id="binance-secret-key" type="password" placeholder="Binance Gizli Anahtarınız" defaultValue="********************" />
                                 </div>
                                 <div className="flex justify-end space-x-2">
-                                    <Button variant="ghost" size="sm"><Trash2 className="mr-2 h-4 w-4" /> Remove</Button>
-                                    <Button size="sm">Test Connection</Button>
+                                    <Button variant="ghost" size="sm"><Trash2 className="mr-2 h-4 w-4" /> Kaldır</Button>
+                                    <Button size="sm">Bağlantıyı Test Et</Button>
                                 </div>
                             </div>
                              <div className="space-y-4 p-4 border rounded-lg border-dashed flex flex-col items-center justify-center">
-                                <h3 className="font-semibold text-center mb-2">Add New Exchange</h3>
+                                <h3 className="font-semibold text-center mb-2">Yeni Borsa Ekle</h3>
                                 <Select>
                                     <SelectTrigger className="w-[280px]">
-                                        <SelectValue placeholder="Select Exchange" />
+                                        <SelectValue placeholder="Borsa Seçin" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="kraken">Kraken</SelectItem>
@@ -61,7 +61,7 @@ export default function SettingsPage() {
                                         <SelectItem value="kucoin">KuCoin</SelectItem>
                                     </SelectContent>
                                 </Select>
-                                <Button className="mt-4">Add Exchange</Button>
+                                <Button className="mt-4">Borsa Ekle</Button>
                             </div>
                         </CardContent>
                     </Card>
@@ -69,21 +69,21 @@ export default function SettingsPage() {
                 <TabsContent value="notifications">
                     <Card>
                         <CardHeader>
-                            <CardTitle className="font-headline">Notification Settings</CardTitle>
-                            <CardDescription>Choose how you want to be notified about trades and bot status.</CardDescription>
+                            <CardTitle className="font-headline">Bildirim Ayarları</CardTitle>
+                            <CardDescription>İşlemler ve bot durumu hakkında nasıl bildirim almak istediğinizi seçin.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="flex items-center justify-between p-4 border rounded-lg">
                                 <div>
-                                    <Label htmlFor="email-notifs" className="font-medium">Email Notifications</Label>
-                                    <p className="text-sm text-muted-foreground">Receive trade summaries and alerts via email.</p>
+                                    <Label htmlFor="email-notifs" className="font-medium">E-posta Bildirimleri</Label>
+                                    <p className="text-sm text-muted-foreground">İşlem özetlerini ve uyarıları e-posta ile alın.</p>
                                 </div>
                                 <Switch id="email-notifs" defaultChecked />
                             </div>
                              <div className="flex items-center justify-between p-4 border rounded-lg">
                                 <div>
-                                    <Label htmlFor="push-notifs" className="font-medium">Push Notifications</Label>
-                                    <p className="text-sm text-muted-foreground">Get real-time alerts on your mobile device (coming soon).</p>
+                                    <Label htmlFor="push-notifs" className="font-medium">Anlık Bildirimler</Label>
+                                    <p className="text-sm text-muted-foreground">Mobil cihazınızda gerçek zamanlı uyarılar alın (yakında).</p>
                                 </div>
                                 <Switch id="push-notifs" disabled />
                             </div>
@@ -93,32 +93,32 @@ export default function SettingsPage() {
                 <TabsContent value="account">
                      <Card>
                         <CardHeader>
-                            <CardTitle className="font-headline">Account Information</CardTitle>
-                            <CardDescription>Manage your account details and subscription.</CardDescription>
+                            <CardTitle className="font-headline">Hesap Bilgileri</CardTitle>
+                            <CardDescription>Hesap detaylarınızı ve aboneliğinizi yönetin.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                              <div className="space-y-2">
-                                <Label htmlFor="email">Email Address</Label>
+                                <Label htmlFor="email">E-posta Adresi</Label>
                                 <Input id="email" defaultValue="user@autopilot.dev" disabled />
                             </div>
                              <div className="space-y-2">
-                                <Label htmlFor="plan">Subscription Plan</Label>
+                                <Label htmlFor="plan">Abonelik Planı</Label>
                                 <Input id="plan" defaultValue="Pro Plan" disabled />
-                                <p className="text-sm text-muted-foreground">Your plan renews on August 29, 2024.</p>
+                                <p className="text-sm text-muted-foreground">Planınız 29 Ağustos 2024 tarihinde yenilenecektir.</p>
                             </div>
-                            <Button>Manage Subscription</Button>
+                            <Button>Aboneliği Yönet</Button>
                         </CardContent>
                         <Separator className="my-6" />
                          <CardHeader>
-                            <CardTitle className="font-headline text-destructive">Danger Zone</CardTitle>
+                            <CardTitle className="font-headline text-destructive">Tehlikeli Bölge</CardTitle>
                         </CardHeader>
                          <CardContent>
                             <div className="flex items-center justify-between p-4 border border-destructive/50 rounded-lg bg-destructive/10">
                                 <div>
-                                    <p className="font-medium">Delete Account</p>
-                                    <p className="text-sm text-muted-foreground">Permanently delete your account and all associated data.</p>
+                                    <p className="font-medium">Hesabı Sil</p>
+                                    <p className="text-sm text-muted-foreground">Hesabınızı ve ilgili tüm verileri kalıcı olarak silin.</p>
                                 </div>
-                                <Button variant="destructive">Delete My Account</Button>
+                                <Button variant="destructive">Hesabımı Sil</Button>
                             </div>
                         </CardContent>
                     </Card>
