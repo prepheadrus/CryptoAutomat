@@ -60,18 +60,18 @@ const Sidebar = () => {
     };
 
     return (
-        <div className="absolute top-4 left-4 z-10 bg-card/80 backdrop-blur-sm border p-2 rounded-lg shadow-xl flex flex-col gap-2 w-56">
+        <aside className="absolute top-4 left-4 z-10 bg-card/80 backdrop-blur-sm border p-2 rounded-lg shadow-xl flex flex-col gap-2 w-56">
             <h3 className="font-bold px-2 py-1 text-sm text-foreground">Araç Kutusu</h3>
-             <Button variant="outline" size="sm" onDragStart={(event) => onDragStart(event, 'indicator')} draggable className="flex justify-start items-center gap-2">
+             <Button variant="outline" size="sm" onDragStart={(event) => onDragStart(event, 'indicator')} draggable className="flex justify-start items-center gap-2 cursor-grab">
                 <Rss /> İndikatör
             </Button>
-            <Button variant="outline" size="sm" onDragStart={(event) => onDragStart(event, 'logic')} draggable className="flex justify-start items-center gap-2">
+            <Button variant="outline" size="sm" onDragStart={(event) => onDragStart(event, 'logic')} draggable className="flex justify-start items-center gap-2 cursor-grab">
                 <GitBranch /> Mantık/Koşul
             </Button>
-            <Button variant="outline" size="sm" onDragStart={(event) => onDragStart(event, 'action')} draggable className="flex justify-start items-center gap-2">
+            <Button variant="outline" size="sm" onDragStart={(event) => onDragStart(event, 'action')} draggable className="flex justify-start items-center gap-2 cursor-grab">
                 <CircleDollarSign /> İşlem (Al/Sat)
             </Button>
-        </div>
+        </aside>
     );
 };
 
@@ -112,15 +112,25 @@ const StrategyBuilder = () => {
       });
       
       let nodeLabel = "Yeni Düğüm";
-      if (type === 'indicator') nodeLabel = 'Yeni İndikatör';
-      if (type === 'logic') nodeLabel = 'Yeni Koşul';
-      if (type === 'action') nodeLabel = 'Yeni İşlem';
+      let nodeData = {};
+      if (type === 'indicator') {
+        nodeLabel = 'Yeni İndikatör';
+        nodeData = { label: nodeLabel, indicatorType: 'rsi', period: 14 };
+      }
+      if (type === 'logic') {
+        nodeLabel = 'Yeni Koşul';
+        nodeData = { label: nodeLabel, operator: 'lt', value: 30 };
+      }
+      if (type === 'action') {
+        nodeLabel = 'Yeni İşlem';
+        nodeData = { label: nodeLabel, actionType: 'buy', amount: 100 };
+      }
 
       const newNode: Node = {
-        id: `${Date.now()}`,
+        id: `${type}-${Date.now()}`,
         type,
         position,
-        data: { label: nodeLabel },
+        data: nodeData,
       };
 
       setNodes((nds) => nds.concat(newNode));
@@ -202,6 +212,8 @@ const StrategyBuilder = () => {
               log.includes('[BAŞARILI]') && 'text-green-400',
               log.includes('[İSTEK]') && 'text-yellow-400',
               log.includes('[SİSTEM]') && 'text-slate-400',
+              log.includes('[SİMÜLASYON]') && 'text-cyan-400',
+              log.includes('[CANLI]') && 'text-green-400',
             )}>
               {log}
             </p>
@@ -221,3 +233,5 @@ export default function StrategyEditorPage() {
         </div>
     );
 }
+
+    
