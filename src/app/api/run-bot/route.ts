@@ -1,18 +1,40 @@
+import { compileStrategy } from '@/lib/compiler';
+import { runStrategy } from '@/lib/bot-engine';
 import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
   try {
-    // Şimdilik gelen isteği ayrıştırmadan direkt başarılı bir cevap dönüyoruz.
-    // Bu, 400 Bad Request hatasını önler ve frontend testini kolaylaştırır.
-    const message = `Motor Başlatıldı: BTC Fiyatı 65.430$ | RSI: 42 | Sinyal: AL (${new Date().toLocaleTimeString()})`;
-    return NextResponse.json({ success: true, message: message });
+    const { nodes, edges } = await request.json();
+
+    if (!nodes || !edges) {
+      return NextResponse.json(
+        { success: false, message: 'Eksik parametreler: nodes ve edges gereklidir.' },
+        { status: 400 }
+      );
+    }
+
+    // 1. Stratejiyi derle
+    const compileResult = compileStrategy(nodes, edges);
+    if (!compileResult.valid || !compileResult.strategy) {
+      return NextResponse.json(
+        { success: false, message: compileResult.message },
+        { status: 400 }
+      );
+    }
+
+    // 2. Bot motorunu çalıştır
+    const engineResult = await runStrategy(compileResult.strategy);
+
+    return NextResponse.json({
+      success: true,
+      message: engineResult.message
+    });
+
   } catch (error) {
     console.error("API rotasında beklenmedik hata:", error);
-    // Hata durumunda bile frontend'in işleyebileceği bir mesaj dönüyoruz.
-    // Status 200 dönmek, frontend'in hatayı yakalamasını kolaylaştırır.
     return NextResponse.json(
-      { success: false, message: "Motor Hatası: Sunucu loglarını kontrol edin." },
-      { status: 500 } // Genellikle 500 daha doğru bir durum kodudur.
+      { success: false, message: `Sunucu Hatası: ${(error as Error).message}` },
+      { status: 500 }
     );
   }
 }
