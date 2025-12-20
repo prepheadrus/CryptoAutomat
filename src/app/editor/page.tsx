@@ -10,17 +10,19 @@ import {
   useEdgesState,
   Connection,
   Edge,
-  MarkerType
+  MarkerType,
+  Node,
 } from '@xyflow/react';
-import { useToast } from "@/hooks/use-toast"
+import { useToast } from "@/components/ui/use-toast";
 import { Button } from '@/components/ui/button';
 import { compileStrategy } from '@/lib/compiler';
+import { Loader2 } from 'lucide-react';
 
 
 // !!! EN ÖNEMLİ KISIM: BU SATIR OLMAZSA KUTULAR GÖRÜNMEZ !!!
 import '@xyflow/react/dist/style.css';
 
-// Özel düğümlerimizi içe aktarıyoruz (NAMED IMPORT OLARAK)
+// Özel düğümlerimizi içe aktarıyoruz
 import { IndicatorNode } from '@/components/editor/nodes/IndicatorNode';
 import { LogicNode } from '@/components/editor/nodes/LogicNode';
 import { ActionNode } from '@/components/editor/nodes/ActionNode';
@@ -33,7 +35,7 @@ const nodeTypes = {
 };
 
 // Başlangıç düğümleri (Boş gelmesin diye)
-const initialNodes = [
+const initialNodes: Node[] = [
   { 
     id: '1', 
     type: 'indicator', 
@@ -57,6 +59,7 @@ const initialNodes = [
 export default function StrategyEditorPage() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [isCompiling, setIsCompiling] = useState(false);
   const { toast } = useToast();
 
   // Bağlantı yapıldığında çalışır
@@ -77,22 +80,38 @@ export default function StrategyEditorPage() {
     setNodes((nds) => nds.concat(newNode));
   };
 
-  // Derleme fonksiyonu
-  const handleCompile = () => {
-    const result = compileStrategy(nodes, edges);
-    
-    if (result.valid) {
-      console.log("Derlenmiş Strateji:", result.strategy);
-      toast({
-        title: "Başarılı!",
-        description: result.message,
+  // Derleme ve çalıştırma fonksiyonu
+  const handleCompileAndRun = async () => {
+    setIsCompiling(true);
+
+    try {
+      const response = await fetch('/api/run-bot', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ nodes, edges }),
       });
-    } else {
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Bilinmeyen bir hata oluştu.');
+      }
+      
+      toast({
+        title: `Strateji Test Sonucu: ${data.result.decision}`,
+        description: data.result.message,
+      });
+
+    } catch (error) {
       toast({
         variant: "destructive",
-        title: "Derleme Hatası",
-        description: result.message,
+        title: "Test Hatası",
+        description: (error as Error).message,
       });
+    } finally {
+      setIsCompiling(false);
     }
   };
 
@@ -128,9 +147,14 @@ export default function StrategyEditorPage() {
 
         {/* Yüzen Aksiyon Paneli (Sağ Üst) */}
         <div className="absolute top-4 right-4 z-10 flex gap-2">
-            <Button onClick={handleCompile}>
-                ▶ Stratejiyi Derle
+            <Button onClick={handleCompileAndRun} disabled={isCompiling}>
+                 {isCompiling ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Çalıştırılıyor...</>
+                ) : (
+                    "▶ Stratejiyi Test Et"
+                )}
             </Button>
+             <Button variant="secondary">Kaydet</Button>
         </div>
     </div>
   );
