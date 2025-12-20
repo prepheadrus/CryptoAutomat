@@ -9,8 +9,9 @@ import {
   useNodesState,
   useEdgesState,
   Connection,
-  Edge,
-  MarkerType
+  MarkerType,
+  type Edge,
+  type Node,
 } from '@xyflow/react';
 
 import '@xyflow/react/dist/style.css';
@@ -19,8 +20,8 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { compileStrategy } from '@/lib/compiler';
 
-import IndicatorNode from '@/components/editor/nodes/IndicatorNode';
-import LogicNode from '@/components/editor/nodes/LogicNode';
+import { IndicatorNode } from '@/components/editor/nodes/IndicatorNode';
+import { LogicNode } from '@/components/editor/nodes/LogicNode';
 import { ActionNode } from '@/components/editor/nodes/ActionNode';
 
 // Düğüm tiplerini tanıtıyoruz
@@ -46,7 +47,7 @@ const initialNodes: Node[] = [
   },
   { 
     id: '3', 
-    type: 'action', 
+    type: 'action', _
     position: { x: 650, y: 150 }, 
     data: { label: 'Alış Emri', actionType: 'buy', amount: 100 } 
   },
