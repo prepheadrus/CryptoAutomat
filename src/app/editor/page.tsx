@@ -13,28 +13,21 @@ import {
   MarkerType,
   Node,
 } from '@xyflow/react';
-import { useToast } from "@/components/ui/use-toast";
 import { Button } from '@/components/ui/button';
-import { compileStrategy } from '@/lib/compiler';
 import { Loader2 } from 'lucide-react';
 
-
-// !!! EN ÖNEMLİ KISIM: BU SATIR OLMAZSA KUTULAR GÖRÜNMEZ !!!
 import '@xyflow/react/dist/style.css';
 
-// Özel düğümlerimizi içe aktarıyoruz
 import { IndicatorNode } from '@/components/editor/nodes/IndicatorNode';
 import { LogicNode } from '@/components/editor/nodes/LogicNode';
 import { ActionNode } from '@/components/editor/nodes/ActionNode';
 
-// Düğüm tiplerini tanıtıyoruz
 const nodeTypes = {
   indicator: IndicatorNode,
   logic: LogicNode,
   action: ActionNode,
 };
 
-// Başlangıç düğümleri (Boş gelmesin diye)
 const initialNodes: Node[] = [
   { 
     id: '1', 
@@ -60,17 +53,14 @@ export default function StrategyEditorPage() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [isCompiling, setIsCompiling] = useState(false);
-  const { toast } = useToast();
 
-  // Bağlantı yapıldığında çalışır
   const onConnect = useCallback(
     (params: Connection | Edge) => setEdges((eds) => addEdge({ ...params, animated: true, markerEnd: { type: MarkerType.ArrowClosed } }, eds)),
     [setEdges],
   );
 
-  // Yeni düğüm ekleme fonksiyonu
   const addNode = (type: string, label: string) => {
-    const id = (nodes.length + 1).toString();
+    const id = `${Date.now()}`;
     const newNode = {
       id,
       type,
@@ -80,7 +70,6 @@ export default function StrategyEditorPage() {
     setNodes((nds) => nds.concat(newNode));
   };
 
-  // Derleme ve çalıştırma fonksiyonu
   const handleCompileAndRun = async () => {
     setIsCompiling(true);
 
@@ -96,20 +85,15 @@ export default function StrategyEditorPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Bilinmeyen bir hata oluştu.');
+        throw new Error(data.message || 'Bilinmeyen bir test hatası oluştu.');
       }
       
-      toast({
-        title: `Strateji Test Sonucu: ${data.result.decision}`,
-        description: data.result.message,
-      });
+      // Toast yerine window.alert kullanarak garantili geri bildirim
+      window.alert(`Test Sonucu:\n\n${data.message}`);
 
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Test Hatası",
-        description: (error as Error).message,
-      });
+       // Hata durumunda da window.alert kullan
+      window.alert(`Hata:\n\n${(error as Error).message}`);
     } finally {
       setIsCompiling(false);
     }
@@ -131,7 +115,6 @@ export default function StrategyEditorPage() {
           <Controls />
         </ReactFlow>
 
-        {/* Yüzen Araç Paneli (Sol Üst) */}
         <div className="absolute top-4 left-4 z-10 bg-card border p-2 rounded-lg shadow-xl flex flex-col gap-2 w-56">
             <h3 className="font-bold px-2 py-1 text-sm">Araç Kutusu</h3>
             <Button variant="outline" size="sm" onClick={() => addNode('indicator', 'Yeni İndikatör')}>
@@ -145,7 +128,6 @@ export default function StrategyEditorPage() {
             </Button>
         </div>
 
-        {/* Yüzen Aksiyon Paneli (Sağ Üst) */}
         <div className="absolute top-4 right-4 z-10 flex gap-2">
             <Button onClick={handleCompileAndRun} disabled={isCompiling}>
                  {isCompiling ? (

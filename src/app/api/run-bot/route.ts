@@ -20,7 +20,11 @@ export async function POST(request: Request) {
     const engineResult = await runStrategy(compileResult.strategy, 'BTC/USDT');
 
     // 3. Sonucu ön yüze döndür
-    return NextResponse.json({ success: true, result: engineResult });
+    // Ön yüzün beklediği "message" alanını oluşturuyoruz.
+    return NextResponse.json({ 
+        success: true, 
+        message: engineResult.message 
+    });
 
   } catch (error) {
     console.error("API rotasında hata:", error);
