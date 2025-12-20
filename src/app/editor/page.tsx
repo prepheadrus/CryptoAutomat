@@ -115,7 +115,7 @@ export default function EditorPage() {
     setNodes(updatedNodes);
 
     const result = compileStrategy(updatedNodes, edges);
-    console.log(result);
+    console.log("Compile Result:", result);
 
     if (result.valid) {
       toast({
