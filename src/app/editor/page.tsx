@@ -288,7 +288,7 @@ const runBacktestEngine = (nodes: Node[], edges: Edge[]): BacktestResult | { err
 
     // Add indicator values to ohlcData for the chart tooltip
     const finalChartData = chartDataWithIndicators.map((d, i) => {
-        const dataPoint = {...d};
+        const dataPoint: any = {...d};
         indicatorNodes.forEach(node => {
             const indicatorKey = `${node.data.indicatorType.toUpperCase()}(${node.data.period})`;
             dataPoint[indicatorKey] = signals[node.id]?.[i];
@@ -300,12 +300,14 @@ const runBacktestEngine = (nodes: Node[], edges: Edge[]): BacktestResult | { err
 };
 
 const initialStrategyConfig: BotConfig = {
+    mode: 'PAPER',
     stopLoss: 2.0,
     takeProfit: 5.0,
     trailingStop: false,
     amountType: 'fixed',
     amount: 100,
-    leverage: 1
+    leverage: 1,
+    initialBalance: 10000,
 };
 
 
@@ -696,6 +698,25 @@ export default function StrategyEditorPage() {
                         </Button>
                     </div>
                     <div className="p-6 space-y-6">
+                        {/* Trading Mode */}
+                        <div>
+                            <h3 className="text-lg font-semibold font-headline mb-4">İşlem Modu</h3>
+                             <Select value={strategyConfig.mode} onValueChange={(value: 'LIVE' | 'PAPER') => handleConfigChange('mode', value)}>
+                                <SelectTrigger className="bg-slate-800 border-slate-700">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="bg-slate-800 border-slate-600 text-white">
+                                    <SelectItem value="PAPER">Paper (Sanal Bakiye)</SelectItem>
+                                    <SelectItem value="LIVE">Live (Gerçek Bakiye - API Gerekli)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <p className="text-sm text-muted-foreground mt-2">
+                                {strategyConfig.mode === 'PAPER' 
+                                    ? 'Strateji, 10,000 USDT sanal bakiye ile test edilecektir.' 
+                                    : 'Strateji, ayarlardaki borsa API anahtarlarınızı kullanarak gerçek emirler gönderecektir.'}
+                            </p>
+                        </div>
+
                         {/* Risk Yönetimi */}
                         <div>
                             <h3 className="text-lg font-semibold font-headline mb-4">Risk Yönetimi</h3>

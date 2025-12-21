@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, MouseEvent, useEffect, useMemo } from "react";
+import { useState, MouseEvent, useEffect, useMemo, useRef } from "react";
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Play, Pause, Terminal, Bot, Settings, PlusCircle, Trash2, Eye, X as XIcon, AreaChart as AreaChartIcon } from "lucide-react";
+import { Play, Pause, Terminal, Bot, Settings, PlusCircle, Trash2, Eye, X as XIcon, AreaChart as AreaChartIcon, FileText, Activity } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { Bot as BotType, Log, BotStatus, BotConfig } from "@/lib/types";
@@ -16,18 +16,18 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 
 const initialBots: BotType[] = [
-    { id: 1, name: "BTC-RSI Stratejisi", pair: "BTC/USDT", status: "Çalışıyor", pnl: 12.5, duration: "2g 5sa", config: { stopLoss: 2, takeProfit: 5, trailingStop: false, amountType: 'fixed', amount: 100, leverage: 5 } },
-    { id: 2, name: "ETH-MACD Scalp", pair: "ETH/USDT", status: "Durduruldu", pnl: -3.2, duration: "12sa 15dk", config: { stopLoss: 1.5, takeProfit: 3, trailingStop: true, amountType: 'percentage', amount: 10, leverage: 10 } },
-    { id: 3, name: "SOL-Trend Follow", pair: "SOL/USDT", status: "Çalışıyor", pnl: 8.9, duration: "5g 1sa", config: { stopLoss: 5, takeProfit: 10, trailingStop: false, amountType: 'fixed', amount: 250, leverage: 3 } },
-    { id: 4, name: "AVAX Arbitraj", pair: "AVAX/USDT", status: "Hata", pnl: 0, duration: "1sa", config: { stopLoss: 3, takeProfit: 6, trailingStop: false, amountType: 'fixed', amount: 50, leverage: 1 } },
+    { id: 1, name: "BTC-RSI Stratejisi", pair: "BTC/USDT", status: "Çalışıyor", pnl: 12.5, duration: "2g 5sa", config: { mode: 'PAPER', stopLoss: 2, takeProfit: 5, trailingStop: false, amountType: 'fixed', amount: 100, leverage: 5, initialBalance: 10000, currentBalance: 11250, inPosition: true, entryPrice: 65000, positionSize: 0.1 } },
+    { id: 2, name: "ETH-MACD Scalp", pair: "ETH/USDT", status: "Durduruldu", pnl: -3.2, duration: "12sa 15dk", config: { mode: 'LIVE', stopLoss: 1.5, takeProfit: 3, trailingStop: true, amountType: 'percentage', amount: 10, leverage: 10 } },
+    { id: 3, name: "SOL-Trend Follow", pair: "SOL/USDT", status: "Çalışıyor", pnl: 8.9, duration: "5g 1sa", config: { mode: 'PAPER', stopLoss: 5, takeProfit: 10, trailingStop: false, amountType: 'fixed', amount: 250, leverage: 3, initialBalance: 10000, currentBalance: 10890, inPosition: false } },
+    { id: 4, name: "AVAX Arbitraj", pair: "AVAX/USDT", status: "Hata", pnl: 0, duration: "1sa", config: { mode: 'LIVE', stopLoss: 3, takeProfit: 6, trailingStop: false, amountType: 'fixed', amount: 50, leverage: 1 } },
 ];
 
 type LogType = 'info' | 'trade' | 'warning' | 'error';
 
 const initialLogs: Log[] = [
-    { type: 'info', message: '[10:00:00] "BTC-RSI Stratejisi" botu başlatıldı.' },
-    { type: 'trade', message: '[10:05:12] 0.1 BTC @ 68123.45 USDT ALINDI.' },
-    { type: 'trade', message: '[10:15:30] 0.1 BTC @ 68456.78 USDT SATILDI. K&Z: +$33.33' },
+    { type: 'info', message: '[10:00:00] "BTC-RSI Stratejisi" [PAPER] botu başlatıldı.' },
+    { type: 'trade', message: '[10:05:12] [PAPER] 0.1 BTC @ 68123.45 USDT ALINDI.' },
+    { type: 'trade', message: '[10:15:30] [PAPER] 0.1 BTC @ 68456.78 USDT SATILDI. K&Z: +$33.33' },
     { type: 'warning', message: "[10:18:00] Binance'de ETH/USDT çifti için yüksek kayma tespit edildi." },
     { type: 'error', message: '[10:20:00] "AVAX Arbitraj" botu Kraken API\'sine bağlanamadı.' },
     { type: 'info', message: '[10:22:00] "ETH-MACD Scalp" botu kullanıcı tarafından duraklatıldı.' },
@@ -70,19 +70,62 @@ export default function BotStatusPage() {
     const [selectedBot, setSelectedBot] = useState<BotType | null>(null);
     const [editedConfig, setEditedConfig] = useState<BotConfig | undefined>(undefined);
     const { toast } = useToast();
+    const intervalRefs = useRef<Record<number, NodeJS.Timeout>>({});
     
+    // Function to add a new log entry
+    const addLog = useCallback((type: LogType, message: string) => {
+        const timestamp = new Date().toLocaleTimeString('tr-TR', { hour12: false });
+        setLogs(prevLogs => [{ type, message: `[${timestamp}] ${message}` }, ...prevLogs].slice(0, 100));
+    }, []);
+
+    // Paper Trading Simulation
+    const runPaperTradeSimulation = useCallback((bot: BotType) => {
+        const decision = Math.random() > 0.5 ? 'buy' : 'sell';
+        const currentPrice = 65000 + (Math.random() - 0.5) * 2000;
+
+        setBots(prevBots => {
+            const updatedBots = prevBots.map(b => {
+                if (b.id !== bot.id) return b;
+                
+                let newPnl = b.pnl;
+                let logMessage = `[${b.name}] [PAPER] için simülasyon adımı. Karar: BEKLE.`;
+                const config = b.config;
+                let newConfig = { ...config };
+
+                if (config.inPosition && decision === 'sell') {
+                    const profit = (currentPrice - (config.entryPrice || currentPrice)) * (config.positionSize || 0);
+                    newPnl += (profit / (config.initialBalance || 10000)) * 100;
+                    logMessage = `[${b.name}] [PAPER] SATIŞ @ ${currentPrice.toFixed(2)}. K&Z: ${profit.toFixed(2)}$`;
+                    addLog('trade', logMessage);
+                    newConfig = { ...newConfig, inPosition: false, entryPrice: undefined, currentBalance: (config.currentBalance || 0) + profit };
+                } else if (!config.inPosition && decision === 'buy') {
+                    logMessage = `[${b.name}] [PAPER] ALIŞ @ ${currentPrice.toFixed(2)}.`;
+                    addLog('trade', logMessage);
+                    const positionSize = (config.amount || 100) / currentPrice;
+                    newConfig = { ...newConfig, inPosition: true, entryPrice: currentPrice, positionSize };
+                }
+
+                return { ...b, pnl: newPnl, config: newConfig };
+            });
+            return updatedBots;
+        });
+    }, [addLog]);
+
+
     useEffect(() => {
         setIsClient(true);
         try {
             const storedBots = localStorage.getItem('myBots');
             if (storedBots) {
-                const parsedBots = JSON.parse(storedBots);
-                // Ensure every bot has a default config if it's missing
-                const botsWithConfig = parsedBots.map((bot: BotType) => ({
+                const parsedBots: BotType[] = JSON.parse(storedBots);
+                const botsWithDefaults = parsedBots.map(bot => ({
                     ...bot,
-                    config: bot.config || initialBots[0].config, 
+                    config: {
+                        ...initialBots[0].config,
+                        ...bot.config,
+                    }
                 }));
-                setBots(botsWithConfig);
+                setBots(botsWithDefaults);
             } else {
                 setBots(initialBots);
             }
@@ -90,7 +133,28 @@ export default function BotStatusPage() {
             console.error("Botlar localStorage'dan yüklenirken hata:", error);
             setBots(initialBots);
         }
+
+        // Cleanup on unmount
+        return () => {
+            Object.values(intervalRefs.current).forEach(clearInterval);
+        };
     }, []);
+
+    // Effect to manage simulation intervals
+    useEffect(() => {
+        bots.forEach(bot => {
+            if (bot.status === 'Çalışıyor' && bot.config.mode === 'PAPER' && !intervalRefs.current[bot.id]) {
+                // Start simulation for this bot
+                intervalRefs.current[bot.id] = setInterval(() => {
+                    runPaperTradeSimulation(bot);
+                }, 5000 + Math.random() * 2000); // Stagger intervals
+            } else if ((bot.status !== 'Çalışıyor' || bot.config.mode !== 'PAPER') && intervalRefs.current[bot.id]) {
+                // Stop simulation for this bot
+                clearInterval(intervalRefs.current[bot.id]);
+                delete intervalRefs.current[bot.id];
+            }
+        });
+    }, [bots, runPaperTradeSimulation]);
 
     useEffect(() => {
         if (isClient) {
@@ -110,10 +174,6 @@ export default function BotStatusPage() {
         }
     }, [selectedBot]);
 
-    const addLog = (type: LogType, message: string) => {
-        const timestamp = new Date().toLocaleTimeString('tr-TR', { hour12: false });
-        setLogs(prevLogs => [{ type, message: `[${timestamp}] ${message}` }, ...prevLogs]);
-    };
 
     const handleToggleStatus = (e: MouseEvent, botId: number) => {
         e.stopPropagation();
@@ -135,6 +195,11 @@ export default function BotStatusPage() {
         e.stopPropagation();
         const botToDelete = bots.find(bot => bot.id === botId);
         if (botToDelete && window.confirm(`"${botToDelete.name}" adlı botu silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`)) {
+            // Stop simulation if it's running
+            if (intervalRefs.current[botId]) {
+                clearInterval(intervalRefs.current[botId]);
+                delete intervalRefs.current[botId];
+            }
             setBots(prev => prev.filter(bot => bot.id !== botId));
             addLog('warning', `Bot silindi: "${botToDelete.name}"`);
         }
@@ -196,6 +261,7 @@ export default function BotStatusPage() {
                                         <CardDescription className="pt-2 flex items-center gap-2">
                                             <div className={cn("w-2 h-2 rounded-full", config.dot)}></div>
                                             <Badge variant={config.badge}>{bot.status}</Badge>
+                                            {bot.config.mode === 'PAPER' && <Badge variant="outline" className="border-amber-500 text-amber-500">PAPER</Badge>}
                                             <span className="text-muted-foreground font-mono text-xs">{bot.pair}</span>
                                         </CardDescription>
                                     </div>
@@ -269,17 +335,19 @@ export default function BotStatusPage() {
                                 <div className="text-sm text-muted-foreground flex items-center gap-4 pt-2">
                                      <span className="text-muted-foreground font-mono">{selectedBot.pair}</span>
                                      <Badge variant={statusConfig[selectedBot.status].badge}>{selectedBot.status}</Badge>
+                                     {selectedBot.config.mode === 'PAPER' && <Badge variant="outline" className="border-amber-500 text-amber-500">PAPER</Badge>}
                                 </div>
                             </SheetHeader>
                             <Tabs defaultValue="overview" className="w-full">
-                                <TabsList className="grid w-full grid-cols-2 bg-slate-800/50 mx-6">
+                                <TabsList className="grid w-full grid-cols-3 bg-slate-800/50 mx-6">
                                     <TabsTrigger value="overview"><AreaChartIcon className="mr-2 h-4 w-4" />Genel Bakış</TabsTrigger>
+                                    <TabsTrigger value="performance"><Activity className="mr-2 h-4 w-4"/>Performans</TabsTrigger>
                                     <TabsTrigger value="settings"><Settings className="mr-2 h-4 w-4" />Ayarlar</TabsTrigger>
                                 </TabsList>
                                 <TabsContent value="overview" className="p-6">
                                     <div className="space-y-6">
                                         <Card className="bg-slate-800/50">
-                                            <CardHeader><CardTitle className="text-base font-semibold">Performans (Son 30 Gün)</CardTitle></CardHeader>
+                                            <CardHeader><CardTitle className="text-base font-semibold">Portföy Değeri (Son 30 Gün)</CardTitle></CardHeader>
                                             <CardContent className="h-48">
                                                  <ResponsiveContainer width="100%" height="100%">
                                                     <AreaChart data={botPerformanceData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
@@ -299,9 +367,15 @@ export default function BotStatusPage() {
                                         <div className="grid grid-cols-2 gap-4">
                                             <Card className="bg-slate-800/50"><CardHeader><CardDescription>Toplam K&Z</CardDescription><CardTitle className={cn(selectedBot.pnl >= 0 ? "text-green-400" : "text-red-400")}>{selectedBot.pnl.toFixed(2)}%</CardTitle></CardHeader></Card>
                                             <Card className="bg-slate-800/50"><CardHeader><CardDescription>Çalışma Süresi</CardDescription><CardTitle>{selectedBot.duration}</CardTitle></CardHeader></Card>
-                                            <Card className="bg-slate-800/50"><CardHeader><CardDescription>Toplam İşlem</CardDescription><CardTitle>142</CardTitle></CardHeader></Card>
-                                            <Card className="bg-slate-800/50"><CardHeader><CardDescription>Başarı Oranı</CardDescription><CardTitle>72%</CardTitle></CardHeader></Card>
                                         </div>
+                                    </div>
+                                </TabsContent>
+                                <TabsContent value="performance" className="p-6">
+                                     <div className="grid grid-cols-2 gap-4">
+                                        <Card className="bg-slate-800/50"><CardHeader><CardDescription>Toplam İşlem</CardDescription><CardTitle>142</CardTitle></CardHeader></Card>
+                                        <Card className="bg-slate-800/50"><CardHeader><CardDescription>Başarı Oranı</CardDescription><CardTitle>72%</CardTitle></CardHeader></Card>
+                                        <Card className="bg-slate-800/50"><CardHeader><CardDescription>Sharpe Oranı</CardDescription><CardTitle>1.82</CardTitle></CardHeader></Card>
+                                        <Card className="bg-slate-800/50"><CardHeader><CardDescription>Maks. Düşüş</CardDescription><CardTitle className="text-red-400">-8.15%</CardTitle></CardHeader></Card>
                                     </div>
                                 </TabsContent>
                                 <TabsContent value="settings" className="p-6">
