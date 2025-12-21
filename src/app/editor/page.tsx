@@ -145,35 +145,37 @@ export default function StrategyEditorPage() {
   return (
     <div className="flex flex-row w-full h-full">
         <Sidebar onAddNode={addNode} />
-        <main className="flex-1 relative">
-            <ReactFlow
-                nodes={nodes}
-                edges={edges}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
-                onConnect={onConnect}
-                nodeTypes={nodeTypes}
-                fitView
-                className="bg-background"
-            >
-                <Background color="#334155" gap={20} size={1} />
-                <Controls />
-            </ReactFlow>
+        <main className="flex-1 relative flex flex-col">
+            <div className="relative flex-1">
+                <ReactFlow
+                    nodes={nodes}
+                    edges={edges}
+                    onNodesChange={onNodesChange}
+                    onEdgesChange={onEdgesChange}
+                    onConnect={onConnect}
+                    nodeTypes={nodeTypes}
+                    fitView
+                    className="bg-background"
+                >
+                    <Background color="#334155" gap={20} size={1} />
+                    <Controls />
+                </ReactFlow>
 
-             <div className="absolute top-4 right-4 z-10 flex gap-2">
-                <Button onClick={handleRunStrategy} disabled={isCompiling}>
-                    {isCompiling ? (
-                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Çalıştırılıyor...</>
-                    ) : (
-                        "▶ Stratejiyi Test Et"
-                    )}
-                </Button>
-                <Button variant="secondary" onClick={() => toast({ title: "Kaydedildi", description: "Stratejiniz başarıyla kaydedildi."})}>
-                    Kaydet
-                </Button>
+                <div className="absolute top-4 right-4 z-10 flex gap-2">
+                    <Button onClick={handleRunStrategy} disabled={isCompiling}>
+                        {isCompiling ? (
+                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Çalıştırılıyor...</>
+                        ) : (
+                            "▶ Stratejiyi Test Et"
+                        )}
+                    </Button>
+                    <Button variant="secondary" onClick={() => toast({ title: "Kaydedildi", description: "Stratejiniz başarıyla kaydedildi."})}>
+                        Kaydet
+                    </Button>
+                </div>
             </div>
             
-            <div className="absolute bottom-0 left-0 right-0 h-48 z-10 bg-black/80 backdrop-blur-sm border-t border-slate-700 text-white font-mono">
+            <div className="h-48 z-10 bg-black/80 backdrop-blur-sm border-t border-slate-700 text-white font-mono">
                 <div className="p-3 border-b border-slate-700 flex items-center gap-2">
                     <Terminal className="h-5 w-5"/>
                     <h3 className="font-bold text-sm">Sistem Kayıtları</h3>
