@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { BarChart, LineChart, Activity, DollarSign, Bot, Percent } from "lucide-react";
+import { BarChart, Bot, Percent, DollarSign } from "lucide-react";
 import {
   ChartContainer,
   ChartTooltip,
@@ -24,10 +24,14 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { Bot as BotType } from "@/lib/types";
 
-// Helper function to generate simulated performance data
-const generatePerformanceData = (currentValue: number) => {
+// Helper function to generate simulated performance data based on bot PNL
+const generatePerformanceData = (bots: BotType[], initialValue: number) => {
     const data = [];
-    let value = currentValue * (1 - (Math.random() * 0.1 - 0.05)); // Start from a slightly different point
+    const totalPnlContribution = bots.reduce((acc, bot) => acc + (bot.pnl / 100 * (bot.config.initialBalance || 1000)), 0);
+    const currentValue = initialValue + totalPnlContribution;
+    
+    let value = currentValue * (1 - (totalPnlContribution / currentValue / 7)); // Start from a point 7 days ago
+
     for (let i = 6; i >= 0; i--) {
         const date = new Date();
         date.setDate(date.getDate() - i);
@@ -35,7 +39,8 @@ const generatePerformanceData = (currentValue: number) => {
             name: date.toLocaleDateString('tr-TR', { month: 'short', day: 'numeric' }),
             value: value,
         });
-        value *= (1 + (Math.random() * 0.02 - 0.008)); // Simulate daily fluctuation
+        // Simulate a path towards the current value
+        value += (totalPnlContribution / 7) + (Math.random() - 0.5) * (currentValue * 0.01);
     }
     data[data.length - 1].value = currentValue; // Ensure the last point is the current value
     return data;
@@ -62,10 +67,11 @@ export default function DashboardPage() {
     // --- KPI Calculations ---
     const activeBots = bots.filter(bot => bot.status === "Çalışıyor").length;
     const totalPnl = bots.reduce((acc, bot) => acc + bot.pnl, 0);
-    const initialPortfolioValue = 10000.00;
+    const averagePnl = bots.length > 0 ? totalPnl / bots.length : 0;
     
-    // Simplified portfolio calculation: each bot is assumed to trade with $1000
-    const portfolioValue = initialPortfolioValue + bots.reduce((acc, bot) => acc + (bot.pnl/100 * 1000), 0);
+    // Assume each bot contributes to a central portfolio
+    const initialPortfolioValue = 10000.00;
+    const portfolioValue = initialPortfolioValue + bots.reduce((acc, bot) => acc + ((bot.config.currentBalance || bot.config.initialBalance || 0) - (bot.config.initialBalance || 0)), 0);
     
     const winningBots = bots.filter(bot => bot.pnl > 0).length;
     const winRate = bots.length > 0 ? (winningBots / bots.length) * 100 : 0;
@@ -93,7 +99,7 @@ export default function DashboardPage() {
     };
 
 
-    const performanceData = isClient ? generatePerformanceData(portfolioValue) : [];
+    const performanceData = isClient ? generatePerformanceData(bots, initialPortfolioValue) : [];
     const recentBots = [...bots].sort((a, b) => b.id - a.id).slice(0, 5);
 
 
@@ -112,14 +118,12 @@ export default function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Toplam Kâr/Zarar</CardTitle>
+            <CardTitle className="text-sm font-medium">Portföy Değeri</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${totalPnl >= 0 ? 'text-primary' : 'text-destructive'}`}>
-                {totalPnl >= 0 ? '+' : ''}{totalPnl.toFixed(2)}%
-            </div>
-            <p className="text-xs text-muted-foreground">Tüm botlardan gelen toplam</p>
+             <div className="text-2xl font-bold">${portfolioValue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+            <p className="text-xs text-muted-foreground">Tüm botların toplam sanal değeri</p>
           </CardContent>
         </Card>
         <Card>
@@ -134,12 +138,13 @@ export default function DashboardPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Portföy Değeri</CardTitle>
-            <BarChart className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Ortalama Kâr/Zarar</CardTitle>
+             <div className={`text-2xl font-bold ${averagePnl >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                {averagePnl >= 0 ? '+' : ''}{averagePnl.toFixed(2)}%
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${portfolioValue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-            <p className="text-xs text-muted-foreground">Simüle edilmiş bakiye</p>
+            <p className="text-xs text-muted-foreground">Bot başına ortalama performans</p>
           </CardContent>
         </Card>
         <Card>
@@ -149,7 +154,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{winRate.toFixed(1)}%</div>
-            <p className="text-xs text-muted-foreground">{winningBots} / {bots.length} kazanan bot</p>
+            <p className="text-xs text-muted-foreground">{winningBots} / {bots.length} kârlı bot</p>
           </CardContent>
         </Card>
       </div>
@@ -190,21 +195,24 @@ export default function DashboardPage() {
              {pieChartData.length > 0 ? (
                 <ChartContainer config={chartConfig} className="h-[300px] w-full">
                     <PieChart>
+                         <ChartTooltip content={<ChartTooltipContent hideLabel />} />
                         <Pie
                             data={pieChartData}
+                            dataKey="value"
+                            nameKey="name"
                             cx="50%"
                             cy="50%"
-                            labelLine={false}
                             outerRadius={80}
                             fill="#8884d8"
-                            dataKey="value"
+                            labelLine={false}
                             label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
-                                const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                                const radius = innerRadius + (outerRadius - innerRadius) * 1.4;
                                 const x = cx + radius * Math.cos(-midAngle * Math.PI / 180);
                                 const y = cy + radius * Math.sin(-midAngle * Math.PI / 180);
+                                const name = pieChartData[pieChartData.findIndex(d => d.value === (percent * 100))]?.name;
                                 return (
-                                <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central">
-                                    {`${(percent * 100).toFixed(0)}%`}
+                                <text x={x} y={y} fill="hsl(var(--foreground))" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={12}>
+                                    {`${pieChartData.find(d => d.name === name)?.name} (${(percent * 100).toFixed(0)}%)`}
                                 </text>
                                 );
                             }}
@@ -213,8 +221,6 @@ export default function DashboardPage() {
                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                         </Pie>
-                        <Legend />
-                        <ChartTooltip content={<ChartTooltipContent hideLabel />} />
                     </PieChart>
                 </ChartContainer>
              ) : (
