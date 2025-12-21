@@ -1,3 +1,4 @@
+
 "use client";
 
 import { usePathname } from "next/navigation";
@@ -118,11 +119,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
       <main className={cn(
-          "flex-1 flex flex-col bg-background",
-           isEditorPage ? "p-0 overflow-hidden" : "p-4 md:p-6"
+          "flex-1 flex flex-col",
+           isEditorPage ? "p-0" : "p-4 md:p-6"
         )}>
           {children}
       </main>
     </div>
   );
 }
+
+    
