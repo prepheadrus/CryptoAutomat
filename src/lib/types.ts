@@ -23,7 +23,7 @@ export type Bot = {
     status: BotStatus;
     pnl: number;
     duration: string;
-    config: BotConfig; // Made config mandatory
+    config: BotConfig;
 };
 
 export type Log = {

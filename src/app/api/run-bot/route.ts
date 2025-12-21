@@ -20,12 +20,21 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+    
+    // For now, we only run in live mode for testing. A real implementation
+    // would get the mode from the bot's config.
+    const mode = 'LIVE'; 
+    const storedKeys = { apiKey: process.env.API_KEY, secret: process.env.API_SECRET }; // In a real app, get from a secure vault or session
 
     try {
-      // GERÇEK MOD: Bot motorunu gerçek verilerle çalıştırmayı dene
-      const engineResult = await runStrategy(compileResult.strategy);
+      if (mode === 'LIVE') {
+        if (!storedKeys.apiKey || !storedKeys.secret) {
+            throw new Error("Borsa API anahtarları yapılandırılmamış. Lütfen ayarlar sayfasından anahtarlarınızı ekleyin.");
+        }
+      }
+      // Pass the keys and mode to the engine
+      const engineResult = await runStrategy(compileResult.strategy, 'BTC/USDT', storedKeys);
       
-      // Eğer motor içinde bir hata yakalanırsa, bunu da simülasyona yönlendir.
       if (engineResult.decision === 'WAIT' && engineResult.data?.error) {
         throw new Error(engineResult.message);
       }
@@ -36,7 +45,6 @@ export async function POST(request: Request) {
       });
 
     } catch (error) {
-      // SİMÜLASYON MODU: Gerçek modda hata olursa (örn: API engeli) burası çalışır.
       console.warn('Gerçek motor hatası, simülasyon moduna geçiliyor:', (error as Error).message);
 
       const simulatedPrice = (64000 + Math.random() * 1000).toFixed(2);
@@ -52,7 +60,6 @@ export async function POST(request: Request) {
     }
 
   } catch (error) {
-    // Genel yakalama bloğu (örn: JSON parse hatası)
     console.error("API rotasında beklenmedik hata:", error);
     return NextResponse.json(
       { success: false, message: `Sunucu Hatası: ${(error as Error).message}` },

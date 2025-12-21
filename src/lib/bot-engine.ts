@@ -1,9 +1,7 @@
-// Bu dosya, `src/lib/compiler.ts`'den gelen Strategy nesnesini işler.
+import ccxt from 'ccxt';
 import { fetchOHLCV, fetchPrice } from './exchange';
 import { calculateRSI } from './indicators';
-import type { Node, Edge } from '@xyflow/react';
 
-// Compiler'dan gelen strateji yapısı
 type Strategy = {
   indicator: {
     type: string;
@@ -15,7 +13,7 @@ type Strategy = {
   };
   action: {
     type: string;
-    amount: number;
+    amount: number; // This might represent a fixed amount or percentage
   };
 };
 
@@ -25,79 +23,102 @@ type EngineResult = {
     data: any;
 }
 
-/**
- * Verilen bir stratejiyi gerçek zamanlı verilerle çalıştırır ve bir ticaret kararı döndürür.
- * Bu bir simülasyondur. Gerçek emirler gönderilmez.
- * @param strategy Strateji editöründen derlenmiş strateji nesnesi.
- * @param symbol Üzerinde işlem yapılacak ticaret çifti (örn: 'BTC/USDT').
- * @returns Bir karar, açıklama mesajı ve ilgili verileri içeren bir nesne.
- */
-export async function runStrategy(strategy: Strategy, symbol: string = 'BTC/USDT'): Promise<EngineResult> {
-    try {
-        // 1. Veriyi Çek
-        // İndikatör için gerekli olan mum verilerini (OHLCV) çekiyoruz.
-        // RSI için sadece kapanış fiyatları yeterlidir.
-        const ohlcv = await fetchOHLCV('binance', symbol, '1h');
-        if (!ohlcv || ohlcv.length === 0) {
-            throw new Error('Borsadan mum verisi alınamadı.');
-        }
-        const closingPrices = ohlcv.map(candle => candle[4]); // 4. index kapanış fiyatıdır.
+type ApiKeys = {
+    apiKey: string;
+    secret: string;
+}
 
-        // 2. İndikatörü Hesapla
+/**
+ * Runs a given strategy with live data and returns a trading decision.
+ * @param strategy The compiled strategy object from the editor.
+ * @param symbol The trading pair to operate on (e.g., 'BTC/USDT').
+ * @param keys The API keys for the exchange.
+ * @returns An object containing the decision, a descriptive message, and relevant data.
+ */
+export async function runStrategy(strategy: Strategy, symbol: string = 'BTC/USDT', keys: ApiKeys): Promise<EngineResult> {
+    try {
+        const exchangeId = 'binance'; // Hardcoded for now
+        const exchange = new (ccxt as any)[exchangeId]({
+            apiKey: keys.apiKey,
+            secret: keys.secret,
+            options: {
+                defaultType: 'future',
+            }
+        });
+
+        // 1. Fetch Data
+        const ohlcv = await fetchOHLCV(exchange, symbol, '1h');
+        if (!ohlcv || ohlcv.length === 0) {
+            throw new Error('Could not fetch candle data from the exchange.');
+        }
+        const closingPrices = ohlcv.map(candle => candle[4]);
+
+        // 2. Calculate Indicator
         let indicatorValue: number;
         if (strategy.indicator.type.toLowerCase() === 'rsi') {
             const rsiResult = calculateRSI(closingPrices, strategy.indicator.period);
             if (rsiResult.length === 0) {
-                throw new Error('RSI hesaplanamadı. Yeterli veri olmayabilir.');
+                throw new Error('Failed to calculate RSI. Not enough data points.');
             }
-            indicatorValue = rsiResult[rsiResult.length - 1]; // En son RSI değerini al
+            indicatorValue = rsiResult[rsiResult.length - 1]; // Get the latest RSI value
         } else {
-            // Diğer indikatörler (SMA, EMA vb.) burada eklenebilir.
-            throw new Error(`Desteklenmeyen indikatör tipi: ${strategy.indicator.type}`);
+            throw new Error(`Unsupported indicator type: ${strategy.indicator.type}`);
         }
 
-        // 3. Koşulu Değerlendir
+        // 3. Evaluate Condition
         const { operator, value: thresholdValue } = strategy.condition;
         let conditionMet = false;
 
         switch (operator) {
-            case 'gt': // Büyüktür
+            case 'gt':
                 conditionMet = indicatorValue > thresholdValue;
                 break;
-            case 'lt': // Küçüktür
+            case 'lt':
                 conditionMet = indicatorValue < thresholdValue;
                 break;
-            case 'crossover':
-                 // Crossover mantığı daha karmaşık olduğu için bu örnekte basitleştirilmiştir.
-                 // Genellikle iki farklı indikatörün kesişimini içerir.
-                 throw new Error('Kesişim (crossover) operatörü henüz desteklenmiyor.');
             default:
-                throw new Error(`Geçersiz operatör: ${operator}`);
+                throw new Error(`Invalid operator: ${operator}`);
         }
 
-        // 4. Karar Ver
+        // 4. Make Decision
         if (conditionMet) {
             const decision = strategy.action.type.toUpperCase() as 'BUY' | 'SELL';
-            const currentPrice = await fetchPrice('binance', symbol);
+            const currentPrice = await fetchPrice(exchange, symbol);
+            
+            // --- THIS IS WHERE THE REAL ORDER WOULD BE PLACED ---
+            // Example:
+            // const amount = strategy.action.amount;
+            // await exchange.createMarketOrder(symbol, decision.toLowerCase(), amount);
+            // console.log(`Placed a ${decision} order for ${amount} of ${symbol}`);
+            // ---
+            
             return {
                 decision: decision,
-                message: `Karar: ${decision}. Koşul sağlandı (${indicatorValue.toFixed(2)} ${operator} ${thresholdValue}). Fiyat: ${currentPrice}`,
+                message: `Karar: ${decision}. Koşul sağlandı (${strategy.indicator.type.toUpperCase()} ${indicatorValue.toFixed(2)} ${operator} ${thresholdValue}). Güncel Fiyat: ${currentPrice}`,
                 data: { indicatorValue, thresholdValue, currentPrice }
             };
         } else {
             return {
                 decision: 'WAIT',
-                message: `Karar: BEKLE. Koşul sağlanmadı (${indicatorValue.toFixed(2)} ${operator} ${thresholdValue} değil).`,
+                message: `Karar: BEKLE. Koşul sağlanmadı (${strategy.indicator.type.toUpperCase()} ${indicatorValue.toFixed(2)} ${operator} ${thresholdValue} değil).`,
                 data: { indicatorValue, thresholdValue }
             };
         }
 
-    } catch (error) {
-        console.error('Bot motorunda hata:', error);
+    } catch (error: any) {
+        console.error('Error in bot engine:', error);
+        // Pass CCXT errors to the frontend for better debugging
+        if (error instanceof ccxt.AuthenticationError) {
+             return {
+                decision: 'WAIT',
+                message: `Kimlik doğrulama hatası: API anahtarlarınız geçersiz veya eksik.`,
+                data: { error: error.message }
+            };
+        }
         return {
             decision: 'WAIT',
-            message: `Hata: Bot çalıştırılamadı. ${(error as Error).message}`,
-            data: { error: (error as Error).message }
+            message: `Hata: Bot çalıştırılamadı. ${error.message}`,
+            data: { error: error.message }
         };
     }
 }

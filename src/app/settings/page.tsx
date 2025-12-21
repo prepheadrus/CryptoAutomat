@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { KeyRound, Bell, User, Trash2, Loader2, Check } from "lucide-react";
+import { KeyRound, Bell, User, Trash2, Loader2, Check, ShieldAlert } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
@@ -35,6 +35,7 @@ export default function SettingsPage() {
     const [apiKey, setApiKey] = useState('');
     const [secretKey, setSecretKey] = useState('');
     const [isTesting, setIsTesting] = useState(false);
+    const [isConnected, setIsConnected] = useState(false);
 
     // Notifications State
     const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({
@@ -62,7 +63,10 @@ export default function SettingsPage() {
             const storedKeys = localStorage.getItem('exchangeKeys');
             if (storedKeys) {
                 const { apiKey: storedApiKey, secretKey: storedSecretKey } = JSON.parse(storedKeys);
-                if (storedApiKey) setApiKey(storedApiKey);
+                if (storedApiKey) {
+                    setApiKey(storedApiKey);
+                    setIsConnected(true); // Assume connected if keys exist
+                }
                 if (storedSecretKey) setSecretKey(storedSecretKey);
             }
         } catch (error) {
@@ -92,7 +96,7 @@ export default function SettingsPage() {
     }, []);
 
     // --- Exchange Keys Handlers ---
-    const handleTestAndSaveKeys = () => {
+    const handleTestAndSaveKeys = async () => {
         if (!apiKey || !secretKey) {
             toast({
                 variant: "destructive",
@@ -105,26 +109,43 @@ export default function SettingsPage() {
         setIsTesting(true);
         toast({ title: "Bağlantı Test Ediliyor..." });
 
-        setTimeout(() => {
-            const isSuccess = Math.random() > 0.2; // 80% success rate
-            if (isSuccess) {
-                try {
+        try {
+            // NOTE: In a real app, this should be a dedicated API route.
+            // This is a simplified example.
+            const response = await fetch('/api/test-keys', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ apiKey, secretKey })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                 try {
                     localStorage.setItem('exchangeKeys', JSON.stringify({ apiKey, secretKey }));
                     toast({ title: "Bağlantı Başarılı! 🚀", description: "API anahtarlarınız güvenli bir şekilde kaydedildi." });
+                    setIsConnected(true);
                 } catch (error) {
                      toast({ variant: "destructive", title: "Kayıt Hatası", description: "API anahtarları kaydedilemedi." });
+                     setIsConnected(false);
                 }
             } else {
-                toast({ variant: "destructive", title: "Bağlantı Başarısız", description: "Girdiğiniz anahtarlar geçersiz. Lütfen kontrol edin." });
+                toast({ variant: "destructive", title: "Bağlantı Başarısız", description: result.message || "Girdiğiniz anahtarlar geçersiz. Lütfen kontrol edin." });
+                setIsConnected(false);
             }
+        } catch (error) {
+            toast({ variant: "destructive", title: "API Hatası", description: "Sunucuya ulaşılamadı veya beklenmedik bir hata oluştu." });
+            setIsConnected(false);
+        } finally {
             setIsTesting(false);
-        }, 1500);
+        }
     };
 
     const handleRemoveKeys = () => {
-         if (window.confirm("Mevcut API anahtarlarını kaldırmak istediğinizden emin misiniz?")) {
+         if (window.confirm("Mevcut API anahtarlarını kaldırmak istediğinizden emin misiniz? Bu işlem, CANLI moddaki botların çalışmasını durduracaktır.")) {
             setApiKey('');
             setSecretKey('');
+            setIsConnected(false);
             try {
                 localStorage.removeItem('exchangeKeys');
                 toast({ title: "Anahtarlar Kaldırıldı" });
@@ -202,11 +223,22 @@ export default function SettingsPage() {
                     <Card>
                         <CardHeader>
                             <CardTitle className="font-headline">Borsa API Anahtarları</CardTitle>
-                            <CardDescription>Borsa hesaplarınızı bağlayın. Anahtarlarınız tarayıcınızda güvenli olarak saklanır.</CardDescription>
+                            <CardDescription>Borsa hesaplarınızı bağlayın. Anahtarlarınız tarayıcınızda güvenli olarak saklanır ve sadece sunucuya işlem yapmak için gönderilir.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
                             <div className="space-y-4 p-4 border rounded-lg">
-                                <h3 className="font-semibold">Binance</h3>
+                                <div className="flex items-center justify-between">
+                                    <h3 className="font-semibold text-lg">Binance</h3>
+                                    {isConnected ? (
+                                        <div className="flex items-center gap-2 text-green-500 font-medium text-sm">
+                                            <Check className="h-5 w-5" /> Bağlandı
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-2 text-yellow-500 font-medium text-sm">
+                                            <ShieldAlert className="h-5 w-5" /> Bağlı Değil
+                                        </div>
+                                    )}
+                                </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="binance-api-key">API Anahtarı</Label>
                                     <Input id="binance-api-key" placeholder="Binance API Anahtarınız" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
@@ -216,7 +248,7 @@ export default function SettingsPage() {
                                     <Input id="binance-secret-key" type="password" placeholder="Binance Gizli Anahtarınız" value={secretKey} onChange={(e) => setSecretKey(e.target.value)} />
                                 </div>
                                 <div className="flex justify-end space-x-2">
-                                    <Button variant="ghost" size="sm" onClick={handleRemoveKeys} disabled={!apiKey && !secretKey}><Trash2 className="mr-2 h-4 w-4" />Kaldır</Button>
+                                    <Button variant="destructive" size="sm" onClick={handleRemoveKeys} disabled={!apiKey && !secretKey}><Trash2 className="mr-2 h-4 w-4" />Kaldır</Button>
                                     <Button size="sm" onClick={handleTestAndSaveKeys} disabled={isTesting}>
                                         {isTesting ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Test Ediliyor...</>) : ("Kaydet ve Test Et")}
                                     </Button>

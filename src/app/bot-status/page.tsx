@@ -4,7 +4,7 @@ import { useState, MouseEvent, useEffect, useMemo, useRef, useCallback } from "r
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Play, Pause, Terminal, Bot, Settings, PlusCircle, Trash2, Eye, X as XIcon, AreaChart as AreaChartIcon, Activity } from "lucide-react";
+import { Play, Pause, Terminal, Bot, Settings, PlusCircle, Trash2, Eye, X as XIcon, AreaChart as AreaChartIcon, Activity, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { Bot as BotType, Log, BotStatus, BotConfig } from "@/lib/types";
@@ -69,16 +69,15 @@ export default function BotStatusPage() {
     const [isClient, setIsClient] = useState(false);
     const [selectedBot, setSelectedBot] = useState<BotType | null>(null);
     const [editedConfig, setEditedConfig] = useState<BotConfig | undefined>(undefined);
+    const [hasApiKeys, setHasApiKeys] = useState(false);
     const { toast } = useToast();
     const intervalRefs = useRef<Record<number, NodeJS.Timeout>>({});
     
-    // Function to add a new log entry
     const addLog = useCallback((type: LogType, message: string) => {
         const timestamp = new Date().toLocaleTimeString('tr-TR', { hour12: false });
         setLogs(prevLogs => [{ type, message: `[${timestamp}] ${message}` }, ...prevLogs].slice(0, 100));
     }, []);
 
-    // Paper Trading Simulation
     const runPaperTradeSimulation = useCallback((bot: BotType) => {
         const decision = Math.random() > 0.5 ? 'buy' : 'sell';
         const currentPrice = 65000 + (Math.random() - 0.5) * 2000;
@@ -111,14 +110,22 @@ export default function BotStatusPage() {
         });
     }, [addLog]);
 
+    const runLiveTradeSimulation = useCallback((bot: BotType) => {
+        // This is a placeholder for actual live trade logic
+        // In a real app, this would involve checking exchange for position status, PNL etc.
+        addLog('info', `[${bot.name}] [LIVE] için periyodik durum kontrolü yapılıyor.`);
+    }, [addLog]);
+
 
     useEffect(() => {
         setIsClient(true);
         try {
             const storedBots = localStorage.getItem('myBots');
+            const storedKeys = localStorage.getItem('exchangeKeys');
+            if(storedKeys) setHasApiKeys(true);
+
             if (storedBots) {
                 const parsedBots: BotType[] = JSON.parse(storedBots);
-                // Ensure every bot has a full config, falling back to defaults
                 const botsWithDefaults = parsedBots.map(bot => ({
                     ...bot,
                     config: {
@@ -147,7 +154,6 @@ export default function BotStatusPage() {
             setBots(initialBots);
         }
 
-        // Cleanup on unmount
         return () => {
             Object.values(intervalRefs.current).forEach(clearInterval);
         };
@@ -156,18 +162,20 @@ export default function BotStatusPage() {
     // Effect to manage simulation intervals
     useEffect(() => {
         bots.forEach(bot => {
-            if (bot.status === 'Çalışıyor' && bot.config.mode === 'PAPER' && !intervalRefs.current[bot.id]) {
-                // Start simulation for this bot
+            const isRunning = bot.status === 'Çalışıyor';
+            const intervalExists = intervalRefs.current[bot.id];
+
+            if (isRunning && !intervalExists) {
+                const callback = bot.config.mode === 'PAPER' ? runPaperTradeSimulation : runLiveTradeSimulation;
                 intervalRefs.current[bot.id] = setInterval(() => {
-                    runPaperTradeSimulation(bot);
-                }, 5000 + Math.random() * 2000); // Stagger intervals
-            } else if ((bot.status !== 'Çalışıyor' || bot.config.mode !== 'PAPER') && intervalRefs.current[bot.id]) {
-                // Stop simulation for this bot
+                    callback(bot);
+                }, 5000 + Math.random() * 2000);
+            } else if (!isRunning && intervalExists) {
                 clearInterval(intervalRefs.current[bot.id]);
                 delete intervalRefs.current[bot.id];
             }
         });
-    }, [bots, runPaperTradeSimulation]);
+    }, [bots, runPaperTradeSimulation, runLiveTradeSimulation]);
 
     useEffect(() => {
         if (isClient) {
@@ -190,6 +198,19 @@ export default function BotStatusPage() {
 
     const handleToggleStatus = (e: MouseEvent, botId: number) => {
         e.stopPropagation();
+        const botToToggle = bots.find(bot => bot.id === botId);
+        if (!botToToggle) return;
+
+        // Check for API keys if trying to start a LIVE bot
+        if (botToToggle.config.mode === 'LIVE' && botToToggle.status !== 'Çalışıyor' && !hasApiKeys) {
+            toast({
+                variant: 'destructive',
+                title: 'API Anahtarları Gerekli',
+                description: 'Canlı (LIVE) bir botu başlatmak için lütfen Ayarlar sayfasından borsa API anahtarlarınızı ekleyin ve test edin.',
+            });
+            return;
+        }
+
         setBots(bots.map(bot => {
             if (bot.id === botId) {
                 if (bot.status === "Çalışıyor") {
@@ -208,7 +229,6 @@ export default function BotStatusPage() {
         e.stopPropagation();
         const botToDelete = bots.find(bot => bot.id === botId);
         if (botToDelete && window.confirm(`"${botToDelete.name}" adlı botu silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`)) {
-            // Stop simulation if it's running
             if (intervalRefs.current[botId]) {
                 clearInterval(intervalRefs.current[botId]);
                 delete intervalRefs.current[botId];
@@ -232,34 +252,32 @@ export default function BotStatusPage() {
     const handleUpdateConfig = () => {
         if (!selectedBot || !editedConfig) return;
 
+        if(selectedBot.config.mode !== editedConfig.mode && editedConfig.mode === 'LIVE' && !hasApiKeys) {
+            toast({
+                variant: 'destructive',
+                title: 'API Anahtarları Eksik',
+                description: 'Bot modunu CANLI olarak değiştirmek için önce Ayarlar sayfasından API anahtarlarınızı eklemelisiniz.'
+            });
+            // Revert mode change
+            setEditedConfig(prev => ({...prev!, mode: 'PAPER'}));
+            return;
+        }
+
         setBots(prevBots => prevBots.map(bot => 
-            bot.id === selectedBot.id ? { ...bot, config: editedConfig } : bot
+            bot.id === selectedBot.id ? { ...bot, config: editedConfig, status: 'Durduruldu' } : bot
         ));
 
         toast({
             title: "Ayarlar Güncellendi",
-            description: `"${selectedBot.name}" botunun konfigürasyonu kaydedildi.`,
+            description: `"${selectedBot.name}" botunun konfigürasyonu kaydedildi. Güvenlik için bot durduruldu.`,
         });
 
-        setSelectedBot(prev => prev ? {...prev, config: editedConfig} : null);
+        setSelectedBot(null);
     }
     
     const botPerformanceData = useMemo(() => {
         if (!selectedBot) return [];
-        // Prevent re-calculation on every render
-        const data = [];
-        let value = 1000;
-        for (let i = 29; i >= 0; i--) {
-            const date = new Date();
-            date.setDate(date.getDate() - i);
-            data.push({
-                name: date.toLocaleDateString('tr-TR', { month: 'short', day: 'numeric' }),
-                profit: value,
-            });
-            const fluctuation = selectedBot.pnl > 0 ? (0.01 + Math.random() * 0.01) : (Math.random() * 0.01 - 0.005);
-            value *= (1 + (selectedBot.pnl / 100 / 30) + fluctuation);
-        }
-        return data;
+        return generateBotPerformanceData(selectedBot.pnl);
     }, [selectedBot]);
 
 
@@ -274,6 +292,21 @@ export default function BotStatusPage() {
               </Button>
             </div>
             
+            {!hasApiKeys && (
+                <Card className="border-l-4 border-yellow-500 bg-yellow-500/10">
+                    <CardHeader className="flex flex-row items-center gap-4">
+                        <AlertTriangle className="h-8 w-8 text-yellow-500" />
+                        <div>
+                            <CardTitle className="text-yellow-200">API Anahtarları Eksik</CardTitle>
+                            <CardDescription className="text-yellow-300/80">Canlı (LIVE) botları çalıştırmak için borsa API anahtarlarınızı eklemeniz gerekmektedir.</CardDescription>
+                        </div>
+                        <Button asChild variant="outline" className="ml-auto bg-transparent border-yellow-500 text-yellow-300 hover:bg-yellow-500/20 hover:text-yellow-200">
+                           <Link href="/settings">Ayarlara Git</Link>
+                        </Button>
+                    </CardHeader>
+                </Card>
+            )}
+
             <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
                 {bots.map((bot) => {
                     const config = statusConfig[bot.status];
@@ -285,10 +318,14 @@ export default function BotStatusPage() {
                                         <CardTitle className="font-headline text-xl flex items-center gap-2">
                                             <Bot className="h-5 w-5 text-primary"/> {bot.name}
                                         </CardTitle>
-                                        <CardDescription className="pt-2 flex items-center gap-2">
+                                        <CardDescription className="pt-2 flex items-center gap-2 flex-wrap">
                                             <div className={cn("w-2 h-2 rounded-full", config.dot)}></div>
                                             <Badge variant={config.badge}>{bot.status}</Badge>
-                                            {bot.config.mode === 'PAPER' && <Badge variant="outline" className="border-amber-500 text-amber-500">PAPER</Badge>}
+                                            {bot.config.mode === 'PAPER' ? (
+                                                <Badge variant="outline" className="border-amber-500 text-amber-500">PAPER</Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="border-green-500 text-green-500">LIVE</Badge>
+                                            )}
                                             <span className="text-muted-foreground font-mono text-xs">{bot.pair}</span>
                                         </CardDescription>
                                     </div>
@@ -362,7 +399,11 @@ export default function BotStatusPage() {
                                 <div className="text-sm text-muted-foreground flex items-center gap-4 pt-2">
                                      <span className="text-muted-foreground font-mono">{selectedBot.pair}</span>
                                      <Badge variant={statusConfig[selectedBot.status].badge}>{selectedBot.status}</Badge>
-                                     {selectedBot.config.mode === 'PAPER' && <Badge variant="outline" className="border-amber-500 text-amber-500">PAPER</Badge>}
+                                     {selectedBot.config.mode === 'PAPER' ? (
+                                        <Badge variant="outline" className="border-amber-500 text-amber-500">PAPER</Badge>
+                                     ) : (
+                                         <Badge variant="outline" className="border-green-500 text-green-500">LIVE</Badge>
+                                     )}
                                 </div>
                             </SheetHeader>
                             <Tabs defaultValue="overview" className="w-full">
@@ -408,6 +449,17 @@ export default function BotStatusPage() {
                                 <TabsContent value="settings" className="p-6">
                                     {editedConfig ? (
                                         <div className="space-y-6">
+                                             <div>
+                                                <h4 className="font-semibold mb-3">İşlem Modu</h4>
+                                                <Select value={editedConfig.mode} onValueChange={(value: 'LIVE' | 'PAPER') => handleConfigChange('mode', value)} disabled={selectedBot.status === 'Çalışıyor'}>
+                                                    <SelectTrigger className="bg-slate-800 border-slate-700"><SelectValue /></SelectTrigger>
+                                                    <SelectContent className="bg-slate-800 border-slate-600 text-white">
+                                                        <SelectItem value="PAPER">Paper (Sanal Bakiye)</SelectItem>
+                                                        <SelectItem value="LIVE">Live (Gerçek Bakiye)</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                                 {selectedBot.status === 'Çalışıyor' && <p className="text-xs text-muted-foreground mt-2">Bot çalışırken işlem modu değiştirilemez.</p>}
+                                            </div>
                                             <div>
                                                 <h4 className="font-semibold mb-3">Risk Yönetimi</h4>
                                                 <div className="grid grid-cols-2 gap-4">
@@ -422,7 +474,7 @@ export default function BotStatusPage() {
                                                     <div className="space-y-2"><Label>Kaldıraç</Label><Input type="number" value={editedConfig.leverage} onChange={(e) => handleConfigChange('leverage', parseInt(e.target.value, 10))} className="bg-slate-800 border-slate-700"/></div>
                                                 </div>
                                             </div>
-                                            <Button onClick={handleUpdateConfig} className="w-full">Ayarları Güncelle</Button>
+                                            <Button onClick={handleUpdateConfig} className="w-full">Ayarları Kaydet</Button>
                                         </div>
                                     ) : (
                                         <p className="text-muted-foreground">Bu bot için konfigürasyon verisi bulunamadı.</p>
