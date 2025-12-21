@@ -138,8 +138,8 @@ export default function StrategyEditorPage() {
   };
 
   return (
-    <div className="flex flex-row h-full w-full overflow-hidden">
-        <aside className="w-64 h-full flex-shrink-0 border-r border-slate-800 bg-slate-900 p-4 flex flex-col gap-2">
+    <div className="flex flex-row flex-1 w-full overflow-hidden">
+        <aside className="w-64 flex-shrink-0 border-r border-slate-800 bg-slate-900 p-4 flex flex-col gap-2">
             <h3 className="font-bold text-lg text-foreground mb-4 font-headline">Araç Kutusu</h3>
              <Button variant="outline" className="justify-start gap-2 bg-slate-800 hover:bg-slate-700 text-white border-slate-700" onClick={() => addNode('indicator')}>
                 <Rss className="text-blue-500" /> İndikatör Ekle
