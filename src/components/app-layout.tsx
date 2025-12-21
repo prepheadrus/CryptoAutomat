@@ -118,8 +118,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
       <main className={cn(
-          "flex-1 bg-background overflow-hidden",
-           isEditorPage ? "p-0" : "p-4 md:p-6"
+          "flex-1 bg-background",
+           isEditorPage ? "p-0 overflow-hidden" : "p-4 md:p-6"
         )}>
           <div className={cn(isEditorPage ? "h-full" : "")}>
             {children}

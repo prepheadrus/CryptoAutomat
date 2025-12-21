@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   ReactFlow,
   Background,
@@ -70,10 +70,10 @@ export default function StrategyEditorPage() {
     const newNodeId = `${type}-${Date.now()}`;
     let nodeLabel = "Yeni Düğüm";
     let nodeData = {};
-    // Position the new node in a predictable location
+    
     const position = {
-        x: 400,
-        y: 200,
+        x: 250 + Math.random() * 100,
+        y: 150 + Math.random() * 100,
     };
 
     if (type === 'indicator') {
