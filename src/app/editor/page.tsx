@@ -53,34 +53,49 @@ const initialNodes: Node[] = [
    {
     id: 'd1',
     type: 'dataSource',
-    position: { x: -250, y: 150 },
+    position: { x: -250, y: 200 },
     data: { label: 'Veri Kaynağı', exchange: 'binance', symbol: 'BTC/USDT' }
   },
   {
     id: '1',
     type: 'indicator',
-    position: { x: 50, y: 150 },
+    position: { x: 50, y: 200 },
     data: { label: 'RSI İndikatörü', indicatorType: 'rsi', period: 14 }
   },
   {
-    id: '2',
+    id: '2a',
     type: 'logic',
-    position: { x: 350, y: 150 },
-    data: { label: 'Koşul', operator: 'lt', value: 30 }
+    position: { x: 350, y: 100 },
+    data: { label: 'Alış Koşulu', operator: 'lt', value: 30 }
   },
   {
-    id: '3',
+    id: '2b',
+    type: 'logic',
+    position: { x: 350, y: 300 },
+    data: { label: 'Satış Koşulu', operator: 'gt', value: 70 }
+  },
+  {
+    id: '3a',
     type: 'action',
-    position: { x: 650, y: 150 },
+    position: { x: 650, y: 100 },
     data: { label: 'Alış Emri', actionType: 'buy' }
+  },
+  {
+    id: '3b',
+    type: 'action',
+    position: { x: 650, y: 300 },
+    data: { label: 'Satış Emri', actionType: 'sell' }
   },
 ];
 
 const initialEdges: Edge[] = [
   { id: 'ed1-1', source: 'd1', target: '1', markerEnd: { type: MarkerType.ArrowClosed } },
-  { id: 'e1-2', source: '1', target: '2', markerEnd: { type: MarkerType.ArrowClosed } },
-  { id: 'e2-3', source: '2', target: '3', markerEnd: { type: MarkerType.ArrowClosed } },
+  { id: 'e1-2a', source: '1', target: '2a', markerEnd: { type: MarkerType.ArrowClosed } },
+  { id: 'e1-2b', source: '1', target: '2b', markerEnd: { type: MarkerType.ArrowClosed } },
+  { id: 'e2a-3a', source: '2a', target: '3a', markerEnd: { type: MarkerType.ArrowClosed } },
+  { id: 'e2b-3b', source: '2b', target: '3b', markerEnd: { type: MarkerType.ArrowClosed } },
 ];
+
 
 type BacktestResult = {
   ohlcData: any[];
@@ -916,3 +931,5 @@ export default function StrategyEditorPage() {
     </div>
   );
 }
+
+    
