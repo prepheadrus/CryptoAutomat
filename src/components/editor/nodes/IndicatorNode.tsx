@@ -74,7 +74,7 @@ export function IndicatorNode({ data, id }: NodeProps<{
         <div className="space-y-2">
             <Label htmlFor={`${id}-indicator-type`}>İndikatör Tipi</Label>
             <Select 
-              value={indicatorType} 
+              defaultValue={indicatorType} 
               onValueChange={handleTypeChange}
             >
                 <SelectTrigger id={`${id}-indicator-type`} className="bg-slate-700 border-slate-600 text-white">
