@@ -86,3 +86,17 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* React Flow Controls Fix for Dark Mode */
+.dark .xyflow__controls-button {
+    background-color: hsl(var(--secondary));
+    border-bottom: 1px solid hsl(var(--border));
+}
+
+.dark .xyflow__controls-button:hover {
+    background-color: hsl(var(--muted));
+}
+
+.dark .xyflow__controls-button svg {
+    fill: hsl(var(--foreground));
+}
