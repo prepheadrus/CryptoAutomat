@@ -123,7 +123,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
         </div>
       </header>
-       <main className={cn("flex flex-col flex-1", isEditorPage ? "overflow-hidden p-0" : "p-6")}>
+       <main className={cn("flex flex-col flex-1 overflow-hidden", isEditorPage ? "p-0" : "p-6 overflow-y-auto")}>
           {children}
       </main>
     </div>
