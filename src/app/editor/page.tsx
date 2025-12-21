@@ -19,7 +19,6 @@ import {
   ComposedChart,
   Line,
   Area,
-  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -30,7 +29,7 @@ import {
   ReferenceLine,
 } from 'recharts';
 import { NameType, ValueType } from 'recharts/types/component/DefaultTooltipContent';
-
+import { RSI as RSICalculator } from 'technicalindicators';
 
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -79,47 +78,137 @@ const nodeTypes = {
   action: ActionNode,
 };
 
-// --- START: Mock Data Generation for Advanced Backtest ---
+type BacktestResult = {
+  ohlcData: any[];
+  tradeData: any[];
+  pnlData: any[];
+  stats: {
+    netProfit: number;
+    totalTrades: number;
+    winRate: number;
+    maxDrawdown: number;
+    profitFactor: number;
+  };
+};
 
-// Generate more realistic OHLC data
-const generateMockOHLCData = () => {
-    let price = 65000;
+// --- START: Mock Data & Backtest Engine ---
+
+const generateMockOHLCData = (numCandles = 100) => {
+    let price = 65000 + Math.random() * 5000;
     const data = [];
-    for (let i = 0; i < 60; i++) {
-        const open = price * (1 + (Math.random() - 0.5) * 0.01);
-        const high = Math.max(open, price) * (1 + Math.random() * 0.015);
-        const low = Math.min(open, price) * (1 - Math.random() * 0.015);
+    for (let i = 0; i < numCandles; i++) {
+        const open = price;
+        const high = open * (1 + Math.random() * 0.02);
+        const low = open * (1 - Math.random() * 0.02);
         const close = low + Math.random() * (high - low);
         price = close;
         data.push({
             time: `D${i+1}`,
-            ohlc: [open, high, low, close],
-            price: close, // Add close price for line chart
-            rsi: 30 + Math.random() * 40,
-            pnl: 100 + i * 20 * (Math.random() > 0.4 ? 1 : -0.5) // Simulated PNL
+            date: new Date(2024, 0, i + 1), // Add date object for better axis
+            price: close,
+            ohlc: [open, high, low, close]
         });
     }
     return data;
 };
 
-const mockBacktestData = generateMockOHLCData();
+// The core backtesting engine
+const runBacktestEngine = (nodes: Node[], edges: Edge[]): BacktestResult => {
+    // 1. Parse Strategy from nodes
+    const indicatorNode = nodes.find(n => n.type === 'indicator');
+    const logicNode = nodes.find(n => n.type === 'logic');
+    
+    // Default strategy if parsing fails
+    const strategy = {
+      indicator: indicatorNode?.data.indicatorType || 'rsi',
+      period: indicatorNode?.data.period || 14,
+      buyConditionOp: logicNode?.data.operator || 'lt',
+      buyConditionVal: logicNode?.data.value || 30,
+      sellConditionOp: 'gt', // Hardcoded exit strategy
+      sellConditionVal: 70,  // Hardcoded exit strategy
+    }
+    
+    // 2. Generate data and calculate indicators
+    const ohlcData = generateMockOHLCData(100);
+    const closePrices = ohlcData.map(d => d.price);
+    let indicatorValues: (number | undefined)[] = [];
 
-// Simulate some trades based on the OHLC data
-const mockTradeData = [
-    { time: 'D10', type: 'buy', price: mockBacktestData[9].price },
-    { time: 'D18', type: 'sell', price: mockBacktestData[17].price },
-    { time: 'D25', type: 'buy', price: mockBacktestData[24].price },
-    { time: 'D35', type: 'sell', price: mockBacktestData[34].price },
-    { time: 'D48', type: 'buy', price: mockBacktestData[47].price },
-    { time: 'D55', type: 'sell', price: mockBacktestData[54].price },
-].map(trade => {
-    const dataPoint = mockBacktestData.find(d => d.time === trade.time);
-    return {
-        ...trade,
-        time: dataPoint?.time,
-        price: dataPoint?.price
-    };
-});
+    if(strategy.indicator === 'rsi') {
+      const rsiOutput = RSICalculator.calculate({ values: closePrices, period: strategy.period });
+      // Pad beginning with undefined to match length
+      indicatorValues = Array(strategy.period - 1).fill(undefined).concat(rsiOutput);
+    }
+    // (Future: Add SMA, EMA etc. here with else if)
+
+    const chartData = ohlcData.map((d, i) => ({...d, rsi: indicatorValues[i]}));
+
+    // 3. Simulate Trades
+    let inPosition = false;
+    let entryPrice = 0;
+    let portfolioValue = 10000;
+    const pnlData = [{ time: 'D0', pnl: portfolioValue }];
+    const trades = [];
+    let peakPortfolio = portfolioValue;
+    let maxDrawdown = 0;
+    let totalProfit = 0;
+    let totalLoss = 0;
+    let winningTrades = 0;
+    let losingTrades = 0;
+
+    for (let i = 1; i < chartData.length; i++) {
+        const rsi = chartData[i].rsi;
+        if (!rsi) {
+            pnlData.push({ time: chartData[i].time, pnl: portfolioValue });
+            continue;
+        };
+
+        const buyCondition = strategy.buyConditionOp === 'lt' ? rsi < strategy.buyConditionVal : rsi > strategy.buyConditionVal;
+        const sellCondition = strategy.sellConditionOp === 'gt' ? rsi > strategy.sellConditionVal : rsi < strategy.sellConditionVal;
+
+        if (buyCondition && !inPosition) {
+            // BUY
+            inPosition = true;
+            entryPrice = chartData[i].price;
+            trades.push({ time: chartData[i].time, type: 'buy', price: entryPrice });
+        } else if (sellCondition && inPosition) {
+            // SELL
+            const exitPrice = chartData[i].price;
+            const profit = exitPrice - entryPrice;
+            if (profit > 0) {
+              totalProfit += profit;
+              winningTrades++;
+            } else {
+              totalLoss += Math.abs(profit);
+              losingTrades++;
+            }
+            portfolioValue += profit;
+            inPosition = false;
+            trades.push({ time: chartData[i].time, type: 'sell', price: exitPrice });
+        }
+
+        pnlData.push({ time: chartData[i].time, pnl: portfolioValue });
+
+        // Calculate drawdown
+        if (portfolioValue > peakPortfolio) {
+            peakPortfolio = portfolioValue;
+        }
+        const drawdown = (peakPortfolio - portfolioValue) / peakPortfolio;
+        if (drawdown > maxDrawdown) {
+            maxDrawdown = drawdown;
+        }
+    }
+
+    const totalTrades = trades.length / 2;
+    const stats = {
+      netProfit: (portfolioValue - 10000) / 10000 * 100,
+      totalTrades: totalTrades,
+      winRate: totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0,
+      maxDrawdown: maxDrawdown * 100,
+      profitFactor: totalLoss > 0 ? totalProfit / totalLoss : totalProfit > 0 ? Infinity : 0,
+    }
+
+    return { ohlcData: chartData, tradeData: trades, pnlData, stats };
+};
 
 const initialStrategyConfig: BotConfig = {
     stopLoss: 2.0,
@@ -134,8 +223,9 @@ const initialStrategyConfig: BotConfig = {
 // Custom Shape for Scatter Markers
 const TradeMarker = (props: any) => {
     const { cx, cy, payload } = props;
+    if (!payload.type) return null;
     const isBuy = payload.type === 'buy';
-    const markerY = isBuy ? cy + 5 : cy - 15; // Position below for buy, above for sell
+    const markerY = isBuy ? cy + 10 : cy - 10;
     
     if (isBuy) {
         return <ArrowUp x={cx - 8} y={markerY} width={16} height={16} className="text-green-500 fill-current" />;
@@ -148,7 +238,9 @@ const CustomTooltip = ({ active, payload, label }: TooltipProps<ValueType, NameT
     if (active && payload && payload.length) {
         const priceData = payload.find(p => p.dataKey === 'price')?.payload;
         const pnlData = payload.find(p => p.dataKey === 'pnl');
-        const trade = mockTradeData.find(t => t.time === label);
+        
+        // Find trade by looking into the full payload, not a separate mock array
+        const trade = payload.find(p => p.dataKey === 'tradeMarker')?.payload;
 
         return (
             <div className="p-2 bg-slate-800/80 border border-slate-700 rounded-md text-white text-xs backdrop-blur-sm">
@@ -156,7 +248,7 @@ const CustomTooltip = ({ active, payload, label }: TooltipProps<ValueType, NameT
                 {priceData && <p>Fiyat: <span className="font-mono">${priceData.price.toFixed(2)}</span></p>}
                 {pnlData && <p>Kâr: <span className="font-mono">${pnlData.value?.toFixed(2)}</span></p>}
                 {priceData && priceData.rsi && <p>RSI: <span className="font-mono">{priceData.rsi.toFixed(2)}</span></p>}
-                {trade && (
+                {trade && trade.type && (
                      <p className={`font-bold mt-2 ${trade.type === 'buy' ? 'text-green-400' : 'text-red-400'}`}>
                         {trade.type.toUpperCase()} @ ${trade.price?.toFixed(2)}
                     </p>
@@ -166,7 +258,7 @@ const CustomTooltip = ({ active, payload, label }: TooltipProps<ValueType, NameT
     }
     return null;
 };
-// --- END: Mock Data Generation ---
+// --- END: Mock Data & Backtest Engine ---
 
 
 export default function StrategyEditorPage() {
@@ -177,6 +269,7 @@ export default function StrategyEditorPage() {
   const [isBacktestModalOpen, setIsBacktestModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [strategyConfig, setStrategyConfig] = useState<BotConfig>(initialStrategyConfig);
+  const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
 
   const { toast } = useToast();
   const router = useRouter();
@@ -298,6 +391,8 @@ export default function StrategyEditorPage() {
   const handleBacktest = () => {
     setIsBacktesting(true);
     setTimeout(() => {
+        const result = runBacktestEngine(nodes, edges);
+        setBacktestResult(result);
         setIsBacktesting(false);
         setIsBacktestModalOpen(true);
     }, 1500);
@@ -306,6 +401,20 @@ export default function StrategyEditorPage() {
   const handleConfigChange = (field: keyof BotConfig, value: any) => {
     setStrategyConfig(prev => ({...prev, [field]: value}));
   }
+
+  const chartAndTradeData = useMemo(() => {
+    if (!backtestResult) return [];
+    
+    return backtestResult.ohlcData.map(ohlc => {
+      const trade = backtestResult.tradeData.find(t => t.time === ohlc.time);
+      const pnl = backtestResult.pnlData.find(p => p.time === ohlc.time);
+      return {
+        ...ohlc,
+        pnl: pnl?.pnl,
+        tradeMarker: trade, // for scatter plot
+      };
+    });
+  }, [backtestResult]);
 
   return (
     <div className="flex h-full w-full flex-row overflow-hidden">
@@ -363,7 +472,7 @@ export default function StrategyEditorPage() {
             </div>
         </main>
         
-        {isBacktestModalOpen && (
+        {isBacktestModalOpen && backtestResult && (
             <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
                 <div className="w-[90vw] h-[85vh] flex flex-col rounded-xl border border-slate-800 bg-slate-900/95 text-white shadow-2xl">
                     <div className="flex items-center justify-between border-b border-slate-800 p-4 shrink-0">
@@ -376,29 +485,31 @@ export default function StrategyEditorPage() {
                         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
                             <div className="rounded-lg bg-slate-800/50 p-3">
                                 <p className="text-xs text-slate-400">Net Kâr</p>
-                                <p className="text-lg font-bold text-green-400">+$1,240.50 <span className="text-sm font-medium text-slate-300">(%12.4)</span></p>
+                                <p className={`text-lg font-bold ${backtestResult.stats.netProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    {backtestResult.stats.netProfit.toFixed(2)}%
+                                </p>
                             </div>
                              <div className="rounded-lg bg-slate-800/50 p-3">
                                 <p className="text-xs text-slate-400">Toplam İşlem</p>
-                                <p className="text-lg font-bold">6</p>
+                                <p className="text-lg font-bold">{backtestResult.stats.totalTrades}</p>
                             </div>
                             <div className="rounded-lg bg-slate-800/50 p-3">
                                 <p className="text-xs text-slate-400">Başarı Oranı</p>
-                                <p className="text-lg font-bold">66.7%</p>
+                                <p className="text-lg font-bold">{backtestResult.stats.winRate.toFixed(1)}%</p>
                             </div>
                             <div className="rounded-lg bg-slate-800/50 p-3">
                                 <p className="text-xs text-slate-400">Maks. Düşüş</p>
-                                <p className="text-lg font-bold text-red-400">-5.2%</p>
+                                <p className="text-lg font-bold text-red-400">-{backtestResult.stats.maxDrawdown.toFixed(2)}%</p>
                             </div>
                             <div className="rounded-lg bg-slate-800/50 p-3">
                                 <p className="text-xs text-slate-400">Kâr Faktörü</p>
-                                <p className="text-lg font-bold">2.18</p>
+                                <p className="text-lg font-bold">{isFinite(backtestResult.stats.profitFactor) ? backtestResult.stats.profitFactor.toFixed(2) : "∞"}</p>
                             </div>
                         </div>
 
                         <div className="w-full h-full">
                            <ResponsiveContainer width="100%" height="70%">
-                               <ComposedChart data={mockBacktestData} syncId="backtestChart">
+                               <ComposedChart data={chartAndTradeData} syncId="backtestChart">
                                     <defs>
                                         <linearGradient id="colorPnl" x1="0" y1="0" x2="0" y2="1">
                                             <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8}/>
@@ -430,11 +541,11 @@ export default function StrategyEditorPage() {
                                     
                                     <Line yAxisId="right" type="monotone" dataKey="price" name="Fiyat" stroke="#82ca9d" dot={false} />
                                     
-                                    <Scatter yAxisId="right" name="İşlemler" data={mockTradeData} shape={<TradeMarker />} />
+                                    <Scatter yAxisId="right" name="İşlemler" dataKey="tradeMarker" shape={<TradeMarker />} />
                                 </ComposedChart>
                             </ResponsiveContainer>
                             <ResponsiveContainer width="100%" height="30%">
-                                <ComposedChart data={mockBacktestData} syncId="backtestChart" margin={{left: 0, right: 10, top: 20}}>
+                                <ComposedChart data={chartAndTradeData} syncId="backtestChart" margin={{left: 0, right: 10, top: 20}}>
                                     <CartesianGrid stroke="rgba(255,255,255,0.1)" strokeDasharray="3 3"/>
                                     <XAxis dataKey="time" hide={true}/>
                                     <YAxis yAxisId="rsi" orientation="right" domain={[0, 100]} tickCount={3} tick={{fontSize: 12}} stroke="rgba(255,255,255,0.4)" />
@@ -531,7 +642,3 @@ export default function StrategyEditorPage() {
     </div>
   );
 }
-
-    
-
-    
