@@ -51,7 +51,7 @@ const statusConfig: Record<BotStatus, { badge: "default" | "secondary" | "destru
 // Helper to generate mock performance data for the detail panel chart
 const generateBotPerformanceData = (pnl: number) => {
     const data = [];
-    let value = 1000; // Start with a base value
+    let value = 10000; // Start with a base value
     for (let i = 29; i >= 0; i--) {
         const date = new Date();
         date.setDate(date.getDate() - i);
@@ -170,14 +170,23 @@ export default function BotStatusPage() {
             if (isRunning && !intervalExists) {
                 const callback = bot.config.mode === 'PAPER' ? runPaperTradeSimulation : runLiveTradeSimulation;
                 intervalRefs.current[bot.id] = setInterval(() => {
-                    callback(bot);
+                    // Pass the most recent version of the bot to the callback
+                    setBots(currentBots => {
+                        const currentBot = currentBots.find(b => b.id === bot.id);
+                        if (currentBot) {
+                           callback(currentBot);
+                        }
+                        return currentBots; // No state change in this setBots, just getting latest bot
+                    });
                 }, 5000 + Math.random() * 2000);
             } else if (!isRunning && intervalExists) {
                 clearInterval(intervalRefs.current[bot.id]);
                 delete intervalRefs.current[bot.id];
             }
         });
-    }, [bots, runPaperTradeSimulation, runLiveTradeSimulation]);
+         // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [bots.map(b => b.status + b.id).join(',')]); // Rerun only when status or bot list changes
+
 
     useEffect(() => {
         if (isClient) {
@@ -279,7 +288,7 @@ export default function BotStatusPage() {
     
     const botPerformanceData = useMemo(() => {
         if (!selectedBot) return [];
-        return generateBotPerformanceData(selectedBot.pnl);
+        return generateBotPerformanceData(selectedBot.config.currentBalance || selectedBot.config.initialBalance || 10000);
     }, [selectedBot]);
 
 
@@ -296,7 +305,7 @@ export default function BotStatusPage() {
             
             {!hasApiKeys && isClient && (
                 <Card className="border-l-4 border-yellow-500 bg-yellow-500/10">
-                    <CardHeader className="flex flex-row items-center gap-4">
+                    <CardHeader className="flex flex-row items-center gap-4 py-4">
                         <AlertTriangle className="h-8 w-8 text-yellow-500" />
                         <div>
                             <CardTitle className="text-yellow-200">API Anahtarları Eksik</CardTitle>
@@ -314,7 +323,7 @@ export default function BotStatusPage() {
                     const config = statusConfig[bot.status];
                     return (
                         <Card key={bot.id} className="flex flex-col border-l-4 border-transparent data-[status=Çalışıyor]:border-primary data-[status=Hata]:border-destructive transition-all hover:shadow-lg" data-status={bot.status}>
-                            <CardHeader>
+                            <CardHeader className="pb-4">
                                 <div className="flex items-start justify-between">
                                     <div>
                                         <CardTitle className="font-headline text-xl flex items-center gap-2">
@@ -359,7 +368,7 @@ export default function BotStatusPage() {
                         </Card>
                     );
                 })}
-                 {bots.length === 0 && (
+                 {bots.length === 0 && isClient && (
                     <div className="lg:col-span-2 xl:col-span-3 text-center text-muted-foreground py-16">
                         <Bot className="mx-auto h-12 w-12 mb-4"/>
                         <h3 className="text-xl font-semibold">Henüz aktif botunuz yok.</h3>
@@ -394,7 +403,7 @@ export default function BotStatusPage() {
                 <SheetContent className="w-[400px] sm:w-[540px] bg-slate-900 border-slate-800 text-white p-0">
                     {selectedBot && (
                         <>
-                            <SheetHeader className="p-6">
+                            <SheetHeader className="p-6 border-b border-slate-800">
                                 <SheetTitle className="font-headline text-2xl flex items-center gap-3">
                                     <Bot className="h-6 w-6 text-primary" /> {selectedBot.name}
                                 </SheetTitle>
@@ -409,7 +418,7 @@ export default function BotStatusPage() {
                                 </div>
                             </SheetHeader>
                             <Tabs defaultValue="overview" className="w-full">
-                                <TabsList className="grid w-full grid-cols-3 bg-slate-800/50 mx-6">
+                                <TabsList className="grid w-full grid-cols-3 bg-slate-900 border-b border-slate-800 rounded-none px-6">
                                     <TabsTrigger value="overview"><AreaChartIcon className="mr-2 h-4 w-4" />Genel Bakış</TabsTrigger>
                                     <TabsTrigger value="performance"><Activity className="mr-2 h-4 w-4"/>Performans</TabsTrigger>
                                     <TabsTrigger value="settings"><Settings className="mr-2 h-4 w-4" />Ayarlar</TabsTrigger>
@@ -437,6 +446,8 @@ export default function BotStatusPage() {
                                         <div className="grid grid-cols-2 gap-4">
                                             <Card className="bg-slate-800/50"><CardHeader><CardDescription>Toplam K&Z</CardDescription><CardTitle className={cn(selectedBot.pnl >= 0 ? "text-green-400" : "text-red-400")}>{selectedBot.pnl.toFixed(2)}%</CardTitle></CardHeader></Card>
                                             <Card className="bg-slate-800/50"><CardHeader><CardDescription>Çalışma Süresi</CardDescription><CardTitle>{selectedBot.duration}</CardTitle></CardHeader></Card>
+                                            <Card className="bg-slate-800/50"><CardHeader><CardDescription>Bakiye</CardDescription><CardTitle>${(selectedBot.config.currentBalance || selectedBot.config.initialBalance)?.toLocaleString(undefined, {minimumFractionDigits: 2})}</CardTitle></CardHeader></Card>
+                                            <Card className="bg-slate-800/50"><CardHeader><CardDescription>Pozisyon</CardDescription><CardTitle>{selectedBot.config.inPosition ? 'Açık' : 'Kapalı'}</CardTitle></CardHeader></Card>
                                         </div>
                                     </div>
                                 </TabsContent>
@@ -491,5 +502,3 @@ export default function BotStatusPage() {
         </div>
     );
 }
-
-    

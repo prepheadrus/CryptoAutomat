@@ -8,7 +8,7 @@ export type BotConfig = {
     amountType: 'fixed' | 'percentage';
     amount: number;
     leverage: number;
-    // Paper trading specific
+    // Paper/Live trading state
     initialBalance?: number;
     currentBalance?: number;
     inPosition?: boolean;
