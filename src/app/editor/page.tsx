@@ -180,8 +180,14 @@ export default function StrategyEditorPage() {
         });
         console.error("Bot kaydetme hatası:", error);
       }
-    } else {
+    } else if (botName !== null) { // Handle empty string case
         toast({
+            title: 'İptal Edildi',
+            description: 'Lütfen bot için bir isim girin.',
+            variant: 'secondary'
+        });
+    } else { // Handle cancel button case
+         toast({
             title: 'İptal Edildi',
             description: 'Bot kaydetme işlemi iptal edildi.',
             variant: 'secondary'
