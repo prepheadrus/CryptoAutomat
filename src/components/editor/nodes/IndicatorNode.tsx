@@ -25,7 +25,8 @@ export function IndicatorNode({ data, id }: NodeProps<{
     setNodes((nodes) =>
       nodes.map((node) => {
         if (node.id === id) {
-          node.data = { ...node.data, ...newData };
+          // Return a new node object to trigger re-render
+          return { ...node, data: { ...node.data, ...newData } };
         }
         return node;
       })
