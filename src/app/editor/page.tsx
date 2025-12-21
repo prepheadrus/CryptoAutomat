@@ -503,6 +503,7 @@ export default function StrategyEditorPage() {
     logic: LogicNode,
     action: ActionNode,
     dataSource: DataSourceNode,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }), []); 
 
 
@@ -580,20 +581,20 @@ export default function StrategyEditorPage() {
   };
 
   const handleSaveStrategy = () => {
-     try {
+    try {
         const storedBotsJSON = localStorage.getItem('myBots');
         let bots: Bot[] = storedBotsJSON ? JSON.parse(storedBotsJSON) : [];
         const dataSourceNode = nodes.find(n => n.type === 'dataSource');
-        const symbol = dataSourceNode?.data.symbol || 'BTC/USDT';
+        const indicatorNode = nodes.find(n => n.type === 'indicator');
+        const symbol = dataSourceNode?.data.symbol || 'UNKN';
+        const indicator = indicatorNode?.data.indicatorType.toUpperCase() || 'Strateji';
 
-        if(editingBotId) {
+        if (editingBotId) {
             // Update existing bot
             bots = bots.map(bot => {
                 if (bot.id === editingBotId) {
-                    const botName = bot.name; // Preserve the original name
                     return {
                         ...bot,
-                        name: botName,
                         pair: symbol,
                         config: strategyConfig,
                         nodes: nodes,
@@ -604,47 +605,50 @@ export default function StrategyEditorPage() {
             });
             const botName = bots.find(b => b.id === editingBotId)?.name;
             toast({
-              title: 'Strateji Güncellendi!',
-              description: `"${botName}" adlı botun yapısı ve ayarları güncellendi.`,
+                title: 'Strateji Güncellendi!',
+                description: `"${botName}" adlı botun yapısı ve ayarları güncellendi.`,
             });
         } else {
-            // Create new bot
-            const botName = window.prompt("Yeni botunuz için bir isim girin:");
-            if (!botName || botName.trim() === '') {
-                 toast({ title: 'İşlem İptal Edildi', description: 'Bot için bir isim girmediniz.', variant: 'secondary'});
-                 return;
+            // Create new bot with smart naming
+            let baseName = `${symbol.split('/')[0]}-${indicator} Stratejisi`;
+            let botName = baseName;
+            let counter = 2;
+            // Ensure the name is unique
+            while (bots.some(b => b.name === botName)) {
+                botName = `${baseName} #${counter}`;
+                counter++;
             }
 
             const newBot: Bot = {
-              id: Date.now(),
-              name: botName,
-              pair: symbol,
-              status: 'Durduruldu',
-              pnl: 0,
-              duration: "0s",
-              config: strategyConfig,
-              nodes: nodes,
-              edges: edges,
-              webhookSecret: crypto.randomUUID(),
+                id: Date.now(),
+                name: botName,
+                pair: symbol,
+                status: 'Durduruldu',
+                pnl: 0,
+                duration: "0s",
+                config: strategyConfig,
+                nodes: nodes,
+                edges: edges,
+                webhookSecret: crypto.randomUUID(),
             };
             bots.push(newBot);
-             toast({
-              title: 'Strateji Kaydedildi!',
-              description: `"${botName}" adlı yeni bot oluşturuldu.`,
+            toast({
+                title: 'Strateji Kaydedildi!',
+                description: `"${botName}" adlı yeni bot oluşturuldu.`,
             });
         }
         
         localStorage.setItem('myBots', JSON.stringify(bots));
         router.push('/bot-status');
 
-      } catch (error) {
+    } catch (error) {
         toast({
-          title: 'Kayıt Hatası',
-          description: 'Bot kaydedilirken bir hata oluştu.',
-          variant: 'destructive',
+            title: 'Kayıt Hatası',
+            description: 'Bot kaydedilirken bir hata oluştu.',
+            variant: 'destructive',
         });
         console.error("Bot kaydetme hatası:", error);
-      }
+    }
   };
   
   const handleBacktest = () => {
@@ -997,3 +1001,5 @@ export default function StrategyEditorPage() {
     </div>
   );
 }
+
+    
