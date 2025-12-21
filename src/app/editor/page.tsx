@@ -396,6 +396,8 @@ const CustomTooltip = ({ active, payload, label }: TooltipProps<ValueType, NameT
 // --- END: Mock Data & Backtest Engine ---
 
 
+const proOptions = { hideAttribution: true };
+
 export default function StrategyEditorPage() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -737,6 +739,7 @@ export default function StrategyEditorPage() {
                 nodeTypes={nodeTypes}
                 fitView
                 className="bg-background"
+                proOptions={proOptions}
             >
                 <Background color="#334155" gap={20} size={1} />
                 <Controls />
@@ -993,5 +996,7 @@ export default function StrategyEditorPage() {
     </div>
   );
 }
+
+    
 
     
