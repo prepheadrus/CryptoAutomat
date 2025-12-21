@@ -116,12 +116,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
       <main className={cn(
-          "flex-1 bg-background overflow-auto",
-          // Editör sayfası için özel padding'i kaldırıyoruz, diğerleri için ekliyoruz.
-          pathname === '/editor' ? "p-0" : "p-4 md:p-6"
+          "flex-1 bg-background overflow-hidden",
+           pathname === '/editor' ? "p-0" : "p-4 md:p-6"
         )}>
-          {/* Editör sayfasının tam yüksekliği kullanabilmesi için ekstra bir div ekliyoruz */}
-          <div className={cn(pathname === '/editor' && "h-full w-full")}>
+          <div className={cn(pathname === '/editor' ? "h-full" : "")}>
             {children}
           </div>
       </main>
