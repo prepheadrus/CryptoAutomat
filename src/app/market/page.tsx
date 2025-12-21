@@ -164,8 +164,7 @@ export default function MarketTerminalPage() {
                                 <Skeleton className="h-5 w-20 justify-self-end" />
                                 <Skeleton className="h-5 w-10 justify-self-end" />
                             </div>
-                        </div>
-                    ))}
+                        ))}
                     </div>
                 ) : (
                     <ul>
