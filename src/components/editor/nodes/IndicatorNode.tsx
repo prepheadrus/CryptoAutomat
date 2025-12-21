@@ -113,5 +113,3 @@ export function IndicatorNode({ data, id }: NodeProps<{
     </div>
   );
 }
-
-    
