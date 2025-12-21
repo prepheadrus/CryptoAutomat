@@ -172,12 +172,14 @@ export default function MarketTerminalPage() {
   }
   
   const filteredAllMarkets = useMemo(() => {
-    if (!searchQuery) return []; // Don't show anything if search is empty
+    if (!searchQuery) {
+        return [];
+    }
+    const query = searchQuery.toLowerCase();
     return marketData.filter(coin =>
-        coin.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        coin.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        searchQuery.toLowerCase().includes(coin.symbol.toLowerCase())
-    )
+        coin.name.toLowerCase().includes(query) ||
+        coin.symbol.toLowerCase().includes(query)
+    );
   }, [marketData, searchQuery]);
 
   const favoriteMarkets = useMemo(() => marketData.filter(coin => 
@@ -218,7 +220,7 @@ export default function MarketTerminalPage() {
         )
     }
 
-    if(coins.length === 0) {
+    if(coins.length === 0 && (listType === 'favorites' || (listType === 'all' && searchQuery))) {
         return <p className="text-center text-muted-foreground p-8">Sonuç bulunamadı.</p>
     }
 
@@ -312,3 +314,5 @@ export default function MarketTerminalPage() {
   );
 }
 
+
+    
