@@ -35,9 +35,6 @@ const TradingViewWidget = memo(({ symbol }: { symbol: string }) => {
     const container_id = `tradingview_widget_${symbol}_${widgetId}`;
 
     useEffect(() => {
-        const container = containerRef.current;
-        if (!container) return;
-        
         let tvWidget: any = null;
 
         const createWidget = () => {
@@ -125,7 +122,7 @@ export default function MarketTerminalPage() {
   useEffect(() => {
     try {
       localStorage.setItem('marketFavorites', JSON.stringify(favorites));
-    } catch (error) {
+    } catch (error)      {
       console.error("Favoriler kaydedilirken hata:", error);
     }
   }, [favorites]);
@@ -173,8 +170,25 @@ export default function MarketTerminalPage() {
               : [...prev, symbol]
       );
   }
+  
+  const filteredAllMarkets = useMemo(() => {
+    if (!searchQuery) return []; // Don't show anything if search is empty
+    return marketData.filter(coin =>
+        coin.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        coin.symbol.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+  }, [marketData, searchQuery]);
 
-  const MarketList = ({ coins }: { coins: MarketCoin[] }) => {
+  const favoriteMarkets = useMemo(() => marketData.filter(coin => 
+      favorites.includes(coin.symbol) && (
+        !searchQuery || // Show all favorites if search is empty
+        coin.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        coin.symbol.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+  ), [marketData, favorites, searchQuery]);
+
+
+  const MarketList = ({ coins, listType }: { coins: MarketCoin[], listType: 'all' | 'favorites' }) => {
     if (isLoading) {
       return (
         <div className="p-2 space-y-2">
@@ -194,6 +208,15 @@ export default function MarketTerminalPage() {
       );
     }
     
+    if (listType === 'all' && !searchQuery) {
+        return (
+            <div className="text-center text-muted-foreground p-8 flex flex-col items-center gap-2">
+                <Search className="h-6 w-6"/>
+                <p>Bir piyasa arayın...</p>
+            </div>
+        )
+    }
+
     if(coins.length === 0) {
         return <p className="text-center text-muted-foreground p-8">Sonuç bulunamadı.</p>
     }
@@ -233,18 +256,6 @@ export default function MarketTerminalPage() {
     );
   }
 
-  const filteredAllMarkets = useMemo(() => marketData.filter(coin =>
-    coin.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    coin.symbol.toLowerCase().includes(searchQuery.toLowerCase())
-  ), [marketData, searchQuery]);
-
-  const favoriteMarkets = useMemo(() => marketData.filter(coin => 
-      favorites.includes(coin.symbol) && (
-        coin.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        coin.symbol.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-  ), [marketData, favorites, searchQuery]);
-
 
   return (
     <div className="flex-1 flex flex-row overflow-hidden rounded-lg bg-slate-950 border border-slate-800">
@@ -273,10 +284,10 @@ export default function MarketTerminalPage() {
                         <div className="text-right font-semibold">Fiyat / 24s Değişim</div>
                     </div>
                      <TabsContent value="all" className="m-0">
-                        <MarketList coins={filteredAllMarkets} />
+                        <MarketList coins={filteredAllMarkets} listType="all"/>
                     </TabsContent>
                     <TabsContent value="favorites" className="m-0">
-                         <MarketList coins={favoriteMarkets} />
+                         <MarketList coins={favoriteMarkets} listType="favorites" />
                     </TabsContent>
                 </div>
             </Tabs>
@@ -299,3 +310,5 @@ export default function MarketTerminalPage() {
     </div>
   );
 }
+
+    
