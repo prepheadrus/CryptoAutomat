@@ -20,13 +20,11 @@ export function IndicatorNode({ data, id }: NodeProps<{
 }>) {
   const { setNodes } = useReactFlow();
   const { toast } = useToast();
-  const indicatorType = data.indicatorType || 'rsi';
-
-  const updateNodeData = (newData: Partial<typeof data>) => {
+  
+  const updateNodeData = (newData: object) => {
     setNodes((nodes) =>
       nodes.map((node) => {
         if (node.id === id) {
-          // Preserve existing data and only update the new fields
           node.data = { ...node.data, ...newData };
         }
         return node;
@@ -35,20 +33,17 @@ export function IndicatorNode({ data, id }: NodeProps<{
   };
   
   const handleTypeChange = (newType: string) => {
-    const newData: any = { indicatorType: newType };
-    // Set default values when changing indicator type
+    let newData: any = { indicatorType: newType };
     switch (newType) {
         case 'rsi':
-            newData.period = 14;
+            newData = { ...newData, period: 14, fastPeriod: undefined, slowPeriod: undefined, signalPeriod: undefined };
             break;
         case 'sma':
         case 'ema':
-            newData.period = 20;
+            newData = { ...newData, period: 20, fastPeriod: undefined, slowPeriod: undefined, signalPeriod: undefined };
             break;
         case 'macd':
-            newData.fastPeriod = 12;
-            newData.slowPeriod = 26;
-            newData.signalPeriod = 9;
+            newData = { ...newData, period: undefined, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 };
             break;
     }
     updateNodeData(newData);
@@ -64,6 +59,7 @@ export function IndicatorNode({ data, id }: NodeProps<{
     }
   }
 
+  const indicatorType = data.indicatorType || 'rsi';
   const isMACD = indicatorType === 'macd';
 
   return (
@@ -94,47 +90,48 @@ export function IndicatorNode({ data, id }: NodeProps<{
         </div>
         
         {isMACD ? (
-            <div className="grid grid-cols-3 gap-2">
-                <div className="space-y-2">
-                    <Label htmlFor={`${id}-fast`} className="text-xs">Hızlı</Label>
-                    <Input id={`${id}-fast`} type="number" value={data.fastPeriod || 12} onChange={(e) => updateNodeData({ fastPeriod: parseInt(e.target.value, 10) })} className="bg-slate-700 border-slate-600 text-white h-8"/>
+            <div>
+                <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-2">
+                        <Label htmlFor={`${id}-fast`} className="text-xs">Hızlı</Label>
+                        <Input id={`${id}-fast`} type="number" value={data.fastPeriod || 12} onChange={(e) => updateNodeData({ fastPeriod: parseInt(e.target.value, 10) || 0 })} className="bg-slate-700 border-slate-600 text-white h-8"/>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor={`${id}-slow`} className="text-xs">Yavaş</Label>
+                        <Input id={`${id}-slow`} type="number" value={data.slowPeriod || 26} onChange={(e) => updateNodeData({ slowPeriod: parseInt(e.target.value, 10) || 0 })} className="bg-slate-700 border-slate-600 text-white h-8"/>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor={`${id}-signal`} className="text-xs">Sinyal</Label>
+                        <Input id={`${id}-signal`} type="number" value={data.signalPeriod || 9} onChange={(e) => updateNodeData({ signalPeriod: parseInt(e.target.value, 10) || 0 })} className="bg-slate-700 border-slate-600 text-white h-8"/>
+                    </div>
                 </div>
-                <div className="space-y-2">
-                    <Label htmlFor={`${id}-slow`} className="text-xs">Yavaş</Label>
-                    <Input id={`${id}-slow`} type="number" value={data.slowPeriod || 26} onChange={(e) => updateNodeData({ slowPeriod: parseInt(e.target.value, 10) })} className="bg-slate-700 border-slate-600 text-white h-8"/>
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor={`${id}-signal`} className="text-xs">Sinyal</Label>
-                    <Input id={`${id}-signal`} type="number" value={data.signalPeriod || 9} onChange={(e) => updateNodeData({ signalPeriod: parseInt(e.target.value, 10) })} className="bg-slate-700 border-slate-600 text-white h-8"/>
+                 <div className="pt-4">
+                     <Button variant="outline" size="sm" className="w-full gap-2" disabled>
+                        <Zap className="h-4 w-4" />
+                        Periyodu Optimize Et
+                     </Button>
+                     <p className="text-xs text-muted-foreground text-center mt-2">MACD optimizasyonu yakında gelecek.</p>
                 </div>
             </div>
         ) : (
-             <div className="space-y-2">
-                <Label htmlFor={`${id}-period`}>Periyot</Label>
-                <Input 
-                    id={`${id}-period`} 
-                    type="number" 
-                    key={data.period} 
-                    defaultValue={data.period || 14} 
-                    onBlur={(e) => updateNodeData({ period: parseInt(e.target.value, 10) })}
-                    className="bg-slate-700 border-slate-600 text-white" 
-                />
+             <div>
+                <div className="space-y-2">
+                    <Label htmlFor={`${id}-period`}>Periyot</Label>
+                    <Input 
+                        id={`${id}-period`} 
+                        type="number" 
+                        value={data.period || 14} 
+                        onChange={(e) => updateNodeData({ period: parseInt(e.target.value, 10) || 0 })}
+                        className="bg-slate-700 border-slate-600 text-white" 
+                    />
+                </div>
+                <div className="pt-4">
+                    <Button onClick={handleOptimizeClick} variant="outline" size="sm" className="w-full gap-2 border-amber-500/50 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300">
+                        <Zap className="h-4 w-4" />
+                        Periyodu Optimize Et
+                    </Button>
+                </div>
             </div>
-        )}
-        
-        {isMACD ? (
-            <div className="pt-1">
-                 <Button variant="outline" size="sm" className="w-full gap-2" disabled>
-                    <Zap className="h-4 w-4" />
-                    Periyodu Optimize Et
-                 </Button>
-                 <p className="text-xs text-muted-foreground text-center mt-2">MACD optimizasyonu yakında gelecek.</p>
-            </div>
-        ) : (
-             <Button onClick={handleOptimizeClick} variant="outline" size="sm" className="w-full gap-2 border-amber-500/50 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300">
-                <Zap className="h-4 w-4" />
-                Periyodu Optimize Et
-            </Button>
         )}
       </div>
       <Handle type="target" position={Position.Left} className={cn("w-3 h-3 !bg-blue-400")} />
