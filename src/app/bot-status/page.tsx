@@ -75,10 +75,11 @@ export default function BotStatusPage() {
         }));
     };
 
-    const handleDeleteBot = (botId: number, botName: string) => {
-        if (window.confirm(`"${botName}" adlı botu silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`)) {
+    const handleDeleteBot = (botId: number) => {
+        const botToDelete = bots.find(bot => bot.id === botId);
+        if (botToDelete && window.confirm(`"${botToDelete.name}" adlı botu silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`)) {
             setBots(bots.filter(bot => bot.id !== botId));
-            addLog('warning', `"${botName}" botu kalıcı olarak silindi.`);
+            addLog('warning', `"${botToDelete.name}" botu kalıcı olarak silindi.`);
         }
     };
 
@@ -117,7 +118,7 @@ export default function BotStatusPage() {
                                          <Button variant="ghost" size="icon" disabled>
                                             <Settings className="h-4 w-4"/>
                                         </Button>
-                                         <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleDeleteBot(bot.id, bot.name)} aria-label="Sil">
+                                         <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleDeleteBot(bot.id)} aria-label="Sil">
                                             <Trash2 className="h-4 w-4"/>
                                         </Button>
                                     </div>
