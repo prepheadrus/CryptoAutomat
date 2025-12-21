@@ -29,7 +29,7 @@ const initialLogs: Log[] = [
     { type: 'trade', message: '[10:05:12] 0.1 BTC @ 68123.45 USDT ALINDI.' },
     { type: 'trade', message: '[10:15:30] 0.1 BTC @ 68456.78 USDT SATILDI. K&Z: +$33.33' },
     { type: 'warning', message: "[10:18:00] Binance'de ETH/USDT çifti için yüksek kayma tespit edildi." },
-    { type: 'error', message: '[10:20:00] "AVAX Arbitraj" botu Kraken API\'sine bağlanamadı.' },
+    { type: 'error', message: '[10:20:00] "AVAX Arbitraj" botu Kraken API'sine bağlanamadı.' },
     { type: 'info', message: '[10:22:00] "ETH-MACD Scalp" botu kullanıcı tarafından duraklatıldı.' },
 ];
 
@@ -266,10 +266,10 @@ export default function BotStatusPage() {
                                 <SheetTitle className="font-headline text-2xl flex items-center gap-3">
                                     <Bot className="h-6 w-6 text-primary" /> {selectedBot.name}
                                 </SheetTitle>
-                                <SheetDescription className="flex items-center gap-4 pt-2">
+                                <div className="text-sm text-muted-foreground flex items-center gap-4 pt-2">
                                      <span className="text-muted-foreground font-mono">{selectedBot.pair}</span>
                                      <Badge variant={statusConfig[selectedBot.status].badge}>{selectedBot.status}</Badge>
-                                </SheetDescription>
+                                </div>
                             </SheetHeader>
                             <Tabs defaultValue="overview" className="w-full">
                                 <TabsList className="grid w-full grid-cols-2 bg-slate-800/50 mx-6">
