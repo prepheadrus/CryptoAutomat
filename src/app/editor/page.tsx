@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   ReactFlow,
   Background,
@@ -54,23 +54,6 @@ const initialEdges: Edge[] = [
   { id: 'e2-3', source: '2', target: '3', markerEnd: { type: MarkerType.ArrowClosed } },
 ];
 
-const Sidebar = ({ onAddNode }: { onAddNode: (type: string) => void }) => {
-    return (
-        <aside className="w-64 flex-shrink-0 border-r bg-card p-4 flex flex-col gap-2">
-            <h3 className="font-bold text-lg text-foreground mb-4 font-headline">Araç Kutusu</h3>
-             <Button variant="outline" className="justify-start gap-2" onClick={() => onAddNode('indicator')}>
-                <Rss className="text-blue-500" /> İndikatör Ekle
-            </Button>
-            <Button variant="outline" className="justify-start gap-2" onClick={() => onAddNode('logic')}>
-                <GitBranch className="text-purple-500" /> Mantık Ekle
-            </Button>
-            <Button variant="outline" className="justify-start gap-2" onClick={() => onAddNode('action')}>
-                <CircleDollarSign className="text-green-500" /> İşlem Ekle
-            </Button>
-        </aside>
-    );
-};
-
 
 export default function StrategyEditorPage() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -87,10 +70,10 @@ export default function StrategyEditorPage() {
     const newNodeId = `${type}-${Date.now()}`;
     let nodeLabel = "Yeni Düğüm";
     let nodeData = {};
-    // Position the new node in the center of the viewport with some random offset
+    // Position the new node in a predictable location
     const position = {
-        x: 400 + Math.random() * 200 - 100,
-        y: 200 + Math.random() * 200 - 100,
+        x: 400,
+        y: 200,
     };
 
     if (type === 'indicator') {
@@ -154,7 +137,18 @@ export default function StrategyEditorPage() {
 
   return (
     <div className="flex flex-row w-full h-full">
-        <Sidebar onAddNode={addNode} />
+        <aside className="w-64 flex-shrink-0 border-r bg-slate-900 p-4 flex flex-col gap-2">
+            <h3 className="font-bold text-lg text-foreground mb-4 font-headline">Araç Kutusu</h3>
+             <Button variant="outline" className="justify-start gap-2" onClick={() => addNode('indicator')}>
+                <Rss className="text-blue-500" /> İndikatör Ekle
+            </Button>
+            <Button variant="outline" className="justify-start gap-2" onClick={() => addNode('logic')}>
+                <GitBranch className="text-purple-500" /> Mantık Ekle
+            </Button>
+            <Button variant="outline" className="justify-start gap-2" onClick={() => addNode('action')}>
+                <CircleDollarSign className="text-green-500" /> İşlem Ekle
+            </Button>
+        </aside>
         <main className="flex-1 relative">
             <ReactFlow
                 nodes={nodes}

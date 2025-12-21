@@ -33,6 +33,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const userAvatar = PlaceHolderImages.find(p => p.id === 'user-avatar') as ImagePlaceholder;
 
+  const isEditorPage = pathname === '/editor';
+
   return (
     <div className="flex min-h-screen w-full flex-col">
       <header className="sticky top-0 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6 z-30">
@@ -117,9 +119,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </header>
       <main className={cn(
           "flex-1 bg-background overflow-hidden",
-           pathname === '/editor' ? "p-0" : "p-4 md:p-6"
+           isEditorPage ? "p-0" : "p-4 md:p-6"
         )}>
-          <div className={cn(pathname === '/editor' ? "h-full" : "")}>
+          <div className={cn(isEditorPage ? "h-full" : "")}>
             {children}
           </div>
       </main>
