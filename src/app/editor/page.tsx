@@ -33,19 +33,19 @@ const initialNodes: Node[] = [
   {
     id: '1',
     type: 'indicator',
-    position: { x: 50, y: 50 },
+    position: { x: 50, y: 150 },
     data: { label: 'RSI İndikatörü', indicatorType: 'rsi', period: 14 }
   },
   {
     id: '2',
     type: 'logic',
-    position: { x: 350, y: 50 },
+    position: { x: 350, y: 150 },
     data: { label: 'Koşul', operator: 'lt', value: 30 }
   },
   {
     id: '3',
     type: 'action',
-    position: { x: 650, y: 50 },
+    position: { x: 650, y: 150 },
     data: { label: 'Alış Emri', actionType: 'buy', amount: 100 }
   },
 ];
@@ -55,11 +55,10 @@ const initialEdges: Edge[] = [
   { id: 'e2-3', source: '2', target: '3', markerEnd: { type: MarkerType.ArrowClosed } },
 ];
 
-
 const Sidebar = ({ onAddNode }: { onAddNode: (type: string) => void }) => {
     return (
-        <aside className="w-64 bg-card border-r flex flex-col gap-2 p-4">
-            <h3 className="font-bold text-lg text-foreground mb-4">Araç Kutusu</h3>
+        <aside className="w-64 flex-shrink-0 border-r bg-card p-4 flex flex-col gap-2">
+            <h3 className="font-bold text-lg text-foreground mb-4 font-headline">Araç Kutusu</h3>
              <Button variant="outline" className="justify-start gap-2" onClick={() => onAddNode('indicator')}>
                 <Rss className="text-blue-500" /> İndikatör Ekle
             </Button>
@@ -88,8 +87,8 @@ export default function StrategyEditorPage() {
     let nodeLabel = "Yeni Düğüm";
     let nodeData = {};
     const position = {
-        x: Math.random() * 400,
-        y: Math.random() * 400,
+        x: 250 + Math.random() * 100,
+        y: 100 + Math.random() * 100,
     };
 
     if (type === 'indicator') {
