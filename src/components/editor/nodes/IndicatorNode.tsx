@@ -58,7 +58,7 @@ export function IndicatorNode({ data, id }: NodeProps<{ indicatorType?: string, 
                     <SelectItem value="rsi">RSI</SelectItem>
                     <SelectItem value="sma">SMA</SelectItem>
                     <SelectItem value="ema">EMA</SelectItem>
-                    <SelectItem value="macd">MACD (Yakında)</SelectItem>
+                    <SelectItem value="macd" disabled>MACD (Yakında)</SelectItem>
                 </SelectContent>
             </Select>
         </div>

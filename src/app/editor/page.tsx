@@ -13,6 +13,7 @@ import {
   Edge,
   MarkerType,
   Node,
+  NodeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useRouter } from 'next/navigation';
@@ -80,13 +81,6 @@ const initialEdges: Edge[] = [
   { id: 'e1-2', source: '1', target: '2', markerEnd: { type: MarkerType.ArrowClosed } },
   { id: 'e2-3', source: '2', target: '3', markerEnd: { type: MarkerType.ArrowClosed } },
 ];
-
-const nodeTypes = {
-  indicator: IndicatorNode,
-  logic: LogicNode,
-  action: ActionNode,
-  dataSource: DataSourceNode,
-};
 
 type BacktestResult = {
   ohlcData: any[];
@@ -174,7 +168,8 @@ const runBacktestEngine = (nodes: Node[], edges: Edge[]): BacktestResult | { err
         }
         // Future: Add MACD etc. here
         
-        signals[node.id] = Array(closePrices.length - result.length).fill(undefined).concat(result);
+        const padding = Array(closePrices.length - result.length).fill(undefined);
+        signals[node.id] = padding.concat(result);
     });
 
     // Use the data from the first available data source for the main chart
@@ -278,7 +273,7 @@ const runBacktestEngine = (nodes: Node[], edges: Edge[]): BacktestResult | { err
         }
     }
 
-    const totalTrades = Math.floor(trades.length / 2);
+    const totalTrades = winningTrades + losingTrades;
     const stats = {
       netProfit: (portfolioValue - 10000) / 10000 * 100,
       totalTrades: totalTrades,
@@ -390,7 +385,7 @@ export default function StrategyEditorPage() {
       });
 
       const result = runBacktestEngine(tempNodes, edges);
-      if (!('error' in result) && result.stats.profitFactor > bestProfitFactor) {
+      if (!('error' in result) && result.stats.profitFactor > bestProfitFactor && isFinite(result.stats.profitFactor)) {
         bestProfitFactor = result.stats.profitFactor;
         bestPeriod = period;
       }
@@ -413,7 +408,7 @@ export default function StrategyEditorPage() {
   };
 
 
-  const nodeTypesWithOptimization = useMemo(() => ({
+  const nodeTypes = useMemo(() => ({
     indicator: (props: NodeProps) => <IndicatorNode {...props} data={{ ...props.data, onOptimize: handleOptimizePeriod }} />,
     logic: LogicNode,
     action: ActionNode,
@@ -543,7 +538,7 @@ export default function StrategyEditorPage() {
   const handleBacktest = () => {
     setIsBacktesting(true);
     setBacktestResult(null);
-    // Use try-catch for localStorage operations
+    setIsBacktestModalOpen(true); // Open modal immediately
     try {
         setTimeout(() => {
             const result = runBacktestEngine(nodes, edges);
@@ -554,11 +549,11 @@ export default function StrategyEditorPage() {
                     variant: 'destructive',
                 });
                 setIsBacktesting(false);
+                setIsBacktestModalOpen(false); // Close modal on error
                 return;
             }
             setBacktestResult(result);
             setIsBacktesting(false);
-            setIsBacktestModalOpen(true);
         }, 1500);
     } catch (error) {
         console.error("Backtest sırasında hata:", error);
@@ -568,6 +563,7 @@ export default function StrategyEditorPage() {
             variant: 'destructive',
         });
         setIsBacktesting(false);
+        setIsBacktestModalOpen(false);
     }
   }
 
@@ -625,7 +621,7 @@ export default function StrategyEditorPage() {
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
-                nodeTypes={nodeTypesWithOptimization}
+                nodeTypes={nodeTypes}
                 fitView
                 className="bg-background"
             >
@@ -659,7 +655,7 @@ export default function StrategyEditorPage() {
             </div>
         </main>
         
-        {isBacktestModalOpen && backtestResult && (
+        {isBacktestModalOpen && (
             <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
                 <div className="w-[90vw] h-[85vh] flex flex-col rounded-xl border border-slate-800 bg-slate-900/95 text-white shadow-2xl">
                     <div className="flex items-center justify-between border-b border-slate-800 p-4 shrink-0">
@@ -668,7 +664,7 @@ export default function StrategyEditorPage() {
                             <XIcon className="h-5 w-5"/>
                         </Button>
                     </div>
-                     {isBacktesting ? (
+                     {isBacktesting || !backtestResult ? (
                         <div className="flex flex-1 items-center justify-center">
                             <Loader2 className="h-10 w-10 animate-spin text-primary" />
                         </div>
