@@ -26,59 +26,78 @@ type MarketCoin = {
 
 // Memoized TradingView Widget to prevent re-renders on parent state changes
 const TradingViewWidget = memo(({ symbol }: { symbol: string }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const widgetId = useId();
-  const container_id = `tradingview_widget_${widgetId}`;
+    const containerRef = useRef<HTMLDivElement>(null);
+    const widgetId = useId();
+    // By including the symbol in the ID, we ensure React creates a new div when the symbol changes.
+    // This forces TradingView to create a completely new widget, avoiding state issues.
+    const container_id = `tradingview_widget_${symbol}_${widgetId}`;
 
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+        
+        let tvWidget: any = null;
 
-    // Ensure the script is loaded, then create the widget.
-    const createWidget = () => {
-        if (document.getElementById(container_id) && typeof window.TradingView !== 'undefined') {
-             // Clear previous widget before creating a new one
-            const widgetContainer = document.getElementById(container_id);
-            if(widgetContainer) {
-                widgetContainer.innerHTML = '';
+        const createWidget = () => {
+            if (typeof window.TradingView !== 'undefined') {
+                tvWidget = new window.TradingView.widget({
+                    autosize: true,
+                    symbol: `BINANCE:${symbol.toUpperCase()}USDT`,
+                    interval: "D",
+                    timezone: "Etc/UTC",
+                    theme: "dark",
+                    style: "1",
+                    locale: "tr",
+                    enable_publishing: false,
+                    withdateranges: true,
+                    hide_side_toolbar: false,
+                    allow_symbol_change: false, // Important: We control the symbol from our UI
+                    container_id: container_id
+                });
             }
-            new window.TradingView.widget({
-              autosize: true,
-              symbol: `BINANCE:${symbol.toUpperCase()}USDT`,
-              interval: "D",
-              timezone: "Etc/UTC",
-              theme: "dark",
-              style: "1",
-              locale: "tr",
-              enable_publishing: false,
-              withdateranges: true,
-              hide_side_toolbar: false,
-              allow_symbol_change: true,
-              container_id: container_id
-            });
         }
-    }
-    
-    const scriptId = 'tradingview-widget-script';
-    if (!document.getElementById(scriptId)) {
-        const script = document.createElement("script");
-        script.id = scriptId;
-        script.src = "https://s3.tradingview.com/tv.js";
-        script.type = "text/javascript";
-        script.async = true;
-        script.onload = createWidget;
-        document.body.appendChild(script);
-    } else {
-        createWidget();
-    }
 
-  }, [symbol, container_id]);
+        const scriptId = 'tradingview-widget-script';
+        const existingScript = document.getElementById(scriptId);
 
-  return (
-    <div className="tradingview-widget-container h-full" ref={containerRef}>
-      <div id={container_id} className="h-full" />
-    </div>
-  );
+        if (!existingScript) {
+            const script = document.createElement("script");
+            script.id = scriptId;
+            script.src = "https://s3.tradingview.com/tv.js";
+            script.type = "text/javascript";
+            script.async = true;
+            script.onload = createWidget;
+            document.body.appendChild(script);
+        } else {
+            // If script already exists, it might have loaded, so try to create widget
+            createWidget();
+        }
+
+        return () => {
+            // Cleanup on component unmount or symbol change
+            if (tvWidget !== null) {
+                try {
+                    // TradingView provides a remove() method on the widget object
+                    // but we don't have a stable reference to it across renders.
+                    // Instead, we manually remove the iframe it creates.
+                    const iframe = container.querySelector('iframe');
+                    if (iframe) {
+                        container.removeChild(iframe);
+                    }
+                } catch (error) {
+                    console.error("Error cleaning up TradingView widget:", error);
+                }
+            }
+        };
+    }, [symbol, container_id]); // Re-run the effect if the symbol or the unique container_id changes
+
+    // The key prop on the outer div ensures React replaces the div (and its children)
+    // when the symbol changes, ensuring a clean slate for the TradingView widget.
+    return (
+        <div key={symbol} className="tradingview-widget-container h-full" ref={containerRef}>
+            <div id={container_id} className="h-full" />
+        </div>
+    );
 });
 
 TradingViewWidget.displayName = 'TradingViewWidget';
@@ -159,7 +178,7 @@ export default function MarketTerminalPage() {
                 {isLoading ? (
                     <div className="p-2 space-y-2">
                         {Array.from({ length: 10 }).map((_, i) => (
-                            <div key={i} className="grid grid-cols-3 gap-2 items-center">
+                             <div key={i} className="grid grid-cols-3 gap-2 items-center">
                                 <Skeleton className="h-5 w-12" />
                                 <Skeleton className="h-5 w-20 justify-self-end" />
                                 <Skeleton className="h-5 w-10 justify-self-end" />
