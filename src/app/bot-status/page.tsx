@@ -126,26 +126,29 @@ export default function BotStatusPage() {
             const storedKeys = localStorage.getItem('exchangeKeys');
             if(storedKeys) setHasApiKeys(true);
 
+            let loadedBots: BotType[] = [];
             if (storedBots) {
-                const parsedBots: BotType[] = JSON.parse(storedBots);
-                const botsWithDefaults = parsedBots.map(bot => ({
-                    ...bot,
-                    config: {
-                        mode: 'PAPER',
-                        stopLoss: 2.0,
-                        takeProfit: 5.0,
-                        trailingStop: false,
-                        amountType: 'fixed',
-                        amount: 100,
-                        leverage: 1,
-                        initialBalance: 10000,
-                        ...bot.config,
-                    }
-                }));
-                setBots(botsWithDefaults);
+                loadedBots = JSON.parse(storedBots);
             } else {
-                setBots(initialBots);
+                loadedBots = initialBots;
             }
+
+            const botsWithDefaults = loadedBots.map(bot => ({
+                ...bot,
+                config: {
+                    mode: 'PAPER',
+                    stopLoss: 2.0,
+                    takeProfit: 5.0,
+                    trailingStop: false,
+                    amountType: 'fixed',
+                    amount: 100,
+                    leverage: 1,
+                    initialBalance: 10000,
+                    ...bot.config,
+                }
+            }));
+            setBots(botsWithDefaults);
+
         } catch (error) {
             console.error("Botlar localStorage'dan yüklenirken hata:", error);
             toast({
@@ -502,3 +505,5 @@ export default function BotStatusPage() {
         </div>
     );
 }
+
+    

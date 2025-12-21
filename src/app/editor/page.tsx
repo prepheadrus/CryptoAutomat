@@ -95,6 +95,17 @@ type BacktestResult = {
   };
 };
 
+const initialStrategyConfig: BotConfig = {
+    mode: 'PAPER',
+    stopLoss: 2.0,
+    takeProfit: 5.0,
+    trailingStop: false,
+    amountType: 'fixed',
+    amount: 100,
+    leverage: 1,
+    initialBalance: 10000,
+};
+
 // --- START: Mock Data & Backtest Engine ---
 
 const generateMockOHLCData = (numCandles = 200, symbol = 'BTC/USDT') => {
@@ -295,18 +306,6 @@ const runBacktestEngine = (nodes: Node[], edges: Edge[]): BacktestResult | { err
     return { ohlcData: finalChartData, tradeData: trades, pnlData, stats };
 };
 
-const initialStrategyConfig: BotConfig = {
-    mode: 'PAPER',
-    stopLoss: 2.0,
-    takeProfit: 5.0,
-    trailingStop: false,
-    amountType: 'fixed',
-    amount: 100,
-    leverage: 1,
-    initialBalance: 10000,
-};
-
-
 // Custom Shape for Scatter Markers
 const TradeMarker = (props: any) => {
     const { cx, cy, payload } = props;
@@ -428,7 +427,7 @@ export default function StrategyEditorPage() {
     logic: LogicNode,
     action: ActionNode,
     dataSource: DataSourceNode,
-  }), [nodes]); // Re-create if nodes change to pass the latest nodes array to the optimizer
+  }), []); 
 
 
   const addNode = useCallback((type: string) => {
@@ -816,8 +815,7 @@ export default function StrategyEditorPage() {
                             </div>
                             <div className="flex items-center space-x-2 mt-4">
                                 <Checkbox id="trailing-stop" checked={strategyConfig.trailingStop} onCheckedChange={checked => handleConfigChange('trailingStop', !!checked)} />
-                                <Label htmlFor="trailing-stop">Trailing Stop Kullan</Label>
-                            </div>
+                                <Label htmlFor="trailing-stop">Trailing Stop Kullan</Label>                            </div>
                         </div>
                         
                         {/* Pozisyon Boyutlandırma */}
@@ -872,3 +870,5 @@ export default function StrategyEditorPage() {
     </div>
   );
 }
+
+    
