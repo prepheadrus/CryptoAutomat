@@ -44,6 +44,7 @@ import { IndicatorNode } from '@/components/editor/nodes/IndicatorNode';
 import { LogicNode } from '@/components/editor/nodes/LogicNode';
 import { ActionNode } from '@/components/editor/nodes/ActionNode';
 import type { Bot, BotConfig } from '@/lib/types';
+import type { TooltipProps } from 'recharts';
 
 
 const initialNodes: Node[] = [
@@ -69,7 +70,7 @@ const initialNodes: Node[] = [
 
 const initialEdges: Edge[] = [
   { id: 'e1-2', source: '1', target: '2', markerEnd: { type: MarkerType.ArrowClosed } },
-  { id: 'e2-3', source: '2', target: '3', markerEnd: { type: MarkerType.ArrowClosed } },
+  { id:e2-3', source: '2', target: '3', markerEnd: { type: MarkerType.ArrowClosed } },
 ];
 
 const nodeTypes = {
@@ -396,7 +397,7 @@ export default function StrategyEditorPage() {
                         </div>
 
                         <div className="w-full h-full">
-                            <ResponsiveContainer width="100%" height="100%">
+                           <ResponsiveContainer width="100%" height="75%">
                                <ComposedChart data={mockBacktestData} syncId="backtestChart">
                                     <CartesianGrid stroke="rgba(255,255,255,0.1)" strokeDasharray="3 3"/>
                                     <XAxis dataKey="time" tick={{fontSize: 12}} stroke="rgba(255,255,255,0.4)" />
@@ -412,26 +413,9 @@ export default function StrategyEditorPage() {
                                     <Tooltip content={<CustomTooltip />} />
                                     <Legend />
                                     
-                                     {/* Fake candlestick by composing four bars and stacking them */}
-                                    <Bar yAxisId="price" dataKey={(v) => v.ohlc ? v.ohlc[2] : 0} stackId="a" fill="transparent" isAnimationActive={false} stroke="transparent" />
-                                    <Bar yAxisId="price" dataKey={(v) => v.ohlc ? Math.min(v.ohlc[0], v.ohlc[3]) - v.ohlc[2] : 0} stackId="a" fill="transparent" shape={(props: any) => {
-                                        const {x, y, width, height, payload} = props;
-                                        const color = payload.ohlc[3] > payload.ohlc[0] ? '#22c55e' : '#ef4444';
-                                        return <rect x={x + width/2 - 0.5} y={y} width={1} height={height} fill={color} />;
-                                    }} isAnimationActive={false}/>
-                                    <Bar yAxisId="price" dataKey={(v) => v.ohlc ? Math.abs(v.ohlc[0] - v.ohlc[3]) : 0} stackId="a" shape={(props: any) => {
-                                        const {x, y, width, height, payload} = props;
-                                        const color = payload.ohlc[3] > payload.ohlc[0] ? '#22c55e' : '#ef4444';
-                                        return <rect x={x} y={y} width={width} height={height} fill={color} />;
-                                    }} isAnimationActive={false}/>
-                                    <Bar yAxisId="price" dataKey={(v) => v.ohlc ? v.ohlc[1] - Math.max(v.ohlc[0], v.ohlc[3]) : 0} stackId="a" fill="transparent" shape={(props: any) => {
-                                        const {x, y, width, height, payload} = props;
-                                        const color = payload.ohlc[3] > payload.ohlc[0] ? '#22c55e' : '#ef4444';
-                                        return <rect x={x + width/2 - 0.5} y={y} width={1} height={height} fill={color} />;
-                                    }} isAnimationActive={false} />
+                                    <Line yAxisId="price" type="monotone" dataKey={(v) => v.ohlc ? v.ohlc[3] : null} name="Fiyat" stroke="#82ca9d" dot={false} />
                                     
-                                    {/* Trade Markers */}
-                                    <Scatter yAxisId="price" name="Trades" data={mockTradeData} dataKey="position" shape={<TradeMarker />} />
+                                    <Scatter yAxisId="price" name="İşlemler" data={mockTradeData} dataKey="position" shape={<TradeMarker />} />
                                </ComposedChart>
                             </ResponsiveContainer>
                             <ResponsiveContainer width="100%" height="25%">
@@ -532,3 +516,5 @@ export default function StrategyEditorPage() {
     </div>
   );
 }
+
+    
