@@ -70,7 +70,7 @@ const initialNodes: Node[] = [
 
 const initialEdges: Edge[] = [
   { id: 'e1-2', source: '1', target: '2', markerEnd: { type: MarkerType.ArrowClosed } },
-  { id:e2-3', source: '2', target: '3', markerEnd: { type: MarkerType.ArrowClosed } },
+  { id: 'e2-3', source: '2', target: '3', markerEnd: { type: MarkerType.ArrowClosed } },
 ];
 
 const nodeTypes = {
@@ -94,7 +94,9 @@ const generateMockOHLCData = () => {
         data.push({
             time: `D${i+1}`,
             ohlc: [open, high, low, close],
+            price: close, // Add close price for line chart
             rsi: 30 + Math.random() * 40,
+            pnl: 100 + i * 20 * (Math.random() > 0.4 ? 1 : -0.5) // Simulated PNL
         });
     }
     return data;
@@ -104,18 +106,18 @@ const mockBacktestData = generateMockOHLCData();
 
 // Simulate some trades based on the OHLC data
 const mockTradeData = [
-    { time: 'D10', type: 'buy', price: mockBacktestData[9].ohlc[3], rsi: mockBacktestData[9].rsi },
-    { time: 'D18', type: 'sell', price: mockBacktestData[17].ohlc[3], rsi: mockBacktestData[17].rsi },
-    { time: 'D25', type: 'buy', price: mockBacktestData[24].ohlc[3], rsi: mockBacktestData[24].rsi },
-    { time: 'D35', type: 'sell', price: mockBacktestData[34].ohlc[3], rsi: mockBacktestData[34].rsi },
-    { time: 'D48', type: 'buy', price: mockBacktestData[47].ohlc[3], rsi: mockBacktestData[47].rsi },
-    { time: 'D55', type: 'sell', price: mockBacktestData[54].ohlc[3], rsi: mockBacktestData[54].rsi },
+    { time: 'D10', type: 'buy', price: mockBacktestData[9].price },
+    { time: 'D18', type: 'sell', price: mockBacktestData[17].price },
+    { time: 'D25', type: 'buy', price: mockBacktestData[24].price },
+    { time: 'D35', type: 'sell', price: mockBacktestData[34].price },
+    { time: 'D48', type: 'buy', price: mockBacktestData[47].price },
+    { time: 'D55', type: 'sell', price: mockBacktestData[54].price },
 ].map(trade => {
     const dataPoint = mockBacktestData.find(d => d.time === trade.time);
     return {
         ...trade,
-        // Position markers above/below the candle
-        position: trade.type === 'buy' ? dataPoint!.ohlc[2] * 0.995 : dataPoint!.ohlc[1] * 1.005
+        time: dataPoint?.time,
+        price: dataPoint?.price
     };
 });
 
@@ -132,37 +134,31 @@ const initialStrategyConfig: BotConfig = {
 // Custom Shape for Scatter Markers
 const TradeMarker = (props: any) => {
     const { cx, cy, payload } = props;
-    if (payload.type === 'buy') {
-        return <ArrowUp x={cx - 8} y={cy - 8} width={16} height={16} className="text-green-500 fill-current" />;
+    const isBuy = payload.type === 'buy';
+    const markerY = isBuy ? cy + 5 : cy - 15; // Position below for buy, above for sell
+    
+    if (isBuy) {
+        return <ArrowUp x={cx - 8} y={markerY} width={16} height={16} className="text-green-500 fill-current" />;
     }
-    if (payload.type === 'sell') {
-        return <ArrowDown x={cx - 8} y={cy - 8} width={16} height={16} className="text-red-500 fill-current" />;
-    }
-    return null;
+    return <ArrowDown x={cx - 8} y={markerY} width={16} height={16} className="text-red-500 fill-current" />;
 };
 
 // Custom Tooltip for combined chart
 const CustomTooltip = ({ active, payload, label }: TooltipProps<ValueType, NameType>) => {
     if (active && payload && payload.length) {
-        const ohlc = payload.find(p => p.dataKey === 'ohlc')?.payload.ohlc;
-        const rsi = payload.find(p => p.dataKey === 'rsi')?.payload.rsi;
-        const trade = payload.find(p => p.dataKey === 'position');
+        const priceData = payload.find(p => p.dataKey === 'price')?.payload;
+        const pnlData = payload.find(p => p.dataKey === 'pnl');
+        const trade = mockTradeData.find(t => t.time === label);
 
         return (
             <div className="p-2 bg-slate-800/80 border border-slate-700 rounded-md text-white text-xs backdrop-blur-sm">
                 <p className="font-bold">{`Tarih: ${label}`}</p>
-                {ohlc && (
-                    <>
-                        <p>Açılış: <span className="font-mono">${ohlc[0].toFixed(2)}</span></p>
-                        <p>Yüksek: <span className="font-mono">${ohlc[1].toFixed(2)}</span></p>
-                        <p>Düşük: <span className="font-mono">${ohlc[2].toFixed(2)}</span></p>
-                        <p>Kapanış: <span className="font-mono">${ohlc[3].toFixed(2)}</span></p>
-                    </>
-                )}
-                {rsi && <p>RSI: <span className="font-mono">{rsi.toFixed(2)}</span></p>}
+                {priceData && <p>Fiyat: <span className="font-mono">${priceData.price.toFixed(2)}</span></p>}
+                {pnlData && <p>Kâr: <span className="font-mono">${pnlData.value?.toFixed(2)}</span></p>}
+                {priceData.rsi && <p>RSI: <span className="font-mono">{priceData.rsi.toFixed(2)}</span></p>}
                 {trade && (
-                     <p className={`font-bold mt-2 ${trade.payload.type === 'buy' ? 'text-green-400' : 'text-red-400'}`}>
-                        {trade.payload.type.toUpperCase()} @ ${trade.payload.price.toFixed(2)}
+                     <p className={`font-bold mt-2 ${trade.type === 'buy' ? 'text-green-400' : 'text-red-400'}`}>
+                        {trade.type.toUpperCase()} @ ${trade.price?.toFixed(2)}
                     </p>
                 )}
             </div>
@@ -377,10 +373,18 @@ export default function StrategyEditorPage() {
                         </Button>
                     </div>
                     <div className="p-4 md:p-6 flex-1 min-h-0 grid grid-rows-[auto,1fr] gap-6">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
                             <div className="rounded-lg bg-slate-800/50 p-3">
                                 <p className="text-xs text-slate-400">Net Kâr</p>
                                 <p className="text-lg font-bold text-green-400">+$1,240.50 <span className="text-sm font-medium text-slate-300">(%12.4)</span></p>
+                            </div>
+                             <div className="rounded-lg bg-slate-800/50 p-3">
+                                <p className="text-xs text-slate-400">Toplam İşlem</p>
+                                <p className="text-lg font-bold">6</p>
+                            </div>
+                            <div className="rounded-lg bg-slate-800/50 p-3">
+                                <p className="text-xs text-slate-400">Başarı Oranı</p>
+                                <p className="text-lg font-bold">66.7%</p>
                             </div>
                             <div className="rounded-lg bg-slate-800/50 p-3">
                                 <p className="text-xs text-slate-400">Maks. Düşüş</p>
@@ -390,35 +394,46 @@ export default function StrategyEditorPage() {
                                 <p className="text-xs text-slate-400">Kâr Faktörü</p>
                                 <p className="text-lg font-bold">2.18</p>
                             </div>
-                            <div className="rounded-lg bg-slate-800/50 p-3">
-                                <p className="text-xs text-slate-400">Toplam İşlem</p>
-                                <p className="text-lg font-bold">6</p>
-                            </div>
                         </div>
 
                         <div className="w-full h-full">
-                           <ResponsiveContainer width="100%" height="75%">
+                           <ResponsiveContainer width="100%" height="70%">
                                <ComposedChart data={mockBacktestData} syncId="backtestChart">
+                                    <defs>
+                                        <linearGradient id="colorPnl" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8}/>
+                                            <stop offset="95%" stopColor="#8884d8" stopOpacity={0.1}/>
+                                        </linearGradient>
+                                    </defs>
                                     <CartesianGrid stroke="rgba(255,255,255,0.1)" strokeDasharray="3 3"/>
                                     <XAxis dataKey="time" tick={{fontSize: 12}} stroke="rgba(255,255,255,0.4)" />
                                     <YAxis 
-                                        yAxisId="price" 
+                                        yAxisId="left" 
+                                        orientation="left"
+                                        domain={['auto', 'auto']} 
+                                        tickFormatter={(val: number) => `$${val.toLocaleString()}`}
+                                        tick={{fontSize: 12}}
+                                        stroke="#8884d8"
+                                    />
+                                    <YAxis 
+                                        yAxisId="right" 
                                         orientation="right"
                                         domain={['dataMin * 0.98', 'dataMax * 1.02']} 
                                         tickFormatter={(val: number) => `$${(val/1000).toFixed(1)}k`}
                                         tick={{fontSize: 12}}
-                                        stroke="rgba(255,255,255,0.4)"
+                                        stroke="#82ca9d"
                                     />
-                                    <YAxis yAxisId="rsi" orientation="right" domain={[0, 100]} tickCount={5} axisLine={false} tickLine={false} tick={{fontSize: 10}} hide={true} />
                                     <Tooltip content={<CustomTooltip />} />
                                     <Legend />
                                     
-                                    <Line yAxisId="price" type="monotone" dataKey={(v) => v.ohlc ? v.ohlc[3] : null} name="Fiyat" stroke="#82ca9d" dot={false} />
+                                    <Area yAxisId="left" type="monotone" dataKey="pnl" name="Kümülatif Kâr" stroke="#8884d8" fill="url(#colorPnl)" />
                                     
-                                    <Scatter yAxisId="price" name="İşlemler" data={mockTradeData} dataKey="position" shape={<TradeMarker />} />
-                               </ComposedChart>
+                                    <Line yAxisId="right" type="monotone" dataKey="price" name="Fiyat" stroke="#82ca9d" dot={false} />
+                                    
+                                    <Scatter yAxisId="right" name="İşlemler" data={mockTradeData} shape={<TradeMarker />} />
+                                </ComposedChart>
                             </ResponsiveContainer>
-                            <ResponsiveContainer width="100%" height="25%">
+                            <ResponsiveContainer width="100%" height="30%">
                                 <ComposedChart data={mockBacktestData} syncId="backtestChart" margin={{left: 0, right: 10, top: 20}}>
                                     <CartesianGrid stroke="rgba(255,255,255,0.1)" strokeDasharray="3 3"/>
                                     <XAxis dataKey="time" hide={true}/>
@@ -426,7 +441,7 @@ export default function StrategyEditorPage() {
                                     <Tooltip content={<CustomTooltip />} />
                                     <ReferenceLine yAxisId="rsi" y={70} label={{value: "70", position: 'insideRight', fill: 'rgba(255,255,255,0.5)', fontSize: 10}} stroke="rgba(255,255,255,0.3)" strokeDasharray="3 3" />
                                     <ReferenceLine yAxisId="rsi" y={30} label={{value: "30", position: 'insideRight', fill: 'rgba(255,255,255,0.5)', fontSize: 10}} stroke="rgba(255,255,255,0.3)" strokeDasharray="3 3" />
-                                    <Area yAxisId="rsi" type="monotone" dataKey="rsi" stroke="#8884d8" fill="#8884d8" fillOpacity={0.2} name="RSI"/>
+                                    <Area yAxisId="rsi" type="monotone" dataKey="rsi" stroke="#eab308" fill="#eab308" fillOpacity={0.2} name="RSI"/>
                                 </ComposedChart>
                             </ResponsiveContainer>
                         </div>
