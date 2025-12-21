@@ -313,6 +313,3 @@ export default function MarketTerminalPage() {
     </div>
   );
 }
-
-
-    
