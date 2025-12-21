@@ -1,4 +1,4 @@
-import { RSI, MACD } from 'technicalindicators';
+import { RSI, MACD as MACDCalculator } from 'technicalindicators';
 
 export function calculateRSI(values: number[], period: number = 14) {
     const input = {
@@ -17,5 +17,6 @@ export function calculateMACD(values: number[], fastPeriod: number = 12, slowPer
         SimpleMAOscillator: false,
         SimpleMASignal: false,
     };
-    return MACD.calculate(input);
+    // The result will be an array of objects { MACD: number, signal: number, histogram: number }
+    return MACDCalculator.calculate(input);
 }

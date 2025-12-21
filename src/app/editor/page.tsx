@@ -29,9 +29,10 @@ import {
   ResponsiveContainer,
   Scatter,
   ReferenceLine,
+  Bar,
 } from 'recharts';
 import { NameType, ValueType } from 'recharts/types/component/DefaultTooltipContent';
-import { RSI as RSICalculator, MACD as MACDCalculator, SMA as SMACalculator } from 'technicalindicators';
+import { RSI as RSICalculator, SMA as SMACalculator } from 'technicalindicators';
 
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -47,6 +48,7 @@ import { ActionNode } from '@/components/editor/nodes/ActionNode';
 import { DataSourceNode } from '@/components/editor/nodes/DataSourceNode';
 import type { Bot, BotConfig } from '@/lib/types';
 import type { TooltipProps } from 'recharts';
+import { calculateMACD } from '@/lib/indicators';
 
 
 const initialNodes: Node[] = [
@@ -170,7 +172,8 @@ const runBacktestEngine = (nodes: Node[], edges: Edge[]): BacktestResult | { err
 
     // 2. Calculate all indicators present on the graph
     const indicatorNodes = nodes.filter(n => n.type === 'indicator');
-    const signals: Record<string, (number | undefined)[]> = {};
+    const signals: Record<string, (number | undefined | { MACD?: number, signal?: number, histogram?: number })[]> = {};
+
 
     indicatorNodes.forEach(node => {
         const sourceEdge = edges.find(e => e.target === node.id);
@@ -182,17 +185,18 @@ const runBacktestEngine = (nodes: Node[], edges: Edge[]): BacktestResult | { err
         }
         
         const closePrices = pricesBySource[sourceEdge.source];
-        const { indicatorType, period } = node.data;
-        let result: number[] = [];
+        const { indicatorType, period, fastPeriod, slowPeriod, signalPeriod } = node.data;
+        let result: any[] = [];
 
         if (indicatorType === 'rsi') {
             result = RSICalculator.calculate({ values: closePrices, period: period || 14 });
         } else if (indicatorType === 'sma') {
             result = SMACalculator.calculate({ values: closePrices, period: period || 20 });
-        } else if (indicatorType === 'ema') { // EMA is a type of MA
+        } else if (indicatorType === 'ema') {
              result = SMACalculator.calculate({ values: closePrices, period: period || 20 });
+        } else if (indicatorType === 'macd') {
+            result = calculateMACD(closePrices, fastPeriod, slowPeriod, signalPeriod);
         }
-        // Future: Add MACD etc. here
         
         const padding = Array(closePrices.length - result.length).fill(undefined);
         signals[node.id] = padding.concat(result);
@@ -238,8 +242,16 @@ const runBacktestEngine = (nodes: Node[], edges: Edge[]): BacktestResult | { err
                 const indicatorNode = nodes.find(n => n.id === indEdge.source);
                 if (!indicatorNode) return false;
 
-                const indicatorValue = signals[indicatorNode.id]?.[candleIndex];
+                let indicatorValue = signals[indicatorNode.id]?.[candleIndex];
                 if (indicatorValue === undefined) return false;
+                
+                // If indicator is MACD, use the MACD line value for logic
+                if (typeof indicatorValue === 'object' && indicatorValue.MACD !== undefined) {
+                    indicatorValue = indicatorValue.MACD;
+                }
+                
+                if (typeof indicatorValue !== 'number') return false;
+
 
                 const { operator, value: thresholdValue } = logicNode.data;
                 
@@ -312,8 +324,20 @@ const runBacktestEngine = (nodes: Node[], edges: Edge[]): BacktestResult | { err
     const finalChartData = chartDataWithIndicators.map((d, i) => {
         const dataPoint: any = {...d};
         indicatorNodes.forEach(node => {
-            const indicatorKey = `${node.data.indicatorType.toUpperCase()}(${node.data.period})`;
-            dataPoint[indicatorKey] = signals[node.id]?.[i];
+            let key;
+            const signal = signals[node.id]?.[i];
+
+            if (node.data.indicatorType === 'macd') {
+                key = `MACD(${node.data.fastPeriod || 12},${node.data.slowPeriod || 26},${node.data.signalPeriod || 9})`;
+                if(typeof signal === 'object' && signal !== null) {
+                    dataPoint[`${key}_MACD`] = signal.MACD;
+                    dataPoint[`${key}_Signal`] = signal.signal;
+                    dataPoint[`${key}_Hist`] = signal.histogram;
+                }
+            } else {
+                key = `${node.data.indicatorType.toUpperCase()}(${node.data.period})`;
+                dataPoint[key] = signal;
+            }
         });
         return dataPoint;
     });
@@ -547,16 +571,18 @@ export default function StrategyEditorPage() {
   const handleSaveStrategy = () => {
      try {
         const storedBotsJSON = localStorage.getItem('myBots');
-        const bots: Bot[] = storedBotsJSON ? JSON.parse(storedBotsJSON) : [];
+        let bots: Bot[] = storedBotsJSON ? JSON.parse(storedBotsJSON) : [];
         const dataSourceNode = nodes.find(n => n.type === 'dataSource');
         const symbol = dataSourceNode?.data.symbol || 'BTC/USDT';
 
         if(editingBotId) {
             // Update existing bot
-            const updatedBots = bots.map(bot => {
+            bots = bots.map(bot => {
                 if (bot.id === editingBotId) {
+                    const botName = bot.name; // Preserve the original name
                     return {
                         ...bot,
+                        name: botName,
                         pair: symbol,
                         config: strategyConfig,
                         nodes: nodes,
@@ -565,8 +591,7 @@ export default function StrategyEditorPage() {
                 }
                 return bot;
             });
-            localStorage.setItem('myBots', JSON.stringify(updatedBots));
-            const botName = updatedBots.find(b => b.id === editingBotId)?.name;
+            const botName = bots.find(b => b.id === editingBotId)?.name;
             toast({
               title: 'Strateji Güncellendi!',
               description: `"${botName}" adlı botun yapısı ve ayarları güncellendi.`,
@@ -591,13 +616,13 @@ export default function StrategyEditorPage() {
               edges: edges,
             };
             bots.push(newBot);
-            localStorage.setItem('myBots', JSON.stringify(bots));
              toast({
               title: 'Strateji Kaydedildi!',
               description: `"${botName}" adlı yeni bot oluşturuldu.`,
             });
         }
-
+        
+        localStorage.setItem('myBots', JSON.stringify(bots));
         router.push('/bot-status');
 
       } catch (error) {
@@ -666,10 +691,14 @@ export default function StrategyEditorPage() {
     return Object.keys(firstDataPoint).filter(key => key.includes('('));
   }, [backtestResult]);
   
-  // A flag to check if there is an oscillator indicator like RSI
   const hasOscillator = useMemo(() => {
     return indicatorKeys.some(key => key.startsWith('RSI'));
   }, [indicatorKeys]);
+  
+  const hasMACD = useMemo(() => {
+    return indicatorKeys.some(key => key.startsWith('MACD'));
+  }, [indicatorKeys]);
+
 
   return (
     <div className="flex flex-1 flex-row overflow-hidden">
@@ -725,7 +754,7 @@ export default function StrategyEditorPage() {
                 </Button>
                 <Button variant="secondary" onClick={handleSaveStrategy} disabled={isCompiling || isBacktesting}>
                     <Save className="mr-2 h-4 w-4" />
-                    Kaydet
+                    {editingBotId ? 'Değişiklikleri Kaydet' : 'Yeni Olarak Kaydet'}
                 </Button>
             </div>
         </main>
@@ -771,7 +800,7 @@ export default function StrategyEditorPage() {
                         </div>
 
                         <div className="w-full h-full">
-                           <ResponsiveContainer width="100%" height={hasOscillator ? "70%" : "100%"}>
+                           <ResponsiveContainer width="100%" height={(hasOscillator || hasMACD) ? "70%" : "100%"}>
                                <ComposedChart data={chartAndTradeData} syncId="backtestChart">
                                     <defs>
                                         <linearGradient id="colorPnl" x1="0" y1="0" x2="0" y2="1">
@@ -803,14 +832,14 @@ export default function StrategyEditorPage() {
                                     <Area yAxisId="pnl" type="monotone" dataKey="pnl" name="Kümülatif Kâr" stroke="hsl(var(--primary))" fill="url(#colorPnl)" />
                                     
                                     <Line yAxisId="price" type="monotone" dataKey="price" name="Fiyat" stroke="hsl(var(--accent))" dot={false} strokeWidth={2} />
-                                     {indicatorKeys.filter(k => !k.startsWith('RSI')).map((key, index) => (
+                                     {indicatorKeys.filter(k => !k.startsWith('RSI') && !k.startsWith('MACD')).map((key, index) => (
                                         <Line key={key} yAxisId="price" type="monotone" dataKey={key} name={key} stroke={["#facc15", "#38bdf8"][(index) % 2]} dot={false} strokeWidth={1.5} />
                                     ))}
                                     
                                     <Scatter yAxisId="price" name="İşlemler" dataKey="tradeMarker.price" fill="transparent" shape={<TradeMarker />} />
                                 </ComposedChart>
                             </ResponsiveContainer>
-                            {hasOscillator && (
+                             {hasOscillator && !hasMACD && (
                                 <ResponsiveContainer width="100%" height="30%">
                                     <ComposedChart data={chartAndTradeData} syncId="backtestChart" margin={{left: 0, right: 10, top: 20}}>
                                         <CartesianGrid stroke="rgba(255,255,255,0.1)" strokeDasharray="3 3"/>
@@ -821,6 +850,30 @@ export default function StrategyEditorPage() {
                                         <ReferenceLine yAxisId="indicator" y={30} label={{value: "30", position: 'insideRight', fill: 'rgba(255,255,255,0.5)', fontSize: 10}} stroke="rgba(255,255,255,0.3)" strokeDasharray="3 3" />
                                         {indicatorKeys.filter(k => k.startsWith('RSI')).map((key, index) => (
                                             <Line key={key} yAxisId="indicator" type="monotone" dataKey={key} stroke={["#eab308", "#3b82f6"][index % 2]} fillOpacity={0.2} name={key} dot={false}/>
+                                        ))}
+                                    </ComposedChart>
+                                </ResponsiveContainer>
+                            )}
+                             {hasMACD && (
+                                <ResponsiveContainer width="100%" height="30%">
+                                    <ComposedChart data={chartAndTradeData} syncId="backtestChart" margin={{left: 0, right: 10, top: 20}}>
+                                        <CartesianGrid stroke="rgba(255,255,255,0.1)" strokeDasharray="3 3"/>
+                                        <XAxis dataKey="time" hide={true}/>
+                                        <YAxis yAxisId="macd" orientation="right" domain={['auto', 'auto']} tickCount={5} tick={{fontSize: 12}} stroke="rgba(255,255,255,0.4)" />
+                                        <Tooltip content={<CustomTooltip />} />
+                                        <ReferenceLine yAxisId="macd" y={0} stroke="rgba(255,255,255,0.3)" strokeDasharray="3 3" />
+                                        {indicatorKeys.filter(k => k.includes('_Hist')).map((key, index) => (
+                                            <Bar key={key} yAxisId="macd" dataKey={key} name="Histogram" >
+                                               {chartAndTradeData.map((entry, i) => (
+                                                    <Cell key={`cell-${i}`} fill={entry[key] > 0 ? '#22c55e' : '#ef4444'} />
+                                                ))}
+                                            </Bar>
+                                        ))}
+                                        {indicatorKeys.filter(k => k.includes('_MACD')).map((key, index) => (
+                                            <Line key={key} yAxisId="macd" type="monotone" dataKey={key} name="MACD" stroke="#3b82f6" dot={false}/>
+                                        ))}
+                                        {indicatorKeys.filter(k => k.includes('_Signal')).map((key, index) => (
+                                            <Line key={key} yAxisId="macd" type="monotone" dataKey={key} name="Signal" stroke="#f97316" dot={false}/>
                                         ))}
                                     </ComposedChart>
                                 </ResponsiveContainer>
