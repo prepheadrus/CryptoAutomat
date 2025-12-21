@@ -18,7 +18,7 @@ import {
 import '@xyflow/react/dist/style.css';
 
 import { Button } from '@/components/ui/button';
-import { Loader2, Terminal, Share2, GitBranch, Rss, CircleDollarSign } from 'lucide-react';
+import { Loader2, Terminal, Rss, GitBranch, CircleDollarSign } from 'lucide-react';
 import { IndicatorNode } from '@/components/editor/nodes/IndicatorNode';
 import { LogicNode } from '@/components/editor/nodes/LogicNode';
 import { ActionNode } from '@/components/editor/nodes/ActionNode';
@@ -52,6 +52,12 @@ const initialNodes: Node[] = [
   },
 ];
 
+const initialEdges: Edge[] = [
+    { id: 'e1-2', source: '1', target: '2', markerEnd: { type: MarkerType.ArrowClosed } },
+    { id: 'e2-3', source: '2', target: '3', markerEnd: { type: MarkerType.ArrowClosed } },
+];
+
+
 const Sidebar = () => {
     const onDragStart = (event: DragEvent<HTMLDivElement>, nodeType: string) => {
         if (event.dataTransfer) {
@@ -80,7 +86,7 @@ const Sidebar = () => {
 function StrategyBuilder() {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [isCompiling, setIsCompiling] = useState(false);
   const [logs, setLogs] = useState<string[]>(['> [SİSTEM] Editör başlatıldı. Stratejinizi oluşturun veya test edin.']);
   const { screenToFlowPosition } = useReactFlow();
@@ -167,15 +173,13 @@ function StrategyBuilder() {
   };
 
   return (
-    <div className="w-full h-full" ref={reactFlowWrapper}>
+    <div className="w-full h-full" ref={reactFlowWrapper} onDrop={onDrop} onDragOver={onDragOver}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
-        onDrop={onDrop}
-        onDragOver={onDragOver}
         nodeTypes={nodeTypes}
         fitView
         className="bg-background"
