@@ -1,7 +1,6 @@
-
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   ReactFlow,
   Background,
@@ -15,19 +14,16 @@ import {
   Node,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Rss, GitBranch, CircleDollarSign } from 'lucide-react';
+import { Loader2, Rss, GitBranch, CircleDollarSign, Save } from 'lucide-react';
 import { IndicatorNode } from '@/components/editor/nodes/IndicatorNode';
 import { LogicNode } from '@/components/editor/nodes/LogicNode';
 import { ActionNode } from '@/components/editor/nodes/ActionNode';
+import type { Bot } from '@/lib/types';
 
-const nodeTypes = {
-  indicator: IndicatorNode,
-  logic: LogicNode,
-  action: ActionNode,
-};
 
 const initialNodes: Node[] = [
   {
@@ -61,6 +57,12 @@ export default function StrategyEditorPage() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [isCompiling, setIsCompiling] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const onConnect = useCallback(
     (params: Connection | Edge) => setEdges((eds) => addEdge({ ...params, animated: true, markerEnd: { type: MarkerType.ArrowClosed } }, eds)),
@@ -122,7 +124,7 @@ export default function StrategyEditorPage() {
       toast({
         title: 'Test Başarılı',
         description: data.message,
-        variant: data.message.includes('[SİMÜLASYON]') ? 'default' : 'default', // Renk ayarlanabilir
+        variant: data.message.includes('[SİMÜLASYON]') ? 'default' : 'default',
       });
 
     } catch (error) {
@@ -137,8 +139,53 @@ export default function StrategyEditorPage() {
     }
   };
 
+  const handleSaveStrategy = () => {
+    if (!isClient) return;
+
+    const botName = window.prompt("Yeni botunuz için bir isim girin:");
+
+    if (botName) {
+      try {
+        const newBot: Bot = {
+          id: Date.now(),
+          name: botName,
+          pair: 'BTC/USDT',
+          status: 'Durduruldu',
+          pnl: 0,
+          duration: "0s",
+        };
+
+        const storedBots = localStorage.getItem('myBots');
+        const bots: Bot[] = storedBots ? JSON.parse(storedBots) : [];
+        bots.push(newBot);
+        localStorage.setItem('myBots', JSON.stringify(bots));
+
+        toast({
+          title: 'Strateji Kaydedildi!',
+          description: `"${botName}" adlı yeni bot oluşturuldu.`,
+        });
+
+        router.push('/bot-status');
+      } catch (error) {
+        toast({
+          title: 'Kayıt Hatası',
+          description: 'Bot kaydedilirken bir hata oluştu.',
+          variant: 'destructive',
+        });
+        console.error("Bot kaydetme hatası:", error);
+      }
+    } else {
+        toast({
+            title: 'İptal Edildi',
+            description: 'Bot kaydetme işlemi iptal edildi.',
+            variant: 'secondary'
+        });
+    }
+  };
+
+
   return (
-    <div className="flex flex-row flex-1 w-full overflow-hidden">
+    <div className="flex flex-row h-full w-full overflow-hidden">
         <aside className="w-64 flex-shrink-0 border-r border-slate-800 bg-slate-900 p-4 flex flex-col gap-2">
             <h3 className="font-bold text-lg text-foreground mb-4 font-headline">Araç Kutusu</h3>
              <Button variant="outline" className="justify-start gap-2 bg-slate-800 hover:bg-slate-700 text-white border-slate-700" onClick={() => addNode('indicator')}>
@@ -175,7 +222,8 @@ export default function StrategyEditorPage() {
                         "▶ Stratejiyi Test Et"
                     )}
                 </Button>
-                <Button variant="secondary">
+                <Button variant="secondary" onClick={handleSaveStrategy}>
+                    <Save className="mr-2 h-4 w-4" />
                     Kaydet
                 </Button>
             </div>

@@ -1,15 +1,16 @@
-
 'use client';
 
-import { useState, MouseEvent } from "react";
+import { useState, MouseEvent, useEffect } from "react";
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Play, Pause, Terminal, Bot, Settings, PlusCircle, Trash2 } from "lucide-react";
+import { Play, Pause, Terminal, Bot, Settings, PlusCircle, Trash2, Save } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import type { Bot as BotType, Log, BotStatus } from "@/lib/types";
 
-const initialBots = [
+
+const initialBots: BotType[] = [
     { id: 1, name: "BTC-RSI Stratejisi", pair: "BTC/USDT", status: "Çalışıyor", pnl: 12.5, duration: "2g 5sa" },
     { id: 2, name: "ETH-MACD Scalp", pair: "ETH/USDT", status: "Durduruldu", pnl: -3.2, duration: "12sa 15dk" },
     { id: 3, name: "SOL-Trend Follow", pair: "SOL/USDT", status: "Çalışıyor", pnl: 8.9, duration: "5g 1sa" },
@@ -17,22 +18,6 @@ const initialBots = [
 ];
 
 type LogType = 'info' | 'trade' | 'warning' | 'error';
-type BotStatus = "Çalışıyor" | "Durduruldu" | "Hata";
-
-type Bot = {
-    id: number;
-    name: string;
-    pair: string;
-    status: BotStatus;
-    pnl: number;
-    duration: string;
-};
-
-type Log = {
-    type: LogType;
-    message: string;
-};
-
 
 const initialLogs: Log[] = [
     { type: 'info', message: '[10:00:00] "BTC-RSI Stratejisi" botu başlatıldı.' },
@@ -72,8 +57,35 @@ const statusConfig: Record<BotStatus, { badge: "default" | "secondary" | "destru
 };
 
 export default function BotStatusPage() {
-    const [bots, setBots] = useState<Bot[]>(initialBots);
+    const [bots, setBots] = useState<BotType[]>([]);
     const [logs, setLogs] = useState<Log[]>(initialLogs);
+    const [isClient, setIsClient] = useState(false);
+
+    useEffect(() => {
+        setIsClient(true);
+        try {
+            const storedBots = localStorage.getItem('myBots');
+            if (storedBots) {
+                setBots(JSON.parse(storedBots));
+            } else {
+                setBots(initialBots);
+            }
+        } catch (error) {
+            console.error("Botlar localStorage'dan yüklenirken hata:", error);
+            setBots(initialBots);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (isClient) {
+            try {
+                localStorage.setItem('myBots', JSON.stringify(bots));
+            } catch (error) {
+                console.error("Botlar localStorage'a kaydedilirken hata:", error);
+            }
+        }
+    }, [bots, isClient]);
+
 
     const addLog = (type: LogType, message: string) => {
         const timestamp = new Date().toLocaleTimeString('tr-TR', { hour12: false });
@@ -86,28 +98,28 @@ export default function BotStatusPage() {
             if (bot.id === botId) {
                 if (bot.status === "Çalışıyor") {
                     addLog('info', `"${bot.name}" botu kullanıcı tarafından durduruldu.`);
-                    return { ...bot, status: "Durduruldu" };
+                    return { ...bot, status: "Durduruldu" as BotStatus };
                 } else if (bot.status === "Durduruldu" || bot.status === "Hata") {
                     addLog('info', `"${bot.name}" botu kullanıcı tarafından başlatıldı.`);
-                    return { ...bot, status: "Çalışıyor" };
+                    return { ...bot, status: "Çalışıyor" as BotStatus };
                 }
             }
             return bot;
         }));
     };
 
-    const handleDeleteBot = (e: MouseEvent, botId: number, botName: string) => {
+    const handleDeleteBot = (e: MouseEvent, botId: number) => {
         e.stopPropagation();
-        if (window.confirm(`"${botName}" adlı botu silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`)) {
+        const botToDelete = bots.find(bot => bot.id === botId);
+        if (botToDelete && window.confirm(`"${botToDelete.name}" adlı botu silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`)) {
             setBots(prev => prev.filter(bot => bot.id !== botId));
-            addLog('warning', `Bot silindi: "${botName}"`);
+            addLog('warning', `Bot silindi: "${botToDelete.name}"`);
         }
     };
     
     const handleSettings = (e: MouseEvent, botId: number) => {
         e.stopPropagation();
-        console.log(`Ayarlar tıklandı: ${botId}`);
-        window.alert("Ayarlar modülü henüz aktif değil.");
+        window.alert(`Ayarlar modülü bot #${botId} için henüz aktif değil.`);
     }
 
     return (
@@ -145,7 +157,7 @@ export default function BotStatusPage() {
                                          <Button variant="ghost" size="icon" onClick={(e) => handleSettings(e, bot.id)}>
                                             <Settings className="h-4 w-4"/>
                                         </Button>
-                                         <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={(e) => handleDeleteBot(e, bot.id, bot.name)} aria-label="Sil">
+                                         <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={(e) => handleDeleteBot(e, bot.id)} aria-label="Sil">
                                             <Trash2 className="h-4 w-4"/>
                                         </Button>
                                     </div>
