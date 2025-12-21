@@ -1,15 +1,17 @@
 
 'use client';
 
-import { useState, useEffect, useRef, memo, useId, useCallback } from 'react';
+import { useState, useEffect, useRef, memo, useId, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, ArrowRight } from "lucide-react";
+import { Search, ArrowRight, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 
 declare global {
     interface Window {
@@ -18,8 +20,8 @@ declare global {
 }
 
 type MarketCoin = {
-  symbol: string;
-  name: string;
+  symbol: string; // Base currency, e.g., 'BTC'
+  name: string; // Full name, e.g., 'Bitcoin'
   price: number;
   change: number;
 };
@@ -39,7 +41,7 @@ const TradingViewWidget = memo(({ symbol }: { symbol: string }) => {
         let tvWidget: any = null;
 
         const createWidget = () => {
-            if (typeof window.TradingView !== 'undefined') {
+            if (document.getElementById(container_id) && typeof window.TradingView !== 'undefined') {
                 tvWidget = new window.TradingView.widget({
                     autosize: true,
                     symbol: `BINANCE:${symbol.toUpperCase()}USDT`,
@@ -69,30 +71,23 @@ const TradingViewWidget = memo(({ symbol }: { symbol: string }) => {
             script.onload = createWidget;
             document.body.appendChild(script);
         } else {
-            // If script already exists, it might have loaded, so try to create widget
             createWidget();
         }
 
         return () => {
-            // Cleanup on component unmount or symbol change
-            if (tvWidget !== null) {
-                try {
-                    // TradingView provides a remove() method on the widget object
-                    // but we don't have a stable reference to it across renders.
-                    // Instead, we manually remove the iframe it creates.
-                    const iframe = container.querySelector('iframe');
-                    if (iframe) {
-                        container.removeChild(iframe);
-                    }
-                } catch (error) {
-                    console.error("Error cleaning up TradingView widget:", error);
+             if (container) {
+                const iframe = container.querySelector('iframe');
+                if (iframe) {
+                   try {
+                     container.removeChild(iframe);
+                   } catch (error) {
+                       console.error("Error cleaning up TradingView widget:", error);
+                   }
                 }
             }
         };
-    }, [symbol, container_id]); // Re-run the effect if the symbol or the unique container_id changes
+    }, [symbol, container_id]);
 
-    // The key prop on the outer div ensures React replaces the div (and its children)
-    // when the symbol changes, ensuring a clean slate for the TradingView widget.
     return (
         <div key={symbol} className="tradingview-widget-container h-full" ref={containerRef}>
             <div id={container_id} className="h-full" />
@@ -108,19 +103,42 @@ export default function MarketTerminalPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [marketData, setMarketData] = useState<MarketCoin[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [favorites, setFavorites] = useState<string[]>([]);
   
   const searchParams = useSearchParams();
   const router = useRouter();
 
+  // Load favorites from localStorage on initial render
+  useEffect(() => {
+    try {
+      const storedFavorites = localStorage.getItem('marketFavorites');
+      if (storedFavorites) {
+        setFavorites(JSON.parse(storedFavorites));
+      }
+    } catch (error) {
+      console.error("Favoriler yüklenirken hata:", error);
+    }
+  }, []);
+  
+  // Save favorites to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('marketFavorites', JSON.stringify(favorites));
+    } catch (error) {
+      console.error("Favoriler kaydedilirken hata:", error);
+    }
+  }, [favorites]);
+
   useEffect(() => {
     const symbolFromUrl = searchParams.get('symbol');
     if (symbolFromUrl) {
-      setSelectedSymbol(symbolFromUrl);
+      setSelectedSymbol(symbolFromUrl.replace('USDT', ''));
     }
   }, [searchParams]);
 
   const fetchMarketData = useCallback(async () => {
       try {
+          // No need to set isLoading to true here to avoid flicker on interval refresh
           const response = await fetch('/api/market-data');
           if (!response.ok) {
               throw new Error('Piyasa verileri alınamadı');
@@ -129,7 +147,6 @@ export default function MarketTerminalPage() {
           setMarketData(data.tickers);
       } catch (error) {
           console.error(error);
-          // Optionally, show a toast notification
       } finally {
           setIsLoading(false);
       }
@@ -142,21 +159,90 @@ export default function MarketTerminalPage() {
   }, [fetchMarketData]);
 
 
-  const filteredMarkets = marketData.filter(coin =>
-    coin.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    coin.symbol.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
   const handleSelectSymbol = (symbol: string) => {
     setSelectedSymbol(symbol);
-    // Update URL without reloading the page
     router.push(`/market?symbol=${symbol}`, { scroll: false });
   }
 
+  const toggleFavorite = (e: React.MouseEvent, symbol: string) => {
+      e.stopPropagation();
+      setFavorites(prev => 
+          prev.includes(symbol) 
+              ? prev.filter(s => s !== symbol) 
+              : [...prev, symbol]
+      );
+  }
+
+  const MarketList = ({ coins }: { coins: MarketCoin[] }) => {
+    if (isLoading) {
+      return (
+        <div className="p-2 space-y-2">
+            {Array.from({ length: 15 }).map((_, i) => (
+                <div key={i} className="grid grid-cols-[auto,1fr,1fr] gap-4 items-center">
+                    <Skeleton className="h-5 w-5 rounded-full" />
+                    <Skeleton className="h-5 w-16" />
+                    <Skeleton className="h-5 w-24 justify-self-end" />
+                </div>
+            ))}
+        </div>
+      );
+    }
+    
+    if(coins.length === 0) {
+        return <p className="text-center text-muted-foreground p-8">Sonuç bulunamadı.</p>
+    }
+
+    return (
+        <ul>
+            {coins.map((coin) => (
+                <li key={coin.symbol}>
+                    <button 
+                        className={cn(
+                            "w-full p-2 grid grid-cols-[auto,1fr,1fr] gap-4 items-center text-sm text-left hover:bg-slate-800/50 rounded-md transition-colors",
+                            selectedSymbol === coin.symbol && "bg-primary/10 text-primary"
+                        )}
+                        onClick={() => handleSelectSymbol(coin.symbol)}
+                    >
+                        <Star 
+                            className={cn(
+                                "h-4 w-4 text-muted-foreground/50 hover:text-yellow-400 transition-colors",
+                                favorites.includes(coin.symbol) && "text-yellow-400 fill-yellow-400"
+                            )}
+                            onClick={(e) => toggleFavorite(e, coin.symbol)}
+                        />
+                        <span className="font-bold">{coin.symbol}</span>
+                        <div className="flex flex-col items-end">
+                            <span className="font-mono">${coin.price < 0.01 ? coin.price.toPrecision(2) : coin.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            <span className={cn(
+                                "font-mono text-xs",
+                                coin.change >= 0 ? "text-green-500" : "text-red-500"
+                            )}>
+                                {coin.change.toFixed(2)}%
+                            </span>
+                        </div>
+                    </button>
+                </li>
+            ))}
+        </ul>
+    );
+  }
+
+  const filteredAllMarkets = useMemo(() => marketData.filter(coin =>
+    coin.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    coin.symbol.toLowerCase().includes(searchQuery.toLowerCase())
+  ), [marketData, searchQuery]);
+
+  const favoriteMarkets = useMemo(() => marketData.filter(coin => 
+      favorites.includes(coin.symbol) && (
+        coin.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        coin.symbol.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+  ), [marketData, favorites, searchQuery]);
+
+
   return (
     <div className="flex-1 flex flex-row overflow-hidden rounded-lg bg-slate-950 border border-slate-800">
-        {/* Left Panel: Market List */}
-        <aside className="w-1/4 flex-shrink-0 border-r border-slate-800 bg-slate-900/50 flex flex-col">
+        <aside className="w-1/3 max-w-sm flex-shrink-0 border-r border-slate-800 bg-slate-900/50 flex flex-col">
             <div className="p-4 border-b border-slate-800">
                 <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -169,47 +255,25 @@ export default function MarketTerminalPage() {
                     />
                 </div>
             </div>
-            <div className="flex-1 overflow-y-auto">
-                <div className="grid grid-cols-3 gap-2 p-2 border-b border-slate-800 text-xs text-muted-foreground sticky top-0 bg-slate-900/50 z-10">
-                    <div className="font-semibold">Sembol</div>
-                    <div className="text-right font-semibold">Fiyat</div>
-                    <div className="text-right font-semibold">24s Değişim</div>
-                </div>
-                {isLoading ? (
-                    <div className="p-2 space-y-2">
-                        {Array.from({ length: 10 }).map((_, i) => (
-                             <div key={i} className="grid grid-cols-3 gap-2 items-center">
-                                <Skeleton className="h-5 w-12" />
-                                <Skeleton className="h-5 w-20 justify-self-end" />
-                                <Skeleton className="h-5 w-10 justify-self-end" />
-                            </div>
-                        ))}
+             <Tabs defaultValue="all" className="flex-1 flex flex-col min-h-0">
+                <TabsList className="grid w-full grid-cols-2 shrink-0">
+                    <TabsTrigger value="all">Tüm Piyasalar</TabsTrigger>
+                    <TabsTrigger value="favorites">Favoriler</TabsTrigger>
+                </TabsList>
+                <div className="flex-1 overflow-y-auto">
+                    <div className="grid grid-cols-[auto,1fr,1fr] gap-4 p-2 border-b border-slate-800 text-xs text-muted-foreground sticky top-0 bg-slate-900 z-10">
+                        <div className="w-4"></div>
+                        <div className="font-semibold">Sembol</div>
+                        <div className="text-right font-semibold">Fiyat / 24s Değişim</div>
                     </div>
-                ) : (
-                    <ul>
-                        {filteredMarkets.map((coin) => (
-                            <li key={coin.symbol}>
-                                <button 
-                                    className={cn(
-                                        "w-full p-2 grid grid-cols-3 gap-2 items-center text-sm text-left hover:bg-slate-800/50 rounded-md transition-colors",
-                                        selectedSymbol === coin.symbol && "bg-primary/10 text-primary"
-                                    )}
-                                    onClick={() => handleSelectSymbol(coin.symbol)}
-                                >
-                                    <span className="font-bold">{coin.symbol}</span>
-                                    <span className="font-mono text-right">${coin.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                    <span className={cn(
-                                        "font-mono text-right",
-                                        coin.change >= 0 ? "text-green-500" : "text-red-500"
-                                    )}>
-                                        {coin.change.toFixed(2)}%
-                                    </span>
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </div>
+                     <TabsContent value="all" className="m-0">
+                        <MarketList coins={filteredAllMarkets} />
+                    </TabsContent>
+                    <TabsContent value="favorites" className="m-0">
+                         <MarketList coins={favoriteMarkets} />
+                    </TabsContent>
+                </div>
+            </Tabs>
         </aside>
 
         {/* Right Panel: Chart and Actions */}
