@@ -53,7 +53,6 @@ const generateBotPerformanceData = (bot: BotType) => {
     const data = [];
     const baseValue = bot.config.initialBalance || 10000;
     let currentValue = bot.config.currentBalance || baseValue;
-    const pnlRatio = bot.pnl / 100;
     
     // Create a smooth-ish path to the current value over 30 days
     const a = (currentValue - baseValue) / (29 * 29); // Coefficient for a quadratic curve
@@ -534,5 +533,3 @@ export default function BotStatusPage() {
         </div>
     );
 }
-
-    
