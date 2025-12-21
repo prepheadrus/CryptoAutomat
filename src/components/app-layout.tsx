@@ -12,6 +12,7 @@ import {
   Settings,
   User,
   Menu,
+  CandlestickChart,
 } from "lucide-react";
 import Link from "next/link";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
@@ -27,6 +28,7 @@ const navItems = [
   { href: "/", icon: LayoutDashboard, label: "Özet Panel" },
   { href: "/editor", icon: Share2, label: "Strateji Editörü" },
   { href: "/bot-status", icon: Bot, label: "Bot Yönetimi" },
+  { href: "/market", icon: CandlestickChart, label: "Piyasa Analizi" },
   { href: "/settings", icon: Settings, label: "Ayarlar" },
 ];
 
@@ -37,7 +39,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const isEditorPage = pathname === '/editor';
 
   return (
-    <div className="flex min-h-screen w-full flex-col">
+    <div className="flex min-h-screen w-full flex-col bg-background">
       <header className="sticky top-0 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6 z-30 shrink-0">
         <nav className="hidden flex-col gap-6 text-lg font-medium md:flex md:flex-row md:items-center md:gap-5 md:text-sm lg:gap-6">
           <Link
@@ -118,14 +120,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
         </div>
       </header>
-      <main className={cn(
-          "flex-1 flex flex-col overflow-hidden",
-           isEditorPage ? "p-0" : "p-4 md:p-6"
-        )}>
+       <main className={cn("flex flex-col flex-1", isEditorPage ? "p-0 overflow-hidden" : "p-4 md:p-6")}>
           {children}
       </main>
     </div>
   );
 }
-
-    
