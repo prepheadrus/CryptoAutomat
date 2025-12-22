@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useRef, memo, useId, useCallback, useMemo } from 'react';
@@ -7,11 +6,9 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, ArrowRight, Star } from "lucide-react";
+import { Search, ArrowRight, Star, Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
 
 declare global {
     interface Window {
@@ -30,8 +27,6 @@ type MarketCoin = {
 const TradingViewWidget = memo(({ symbol }: { symbol: string }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const widgetId = useId();
-    // By including the symbol in the ID, we ensure React creates a new div when the symbol changes.
-    // This forces TradingView to create a completely new widget, avoiding state issues.
     const container_id = `tradingview_widget_${symbol}_${widgetId}`;
 
     useEffect(() => {
@@ -50,7 +45,7 @@ const TradingViewWidget = memo(({ symbol }: { symbol: string }) => {
                     enable_publishing: false,
                     withdateranges: true,
                     hide_side_toolbar: false,
-                    allow_symbol_change: false, // Important: We control the symbol from our UI
+                    allow_symbol_change: false, // We control the symbol from our UI
                     container_id: container_id
                 });
             }
@@ -102,7 +97,6 @@ export default function MarketTerminalPage() {
   const [marketData, setMarketData] = useState<MarketCoin[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [favorites, setFavorites] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState('all');
   
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -137,7 +131,6 @@ export default function MarketTerminalPage() {
 
   const fetchMarketData = useCallback(async () => {
       try {
-          // No need to set isLoading to true here to avoid flicker on interval refresh
           const response = await fetch('/api/market-data');
           if (!response.ok) {
               throw new Error('Piyasa verileri alınamadı');
@@ -175,33 +168,22 @@ export default function MarketTerminalPage() {
   const filteredCoins = useMemo(() => {
     const query = searchQuery.toLowerCase();
     
-    if (activeTab === 'all') {
-      if (!query) {
-        return []; // "Tüm Piyasalar" sekmesinde arama boşsa, liste boş döner
-      }
+    // If there is a search query, filter all market data
+    if (query) {
       return marketData.filter(coin => 
         coin.symbol.toLowerCase().includes(query) || 
         coin.name.toLowerCase().includes(query)
       );
     }
-
-    if (activeTab === 'favorites') {
-      const favoriteCoins = marketData.filter(coin => favorites.includes(coin.symbol));
-      if (!query) {
-        return favoriteCoins; // Arama boşsa tüm favorileri göster
-      }
-      return favoriteCoins.filter(coin => 
-        coin.symbol.toLowerCase().includes(query) || 
-        coin.name.toLowerCase().includes(query)
-      );
-    }
     
-    return [];
-  }, [searchQuery, marketData, favorites, activeTab]);
+    // If search is empty, show only favorite coins
+    return marketData.filter(coin => favorites.includes(coin.symbol));
+    
+  }, [searchQuery, marketData, favorites]);
 
 
   const MarketList = ({ coins }: { coins: MarketCoin[] }) => {
-    if (isLoading) {
+    if (isLoading && marketData.length === 0) {
       return (
         <div className="p-2 space-y-2">
             {Array.from({ length: 15 }).map((_, i) => (
@@ -220,17 +202,17 @@ export default function MarketTerminalPage() {
       );
     }
     
-    if (activeTab === 'all' && !searchQuery) {
+    if (coins.length === 0) {
+        if(searchQuery) {
+            return <p className="text-center text-muted-foreground p-8">"{searchQuery}" için sonuç bulunamadı.</p>
+        }
         return (
             <div className="text-center text-muted-foreground p-8 flex flex-col items-center gap-2">
-                <Search className="h-6 w-6"/>
-                <p>Bir piyasa arayın...</p>
+                <Heart className="h-6 w-6"/>
+                <p>Henüz favoriniz yok.</p>
+                <p className="text-xs">Bir varlığı favorilere eklemek için arama yapın ve yıldız ikonuna tıklayın.</p>
             </div>
         )
-    }
-
-    if(coins.length === 0) {
-        return <p className="text-center text-muted-foreground p-8">Sonuç bulunamadı.</p>
     }
 
     return (
@@ -284,25 +266,18 @@ export default function MarketTerminalPage() {
                     />
                 </div>
             </div>
-             <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-                <TabsList className="grid w-full grid-cols-2 shrink-0">
-                    <TabsTrigger value="all">Tüm Piyasalar</TabsTrigger>
-                    <TabsTrigger value="favorites">Favoriler</TabsTrigger>
-                </TabsList>
-                <div className="flex-1 overflow-y-auto">
-                    <div className="grid grid-cols-[auto,1fr,1fr] gap-4 p-2 border-b border-slate-800 text-xs text-muted-foreground sticky top-0 bg-slate-900 z-10">
-                        <div className="w-4"></div>
-                        <div className="font-semibold">Sembol</div>
-                        <div className="text-right font-semibold">Fiyat / 24s Değişim</div>
+            <div className="flex-1 flex flex-col min-h-0">
+                <div className="grid grid-cols-[auto,1fr,1fr] gap-4 p-2 border-b border-slate-800 text-xs text-muted-foreground sticky top-0 bg-slate-900 z-10">
+                    <div className="w-4 pl-1">
+                       <Heart className="h-3 w-3" />
                     </div>
-                     <TabsContent value="all" className="m-0">
-                        <MarketList coins={filteredCoins}/>
-                    </TabsContent>
-                    <TabsContent value="favorites" className="m-0">
-                         <MarketList coins={filteredCoins} />
-                    </TabsContent>
+                    <div className="font-semibold">{searchQuery ? 'Arama Sonuçları' : 'Favoriler'}</div>
+                    <div className="text-right font-semibold">Fiyat / 24s Değişim</div>
                 </div>
-            </Tabs>
+                <div className="flex-1 overflow-y-auto">
+                    <MarketList coins={filteredCoins}/>
+                </div>
+            </div>
         </aside>
 
         {/* Right Panel: Chart and Actions */}
@@ -322,5 +297,3 @@ export default function MarketTerminalPage() {
     </div>
   );
 }
-
-    
