@@ -174,7 +174,6 @@ const MarketList = memo(({ coins, favorites, selectedSymbol, onSelectSymbol, onT
 });
 MarketList.displayName = 'MarketList';
 
-
 // Supported exchanges
 const EXCHANGES = [
   { id: 'binance', name: 'Binance' },
@@ -194,6 +193,7 @@ export default function MarketTerminalPage() {
   const [marketData, setMarketData] = useState<MarketCoin[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [source, setSource] = useState<'live' | 'static'>('static');
+  const [error, setError] = useState<string | null>(null);
   const [totalAvailable, setTotalAvailable] = useState(0);
 
   const searchParams = useSearchParams();
@@ -233,6 +233,7 @@ export default function MarketTerminalPage() {
   useEffect(() => {
     const fetchMarketData = async () => {
       setIsLoading(true);
+      setError(null);
       try {
         const params = new URLSearchParams({
           exchange: selectedExchange,
@@ -249,9 +250,13 @@ export default function MarketTerminalPage() {
           setMarketData(data.tickers);
           setSource(data.source);
           setTotalAvailable(data.totalAvailable || 0);
+          if (data.error) {
+            setError(data.error);
+          }
         }
-      } catch (error) {
-        console.error('Error fetching market data:', error);
+      } catch (err: any) {
+        console.error('Error fetching market data:', err);
+        setError(err.message || 'Failed to fetch market data');
       } finally {
         setIsLoading(false);
       }
