@@ -167,7 +167,7 @@ export default function MarketTerminalPage() {
   
   const filteredCoins = useMemo(() => {
     const query = searchQuery.toLowerCase();
-    
+
     // If there is a search query, filter all market data
     if (query) {
       return marketData.filter(coin => 
@@ -182,7 +182,7 @@ export default function MarketTerminalPage() {
   }, [searchQuery, marketData, favorites]);
 
 
-  const MarketList = ({ coins }: { coins: MarketCoin[] }) => {
+  const MarketList = ({ coins, isSearching }: { coins: MarketCoin[], isSearching: boolean }) => {
     if (isLoading && marketData.length === 0) {
       return (
         <div className="p-2 space-y-2">
@@ -203,7 +203,7 @@ export default function MarketTerminalPage() {
     }
     
     if (coins.length === 0) {
-        if(searchQuery) {
+        if(isSearching) {
             return <p className="text-center text-muted-foreground p-8">"{searchQuery}" için sonuç bulunamadı.</p>
         }
         return (
@@ -233,7 +233,10 @@ export default function MarketTerminalPage() {
                             )}
                             onClick={(e) => toggleFavorite(e, coin.symbol)}
                         />
-                        <span className="font-bold">{coin.symbol}</span>
+                        <div className="flex flex-col">
+                           <span className="font-bold">{coin.symbol}</span>
+                           <span className="text-xs text-muted-foreground">{coin.name}</span>
+                        </div>
                         <div className="flex flex-col items-end">
                             <span className="font-mono">${coin.price < 0.01 ? coin.price.toPrecision(2) : coin.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             <span className={cn(
@@ -275,7 +278,7 @@ export default function MarketTerminalPage() {
                     <div className="text-right font-semibold">Fiyat / 24s Değişim</div>
                 </div>
                 <div className="flex-1 overflow-y-auto">
-                    <MarketList coins={filteredCoins}/>
+                    <MarketList coins={filteredCoins} isSearching={!!searchQuery}/>
                 </div>
             </div>
         </aside>

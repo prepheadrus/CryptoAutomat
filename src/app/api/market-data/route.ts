@@ -2,12 +2,14 @@
 import { NextResponse } from 'next/server';
 import ccxt from 'ccxt';
 
+// The name map is useful but not exhaustive. We will fallback to the symbol if a name is not found.
 const symbolToName: Record<string, string> = {
     'BTC': 'Bitcoin', 'ETH': 'Ethereum', 'SOL': 'Solana', 'BNB': 'Binance Coin',
     'AVAX': 'Avalanche', 'DOT': 'Polkadot', 'MATIC': 'Polygon', 'LINK': 'Chainlink',
     'XRP': 'Ripple', 'ADA': 'Cardano', 'DOGE': 'Dogecoin', 'SHIB': 'Shiba Inu',
     'LTC': 'Litecoin', 'BCH': 'Bitcoin Cash', 'TRX': 'Tron', 'ATOM': 'Cosmos',
     'NEAR': 'Near Protocol', 'UNI': 'Uniswap', 'FTM': 'Fantom', 'ICP': 'Internet Computer',
+    'ARB': 'Arbitrum', // Add names as they become relevant
 };
 
 // In-memory cache
@@ -64,12 +66,14 @@ export async function GET() {
         }
 
         const formattedTickers = Object.values(allTickers)
-            .filter(ticker => ticker.last && ticker.percentage !== undefined)
+            .filter(ticker => ticker.last && ticker.percentage !== undefined && ticker.symbol)
             .map(ticker => {
                 const baseCurrency = ticker.symbol.split('/')[0];
                 return {
                     symbol: baseCurrency,
-                    name: symbolToName[baseCurrency] || baseCurrency, // Fallback to symbol if name not in map
+                    // Use the name from the map, or fallback to the base currency symbol itself.
+                    // This ensures the 'name' field is never undefined.
+                    name: symbolToName[baseCurrency] || baseCurrency, 
                     price: ticker.last,
                     change: ticker.percentage
                 };
