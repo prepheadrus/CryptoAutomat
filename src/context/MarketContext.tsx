@@ -65,22 +65,6 @@ export const MarketProvider = ({ children }: { children: ReactNode }) => {
     fetchMarketData();
   }, []);
 
-  // Real-time data simulation/polling (no changes here for now)
-  useEffect(() => {
-    if (isLoading || source !== 'static') return; // Only run simulation if initial load is done and source is static
-
-    const intervalId = setInterval(() => {
-        setMarketData(prevData => prevData.map(coin => ({
-            ...coin,
-            price: coin.price + (Math.random() - 0.5) * (coin.price * 0.005),
-            change: coin.change + (Math.random() - 0.5) * 0.1
-        })));
-    }, 3000);
-
-    return () => clearInterval(intervalId);
-  }, [isLoading, source]);
-
-
   const value = useMemo(() => ({
     marketData,
     isLoading,

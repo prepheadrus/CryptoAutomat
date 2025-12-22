@@ -15,12 +15,12 @@ type FormattedTicker = {
 const getDebugFallbackData = (): FormattedTicker[] => {
     console.log('[Market-Data-API] DEBUG: Generating and returning static fallback data.');
     return [
-        { symbol: 'BTC', name: 'Bitcoin', price: 67015.78 + (Math.random() - 0.5) * 500, change: (Math.random() - 0.5) * 5 },
-        { symbol: 'ETH', name: 'Ethereum', price: 3788.11 + (Math.random() - 0.5) * 200, change: (Math.random() - 0.5) * 5 },
-        { symbol: 'SOL', name: 'Solana', price: 165.45 + (Math.random() - 0.5) * 20, change: (Math.random() - 0.5) * 5 },
-        { symbol: 'ARB', name: 'Arbitrum', price: 0.95 + (Math.random() - 0.5) * 0.1, change: (Math.random() - 0.5) * 5 },
-        { symbol: 'BNB', name: 'BNB', price: 601.30 + (Math.random() - 0.5) * 10, change: (Math.random() - 0.5) * 5 },
-        { symbol: 'XRP', name: 'XRP', price: 0.49 + (Math.random() - 0.5) * 0.05, change: (Math.random() - 0.5) * 5 },
+        { symbol: 'BTC', name: 'Bitcoin', price: 67015.78, change: -1.25 },
+        { symbol: 'ETH', name: 'Ethereum', price: 3788.11, change: 2.33 },
+        { symbol: 'SOL', name: 'Solana', price: 165.45, change: -5.10 },
+        { symbol: 'ARB', name: 'Arbitrum', price: 0.95, change: 1.50 },
+        { symbol: 'BNB', name: 'BNB', price: 601.30, change: 0.55 },
+        { symbol: 'XRP', name: 'XRP', price: 0.49, change: -2.05 },
     ];
 };
 
