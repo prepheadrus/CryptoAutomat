@@ -102,6 +102,7 @@ export default function MarketTerminalPage() {
   const [marketData, setMarketData] = useState<MarketCoin[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState('all');
   
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -171,27 +172,35 @@ export default function MarketTerminalPage() {
       );
   }
   
-  const filteredAllMarkets = useMemo(() => {
-    if (!searchQuery) {
-        return [];
-    }
+  const filteredCoins = useMemo(() => {
     const query = searchQuery.toLowerCase();
-    return marketData.filter(coin =>
-        coin.name.toLowerCase().includes(query) ||
-        coin.symbol.toLowerCase().includes(query)
-    );
-  }, [marketData, searchQuery]);
+    
+    if (activeTab === 'all') {
+      if (!query) {
+        return []; // "Tüm Piyasalar" sekmesinde arama boşsa, liste boş döner
+      }
+      return marketData.filter(coin => 
+        coin.symbol.toLowerCase().includes(query) || 
+        coin.name.toLowerCase().includes(query)
+      );
+    }
 
-  const favoriteMarkets = useMemo(() => marketData.filter(coin => 
-      favorites.includes(coin.symbol) && (
-        !searchQuery || // Show all favorites if search is empty
-        coin.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        coin.symbol.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-  ), [marketData, favorites, searchQuery]);
+    if (activeTab === 'favorites') {
+      const favoriteCoins = marketData.filter(coin => favorites.includes(coin.symbol));
+      if (!query) {
+        return favoriteCoins; // Arama boşsa tüm favorileri göster
+      }
+      return favoriteCoins.filter(coin => 
+        coin.symbol.toLowerCase().includes(query) || 
+        coin.name.toLowerCase().includes(query)
+      );
+    }
+    
+    return [];
+  }, [searchQuery, marketData, favorites, activeTab]);
 
 
-  const MarketList = ({ coins, listType }: { coins: MarketCoin[], listType: 'all' | 'favorites' }) => {
+  const MarketList = ({ coins }: { coins: MarketCoin[] }) => {
     if (isLoading) {
       return (
         <div className="p-2 space-y-2">
@@ -211,7 +220,7 @@ export default function MarketTerminalPage() {
       );
     }
     
-    if (listType === 'all' && !searchQuery) {
+    if (activeTab === 'all' && !searchQuery) {
         return (
             <div className="text-center text-muted-foreground p-8 flex flex-col items-center gap-2">
                 <Search className="h-6 w-6"/>
@@ -220,7 +229,7 @@ export default function MarketTerminalPage() {
         )
     }
 
-    if(coins.length === 0 && (listType === 'favorites' || (listType === 'all' && searchQuery))) {
+    if(coins.length === 0) {
         return <p className="text-center text-muted-foreground p-8">Sonuç bulunamadı.</p>
     }
 
@@ -275,7 +284,7 @@ export default function MarketTerminalPage() {
                     />
                 </div>
             </div>
-             <Tabs defaultValue="all" className="flex-1 flex flex-col min-h-0">
+             <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
                 <TabsList className="grid w-full grid-cols-2 shrink-0">
                     <TabsTrigger value="all">Tüm Piyasalar</TabsTrigger>
                     <TabsTrigger value="favorites">Favoriler</TabsTrigger>
@@ -287,10 +296,10 @@ export default function MarketTerminalPage() {
                         <div className="text-right font-semibold">Fiyat / 24s Değişim</div>
                     </div>
                      <TabsContent value="all" className="m-0">
-                        <MarketList coins={filteredAllMarkets} listType="all"/>
+                        <MarketList coins={filteredCoins}/>
                     </TabsContent>
                     <TabsContent value="favorites" className="m-0">
-                         <MarketList coins={favoriteMarkets} listType="favorites" />
+                         <MarketList coins={filteredCoins} />
                     </TabsContent>
                 </div>
             </Tabs>
@@ -313,3 +322,5 @@ export default function MarketTerminalPage() {
     </div>
   );
 }
+
+    
