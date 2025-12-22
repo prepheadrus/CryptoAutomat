@@ -24,10 +24,24 @@ export const MarketContext = createContext<MarketContextType>({
   error: null,
 });
 
+// Fallback data in case API fails
+const FALLBACK_DATA: MarketCoin[] = [
+  { symbol: 'BTC/USDT', name: 'Bitcoin', price: 68530.24, change: 1.75 },
+  { symbol: 'ETH/USDT', name: 'Ethereum', price: 3560.88, change: -0.45 },
+  { symbol: 'SOL/USDT', name: 'Solana', price: 168.15, change: 3.10 },
+  { symbol: 'XRP/USDT', name: 'XRP', price: 0.52, change: -1.20 },
+  { symbol: 'BNB/USDT', name: 'BNB', price: 605.60, change: 0.88 },
+  { symbol: 'DOGE/USDT', name: 'Dogecoin', price: 0.16, change: 5.55 },
+  { symbol: 'ADA/USDT', name: 'Cardano', price: 0.45, change: 1.15 },
+  { symbol: 'AVAX/USDT', name: 'Avalanche', price: 36.70, change: 2.80 },
+  { symbol: 'DOT/USDT', name: 'Polkadot', price: 7.25, change: 0.50 },
+  { symbol: 'MATIC/USDT', name: 'Polygon', price: 0.72, change: -2.35 },
+];
+
 export const MarketProvider = ({ children }: { children: ReactNode }) => {
-  const [marketData, setMarketData] = useState<MarketCoin[]>([]);
+  const [marketData, setMarketData] = useState<MarketCoin[]>(FALLBACK_DATA);
   const [isLoading, setIsLoading] = useState(true);
-  const [source, setSource] = useState<'live' | 'static' | null>(null);
+  const [source, setSource] = useState<'live' | 'static' | null>('static');
   const [error, setError] = useState<string | null>(null);
 
   // Initial data fetch
@@ -59,9 +73,10 @@ export const MarketProvider = ({ children }: { children: ReactNode }) => {
         }
       } catch (e: any) {
         console.error("[MarketContext] Error fetching or processing data:", e.message);
+        console.log("[MarketContext] Using fallback data due to error.");
         setError(e.message);
-        setSource('static'); 
-        setMarketData([]); // Clear data on error
+        setSource('static');
+        setMarketData(FALLBACK_DATA); // Use fallback data instead of empty array
       } finally {
         setIsLoading(false);
       }
