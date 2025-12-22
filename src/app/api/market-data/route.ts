@@ -50,6 +50,7 @@ export async function GET() {
     }
 
     try {
+        console.log(`[Market-Data] Ortam: ${isLocal ? 'Yerel' : 'Sunucu'}. Proxy durumu: ${!isLocal && process.env.PROXY_URL ? 'Aktif' : 'Pasif'}`);
         const exchangeConfig = {
             // Conditionally add proxy if on server and PROXY_URL is set
             ...(!isLocal && process.env.PROXY_URL ? { 'https': process.env.PROXY_URL, 'http': process.env.PROXY_URL, 'httpsProxy': process.env.PROXY_URL, 'httpProxy': process.env.PROXY_URL } : {})
@@ -69,9 +70,10 @@ export async function GET() {
                 Object.assign(allTickers, tickersChunk);
             } catch (e) {
                  // If a chunk fails, log it but continue with the next one
-                console.warn(`Piyasa verisi alınırken bir bölüm başarısız oldu: ${chunk.join(',')}`, e);
+                console.warn(`[Market-Data] Piyasa verisi alınırken bir bölüm başarısız oldu: ${chunk.join(',')}`, e);
             }
         }
+        console.log(`[Market-Data] API'den gelen coin sayısı: ${Object.keys(allTickers).length}`);
 
         const formattedTickers = Object.values(allTickers)
             .filter(ticker => ticker.last && ticker.percentage !== undefined && ticker.symbol)
@@ -98,7 +100,7 @@ export async function GET() {
         return NextResponse.json(response);
 
     } catch (error) {
-        console.error('Piyasa verileri alınırken hata oluştu:', error);
+        console.error('[Market-Data] Piyasa verileri alınırken hata oluştu:', error);
         // Avoid caching errors
         return NextResponse.json(
             { success: false, message: 'Sunucu Hatası: Piyasa verileri alınamadı.' },

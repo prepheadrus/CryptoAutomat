@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, ArrowRight, Star, Heart } from "lucide-react";
+import { Search, ArrowRight, Star, Heart, WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -91,7 +91,7 @@ const TradingViewWidget = memo(({ symbol }: { symbol: string }) => {
 TradingViewWidget.displayName = 'TradingViewWidget';
 
 // Memoized MarketList for performance
-const MarketList = memo(({ coins, favorites, selectedSymbol, onSelectSymbol, onToggleFavorite, isLoading, searchQuery }: { 
+const MarketList = memo(({ coins, favorites, selectedSymbol, onSelectSymbol, onToggleFavorite, isLoading, searchQuery, hasData }: { 
     coins: MarketCoin[], 
     favorites: string[],
     selectedSymbol: string,
@@ -99,8 +99,9 @@ const MarketList = memo(({ coins, favorites, selectedSymbol, onSelectSymbol, onT
     onToggleFavorite: (e: React.MouseEvent, symbol: string) => void,
     isLoading: boolean,
     searchQuery: string,
+    hasData: boolean,
 }) => {
-    if (isLoading && coins.length === 0) {
+    if (isLoading) {
       return (
         <div className="p-2 space-y-2">
             {Array.from({ length: 15 }).map((_, i) => (
@@ -120,9 +121,21 @@ const MarketList = memo(({ coins, favorites, selectedSymbol, onSelectSymbol, onT
     }
     
     if (coins.length === 0) {
+        // No data from API at all
+        if (!hasData) {
+            return (
+                <div className="text-center text-muted-foreground p-8 flex flex-col items-center gap-2">
+                    <WifiOff className="h-8 w-8 text-destructive"/>
+                    <p className='font-semibold text-foreground'>Veri Alınamadı</p>
+                    <p className="text-xs">Piyasa verileri sunucusuna ulaşılamıyor. Lütfen daha sonra tekrar deneyin.</p>
+                </div>
+            );
+        }
+        // Has data, but search returned no results
         if(searchQuery) {
             return <p className="text-center text-muted-foreground p-8">"{searchQuery}" için sonuç bulunamadı.</p>
         }
+        // Has data, search is empty, but no favorites
         return (
             <div className="text-center text-muted-foreground p-8 flex flex-col items-center gap-2">
                 <Heart className="h-6 w-6"/>
@@ -212,14 +225,21 @@ export default function MarketTerminalPage() {
 
   const fetchMarketData = useCallback(async () => {
       try {
+          console.log("[Market-Data-Client] Veri çekiliyor...");
           const response = await fetch('/api/market-data');
           if (!response.ok) {
               throw new Error('Piyasa verileri alınamadı');
           }
           const data = await response.json();
-          setMarketData(data.tickers);
+          if (data && data.tickers) {
+             console.log(`[Market-Data-Client] Alınan coin sayısı: ${data.tickers.length}`);
+             setMarketData(data.tickers);
+          } else {
+             setMarketData([]);
+          }
       } catch (error) {
           console.error(error);
+          setMarketData([]); // Set to empty on error
       } finally {
           setIsLoading(false);
       }
@@ -295,6 +315,7 @@ export default function MarketTerminalPage() {
                         onToggleFavorite={toggleFavorite}
                         isLoading={isLoading}
                         searchQuery={searchQuery}
+                        hasData={marketData.length > 0}
                     />
                 </div>
             </div>
