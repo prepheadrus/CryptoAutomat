@@ -26,23 +26,34 @@ declare global {
 }
 
 // Memoized TradingView Widget to prevent re-renders on parent state changes
-const TradingViewWidget = memo(({ symbol }: { symbol: string }) => {
+const TradingViewWidget = memo(({ symbol, exchange }: { symbol: string; exchange: string }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const widgetId = useId();
-    const container_id = `tradingview_widget_${symbol.replace('/', '')}_${widgetId}`;
+    const container_id = `tradingview_widget_${symbol.replace('/', '')}_${exchange}_${widgetId}`;
+
+    // Map our exchange IDs to TradingView exchange IDs
+    const exchangeMap: Record<string, string> = {
+        'binance': 'BINANCE',
+        'kucoin': 'KUCOIN',
+        'bybit': 'BYBIT',
+        'kraken': 'KRAKEN',
+        'okx': 'OKX',
+        'gateio': 'GATEIO',
+    };
 
     useEffect(() => {
         let tvWidget: any = null;
 
-        // Clean up the symbol to be compatible with TradingView 
-        // (e.g., "BTC/USDT" -> "BINANCE:BTCUSDT")
+        // Clean up the symbol to be compatible with TradingView
+        // (e.g., "BTC/USDT" -> "BTCUSDT")
         const formattedSymbol = symbol.toUpperCase().replace('/USDT', '').replace('/', '');
+        const tvExchange = exchangeMap[exchange.toLowerCase()] || 'BINANCE';
 
         const createWidget = () => {
             if (document.getElementById(container_id) && typeof window.TradingView !== 'undefined') {
                 tvWidget = new window.TradingView.widget({
                     autosize: true,
-                    symbol: `BINANCE:${formattedSymbol}USDT`, // Always append USDT for consistency
+                    symbol: `${tvExchange}:${formattedSymbol}USDT`,
                     interval: "D",
                     timezone: "Etc/UTC",
                     theme: "dark",
@@ -82,7 +93,7 @@ const TradingViewWidget = memo(({ symbol }: { symbol: string }) => {
                  widgetContainer.innerHTML = '';
              }
         };
-    }, [symbol, container_id]);
+    }, [symbol, exchange, container_id]);
 
     return (
         <div key={symbol} className="tradingview-widget-container h-full" ref={containerRef}>
@@ -394,7 +405,7 @@ export default function MarketTerminalPage() {
                 </Button>
             </div>
             <div className="flex-1 bg-background relative">
-                <TradingViewWidget symbol={selectedSymbol} />
+                <TradingViewWidget symbol={selectedSymbol} exchange={selectedExchange} />
             </div>
         </main>
     </div>
