@@ -10,32 +10,23 @@ type FormattedTicker = {
     change: number;
 };
 
-// Coin name mapping for popular symbols
-const COIN_NAMES: Record<string, string> = {
-    'BTC/USDT': 'Bitcoin',
-    'ETH/USDT': 'Ethereum',
-    'SOL/USDT': 'Solana',
-    'XRP/USDT': 'XRP',
-    'BNB/USDT': 'BNB',
-    'DOGE/USDT': 'Dogecoin',
-    'ADA/USDT': 'Cardano',
-    'AVAX/USDT': 'Avalanche',
-    'DOT/USDT': 'Polkadot',
-    'MATIC/USDT': 'Polygon',
-    'LINK/USDT': 'Chainlink',
-    'UNI/USDT': 'Uniswap',
-    'ATOM/USDT': 'Cosmos',
-    'LTC/USDT': 'Litecoin',
-    'BCH/USDT': 'Bitcoin Cash',
-    'NEAR/USDT': 'NEAR Protocol',
-    'APT/USDT': 'Aptos',
-    'ARB/USDT': 'Arbitrum',
-    'OP/USDT': 'Optimism',
-    'FIL/USDT': 'Filecoin',
-};
+// Supported exchanges
+const SUPPORTED_EXCHANGES = ['binance', 'kucoin', 'bybit', 'kraken', 'okx', 'gateio'] as const;
+type ExchangeId = typeof SUPPORTED_EXCHANGES[number];
 
-// Popular trading pairs to fetch
-const SYMBOLS = Object.keys(COIN_NAMES);
+// Popular coins to show by default (top 50 by market cap)
+const DEFAULT_SYMBOLS = [
+    'BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'SOL/USDT', 'XRP/USDT',
+    'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT', 'LINK/USDT',
+    'UNI/USDT', 'ATOM/USDT', 'LTC/USDT', 'BCH/USDT', 'NEAR/USDT',
+    'APT/USDT', 'ARB/USDT', 'OP/USDT', 'FIL/USDT', 'DOGE/USDT',
+    'TRX/USDT', 'SHIB/USDT', 'TON/USDT', 'ICP/USDT', 'IMX/USDT',
+    'AAVE/USDT', 'MKR/USDT', 'GRT/USDT', 'SAND/USDT', 'MANA/USDT',
+    'ALGO/USDT', 'VET/USDT', 'ETC/USDT', 'XTZ/USDT', 'THETA/USDT',
+    'FTM/USDT', 'EGLD/USDT', 'AXS/USDT', 'RUNE/USDT', 'STX/USDT',
+    'INJ/USDT', 'SUI/USDT', 'SEI/USDT', 'TIA/USDT', 'WLD/USDT',
+    'PEPE/USDT', 'BONK/USDT', 'FLOKI/USDT', 'ORDI/USDT', 'RNDR/USDT',
+];
 
 // Fallback data in case API fails
 const getFallbackData = (): FormattedTicker[] => {
@@ -55,42 +46,99 @@ const getFallbackData = (): FormattedTicker[] => {
 };
 
 /**
- * Fetch real-time market data from Binance using CCXT
+ * Fetch market data from specified exchange
+ * Query params:
+ * - exchange: Exchange ID (binance, kucoin, bybit, etc.) - default: binance
+ * - search: Search query to filter symbols - optional
  */
-export async function GET() {
-    console.log('[Market-Data-API] GET request received. Fetching live data from Binance...');
+export async function GET(request: Request) {
+    const { searchParams } = new URL(request.url);
+    const exchangeId = (searchParams.get('exchange') || 'binance') as ExchangeId;
+    const searchQuery = searchParams.get('search')?.toLowerCase();
+
+    console.log(`[Market-Data-API] GET request - Exchange: ${exchangeId}, Search: ${searchQuery || 'none'}`);
+
+    // Validate exchange
+    if (!SUPPORTED_EXCHANGES.includes(exchangeId)) {
+        return NextResponse.json({
+            tickers: getFallbackData(),
+            source: 'static',
+            error: `Unsupported exchange: ${exchangeId}`,
+        }, { status: 400 });
+    }
 
     try {
-        // Initialize Binance exchange
-        const exchange = new ccxt.binance({
+        // Initialize exchange
+        const exchangeClass = ccxt[exchangeId];
+        if (!exchangeClass) {
+            throw new Error(`Exchange ${exchangeId} not available in CCXT`);
+        }
+
+        const exchange = new exchangeClass({
             enableRateLimit: true,
         });
 
-        // Fetch tickers for all symbols
-        console.log('[Market-Data-API] Fetching tickers for', SYMBOLS.length, 'symbols...');
-        const tickers = await exchange.fetchTickers(SYMBOLS);
+        // Load all markets to get available symbols
+        await exchange.loadMarkets();
+
+        // Get USDT pairs only
+        const usdtPairs = Object.keys(exchange.markets).filter(symbol =>
+            symbol.endsWith('/USDT') && exchange.markets[symbol].active
+        );
+
+        console.log(`[Market-Data-API] Found ${usdtPairs.length} active USDT pairs on ${exchangeId}`);
+
+        // Determine which symbols to fetch
+        let symbolsToFetch: string[] = [];
+
+        if (searchQuery) {
+            // If search query provided, filter all USDT pairs
+            symbolsToFetch = usdtPairs.filter(symbol => {
+                const base = symbol.split('/')[0].toLowerCase();
+                return base.includes(searchQuery) || symbol.toLowerCase().includes(searchQuery);
+            }).slice(0, 100); // Limit to 100 results
+
+            console.log(`[Market-Data-API] Search "${searchQuery}" found ${symbolsToFetch.length} matches`);
+        } else {
+            // No search - return default popular coins that exist on this exchange
+            symbolsToFetch = DEFAULT_SYMBOLS.filter(symbol => usdtPairs.includes(symbol));
+            console.log(`[Market-Data-API] Returning ${symbolsToFetch.length} default popular coins`);
+        }
+
+        if (symbolsToFetch.length === 0) {
+            console.log('[Market-Data-API] No symbols to fetch, returning fallback');
+            return NextResponse.json({
+                tickers: getFallbackData(),
+                source: 'static',
+                exchange: exchangeId,
+            });
+        }
+
+        // Fetch tickers
+        const tickers = await exchange.fetchTickers(symbolsToFetch);
 
         // Format the data
-        const formattedTickers: FormattedTicker[] = SYMBOLS.map(symbol => {
+        const formattedTickers: FormattedTicker[] = symbolsToFetch.map(symbol => {
             const ticker = tickers[symbol];
             if (!ticker) {
-                console.warn(`[Market-Data-API] No data for ${symbol}, skipping.`);
                 return null;
             }
 
             return {
                 symbol,
-                name: COIN_NAMES[symbol] || symbol.split('/')[0],
+                name: symbol.split('/')[0], // Just use the base currency as name
                 price: ticker.last || 0,
                 change: ticker.percentage || 0,
             };
         }).filter((ticker): ticker is FormattedTicker => ticker !== null);
 
-        console.log(`[Market-Data-API] Successfully fetched ${formattedTickers.length} tickers from Binance.`);
+        console.log(`[Market-Data-API] Successfully fetched ${formattedTickers.length} tickers from ${exchangeId}`);
 
         return NextResponse.json({
             tickers: formattedTickers,
             source: 'live',
+            exchange: exchangeId,
+            totalAvailable: usdtPairs.length,
         });
 
     } catch (error: any) {
@@ -100,7 +148,8 @@ export async function GET() {
         return NextResponse.json({
             tickers: getFallbackData(),
             source: 'static',
+            exchange: exchangeId,
+            error: error.message,
         });
     }
 }
-

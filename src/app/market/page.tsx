@@ -1,16 +1,23 @@
 
 'use client';
 
-import { useState, useEffect, useRef, memo, useId, useCallback, useMemo, useContext } from 'react';
+import { useState, useEffect, useRef, memo, useId, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, ArrowRight, Star, Heart, WifiOff, Activity } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Search, ArrowRight, Star, Heart, WifiOff, Activity, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from '@/components/ui/skeleton';
-import { MarketContext, type MarketCoin } from '@/context/MarketContext';
+
+type MarketCoin = {
+  symbol: string;
+  name: string;
+  price: number;
+  change: number;
+};
 
 declare global {
     interface Window {
@@ -168,12 +175,27 @@ const MarketList = memo(({ coins, favorites, selectedSymbol, onSelectSymbol, onT
 MarketList.displayName = 'MarketList';
 
 
+// Supported exchanges
+const EXCHANGES = [
+  { id: 'binance', name: 'Binance' },
+  { id: 'kucoin', name: 'KuCoin' },
+  { id: 'bybit', name: 'Bybit' },
+  { id: 'kraken', name: 'Kraken' },
+  { id: 'okx', name: 'OKX' },
+  { id: 'gateio', name: 'Gate.io' },
+] as const;
+
 export default function MarketTerminalPage() {
   const [selectedSymbol, setSelectedSymbol] = useState("BTC/USDT");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [favorites, setFavorites] = useState<string[]>([]);
-  const { marketData, isLoading, source, error } = useContext(MarketContext);
-  
+  const [selectedExchange, setSelectedExchange] = useState('binance');
+  const [marketData, setMarketData] = useState<MarketCoin[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [source, setSource] = useState<'live' | 'static'>('static');
+  const [totalAvailable, setTotalAvailable] = useState(0);
+
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -188,15 +210,55 @@ export default function MarketTerminalPage() {
       console.error("Favoriler yüklenirken hata:", error);
     }
   }, []);
-  
+
   // Save favorites to localStorage whenever they change
   useEffect(() => {
     try {
       localStorage.setItem('marketFavorites', JSON.stringify(favorites));
-    } catch (error)      {
+    } catch (error) {
       console.error("Favoriler kaydedilirken hata:", error);
     }
   }, [favorites]);
+
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 500); // 500ms delay
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Fetch market data when exchange or debounced search changes
+  useEffect(() => {
+    const fetchMarketData = async () => {
+      setIsLoading(true);
+      try {
+        const params = new URLSearchParams({
+          exchange: selectedExchange,
+        });
+
+        if (debouncedSearchQuery) {
+          params.append('search', debouncedSearchQuery);
+        }
+
+        const response = await fetch(`/api/market-data?${params.toString()}`);
+        const data = await response.json();
+
+        if (data && Array.isArray(data.tickers)) {
+          setMarketData(data.tickers);
+          setSource(data.source);
+          setTotalAvailable(data.totalAvailable || 0);
+        }
+      } catch (error) {
+        console.error('Error fetching market data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchMarketData();
+  }, [selectedExchange, debouncedSearchQuery]);
 
   useEffect(() => {
     const symbolFromUrl = searchParams.get('symbol');
@@ -221,30 +283,59 @@ export default function MarketTerminalPage() {
       );
   }
   
-  const filteredCoins = useMemo(() => {
-    const query = searchQuery.toLowerCase().replace('/', '');
-    
-    if (query) {
-      return marketData.filter(coin => 
-        coin.symbol.toLowerCase().replace('/', '').includes(query) || 
-        coin.name.toLowerCase().includes(query)
-      );
+  // TradingView logic: Show favorites when no search, show all results when searching
+  const displayCoins = useMemo(() => {
+    if (searchQuery || debouncedSearchQuery) {
+      // When searching, show all results from API
+      return marketData;
     }
-    
-    return marketData;
-  }, [searchQuery, marketData]);
 
-  const listTitle = searchQuery ? "Arama Sonuçları" : "Tüm Piyasalar";
+    // No search - show only favorites if any, otherwise show popular coins
+    if (favorites.length > 0) {
+      return marketData.filter(coin => favorites.includes(coin.symbol));
+    }
+
+    // No favorites yet - show top popular coins from API
+    return marketData;
+  }, [searchQuery, debouncedSearchQuery, marketData, favorites]);
+
+  const listTitle = searchQuery
+    ? `Arama: "${searchQuery}"`
+    : favorites.length > 0
+      ? "Favoriler"
+      : "Popüler Coinler";
 
   return (
     <div className="flex-1 flex flex-row overflow-hidden rounded-lg bg-slate-950 border border-slate-800">
         <aside className="w-1/3 max-w-sm flex-shrink-0 border-r border-slate-800 bg-slate-900/50 flex flex-col">
-            <div className="p-4 border-b border-slate-800">
+            <div className="p-4 border-b border-slate-800 space-y-3">
+                {/* Exchange Selector */}
+                <div className="flex items-center gap-2">
+                  <Select value={selectedExchange} onValueChange={setSelectedExchange}>
+                    <SelectTrigger className="bg-slate-800 border-slate-700">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {EXCHANGES.map(exchange => (
+                        <SelectItem key={exchange.id} value={exchange.id}>
+                          {exchange.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {totalAvailable > 0 && (
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {totalAvailable} coin
+                    </span>
+                  )}
+                </div>
+
+                {/* Search Input */}
                 <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                         type="text"
-                        placeholder="Piyasa ara..."
+                        placeholder="Coin ara... (örn: BTC, ETH)"
                         className="bg-slate-800 border-slate-700 pl-9"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
@@ -260,8 +351,8 @@ export default function MarketTerminalPage() {
                     <div className="text-right font-semibold">Fiyat / 24s Değişim</div>
                 </div>
                 <div className="flex-1 overflow-y-auto">
-                    <MarketList 
-                        coins={filteredCoins} 
+                    <MarketList
+                        coins={displayCoins}
                         favorites={favorites}
                         selectedSymbol={selectedSymbol}
                         onSelectSymbol={handleSelectSymbol}
