@@ -1,6 +1,6 @@
 
 import { NextResponse } from 'next/server';
-import axios from 'axios';
+import ccxt from 'ccxt';
 
 // Define types for our standardized format
 type FormattedTicker = {
@@ -10,10 +10,36 @@ type FormattedTicker = {
     change: number;
 };
 
-// --- STEP 3: Static Failover Data ---
-// This is the guaranteed data that will be returned if the live API fails for any reason.
-const getDebugFallbackData = (): FormattedTicker[] => {
-    console.log('[Market-Data-API] DEBUG: Generating and returning static fallback data.');
+// Coin name mapping for popular symbols
+const COIN_NAMES: Record<string, string> = {
+    'BTC/USDT': 'Bitcoin',
+    'ETH/USDT': 'Ethereum',
+    'SOL/USDT': 'Solana',
+    'XRP/USDT': 'XRP',
+    'BNB/USDT': 'BNB',
+    'DOGE/USDT': 'Dogecoin',
+    'ADA/USDT': 'Cardano',
+    'AVAX/USDT': 'Avalanche',
+    'DOT/USDT': 'Polkadot',
+    'MATIC/USDT': 'Polygon',
+    'LINK/USDT': 'Chainlink',
+    'UNI/USDT': 'Uniswap',
+    'ATOM/USDT': 'Cosmos',
+    'LTC/USDT': 'Litecoin',
+    'BCH/USDT': 'Bitcoin Cash',
+    'NEAR/USDT': 'NEAR Protocol',
+    'APT/USDT': 'Aptos',
+    'ARB/USDT': 'Arbitrum',
+    'OP/USDT': 'Optimism',
+    'FIL/USDT': 'Filecoin',
+};
+
+// Popular trading pairs to fetch
+const SYMBOLS = Object.keys(COIN_NAMES);
+
+// Fallback data in case API fails
+const getFallbackData = (): FormattedTicker[] => {
+    console.log('[Market-Data-API] Using fallback data.');
     return [
       { symbol: 'BTC/USDT', name: 'Bitcoin', price: 68530.24, change: 1.75 },
       { symbol: 'ETH/USDT', name: 'Ethereum', price: 3560.88, change: -0.45 },
@@ -29,22 +55,52 @@ const getDebugFallbackData = (): FormattedTicker[] => {
 };
 
 /**
- * DEBUGGING STEP: This route handler is simplified to ALWAYS return a static
- * list of tickers. This helps isolate whether the problem is in data fetching (backend)
- * or data consumption (frontend).
+ * Fetch real-time market data from Binance using CCXT
  */
 export async function GET() {
-    console.log('[Market-Data-API] GET request received. Returning debug data.');
-    
-    const fallbackTickers = getDebugFallbackData();
-    const dataToSend = { 
-        tickers: fallbackTickers, 
-        source: 'static' // Explicitly mark data source
-    };
+    console.log('[Market-Data-API] GET request received. Fetching live data from Binance...');
 
-    // --- STEP 1: Log the exact data structure being sent ---
-    console.log("[Market-Data-API] SERVER_SENDING_DATA:", JSON.stringify(dataToSend, null, 2).substring(0, 250));
+    try {
+        // Initialize Binance exchange
+        const exchange = new ccxt.binance({
+            enableRateLimit: true,
+        });
 
-    return NextResponse.json(dataToSend);
+        // Fetch tickers for all symbols
+        console.log('[Market-Data-API] Fetching tickers for', SYMBOLS.length, 'symbols...');
+        const tickers = await exchange.fetchTickers(SYMBOLS);
+
+        // Format the data
+        const formattedTickers: FormattedTicker[] = SYMBOLS.map(symbol => {
+            const ticker = tickers[symbol];
+            if (!ticker) {
+                console.warn(`[Market-Data-API] No data for ${symbol}, skipping.`);
+                return null;
+            }
+
+            return {
+                symbol,
+                name: COIN_NAMES[symbol] || symbol.split('/')[0],
+                price: ticker.last || 0,
+                change: ticker.percentage || 0,
+            };
+        }).filter((ticker): ticker is FormattedTicker => ticker !== null);
+
+        console.log(`[Market-Data-API] Successfully fetched ${formattedTickers.length} tickers from Binance.`);
+
+        return NextResponse.json({
+            tickers: formattedTickers,
+            source: 'live',
+        });
+
+    } catch (error: any) {
+        console.error('[Market-Data-API] Error fetching live data:', error.message);
+        console.log('[Market-Data-API] Returning fallback data due to error.');
+
+        return NextResponse.json({
+            tickers: getFallbackData(),
+            source: 'static',
+        });
+    }
 }
 
