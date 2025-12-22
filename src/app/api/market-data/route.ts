@@ -30,15 +30,16 @@ const getDebugFallbackData = (): FormattedTicker[] => {
  * or data consumption (frontend).
  */
 export async function GET() {
-    console.log('[Market-Data-API] GET request received. Attempting to fetch live data...');
+    console.log('[Market-Data-API] GET request received. Returning debug data.');
     
-    // --- STEP 4: Manual Data Injection Test ---
-    // If this static data appears on the frontend, it confirms the frontend and context are working,
-    // and the issue is with fetching live data (CMC API, proxy, keys, etc.).
     const fallbackTickers = getDebugFallbackData();
-    
-    return NextResponse.json({ 
+    const dataToSend = { 
         tickers: fallbackTickers, 
         source: 'static' // Explicitly mark data source
-    });
+    };
+
+    // --- STEP 1: Log the exact data structure being sent ---
+    console.log("[Market-Data-API] SERVER_SENDING_DATA:", JSON.stringify(dataToSend).substring(0, 200));
+
+    return NextResponse.json(dataToSend);
 }
