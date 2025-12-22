@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server';
 import axios from 'axios';
 import 'dotenv/config';
@@ -117,3 +118,5 @@ export async function GET() {
         return NextResponse.json({ tickers: fallbackTickers, source: 'static' });
     }
 }
+
+    

@@ -221,6 +221,7 @@ export default function MarketTerminalPage() {
   const filteredCoins = useMemo(() => {
     const query = searchQuery.toLowerCase();
     
+    // If there's a search query, filter all market data
     if (query) {
       return marketData.filter(coin => 
         coin.symbol.toLowerCase().includes(query) || 
@@ -228,6 +229,7 @@ export default function MarketTerminalPage() {
       );
     }
     
+    // If search is empty, show only favorites
     return marketData.filter(coin => favorites.includes(coin.symbol));
     
   }, [searchQuery, marketData, favorites]);
@@ -296,3 +298,6 @@ export default function MarketTerminalPage() {
     </div>
   );
 }
+
+
+    
