@@ -54,7 +54,7 @@ export async function GET() {
     
     // 1. Serve from cache if data is fresh
     if (cachedData && (now - cachedData.timestamp < CACHE_DURATION)) {
-        console.log(`[Market-Data] Veri önbellekten sunuluyor. Kaynak: ${cachedData.source}`);
+        console.log(`[Market-Data] Serving ${cachedData.tickers.length} tickers from cache. Source: ${cachedData.source}`);
         return NextResponse.json({
             tickers: cachedData.tickers,
             source: cachedData.source,
@@ -62,9 +62,9 @@ export async function GET() {
     }
 
     // 2. Check for API Key
-    const apiKey = process.env.API_KEY; // Use the standard API_KEY
+    const apiKey = process.env.API_KEY;
     if (!apiKey) {
-        console.warn('[Market-Data] CoinMarketCap API anahtarı (API_KEY) bulunamadı. Yedek veri kullanılıyor.');
+        console.warn('[Market-Data] CoinMarketCap API key (API_KEY) not found. Using fallback data.');
         const fallbackTickers = getFallbackData();
         cachedData = { tickers: fallbackTickers, timestamp: now, source: 'static' };
         return NextResponse.json({ tickers: fallbackTickers, source: 'static' });
@@ -72,7 +72,7 @@ export async function GET() {
     
     // 3. Fetch from CoinMarketCap API
     try {
-        console.log('[Market-Data] Canlı veri CoinMarketCap API\'sinden alınıyor...');
+        console.log('[Market-Data] Fetching live data from CoinMarketCap API...');
         const response = await axios.get('https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest', {
             headers: {
                 'X-CMC_PRO_API_KEY': apiKey,
@@ -94,7 +94,7 @@ export async function GET() {
             change: quote.quote.USD.percent_change_24h,
         }));
         
-        console.log(`[Market-Data] CMC'den ${formattedTickers.length} adet coin verisi başarıyla alındı.`);
+        console.log(`[Market-Data] Successfully fetched ${formattedTickers.length} tickers from CMC.`);
         
         // 5. Update cache with live data
         cachedData = {
@@ -109,9 +109,9 @@ export async function GET() {
         });
 
     } catch (error: any) {
-        console.error('[Market-Data] CoinMarketCap API\'sinden veri alınırken hata oluştu:', error.response?.data || error.message);
+        console.error('[Market-Data] Error fetching from CoinMarketCap API:', error.response?.data || error.message);
         
-        console.warn('[Market-Data] Canlı veri alınamadı. Yedek veri mekanizması devreye sokuluyor.');
+        console.warn('[Market-Data] Failed to fetch live data. Engaging fallback mechanism.');
         const fallbackTickers = getFallbackData();
         cachedData = { tickers: fallbackTickers, timestamp: now, source: 'static' };
         return NextResponse.json({ tickers: fallbackTickers, source: 'static' });

@@ -2,6 +2,7 @@ import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { AppLayout } from '@/components/app-layout';
+import { MarketProvider } from '@/context/MarketContext';
 
 export const metadata: Metadata = {
   title: 'AutoPilot Algo Trading Platform',
@@ -22,11 +23,11 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body bg-background text-foreground antialiased h-full">
-        <AppLayout>{children}</AppLayout>
+        <MarketProvider>
+          <AppLayout>{children}</AppLayout>
+        </MarketProvider>
         <Toaster />
       </body>
     </html>
   );
 }
-
-    

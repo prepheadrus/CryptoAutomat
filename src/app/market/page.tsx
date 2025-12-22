@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useRef, memo, useId, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, memo, useId, useCallback, useMemo, useContext } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Card } from "@/components/ui/card";
@@ -10,19 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Search, ArrowRight, Star, Heart, WifiOff, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from '@/components/ui/skeleton';
+import { MarketContext, type MarketCoin } from '@/context/MarketContext';
 
 declare global {
     interface Window {
         TradingView: any;
     }
 }
-
-type MarketCoin = {
-  symbol: string; // Base currency, e.g., 'BTC'
-  name: string; // Full name, e.g., 'Bitcoin'
-  price: number;
-  change: number;
-};
 
 // Memoized TradingView Widget to prevent re-renders on parent state changes
 const TradingViewWidget = memo(({ symbol }: { symbol: string }) => {
@@ -121,11 +115,9 @@ const MarketList = memo(({ coins, favorites, selectedSymbol, onSelectSymbol, onT
     }
     
     if (coins.length === 0) {
-        // Search returned no results
         if(searchQuery) {
             return <p className="text-center text-muted-foreground p-8">"{searchQuery}" için sonuç bulunamadı.</p>
         }
-        // No search, but no favorites to display
         return (
             <div className="text-center text-muted-foreground p-8 flex flex-col items-center gap-2">
                 <Heart className="h-6 w-6"/>
@@ -178,10 +170,8 @@ MarketList.displayName = 'MarketList';
 export default function MarketTerminalPage() {
   const [selectedSymbol, setSelectedSymbol] = useState("BTC");
   const [searchQuery, setSearchQuery] = useState("");
-  const [marketData, setMarketData] = useState<MarketCoin[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [favorites, setFavorites] = useState<string[]>([]);
-  const [isSimulatedData, setIsSimulatedData] = useState(false);
+  const { marketData, isLoading, source } = useContext(MarketContext);
   
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -214,70 +204,6 @@ export default function MarketTerminalPage() {
     }
   }, [searchParams]);
 
-  const fetchMarketData = useCallback(async () => {
-      // Don't refetch if simulation is active
-      if (isSimulatedData) {
-          setIsLoading(false);
-          return;
-      }
-      try {
-          console.log("[Market-Data-Client] Veri çekiliyor...");
-          const response = await fetch('/api/market-data');
-          if (!response.ok) {
-              throw new Error('Piyasa verileri alınamadı');
-          }
-          const data = await response.json();
-          if (data && data.tickers) {
-             console.log(`[Market-Data-Client] Alınan coin sayısı: ${data.tickers.length}. Kaynak: ${data.source}`);
-             setMarketData(data.tickers);
-             setIsSimulatedData(data.source === 'static');
-          } else {
-             setMarketData([]);
-             setIsSimulatedData(true); // Fallback to simulation
-          }
-      } catch (error) {
-          console.error(error);
-          setMarketData([]); // Set to empty on error
-          setIsSimulatedData(true);
-      } finally {
-          setIsLoading(false);
-      }
-  }, [isSimulatedData]);
-
-  useEffect(() => {
-      fetchMarketData(); // Initial fetch
-      
-      const liveDataInterval = setInterval(() => {
-          if (!isSimulatedData) {
-            fetchMarketData();
-          }
-      }, 5000);
-
-      return () => clearInterval(liveDataInterval);
-  }, [fetchMarketData, isSimulatedData]);
-  
-  // Effect for price simulation when using fallback data
-  useEffect(() => {
-    if (!isSimulatedData) return;
-
-    const simulationInterval = setInterval(() => {
-        setMarketData(prevData =>
-            prevData.map(coin => {
-                const priceJitter = (Math.random() - 0.5) * (coin.price * 0.001); // +/- 0.05%
-                const changeJitter = (Math.random() - 0.5) * 0.1;
-                return {
-                    ...coin,
-                    price: Math.max(0, coin.price + priceJitter),
-                    change: coin.change + changeJitter,
-                };
-            })
-        );
-    }, 3000); // Update every 3 seconds
-
-    return () => clearInterval(simulationInterval);
-  }, [isSimulatedData]);
-
-
   const handleSelectSymbol = (symbol: string) => {
     setSelectedSymbol(symbol);
     router.push(`/market?symbol=${symbol}`, { scroll: false });
@@ -295,7 +221,6 @@ export default function MarketTerminalPage() {
   const filteredCoins = useMemo(() => {
     const query = searchQuery.toLowerCase();
     
-    // If there is a search query, filter all market data
     if (query) {
       return marketData.filter(coin => 
         coin.symbol.toLowerCase().includes(query) || 
@@ -303,11 +228,11 @@ export default function MarketTerminalPage() {
       );
     }
     
-    // If search is empty, show only favorite coins
     return marketData.filter(coin => favorites.includes(coin.symbol));
     
   }, [searchQuery, marketData, favorites]);
 
+  const listTitle = searchQuery ? "Arama Sonuçları" : "Favoriler";
 
   return (
     <div className="flex-1 flex flex-row overflow-hidden rounded-lg bg-slate-950 border border-slate-800">
@@ -329,7 +254,7 @@ export default function MarketTerminalPage() {
                     <div className="w-4 pl-1">
                        <Heart className="h-3 w-3" />
                     </div>
-                    <div className="font-semibold">{searchQuery ? 'Arama Sonuçları' : 'Favoriler'}</div>
+                    <div className="font-semibold">{listTitle}</div>
                     <div className="text-right font-semibold">Fiyat / 24s Değişim</div>
                 </div>
                 <div className="flex-1 overflow-y-auto">
@@ -351,7 +276,7 @@ export default function MarketTerminalPage() {
             <div className="flex h-16 items-center justify-between p-4 border-b border-slate-800 shrink-0">
                 <div className="flex items-center gap-4">
                      <h1 className="text-xl font-headline font-bold text-white">{selectedSymbol}/USDT</h1>
-                     {isSimulatedData && (
+                     {source === 'static' && (
                         <div className="flex items-center gap-2 text-xs text-amber-400 animate-pulse">
                             <Activity className="h-4 w-4" />
                             <span>Simülasyon Modu</span>
