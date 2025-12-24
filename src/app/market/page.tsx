@@ -203,6 +203,7 @@ export default function MarketTerminalPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [source, setSource] = useState<'live' | 'static'>('static');
   const [totalAvailable, setTotalAvailable] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -241,6 +242,7 @@ export default function MarketTerminalPage() {
   useEffect(() => {
     const fetchMarketData = async () => {
       setIsLoading(true);
+      setError(null);
       try {
         const params = new URLSearchParams({
           exchange: selectedExchange,
@@ -258,8 +260,9 @@ export default function MarketTerminalPage() {
           setSource(data.source);
           setTotalAvailable(data.totalAvailable || 0);
         }
-      } catch (error) {
-        console.error('Error fetching market data:', error);
+      } catch (err: any) {
+        console.error('Error fetching market data:', err);
+        setError(err.message || 'Veri yüklenirken hata oluştu');
       } finally {
         setIsLoading(false);
       }
