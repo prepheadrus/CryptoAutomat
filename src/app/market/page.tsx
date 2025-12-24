@@ -24,141 +24,140 @@ declare global {
     }
 }
 
-// Memoized TradingView Widget - Binance only with aggressive cleanup
+// TradingView Widget - Load script once, recreate widgets
 const TradingViewWidget = memo(({ symbol }: { symbol: string }) => {
-    const containerRef = useRef<HTMLDivElement>(null);
     const widgetRef = useRef<any>(null);
-    const containerIdRef = useRef(`tradingview_${Date.now()}`);
+    const scriptLoadedRef = useRef(false);
+    // Generate unique container ID that stays constant
+    const containerIdRef = useRef(`tvwidget_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
 
     useEffect(() => {
-        // Nuclear cleanup - remove ALL TradingView elements
-        const cleanupAllWidgets = () => {
-            // Remove previous widget instance
+        // Load TradingView script once globally
+        const loadTradingViewScript = () => {
+            return new Promise((resolve, reject) => {
+                if (typeof window.TradingView !== 'undefined') {
+                    scriptLoadedRef.current = true;
+                    resolve(true);
+                    return;
+                }
+
+                const scriptId = 'tradingview-lib-script';
+                let script = document.getElementById(scriptId) as HTMLScriptElement;
+
+                if (!script) {
+                    script = document.createElement('script');
+                    script.id = scriptId;
+                    script.src = 'https://s3.tradingview.com/tv.js';
+                    script.async = true;
+                    script.onload = () => {
+                        scriptLoadedRef.current = true;
+                        resolve(true);
+                    };
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                } else {
+                    if (window.TradingView) {
+                        scriptLoadedRef.current = true;
+                        resolve(true);
+                    } else {
+                        script.onload = () => {
+                            scriptLoadedRef.current = true;
+                            resolve(true);
+                        };
+                    }
+                }
+            });
+        };
+
+        // Format symbol for Binance
+        const formattedSymbol = symbol.toUpperCase().replace('/USDT', '').replace('/', '');
+        const binanceSymbol = `BINANCE:${formattedSymbol}USDT`;
+
+        console.log('🔄 Initializing widget for:', binanceSymbol);
+
+        const initWidget = async () => {
+            try {
+                // Wait for script to load
+                await loadTradingViewScript();
+
+                // Small delay to ensure DOM is ready
+                await new Promise(resolve => setTimeout(resolve, 100));
+
+                const container = document.getElementById(containerIdRef.current);
+                if (!container) {
+                    console.error('❌ Container not found');
+                    return;
+                }
+
+                // Cleanup previous widget
+                if (widgetRef.current) {
+                    try {
+                        widgetRef.current.remove();
+                        widgetRef.current = null;
+                    } catch (e) {
+                        console.log('Widget cleanup:', e);
+                    }
+                }
+
+                // Clear container
+                container.innerHTML = '';
+
+                console.log('✅ Creating widget with symbol:', binanceSymbol);
+
+                // Create widget with forced Binance exchange
+                widgetRef.current = new window.TradingView.widget({
+                    autosize: true,
+                    symbol: binanceSymbol,
+                    interval: 'D',
+                    timezone: 'Etc/UTC',
+                    theme: 'dark',
+                    style: '1',
+                    locale: 'tr',
+                    toolbar_bg: '#f1f3f6',
+                    enable_publishing: false,
+                    allow_symbol_change: true, // Allow changing to see if it helps
+                    container_id: containerIdRef.current,
+                    hide_top_toolbar: false,
+                    hide_side_toolbar: false,
+                    details: true,
+                    hotlist: false,
+                    calendar: false,
+                    studies: [],
+                    disabled_features: [
+                        'use_localstorage_for_settings',
+                        'header_symbol_search',
+                        'symbol_search_hot_key'
+                    ],
+                    enabled_features: [],
+                    loading_screen: { backgroundColor: '#131722' },
+                    overrides: {
+                        'mainSeriesProperties.showCountdown': false
+                    }
+                });
+
+                console.log('✅ Widget created');
+            } catch (error) {
+                console.error('❌ Widget error:', error);
+            }
+        };
+
+        initWidget();
+
+        return () => {
             if (widgetRef.current) {
                 try {
                     widgetRef.current.remove();
                     widgetRef.current = null;
                 } catch (e) {
-                    console.log('Widget remove error:', e);
+                    // Ignore cleanup errors
                 }
             }
-
-            // Remove all TradingView containers except current
-            const allContainers = document.querySelectorAll('[id^="tradingview_"]');
-            allContainers.forEach(container => {
-                if (container.id !== containerIdRef.current) {
-                    container.innerHTML = '';
-                    container.remove();
-                }
-            });
-
-            // Clean iframes
-            const iframes = document.querySelectorAll('iframe[id*="tradingview"]');
-            iframes.forEach(iframe => iframe.remove());
-        };
-
-        cleanupAllWidgets();
-
-        // Format symbol for TradingView
-        const formattedSymbol = symbol.toUpperCase().replace('/USDT', '').replace('/', '');
-        const binanceSymbol = `BINANCE:${formattedSymbol}USDT`;
-
-        console.log('🔄 Creating TradingView widget for:', binanceSymbol);
-        console.log('📦 Container ID:', containerIdRef.current);
-
-        const createWidget = () => {
-            const container = document.getElementById(containerIdRef.current);
-            if (!container) {
-                console.error('❌ Container not found:', containerIdRef.current);
-                // Retry once after a short delay
-                setTimeout(() => {
-                    const retryContainer = document.getElementById(containerIdRef.current);
-                    if (retryContainer) {
-                        console.log('✅ Container found on retry');
-                        createWidgetNow(retryContainer, binanceSymbol);
-                    }
-                }, 100);
-                return;
-            }
-
-            createWidgetNow(container, binanceSymbol);
-        };
-
-        const createWidgetNow = (container: HTMLElement, symbol: string) => {
-            if (typeof window.TradingView === 'undefined') {
-                console.error('❌ TradingView library not loaded');
-                return;
-            }
-
-            // Complete cleanup of container
-            container.innerHTML = '';
-
-            try {
-                console.log('✅ Creating widget with symbol:', symbol);
-
-                // Create new widget with explicit Binance configuration
-                widgetRef.current = new window.TradingView.widget({
-                    width: "100%",
-                    height: "100%",
-                    symbol: symbol,
-                    interval: "D",
-                    timezone: "Etc/UTC",
-                    theme: "dark",
-                    style: "1",
-                    locale: "tr",
-                    toolbar_bg: "#1a1a1a",
-                    enable_publishing: false,
-                    withdateranges: true,
-                    hide_side_toolbar: false,
-                    allow_symbol_change: false,
-                    save_image: false,
-                    container_id: containerIdRef.current,
-                    // Force specific data source
-                    disabled_features: ["use_localstorage_for_settings"],
-                    enabled_features: [],
-                    overrides: {
-                        "symbolWatermarkProperties.color": "rgba(0, 0, 0, 0)"
-                    }
-                });
-
-                console.log('✅ Widget created successfully');
-            } catch (e) {
-                console.error('❌ Widget creation error:', e);
-            }
-        };
-
-        // Delay to ensure DOM is ready and cleanup is complete
-        const timer = setTimeout(() => {
-            const scriptId = 'tradingview-widget-script';
-            let existingScript = document.getElementById(scriptId) as HTMLScriptElement;
-
-            // Remove and recreate script to force fresh load
-            if (existingScript) {
-                existingScript.remove();
-                existingScript = null as any;
-            }
-
-            const script = document.createElement("script");
-            script.id = scriptId;
-            script.src = "https://s3.tradingview.com/tv.js";
-            script.type = "text/javascript";
-            script.async = true;
-            script.onload = () => {
-                // Additional delay to ensure TradingView is fully loaded
-                setTimeout(createWidget, 250);
-            };
-            document.head.appendChild(script);
-        }, 200);
-
-        return () => {
-            clearTimeout(timer);
-            cleanupAllWidgets();
         };
     }, [symbol]);
 
     return (
-        <div key={symbol} className="tradingview-widget-container h-full w-full" ref={containerRef}>
-            <div id={containerIdRef.current} className="h-full w-full bg-slate-900" />
+        <div className="tradingview-widget-container h-full w-full">
+            <div id={containerIdRef.current} className="h-full w-full" />
         </div>
     );
 });
