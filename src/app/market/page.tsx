@@ -24,35 +24,51 @@ declare global {
     }
 }
 
-// Memoized TradingView Widget - Binance only for now
+// Memoized TradingView Widget - Binance only
 const TradingViewWidget = memo(({ symbol }: { symbol: string }) => {
     const containerRef = useRef<HTMLDivElement>(null);
-    const widgetId = useId();
-    const container_id = `tradingview_widget_${symbol.replace('/', '')}_${widgetId}`;
     const widgetRef = useRef<any>(null);
+    // Use symbol in container ID to force recreation on symbol change
+    const container_id = `tradingview_${symbol.replace(/\//g, '_')}`;
 
     useEffect(() => {
+        // Aggressive cleanup before creating new widget
+        if (widgetRef.current) {
+            try {
+                widgetRef.current.remove();
+                widgetRef.current = null;
+            } catch (e) {
+                console.log('Widget remove error:', e);
+            }
+        }
+
         // Clean up the symbol to be compatible with TradingView
         // (e.g., "BTC/USDT" -> "BTCUSDT")
         const formattedSymbol = symbol.toUpperCase().replace('/USDT', '').replace('/', '');
+        const binanceSymbol = `BINANCE:${formattedSymbol}USDT`;
+
+        console.log('Creating TradingView widget for:', binanceSymbol);
 
         const createWidget = () => {
             const container = document.getElementById(container_id);
-            if (container && typeof window.TradingView !== 'undefined') {
-                // Clear previous widget if exists
-                if (widgetRef.current) {
-                    try {
-                        widgetRef.current.remove();
-                    } catch (e) {
-                        console.log('Widget cleanup error:', e);
-                    }
-                }
-                container.innerHTML = '';
+            if (!container) {
+                console.log('Container not found:', container_id);
+                return;
+            }
 
-                // Create new widget - Binance only
+            if (typeof window.TradingView === 'undefined') {
+                console.log('TradingView not loaded yet');
+                return;
+            }
+
+            // Complete container cleanup
+            container.innerHTML = '';
+
+            try {
+                // Create new widget with Binance symbol
                 widgetRef.current = new window.TradingView.widget({
                     autosize: true,
-                    symbol: `BINANCE:${formattedSymbol}USDT`,
+                    symbol: binanceSymbol,
                     interval: "D",
                     timezone: "Etc/UTC",
                     theme: "dark",
@@ -62,32 +78,42 @@ const TradingViewWidget = memo(({ symbol }: { symbol: string }) => {
                     withdateranges: true,
                     hide_side_toolbar: false,
                     allow_symbol_change: false,
-                    container_id: container_id
+                    container_id: container_id,
+                    // Force specific exchange
+                    studies_overrides: {},
                 });
+                console.log('Widget created successfully for:', binanceSymbol);
+            } catch (e) {
+                console.error('Widget creation error:', e);
             }
         }
 
-        const scriptId = 'tradingview-widget-script';
-        const existingScript = document.getElementById(scriptId);
+        // Small delay to ensure DOM is ready
+        const timer = setTimeout(() => {
+            const scriptId = 'tradingview-widget-script';
+            const existingScript = document.getElementById(scriptId);
 
-        if (!existingScript) {
-            const script = document.createElement("script");
-            script.id = scriptId;
-            script.src = "https://s3.tradingview.com/tv.js";
-            script.type = "text/javascript";
-            script.async = true;
-            script.onload = createWidget;
-            document.body.appendChild(script);
-        } else {
-            if(window.TradingView) {
-               createWidget();
+            if (!existingScript) {
+                const script = document.createElement("script");
+                script.id = scriptId;
+                script.src = "https://s3.tradingview.com/tv.js";
+                script.type = "text/javascript";
+                script.async = true;
+                script.onload = createWidget;
+                document.body.appendChild(script);
+            } else {
+                if (window.TradingView) {
+                    createWidget();
+                }
             }
-        }
+        }, 100);
 
         return () => {
+            clearTimeout(timer);
             if (widgetRef.current) {
                 try {
                     widgetRef.current.remove();
+                    widgetRef.current = null;
                 } catch (e) {
                     console.log('Widget cleanup error:', e);
                 }
@@ -100,7 +126,7 @@ const TradingViewWidget = memo(({ symbol }: { symbol: string }) => {
     }, [symbol, container_id]);
 
     return (
-        <div key={symbol} className="tradingview-widget-container h-full w-full" ref={containerRef}>
+        <div className="tradingview-widget-container h-full w-full" ref={containerRef}>
             <div id={container_id} className="h-full w-full" />
         </div>
     );
@@ -312,7 +338,7 @@ export default function MarketTerminalPage() {
       : "Popüler Coinler";
 
   return (
-    <div className="flex-1 flex flex-row overflow-hidden rounded-lg bg-slate-950 border border-slate-800">
+    <div className="flex-1 flex flex-row overflow-hidden rounded-lg bg-slate-950 border border-slate-800 m-6">
         <aside className="w-1/3 max-w-sm flex-shrink-0 border-r border-slate-800 bg-slate-900/50 flex flex-col">
             <div className="p-4 border-b border-slate-800 space-y-3">
                 {/* Binance Market - Search & Stats */}

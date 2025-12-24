@@ -61,6 +61,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const userAvatar = PlaceHolderImages.find(p => p.id === 'user-avatar') as ImagePlaceholder;
   const pathname = usePathname();
   const isEditorPage = pathname === '/editor';
+  const isMarketPage = pathname === '/market';
+  const isFullHeightPage = isEditorPage || isMarketPage;
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-background">
@@ -75,7 +77,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </Link>
           <NavigationLinks />
         </nav>
-        
+
         {/* Mobile Menu */}
         <Sheet>
           <SheetTrigger asChild>
@@ -101,7 +103,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </nav>
           </SheetContent>
         </Sheet>
-        
+
         <div className="flex w-full items-center justify-end gap-4 md:ml-auto md:gap-2 lg:gap-4">
             <div className="flex items-center gap-3">
               <div className="flex flex-col text-right">
@@ -125,7 +127,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       <main className={cn(
           "flex flex-1 flex-col",
-          isEditorPage ? "p-0 overflow-hidden" : "p-6 overflow-y-auto"
+          isFullHeightPage ? "p-0 overflow-hidden" : "p-6 overflow-y-auto"
       )}>
           {children}
       </main>
