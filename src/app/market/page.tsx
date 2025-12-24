@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Search, ArrowRight, Star, Heart, WifiOff, Activity, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from '@/components/ui/skeleton';
+import { useBinanceWebSocket } from '@/hooks/useBinanceWebSocket';
 
 type MarketCoin = {
   symbol: string;
@@ -128,12 +129,12 @@ const MarketList = memo(({ coins, favorites, selectedSymbol, onSelectSymbol, onT
                            <span className="text-xs text-muted-foreground">{coin.name}</span>
                         </div>
                         <div className="flex flex-col items-end">
-                            <span className="font-mono">${coin.price < 0.01 ? coin.price.toPrecision(2) : coin.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            <span className="font-mono price-transition">${coin.price < 0.01 ? coin.price.toPrecision(2) : coin.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             <span className={cn(
-                                "font-mono text-xs",
+                                "font-mono text-xs price-transition",
                                 coin.change >= 0 ? "text-green-500" : "text-red-500"
                             )}>
-                                {coin.change.toFixed(2)}%
+                                {coin.change >= 0 ? '+' : ''}{coin.change.toFixed(2)}%
                             </span>
                         </div>
                     </button>
@@ -157,6 +158,9 @@ export default function MarketTerminalPage() {
 
   const searchParams = useSearchParams();
   const router = useRouter();
+
+  // WebSocket connection for real-time prices
+  const { tickers: wsTickers, status: wsStatus, lastUpdate: wsLastUpdate } = useBinanceWebSocket();
 
   // Load favorites from localStorage on initial render
   useEffect(() => {
@@ -188,7 +192,7 @@ export default function MarketTerminalPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Fetch market data from Binance
+  // Fetch market data from Binance (initial load)
   useEffect(() => {
     const fetchMarketData = async () => {
       setIsLoading(true);
@@ -220,6 +224,34 @@ export default function MarketTerminalPage() {
 
     fetchMarketData();
   }, [debouncedSearchQuery]);
+
+  // Merge WebSocket real-time data with existing market data
+  useEffect(() => {
+    if (wsStatus === 'connected' && wsTickers.size > 0 && marketData.length > 0) {
+      setMarketData(prevData => {
+        return prevData.map(coin => {
+          const wsTicker = wsTickers.get(coin.symbol);
+          if (wsTicker) {
+            // Update with real-time data from WebSocket
+            return {
+              ...coin,
+              price: parseFloat(wsTicker.price),
+              change: parseFloat(wsTicker.priceChangePercent),
+            };
+          }
+          return coin;
+        });
+      });
+
+      // Update source to 'live' when WebSocket is active
+      setSource('live');
+    } else if (wsStatus === 'disconnected' || wsStatus === 'error') {
+      // Fallback to static when WebSocket is not available
+      if (source === 'live') {
+        setSource('static');
+      }
+    }
+  }, [wsTickers, wsStatus, marketData.length]); // Only depend on wsTickers and wsStatus changes
 
   useEffect(() => {
     const symbolFromUrl = searchParams.get('symbol');
@@ -280,10 +312,23 @@ export default function MarketTerminalPage() {
                       </span>
                     )}
                   </div>
-                  {source === 'live' && (
-                    <span className="text-xs text-green-500 flex items-center gap-1">
+                  {/* WebSocket Connection Status */}
+                  {wsStatus === 'connected' && (
+                    <span className="text-xs text-green-500 flex items-center gap-1" title={`Son güncelleme: ${wsLastUpdate?.toLocaleTimeString() || '-'}`}>
                       <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                       Canlı
+                    </span>
+                  )}
+                  {wsStatus === 'connecting' && (
+                    <span className="text-xs text-yellow-500 flex items-center gap-1">
+                      <RefreshCw className="w-3 h-3 animate-spin" />
+                      Bağlanıyor...
+                    </span>
+                  )}
+                  {(wsStatus === 'disconnected' || wsStatus === 'error') && source === 'static' && (
+                    <span className="text-xs text-amber-400 flex items-center gap-1" title="WebSocket bağlantısı yok - REST API kullanılıyor">
+                      <Activity className="w-3 h-3" />
+                      Statik
                     </span>
                   )}
                 </div>
