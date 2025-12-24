@@ -24,140 +24,39 @@ declare global {
     }
 }
 
-// TradingView Widget - Load script once, recreate widgets
+// TradingView Iframe Embed - Force Binance by URL
 const TradingViewWidget = memo(({ symbol }: { symbol: string }) => {
-    const widgetRef = useRef<any>(null);
-    const scriptLoadedRef = useRef(false);
-    // Generate unique container ID that stays constant
-    const containerIdRef = useRef(`tvwidget_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+    // Format symbol for Binance - handle both "BTC/USDT" and "BTCUSDT" formats
+    const upperSymbol = symbol.toUpperCase();
+    const baseSymbol = upperSymbol.includes('/')
+        ? upperSymbol.split('/')[0]  // "BTC/USDT" -> "BTC"
+        : upperSymbol.replace(/USDT$/, ''); // "BTCUSDT" -> "BTC"
 
-    useEffect(() => {
-        // Load TradingView script once globally
-        const loadTradingViewScript = () => {
-            return new Promise((resolve, reject) => {
-                if (typeof window.TradingView !== 'undefined') {
-                    scriptLoadedRef.current = true;
-                    resolve(true);
-                    return;
-                }
+    const binanceSymbol = `BINANCE%3A${baseSymbol}USDT`;
 
-                const scriptId = 'tradingview-lib-script';
-                let script = document.getElementById(scriptId) as HTMLScriptElement;
+    console.log('📊 TradingView iframe loading:', `BINANCE:${baseSymbol}USDT`);
 
-                if (!script) {
-                    script = document.createElement('script');
-                    script.id = scriptId;
-                    script.src = 'https://s3.tradingview.com/tv.js';
-                    script.async = true;
-                    script.onload = () => {
-                        scriptLoadedRef.current = true;
-                        resolve(true);
-                    };
-                    script.onerror = reject;
-                    document.head.appendChild(script);
-                } else {
-                    if (window.TradingView) {
-                        scriptLoadedRef.current = true;
-                        resolve(true);
-                    } else {
-                        script.onload = () => {
-                            scriptLoadedRef.current = true;
-                            resolve(true);
-                        };
-                    }
-                }
-            });
-        };
-
-        // Format symbol for Binance
-        const formattedSymbol = symbol.toUpperCase().replace('/USDT', '').replace('/', '');
-        const binanceSymbol = `BINANCE:${formattedSymbol}USDT`;
-
-        console.log('🔄 Initializing widget for:', binanceSymbol);
-
-        const initWidget = async () => {
-            try {
-                // Wait for script to load
-                await loadTradingViewScript();
-
-                // Small delay to ensure DOM is ready
-                await new Promise(resolve => setTimeout(resolve, 100));
-
-                const container = document.getElementById(containerIdRef.current);
-                if (!container) {
-                    console.error('❌ Container not found');
-                    return;
-                }
-
-                // Cleanup previous widget
-                if (widgetRef.current) {
-                    try {
-                        widgetRef.current.remove();
-                        widgetRef.current = null;
-                    } catch (e) {
-                        console.log('Widget cleanup:', e);
-                    }
-                }
-
-                // Clear container
-                container.innerHTML = '';
-
-                console.log('✅ Creating widget with symbol:', binanceSymbol);
-
-                // Create widget with forced Binance exchange
-                widgetRef.current = new window.TradingView.widget({
-                    autosize: true,
-                    symbol: binanceSymbol,
-                    interval: 'D',
-                    timezone: 'Etc/UTC',
-                    theme: 'dark',
-                    style: '1',
-                    locale: 'tr',
-                    toolbar_bg: '#f1f3f6',
-                    enable_publishing: false,
-                    allow_symbol_change: true, // Allow changing to see if it helps
-                    container_id: containerIdRef.current,
-                    hide_top_toolbar: false,
-                    hide_side_toolbar: false,
-                    details: true,
-                    hotlist: false,
-                    calendar: false,
-                    studies: [],
-                    disabled_features: [
-                        'use_localstorage_for_settings',
-                        'header_symbol_search',
-                        'symbol_search_hot_key'
-                    ],
-                    enabled_features: [],
-                    loading_screen: { backgroundColor: '#131722' },
-                    overrides: {
-                        'mainSeriesProperties.showCountdown': false
-                    }
-                });
-
-                console.log('✅ Widget created');
-            } catch (error) {
-                console.error('❌ Widget error:', error);
-            }
-        };
-
-        initWidget();
-
-        return () => {
-            if (widgetRef.current) {
-                try {
-                    widgetRef.current.remove();
-                    widgetRef.current = null;
-                } catch (e) {
-                    // Ignore cleanup errors
-                }
-            }
-        };
-    }, [symbol]);
+    // TradingView iframe embed URL with forced Binance exchange
+    const iframeUrl = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${binanceSymbol}&interval=D&hidesidetoolbar=0&hidetoptoolbar=0&symboledit=0&saveimage=0&toolbarbg=f1f3f6&theme=dark&style=1&timezone=Etc%2FUTC&locale=tr&allow_symbol_change=false`;
 
     return (
-        <div className="tradingview-widget-container h-full w-full">
-            <div id={containerIdRef.current} className="h-full w-full" />
+        <div className="tradingview-widget-container h-full w-full relative">
+            <iframe
+                key={symbol} // Force remount on symbol change
+                src={iframeUrl}
+                className="h-full w-full border-0"
+                allowTransparency={true}
+                scrolling="no"
+                allowFullScreen={true}
+                style={{
+                    display: 'block',
+                    height: '100%',
+                    width: '100%',
+                    margin: 0,
+                    padding: 0,
+                }}
+            />
+            <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-slate-900 to-transparent pointer-events-none" />
         </div>
     );
 });
