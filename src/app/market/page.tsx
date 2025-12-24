@@ -28,15 +28,7 @@ declare global {
 const TradingViewWidget = memo(({ symbol }: { symbol: string }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const widgetRef = useRef<any>(null);
-    const [widgetKey, setWidgetKey] = useState(0);
-
-    // Generate unique container ID with timestamp to force recreation
-    const container_id = `tradingview_${symbol.replace(/\//g, '_')}_${widgetKey}`;
-
-    useEffect(() => {
-        // Force new widget key to ensure complete remount
-        setWidgetKey(Date.now());
-    }, [symbol]);
+    const containerIdRef = useRef(`tradingview_${Date.now()}`);
 
     useEffect(() => {
         // Nuclear cleanup - remove ALL TradingView elements
@@ -51,10 +43,10 @@ const TradingViewWidget = memo(({ symbol }: { symbol: string }) => {
                 }
             }
 
-            // Remove all TradingView containers
+            // Remove all TradingView containers except current
             const allContainers = document.querySelectorAll('[id^="tradingview_"]');
             allContainers.forEach(container => {
-                if (container.id !== container_id) {
+                if (container.id !== containerIdRef.current) {
                     container.innerHTML = '';
                     container.remove();
                 }
@@ -72,15 +64,27 @@ const TradingViewWidget = memo(({ symbol }: { symbol: string }) => {
         const binanceSymbol = `BINANCE:${formattedSymbol}USDT`;
 
         console.log('🔄 Creating TradingView widget for:', binanceSymbol);
-        console.log('📦 Container ID:', container_id);
+        console.log('📦 Container ID:', containerIdRef.current);
 
         const createWidget = () => {
-            const container = document.getElementById(container_id);
+            const container = document.getElementById(containerIdRef.current);
             if (!container) {
-                console.error('❌ Container not found:', container_id);
+                console.error('❌ Container not found:', containerIdRef.current);
+                // Retry once after a short delay
+                setTimeout(() => {
+                    const retryContainer = document.getElementById(containerIdRef.current);
+                    if (retryContainer) {
+                        console.log('✅ Container found on retry');
+                        createWidgetNow(retryContainer, binanceSymbol);
+                    }
+                }, 100);
                 return;
             }
 
+            createWidgetNow(container, binanceSymbol);
+        };
+
+        const createWidgetNow = (container: HTMLElement, symbol: string) => {
             if (typeof window.TradingView === 'undefined') {
                 console.error('❌ TradingView library not loaded');
                 return;
@@ -90,13 +94,13 @@ const TradingViewWidget = memo(({ symbol }: { symbol: string }) => {
             container.innerHTML = '';
 
             try {
-                console.log('✅ Creating widget with symbol:', binanceSymbol);
+                console.log('✅ Creating widget with symbol:', symbol);
 
                 // Create new widget with explicit Binance configuration
                 widgetRef.current = new window.TradingView.widget({
                     width: "100%",
                     height: "100%",
-                    symbol: binanceSymbol,
+                    symbol: symbol,
                     interval: "D",
                     timezone: "Etc/UTC",
                     theme: "dark",
@@ -108,7 +112,7 @@ const TradingViewWidget = memo(({ symbol }: { symbol: string }) => {
                     hide_side_toolbar: false,
                     allow_symbol_change: false,
                     save_image: false,
-                    container_id: container_id,
+                    container_id: containerIdRef.current,
                     // Force specific data source
                     disabled_features: ["use_localstorage_for_settings"],
                     enabled_features: [],
@@ -141,20 +145,20 @@ const TradingViewWidget = memo(({ symbol }: { symbol: string }) => {
             script.async = true;
             script.onload = () => {
                 // Additional delay to ensure TradingView is fully loaded
-                setTimeout(createWidget, 200);
+                setTimeout(createWidget, 250);
             };
             document.head.appendChild(script);
-        }, 150);
+        }, 200);
 
         return () => {
             clearTimeout(timer);
             cleanupAllWidgets();
         };
-    }, [symbol, container_id, widgetKey]);
+    }, [symbol]);
 
     return (
-        <div key={`${symbol}-${widgetKey}`} className="tradingview-widget-container h-full w-full" ref={containerRef}>
-            <div id={container_id} className="h-full w-full bg-slate-900" />
+        <div key={symbol} className="tradingview-widget-container h-full w-full" ref={containerRef}>
+            <div id={containerIdRef.current} className="h-full w-full bg-slate-900" />
         </div>
     );
 });
