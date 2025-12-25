@@ -73,7 +73,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             className="flex items-center gap-2 text-lg font-semibold md:text-base text-primary"
           >
             <Bot className="h-6 w-6" />
-            <span className="font-headline">AutoPilot</span>
+            <span className="font-headline">CryptoAutomat</span>
           </Link>
           <NavigationLinks />
         </nav>
@@ -97,7 +97,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 className="flex items-center gap-2 text-lg font-semibold text-primary"
                 >
                 <Bot className="h-6 w-6" />
-                <span className="sr-only">AutoPilot</span>
+                <span className="sr-only">CryptoAutomat</span>
                 </Link>
                 <NavigationLinks inSheet={true} />
             </nav>
@@ -109,7 +109,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <div className="flex flex-col text-right">
                 <span className="text-sm font-medium">Trader Pro</span>
                 <span className="text-xs text-muted-foreground">
-                  user@autopilot.dev
+                  user@cryptoautomat.dev
                 </span>
               </div>
               <Avatar className="h-9 w-9">
