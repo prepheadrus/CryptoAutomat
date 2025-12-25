@@ -34,6 +34,7 @@ export default function SettingsPage() {
     // Exchange Keys State
     const [apiKey, setApiKey] = useState('');
     const [secretKey, setSecretKey] = useState('');
+    const [isTestnet, setIsTestnet] = useState(false);
     const [isTesting, setIsTesting] = useState(false);
     const [isConnected, setIsConnected] = useState(false);
 
@@ -62,12 +63,13 @@ export default function SettingsPage() {
         try {
             const storedKeys = localStorage.getItem('exchangeKeys');
             if (storedKeys) {
-                const { apiKey: storedApiKey, secretKey: storedSecretKey } = JSON.parse(storedKeys);
+                const { apiKey: storedApiKey, secretKey: storedSecretKey, testnet } = JSON.parse(storedKeys);
                 if (storedApiKey) {
                     setApiKey(storedApiKey);
                     setIsConnected(true); // Assume connected if keys exist
                 }
                 if (storedSecretKey) setSecretKey(storedSecretKey);
+                if (testnet !== undefined) setIsTestnet(testnet);
             }
         } catch (error) {
             console.error("API anahtarları localStorage'dan okunurken hata:", error);
@@ -115,15 +117,16 @@ export default function SettingsPage() {
             const response = await fetch('/api/test-keys', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ apiKey, secretKey })
+                body: JSON.stringify({ apiKey, secretKey, testnet: isTestnet })
             });
 
             const result = await response.json();
 
             if (result.success) {
                  try {
-                    localStorage.setItem('exchangeKeys', JSON.stringify({ apiKey, secretKey }));
-                    toast({ title: "Bağlantı Başarılı! 🚀", description: "API anahtarlarınız güvenli bir şekilde kaydedildi." });
+                    localStorage.setItem('exchangeKeys', JSON.stringify({ apiKey, secretKey, testnet: isTestnet }));
+                    const networkType = isTestnet ? 'Testnet' : 'Mainnet';
+                    toast({ title: "Bağlantı Başarılı! 🚀", description: `API anahtarlarınız güvenli bir şekilde kaydedildi (${networkType}).` });
                     setIsConnected(true);
                 } catch (error) {
                      toast({ variant: "destructive", title: "Kayıt Hatası", description: "API anahtarları kaydedilemedi." });
@@ -246,6 +249,13 @@ export default function SettingsPage() {
                                 <div className="space-y-2">
                                     <Label htmlFor="binance-secret-key">Gizli Anahtar</Label>
                                     <Input id="binance-secret-key" type="password" placeholder="Binance Gizli Anahtarınız" value={secretKey} onChange={(e) => setSecretKey(e.target.value)} />
+                                </div>
+                                <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                                    <div className="space-y-0.5">
+                                        <Label htmlFor="testnet-toggle" className="font-medium">Testnet Modu</Label>
+                                        <p className="text-sm text-muted-foreground">Gerçek para riski olmadan test edin</p>
+                                    </div>
+                                    <Switch id="testnet-toggle" checked={isTestnet} onCheckedChange={setIsTestnet} />
                                 </div>
                                 <div className="flex justify-end space-x-2">
                                     <Button variant="destructive" size="sm" onClick={handleRemoveKeys} disabled={!apiKey && !secretKey}><Trash2 className="mr-2 h-4 w-4" />Kaldır</Button>
