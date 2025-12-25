@@ -63,6 +63,8 @@ export class BinanceAPI {
   private apiKey: string;
   private apiSecret: string;
   private baseUrl: string;
+  private timeOffset: number = 0;
+  private timeSynced: boolean = false;
 
   constructor(credentials: BinanceCredentials) {
     this.apiKey = credentials.apiKey;
@@ -83,6 +85,23 @@ export class BinanceAPI {
   }
 
   /**
+   * Sync local time with Binance server time
+   */
+  private async syncServerTime(): Promise<void> {
+    try {
+      const serverTime = await this.getServerTime();
+      const localTime = Date.now();
+      this.timeOffset = serverTime - localTime;
+      this.timeSynced = true;
+      console.log(`[Binance API] Time synced. Offset: ${this.timeOffset}ms`);
+    } catch (error) {
+      console.warn('[Binance API] Failed to sync time, using local time');
+      this.timeOffset = 0;
+      this.timeSynced = false;
+    }
+  }
+
+  /**
    * Make authenticated request to Binance API
    */
   private async request<T>(
@@ -91,7 +110,12 @@ export class BinanceAPI {
     params: Record<string, any> = {},
     signed: boolean = false
   ): Promise<T> {
-    const timestamp = Date.now();
+    // Sync time with server if this is a signed request and we haven't synced yet
+    if (signed && !this.timeSynced) {
+      await this.syncServerTime();
+    }
+
+    const timestamp = Date.now() + this.timeOffset;
     const queryParams = new URLSearchParams({
       ...params,
       ...(signed ? { timestamp: timestamp.toString() } : {}),
