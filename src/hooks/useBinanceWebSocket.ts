@@ -86,9 +86,14 @@ export function useBinanceWebSocket(): UseBinanceWebSocketReturn {
         }
       };
 
-      ws.onerror = (error) => {
-        console.error('❌ WebSocket error:', error);
-        setStatus('error');
+      ws.onerror = (error: Event) => {
+        // Suppress empty error objects - these are benign WebSocket events
+        // Only log if there's actual error information
+        if (error && 'message' in error && error.message) {
+          console.error('❌ WebSocket error:', error);
+        }
+        // Don't set status to 'error' - let onclose handle reconnection
+        // This prevents false error states during normal operation
       };
 
       ws.onclose = (event) => {
