@@ -1,12 +1,13 @@
 
 'use client';
 
-import { useState, useEffect, useRef, memo, useId, useCallback, useMemo, Suspense } from 'react';
+import { useState, useEffect, useRef, memo, useId, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, ArrowRight, Star, Heart, WifiOff, Activity, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from '@/components/ui/skeleton';
@@ -24,39 +25,77 @@ declare global {
     }
 }
 
-// TradingView Iframe Embed - Force Binance by URL
-const TradingViewWidget = memo(({ symbol }: { symbol: string }) => {
-    // Format symbol for Binance - handle both "BTC/USDT" and "BTCUSDT" formats
-    const upperSymbol = symbol.toUpperCase();
-    const baseSymbol = upperSymbol.includes('/')
-        ? upperSymbol.split('/')[0]  // "BTC/USDT" -> "BTC"
-        : upperSymbol.replace(/USDT$/, ''); // "BTCUSDT" -> "BTC"
+// Memoized TradingView Widget to prevent re-renders on parent state changes
+const TradingViewWidget = memo(({ symbol, exchange }: { symbol: string; exchange: string }) => {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const widgetId = useId();
+    const container_id = `tradingview_widget_${symbol.replace('/', '')}_${exchange}_${widgetId}`;
 
-    const binanceSymbol = `BINANCE%3A${baseSymbol}USDT`;
+    // Map our exchange IDs to TradingView exchange IDs
+    const exchangeMap: Record<string, string> = {
+        'binance': 'BINANCE',
+        'kucoin': 'KUCOIN',
+        'bybit': 'BYBIT',
+        'kraken': 'KRAKEN',
+        'okx': 'OKX',
+        'gateio': 'GATEIO',
+    };
 
-    console.log('📊 TradingView iframe loading:', `BINANCE:${baseSymbol}USDT`);
+    useEffect(() => {
+        let tvWidget: any = null;
 
-    // TradingView iframe embed URL with forced Binance exchange
-    const iframeUrl = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${binanceSymbol}&interval=D&hidesidetoolbar=0&hidetoptoolbar=0&symboledit=0&saveimage=0&toolbarbg=f1f3f6&theme=dark&style=1&timezone=Etc%2FUTC&locale=tr&allow_symbol_change=false`;
+        // Clean up the symbol to be compatible with TradingView
+        // (e.g., "BTC/USDT" -> "BTCUSDT")
+        const formattedSymbol = symbol.toUpperCase().replace('/USDT', '').replace('/', '');
+        const tvExchange = exchangeMap[exchange.toLowerCase()] || 'BINANCE';
+
+        const createWidget = () => {
+            if (document.getElementById(container_id) && typeof window.TradingView !== 'undefined') {
+                tvWidget = new window.TradingView.widget({
+                    autosize: true,
+                    symbol: `${tvExchange}:${formattedSymbol}USDT`,
+                    interval: "D",
+                    timezone: "Etc/UTC",
+                    theme: "dark",
+                    style: "1",
+                    locale: "tr",
+                    enable_publishing: false,
+                    withdateranges: true,
+                    hide_side_toolbar: false,
+                    allow_symbol_change: false,
+                    container_id: container_id
+                });
+            }
+        }
+
+        const scriptId = 'tradingview-widget-script';
+        const existingScript = document.getElementById(scriptId);
+
+        if (!existingScript) {
+            const script = document.createElement("script");
+            script.id = scriptId;
+            script.src = "https://s3.tradingview.com/tv.js";
+            script.type = "text/javascript";
+            script.async = true;
+            script.onload = createWidget;
+            document.body.appendChild(script);
+        } else {
+            if(window.TradingView) {
+               createWidget();
+            }
+        }
+
+        return () => {
+             const widgetContainer = document.getElementById(container_id);
+             if (widgetContainer) {
+                 widgetContainer.innerHTML = '';
+             }
+        };
+    }, [symbol, exchange, container_id]);
 
     return (
-        <div className="tradingview-widget-container h-full w-full relative">
-            <iframe
-                key={symbol} // Force remount on symbol change
-                src={iframeUrl}
-                className="h-full w-full border-0"
-                allowTransparency={true}
-                scrolling="no"
-                allowFullScreen={true}
-                style={{
-                    display: 'block',
-                    height: '100%',
-                    width: '100%',
-                    margin: 0,
-                    padding: 0,
-                }}
-            />
-            <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-slate-900 to-transparent pointer-events-none" />
+        <div key={symbol} className="tradingview-widget-container h-full" ref={containerRef}>
+            <div id={container_id} className="h-full" />
         </div>
     );
 });
@@ -144,16 +183,27 @@ const MarketList = memo(({ coins, favorites, selectedSymbol, onSelectSymbol, onT
 });
 MarketList.displayName = 'MarketList';
 
-function MarketTerminalPage() {
+// Supported exchanges
+const EXCHANGES = [
+  { id: 'binance', name: 'Binance' },
+  { id: 'kucoin', name: 'KuCoin' },
+  { id: 'bybit', name: 'Bybit' },
+  { id: 'kraken', name: 'Kraken' },
+  { id: 'okx', name: 'OKX' },
+  { id: 'gateio', name: 'Gate.io' },
+] as const;
+
+export default function MarketTerminalPage() {
   const [selectedSymbol, setSelectedSymbol] = useState("BTC/USDT");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [selectedExchange, setSelectedExchange] = useState('binance');
   const [marketData, setMarketData] = useState<MarketCoin[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [source, setSource] = useState<'live' | 'static'>('static');
-  const [totalAvailable, setTotalAvailable] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [totalAvailable, setTotalAvailable] = useState(0);
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -188,14 +238,14 @@ function MarketTerminalPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Fetch market data from Binance
+  // Fetch market data when exchange or debounced search changes
   useEffect(() => {
     const fetchMarketData = async () => {
       setIsLoading(true);
       setError(null);
       try {
         const params = new URLSearchParams({
-          exchange: 'binance', // Binance only for now
+          exchange: selectedExchange,
         });
 
         if (debouncedSearchQuery) {
@@ -209,17 +259,20 @@ function MarketTerminalPage() {
           setMarketData(data.tickers);
           setSource(data.source);
           setTotalAvailable(data.totalAvailable || 0);
+          if (data.error) {
+            setError(data.error);
+          }
         }
       } catch (err: any) {
         console.error('Error fetching market data:', err);
-        setError(err.message || 'Veri yüklenirken hata oluştu');
+        setError(err.message || 'Failed to fetch market data');
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchMarketData();
-  }, [debouncedSearchQuery]);
+  }, [selectedExchange, debouncedSearchQuery]);
 
   useEffect(() => {
     const symbolFromUrl = searchParams.get('symbol');
@@ -267,23 +320,26 @@ function MarketTerminalPage() {
       : "Popüler Coinler";
 
   return (
-    <div className="flex-1 flex flex-row overflow-hidden rounded-lg bg-slate-950 border border-slate-800 m-6">
+    <div className="flex-1 flex flex-row overflow-hidden rounded-lg bg-slate-950 border border-slate-800">
         <aside className="w-1/3 max-w-sm flex-shrink-0 border-r border-slate-800 bg-slate-900/50 flex flex-col">
             <div className="p-4 border-b border-slate-800 space-y-3">
-                {/* Binance Market - Search & Stats */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-primary">Binance</span>
-                    {totalAvailable > 0 && (
-                      <span className="text-xs text-muted-foreground">
-                        {totalAvailable} coin
-                      </span>
-                    )}
-                  </div>
-                  {source === 'live' && (
-                    <span className="text-xs text-green-500 flex items-center gap-1">
-                      <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                      Canlı
+                {/* Exchange Selector */}
+                <div className="flex items-center gap-2">
+                  <Select value={selectedExchange} onValueChange={setSelectedExchange}>
+                    <SelectTrigger className="bg-slate-800 border-slate-700">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {EXCHANGES.map(exchange => (
+                        <SelectItem key={exchange.id} value={exchange.id}>
+                          {exchange.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {totalAvailable > 0 && (
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {totalAvailable} coin
                     </span>
                   )}
                 </div>
@@ -346,25 +402,10 @@ function MarketTerminalPage() {
                     </Link>
                 </Button>
             </div>
-            <div className="flex-1 bg-background relative overflow-hidden min-h-0">
-                <TradingViewWidget symbol={selectedSymbol} />
+            <div className="flex-1 bg-background relative">
+                <TradingViewWidget symbol={selectedSymbol} exchange={selectedExchange} />
             </div>
         </main>
     </div>
-  );
-}
-
-export default function MarketPage() {
-  return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center h-screen bg-slate-950">
-        <div className="flex flex-col items-center gap-4">
-          <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-muted-foreground">Yükleniyor...</p>
-        </div>
-      </div>
-    }>
-      <MarketTerminalPage />
-    </Suspense>
   );
 }
