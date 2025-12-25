@@ -23,8 +23,9 @@ export async function POST(request: Request) {
     // Test connection
     const pingSuccess = await binance.ping();
     if (!pingSuccess) {
+      console.error('[test-keys] Ping failed for network:', networkType);
       return NextResponse.json(
-        { success: false, message: 'Binance API\'ye bağlanılamadı.' },
+        { success: false, message: `Binance API'ye bağlanılamadı (${networkType}). Lütfen network tipini kontrol edin veya konsol loglarına bakın.` },
         { status: 500 }
       );
     }

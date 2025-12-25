@@ -84,7 +84,7 @@ export class BinanceAPI {
         this.baseUrl = 'https://testnet.binance.vision/api';
         break;
       case 'futures-testnet':
-        this.baseUrl = 'https://testnet.binancefuture.com/fapi';
+        this.baseUrl = 'https://demo-fapi.binance.com/fapi';
         break;
       case 'mainnet':
       default:
@@ -175,8 +175,11 @@ export class BinanceAPI {
   async ping(): Promise<boolean> {
     try {
       await this.request('GET', '/v3/ping');
+      console.log('[Binance API] Ping successful');
       return true;
-    } catch (error) {
+    } catch (error: any) {
+      console.error('[Binance API] Ping failed:', error.message);
+      console.error('[Binance API] URL:', `${this.baseUrl}/v3/ping`);
       return false;
     }
   }
