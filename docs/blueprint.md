@@ -1,4 +1,4 @@
-# **App Name**: AutoPilot Algo Trading Platform
+# **App Name**: CryptoAutomat Algo Trading Platform
 
 ## Core Features:
 

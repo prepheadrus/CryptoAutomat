@@ -2,7 +2,7 @@
 
 ## Genel Bakış
 
-AutoPilot, Binance borsasında otomatik kripto para ticareti yapmanıza olanak tanıyan bir bot platformudur. Hem spot hem de futures (kaldıraçlı) ticareti destekler.
+CryptoAutomat, Binance borsasında otomatik kripto para ticareti yapmanıza olanak tanıyan bir bot platformudur. Hem spot hem de futures (kaldıraçlı) ticareti destekler.
 
 ## Özellikler
 
@@ -37,7 +37,7 @@ AutoPilot, Binance borsasında otomatik kripto para ticareti yapmanıza olanak t
 
 ### 2. API Anahtarlarını Ekleme
 
-1. AutoPilot uygulamasında Settings sayfasına gidin
+1. CryptoAutomat uygulamasında Settings sayfasına gidin
 2. Binance API Key ve Secret Key'i girin
 3. Testnet kullanıyorsanız "Testnet" seçeneğini işaretleyin
 4. "Test Connection" butonuna tıklayın

@@ -5,7 +5,7 @@ import { AppLayout } from '@/components/app-layout';
 import { MarketProvider } from '@/context/MarketContext';
 
 export const metadata: Metadata = {
-  title: 'AutoPilot Algo Trading Platform',
+  title: 'CryptoAutomat Algo Trading Platform',
   description: 'Visually create and deploy trading algorithms.',
 };
 

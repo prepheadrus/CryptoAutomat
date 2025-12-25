@@ -53,7 +53,7 @@ export default function SettingsPage() {
     // Account State
     const [accountSettings, setAccountSettings] = useState<AccountSettings>({
         username: "Trader Pro",
-        email: "user@autopilot.dev",
+        email: "user@cryptoautomat.dev",
         plan: "Pro Plan",
     });
 
@@ -310,7 +310,7 @@ export default function SettingsPage() {
                                             </Button>
                                         ) : (
                                             <div className="flex items-center gap-2 text-green-400 font-medium">
-                                                <Check className="h-5 w-5" /> Bağlandı: @AutoPilotBot (ID: 882910)
+                                                <Check className="h-5 w-5" /> Bağlandı: @CryptoAutomatBot (ID: 882910)
                                             </div>
                                         )}
                                     </div>
