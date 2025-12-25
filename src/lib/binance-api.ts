@@ -3,11 +3,13 @@ import crypto from 'crypto';
 export type OrderSide = 'BUY' | 'SELL';
 export type OrderType = 'MARKET' | 'LIMIT' | 'STOP_LOSS' | 'STOP_LOSS_LIMIT' | 'TAKE_PROFIT' | 'TAKE_PROFIT_LIMIT';
 export type TimeInForce = 'GTC' | 'IOC' | 'FOK';
+export type NetworkType = 'mainnet' | 'spot-testnet' | 'futures-testnet';
 
 export interface BinanceCredentials {
   apiKey: string;
   apiSecret: string;
-  testnet?: boolean;
+  testnet?: boolean; // Deprecated: use networkType instead
+  networkType?: NetworkType;
 }
 
 export interface MarketOrder {
@@ -57,7 +59,7 @@ export interface AccountInfo {
 
 /**
  * Binance API Client
- * Supports both Testnet and Live trading
+ * Supports Mainnet, Spot Testnet, and Futures Testnet
  */
 export class BinanceAPI {
   private apiKey: string;
@@ -69,9 +71,28 @@ export class BinanceAPI {
   constructor(credentials: BinanceCredentials) {
     this.apiKey = credentials.apiKey;
     this.apiSecret = credentials.apiSecret;
-    this.baseUrl = credentials.testnet
-      ? 'https://testnet.binance.vision/api'
-      : 'https://api.binance.com/api';
+
+    // Determine network type (backwards compatible with testnet boolean)
+    let networkType: NetworkType = credentials.networkType || 'mainnet';
+    if (!credentials.networkType && credentials.testnet) {
+      networkType = 'spot-testnet'; // Backwards compatibility
+    }
+
+    // Set base URL based on network type
+    switch (networkType) {
+      case 'spot-testnet':
+        this.baseUrl = 'https://testnet.binance.vision/api';
+        break;
+      case 'futures-testnet':
+        this.baseUrl = 'https://testnet.binancefuture.com/fapi';
+        break;
+      case 'mainnet':
+      default:
+        this.baseUrl = 'https://api.binance.com/api';
+        break;
+    }
+
+    console.log(`[Binance API] Initialized with ${networkType} (${this.baseUrl})`);
   }
 
   /**

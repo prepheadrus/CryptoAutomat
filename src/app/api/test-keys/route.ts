@@ -3,7 +3,7 @@ import { BinanceAPI } from '@/lib/binance-api';
 
 export async function POST(request: Request) {
   try {
-    const { apiKey, secretKey, testnet = false } = await request.json();
+    const { apiKey, secretKey, testnet = false, networkType = 'mainnet' } = await request.json();
 
     if (!apiKey || !secretKey) {
       return NextResponse.json(
@@ -12,11 +12,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create Binance API client
+    // Create Binance API client (backwards compatible with testnet)
     const binance = new BinanceAPI({
       apiKey,
       apiSecret: secretKey,
-      testnet,
+      testnet, // Backwards compatibility
+      networkType,
     });
 
     // Test connection
@@ -48,7 +49,8 @@ export async function POST(request: Request) {
         canWithdraw: accountInfo.canWithdraw,
         canDeposit: accountInfo.canDeposit,
       },
-      testnet,
+      networkType,
+      testnet, // Backwards compatibility
     });
 
   } catch (error: any) {
