@@ -22,18 +22,22 @@ class ExchangeManager:
         # Borsa parametrelerini hazırla
         exchange_args = {
             'enableRateLimit': True, # Borsa kurallarına göre hızı sınırlar (Ban yememek için)
+            'timeout': 60000, # 60 saniye timeout (Oracle Cloud için artırıldı)
             'options': {
                 'defaultType': 'future', # Vadeli işlemler için
+                'recvWindow': 60000, # 60 saniye receive window
             }
         }
-        
+
         # Seçili borsaya göre API anahtarlarını çek (.env dosyasından)
         if self.exchange_id == 'binance':
             if BINANCE_API_KEY and BINANCE_API_SECRET:
                 exchange_args['apiKey'] = BINANCE_API_KEY
                 exchange_args['secret'] = BINANCE_API_SECRET
+                logger.info("✅ Binance API anahtarları yüklendi. Yüksek rate limit aktif.")
             else:
                 logger.warning("Binance API bilgileri bulunamadı (.env)! Sadece genel piyasa izlemesi (Ticker) yapılacak, Emir verilemez.")
+                logger.warning("⚠️ Rate limit düşük olacak. API key eklemek için .env dosyasını düzenleyin.")
             
         # Asenkron borsayı başlat
         self.exchange = self.exchange_class(exchange_args)
@@ -270,7 +274,12 @@ class ExchangeManager:
                     self.active_downloads[key]['current_ts'] = last_ts
                     # Her batch sonrası DB'yi güncelle (ilerleme kaydı)
                     await db_manager.save_download_task(self.active_downloads[key])
-                await asyncio.sleep(0.5) # Rate limit için bekleme süresi artırıldı
+
+                # Dinamik sleep: Her 5 batch'te bir daha uzun bekle (rate limit için)
+                if all_downloaded % 5000 == 0:
+                    await asyncio.sleep(2)  # Her 5000 mumda bir 2 saniye bekle
+                else:
+                    await asyncio.sleep(0.1)  # Normalde 100ms yeterli
                 
             except Exception as e:
                 logger.error(f"⚠️ {symbol} Veri İndirme Döngüsünde Hata: {e}")
