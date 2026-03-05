@@ -38,6 +38,8 @@ class PaperTrader:
         self.active_strategies = {} # symbol -> strategy_id
         self.strategies = {}        # symbol -> strategy_instance
         self.active_timeframes = {} # symbol -> timeframe (1m, 5m, 15m vb.)
+        self.market_types = {}      # symbol -> 'spot' | 'swap' | 'future'
+        self.margin_types = {}      # symbol -> 'isolated' | 'cross'
         
         # Tüm pariteleri varsayılan 'trend_master' ve '1m' ile başlat
         for symbol in CONFIG['trading']['symbols']:
@@ -78,6 +80,14 @@ class PaperTrader:
             
             # Toplu komutta tüm karar geçmişini temizle
             self.latest_decisions = {}
+
+    def set_market_type(self, symbol: str, market_type: str):
+        """Sembolün market tipini (spot, swap, future) belirler."""
+        self.market_types[symbol] = market_type.lower()
+
+    def set_margin_type(self, symbol: str, margin_type: str):
+        """Marjin tipini (isolated, cross) belirler."""
+        self.margin_types[symbol] = margin_type.lower()
 
     def process_signal(self, symbol: str, current_price: float, df: pd.DataFrame, ml_confidence: float, htf_trend: str = "NEUTRAL", regime: str = "UNKNOWN"):
         """Her yeni mum kapandığında botun indikatör ve sinyallerini tarayıp, pozisyon al-kapat kararı verir."""
@@ -156,13 +166,30 @@ class PaperTrader:
                 self._open_new_position(symbol, "LONG", current_price, latest_candle, ml_confidence)
                 
             elif signal == 0:
+                # --- SPOT MARKET ÖZEL MANTIĞI ---
+                # Spot piyasada SHORT (açığa satış) yapılamaz.
+                # Bunun yerine, eğer açık bir LONG varsa onu kapatırız (Satış).
+                is_spot = self.market_types.get(symbol, 'swap') == 'spot'
+                
+                if is_spot:
+                    # Açık LONG pozisyonu bul
+                    for i, pos in enumerate(self.open_positions):
+                        if pos['symbol'] == symbol and pos['direction'] == "LONG":
+                            logger.info(f"📉 [SPOT SELL] {symbol} için SHORT sinyali geldi. Mevcut LONG pozisyonu KAPATILIYOR (Satış).")
+                            await self._close_position(i, pos, current_price, "Spot Sinyal (Dönüş)")
+                            return
+                    
+                    logger.debug(f"[SPOT] {symbol} için SHORT sinyali geldi ama açık LONG yok. İşlem pas geçildi.")
+                    return
+
+                # Normal VADELİ (Future/Swap) mantığı devam eder
                 # SHORT açmak için HTF Boğa (BULL) olmamalı
                 if htf_trend == "BULL":
                     logger.warning(f"⚠️ [HTF FILTER] {symbol} 15m SHORT sinyali var ama 1h-4h Trend BOĞA (BULL). İşlem Engellendi.")
                     return
                     
                 logger.info(f"🚀 [SHORT] {symbol} Sinyali Yakalandı! Güven: {ml_confidence:.2f} (HTF: {htf_trend})")
-                self._open_new_position(symbol, "SHORT", current_price, latest_candle, ml_confidence)
+                await self._open_new_position(symbol, "SHORT", current_price, latest_candle, ml_confidence)
         else:
             # İşlem açılmamasının ana sebebi genellikle budur
             logger.debug(f"[FILTER] {symbol} ML Güven Skoru Yetersiz: {ml_confidence:.2f} (Eşik: {threshold})")
@@ -183,15 +210,21 @@ class PaperTrader:
             price, direction, atr, multiplier=multiplier
         )
         
+        # --- SPOT MARKET KALDIRAÇ KONTROLÜ ---
+        is_spot = self.market_types.get(symbol, 'swap') == 'spot'
+        
+        if is_spot:
+            leverage = 1.0 # Spotta kaldıraç 1x'dir.
+        else:
+            max_lev = CONFIG['risk_management'].get('max_leverage', 10)
+            leverage = RiskManagement.calculate_dynamic_leverage(ml_confidence, max_leverage=max_lev)
+
         pos_size_crypto = RiskManagement.calculate_position_size(
             account_balance=self.balance,
             risk_percentage=risk_percent,
             entry_price=price,
             stop_loss_price=stop_loss
         )
-        
-        max_lev = CONFIG['risk_management'].get('max_leverage', 10)
-        leverage = RiskManagement.calculate_dynamic_leverage(ml_confidence, max_leverage=max_lev)
         
         # Parasal Büyüklük = (Kripto Adedi * Fiyat)
         position_value_usd = pos_size_crypto * price
@@ -211,9 +244,19 @@ class PaperTrader:
         self.free_margin -= (required_margin + fee)
         self.used_margin += required_margin
         
-        # Likidasyon Fiyatı Simülasyonu (Basit İzole Marjin Mantığı)
-        # Long: Giriş * (1 - 1/Kaldıraç), Short: Giriş * (1 + 1/Kaldıraç)
-        liq_price = execution_price * (1 - 0.9 / leverage) if direction == "LONG" else execution_price * (1 + 0.9 / leverage)
+        # --- LİKİDASYON FİYATI HESABI (Isolated vs Cross) ---
+        margin_type = self.margin_types.get(symbol, 'isolated')
+        
+        if margin_type == 'isolated':
+            # Sadece pozisyona ayrılan marjin yanar (Basit İzole Mantığı %90 Kayıpta Likit)
+            liq_price = execution_price * (1 - 0.9 / leverage) if direction == "LONG" else execution_price * (1 + 0.9 / leverage)
+        else:
+            # Çapraz Marjin: Tüm 'Free Margin' likidasyonu korumak için kullanılır
+            # Basitçe: Tüm para / Pozisyon Büyüklüğü kadar ters hareket olursa likit olur
+            total_risk_buffer = (self.free_margin + required_margin) / position_value_usd
+            liq_price = execution_price * (1 - total_risk_buffer * 0.9) if direction == "LONG" else execution_price * (1 + total_risk_buffer * 0.9)
+            # Liq fiyatı sıfırın altına inemez
+            if liq_price < 0: liq_price = 0
 
         new_position = {
             'symbol': symbol,
@@ -224,6 +267,7 @@ class PaperTrader:
             'notional_value': position_value_usd, # Toplam Pozisyon Değeri
             'leverage': leverage,
             'margin': required_margin,
+            'margin_type': margin_type,
             'stop_loss': stop_loss,
             'take_profit': take_profit,
             'liquidation_price': liq_price,

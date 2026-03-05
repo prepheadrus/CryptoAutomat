@@ -94,13 +94,19 @@ async def get_db_symbols():
     symbols = await db_manager.get_symbols_with_data()
     return {"symbols": symbols}
 
-async def start_symbol_tasks(symbol: str):
+async def start_symbol_tasks(symbol: str, market_type: str = 'swap', margin_type: str = 'isolated'):
     """Yeni bir sembol için CCXT ve Strateji döngüsünü başlatır."""
+    from core.paper import paper_engine
     if symbol not in CONFIG['trading']['symbols']:
         CONFIG['trading']['symbols'].append(symbol)
+        
+        # Paper engine ayarlarını yap
+        paper_engine.set_market_type(symbol, market_type)
+        paper_engine.set_margin_type(symbol, margin_type)
+        
         asyncio.create_task(exchange_manager.watch_ticker_loop(symbol))
         asyncio.create_task(exchange_manager.run_strategy_poller(symbol))
-        logger.info(f"🆕 {symbol} için görevler dinamik olarak başlatıldı.")
+        logger.info(f"🆕 {symbol} ({market_type}/{margin_type}) için görevler dinamik olarak başlatıldı.")
 
 @app.post("/api/v1/config/symbols")
 async def update_tracked_symbols(data: Dict[str, list]):
@@ -327,6 +333,8 @@ async def list_available_strategies():
     return {
         "active_strategies": paper_engine.active_strategies,
         "active_timeframes": paper_engine.active_timeframes,
+        "market_types": paper_engine.market_types,
+        "margin_types": paper_engine.margin_types,
         "strategies": StrategyManager.list_all_strategies()
     }
 
@@ -510,20 +518,27 @@ class StrategySelectSchema(BaseModel):
     strategy_id: str
     symbol: Optional[str] = None # Eğer boşsa global (tüm coinler) değişir
     timeframe: str = "1m"
+    market_type: str = "swap"   # spot, swap, future
+    margin_type: str = "isolated" # isolated, cross
 
 @app.post("/api/v1/strategy/select")
 async def change_strategy(req: StrategySelectSchema):
     """Arayüzden gelen komutla botun beynini anında değiştirir."""
     # Eğer sembol izlenmiyorsa başlat
     if req.symbol:
-        await start_symbol_tasks(req.symbol)
+        await start_symbol_tasks(req.symbol, req.market_type, req.margin_type)
+        # Mevcut izleniyorsa da tiplerini güncelle
+        paper_engine.set_market_type(req.symbol, req.market_type)
+        paper_engine.set_margin_type(req.symbol, req.margin_type)
         
     paper_engine.set_strategy(req.strategy_id, req.symbol, req.timeframe)
     return {
         "status": "success",
         "symbol": req.symbol if req.symbol else "GLOBAL",
         "active_id": req.strategy_id,
-        "active_timeframe": req.timeframe
+        "active_timeframe": req.timeframe,
+        "market_type": req.market_type,
+        "margin_type": req.margin_type
     }
 
 # ----------------------------------------------------------------------------------

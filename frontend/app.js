@@ -436,6 +436,14 @@ async function fetchStrategies() {
                                 <select class="strategy-select" id="tf-sel-${symbol.replace('/', '-')}" style="width:70px;">
                                     ${timeframes.map(tf => `<option value="${tf}" ${tf === symActiveTf ? 'selected' : ''}>${tf}</option>`).join('')}
                                 </select>
+                                <select class="strategy-select" id="market-sel-${symbol.replace('/', '-')}" style="width:80px;">
+                                    <option value="swap" ${(data.market_types && data.market_types[symbol] === 'swap') ? 'selected' : ''}>Vadeli</option>
+                                    <option value="spot" ${(data.market_types && data.market_types[symbol] === 'spot') ? 'selected' : ''}>Spot</option>
+                                </select>
+                                <select class="strategy-select" id="margin-sel-${symbol.replace('/', '-')}" style="width:80px;">
+                                    <option value="isolated" ${(data.margin_types && data.margin_types[symbol] === 'isolated') ? 'selected' : ''}>İzole</option>
+                                    <option value="cross" ${(data.margin_types && data.margin_types[symbol] === 'cross') ? 'selected' : ''}>Çapraz</option>
+                                </select>
                             </div>
                         </td>
                         <td>
@@ -504,10 +512,14 @@ async function fetchStrategies() {
 window.selectStrategy = async function (symbol) {
     const stratEl = document.getElementById(`strat-sel-${symbol.replace('/', '-')}`);
     const tfEl = document.getElementById(`tf-sel-${symbol.replace('/', '-')}`);
+    const marketEl = document.getElementById(`market-sel-${symbol.replace('/', '-')}`);
+    const marginEl = document.getElementById(`margin-sel-${symbol.replace('/', '-')}`);
     const statusEl = document.getElementById(`status-${symbol.replace('/', '-')}`);
 
     const strategyId = stratEl.value;
     const timeframe = tfEl.value;
+    const marketType = marketEl.value;
+    const marginType = marginEl.value;
 
     if (!strategyId) {
         alert("Lütfen bir strateji (bot) seçin!");
@@ -524,7 +536,9 @@ window.selectStrategy = async function (symbol) {
             body: JSON.stringify({
                 strategy_id: strategyId,
                 symbol: symbol,
-                timeframe: timeframe
+                timeframe: timeframe,
+                market_type: marketType,
+                margin_type: marginType
             })
         });
         const result = await res.json();
@@ -1021,10 +1035,28 @@ async function runMLVisualAnalysis() {
     const strategyId = stratField.value;
     const tfValue = tfField.value;
 
+    const marketTypeField = document.getElementById('ml-analysis-market-type');
+    const marginTypeField = document.getElementById('ml-analysis-margin-type');
+    const marketType = marketTypeField ? marketTypeField.value : 'swap';
+    const marginType = marginTypeField ? marginTypeField.value : 'isolated';
+
     if (!symbolValue) return;
 
     try {
         const encodedSymbol = encodeURIComponent(symbolValue);
+        // Strateji seçimini de sunucuya bildir ki paper engine ayarlarını güncelleyebilsin
+        await fetch('/api/v1/strategy/select', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                strategy_id: strategyId,
+                symbol: symbolValue,
+                timeframe: tfValue,
+                market_type: marketType,
+                margin_type: marginType
+            })
+        });
+
         const res = await fetch(`/api/v1/ml/visual-analysis?symbol=${encodedSymbol}&strategy_id=${strategyId}&timeframe=${tfValue}&limit=300`);
         const data = await res.json();
 

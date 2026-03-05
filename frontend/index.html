@@ -145,6 +145,16 @@
                                 <option value="4h">4h</option>
                                 <option value="1d">1d</option>
                             </select>
+                            
+                            <select id="ml-analysis-market-type" class="strategy-select" style="min-width:100px;">
+                                <option value="swap" selected>Vadeli (Swap)</option>
+                                <option value="spot">Spot Piyasa</option>
+                            </select>
+                            
+                            <select id="ml-analysis-margin-type" class="strategy-select" style="min-width:100px;">
+                                <option value="isolated" selected>İzole Marjin</option>
+                                <option value="cross">Çapraz Marjin</option>
+                            </select>
                             <button class="btn btn-primary" onclick="runMLVisualAnalysis()"
                                 style="padding: 10px 20px; font-weight:bold;">🚀 Simülasyonu Başlat</button>
                         </div>
