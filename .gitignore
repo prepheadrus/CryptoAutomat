@@ -1,0 +1,35 @@
+# Environments
+venv/
+env/
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Database
+*.db
+*.sqlite3
+cryptobot.db
+
+# Logs and Debug
+*.log
+debug_output.txt
+cols_out.txt
+error_trace.txt
+
+# Migration/Temp Folders
+linux_migration/
+.vscode/
+
+# Jupyter Notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# IDEs
+.idea/
+.DS_Store

@@ -1,0 +1,26 @@
+bot:
+  name: "CryptoAlgoBot"
+  environment: "development"
+  log_level: "DEBUG" # DEBUG, INFO, WARNING, ERROR
+
+trading:
+  exchange: "binance" # binance, btcturk, paribu
+  symbols: []
+  timeframes:
+    - "1m"
+    - "5m"
+    - "1h"
+  
+risk_management:
+  max_risk_per_trade_percent: 0.2 
+  max_open_positions: 5
+  default_leverage: 1
+  max_leverage: 50
+
+
+strategy:
+  active_modules:
+    - "trend_following"
+    - "mean_reversion"
+  ml_confidence_threshold: 0.51 
+
