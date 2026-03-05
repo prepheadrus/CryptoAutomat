@@ -152,6 +152,9 @@ class ExchangeManager:
         from data.database import db_manager
         import datetime
         
+        # Piyasa tipini standardize et (Swap/Perp -> Future)
+        market_type = 'future' if market_type.lower() in ['future', 'swap', 'perp', 'perpetual'] else 'spot'
+        
         # Market bilgilerini tazele (Hataları önlemek için kritik)
         if not self.exchange.markets or symbol not in self.exchange.markets:
             try:

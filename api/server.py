@@ -210,34 +210,39 @@ async def get_active_downloads():
     # 1. RAM'deki ve DB'deki indirme görevlerini al
     db_tasks = await db_manager.get_all_download_tasks()
     
-    # Task map'i sembol ve market_type kombinasyonuyla kuralım (Mükerrerleri önlemek için her şeyi küçültüyoruz)
+    # Task map'i sembol ve market_type kombinasyonuyla kuralım
     task_map = {}
+    
+    def normalize_mtype(mt):
+        mt = str(mt).lower().strip()
+        if mt in ['future', 'swap', 'perp', 'perpetual', 'süresiz vadeli (perp)']: return 'future'
+        return 'spot'
+
     for t in db_tasks:
         s_norm = t['symbol'].strip()
-        m_type = t['market_type'].lower()
+        m_type = normalize_mtype(t['market_type'])
         key = f"{s_norm}_{m_type}"
         task_map[key] = dict(t)
-        task_map[key]['market_type'] = m_type # Normalize et
+        task_map[key]['market_type'] = m_type
     
     # RAM'dekileri de ekle (Hafıza her zaman günceldir)
     for s, meta in exchange_manager.active_downloads.items():
         s_norm = s.strip()
-        m_type = meta['market_type'].lower()
+        m_type = normalize_mtype(meta['market_type'])
         key = f"{s_norm}_{m_type}"
         task_map[key] = meta
         task_map[key]['market_type'] = m_type
 
-    # 2. Önemli: DB'de klines verisi olan ama görev listesinde olmayanları (yetim veriler) ekle
-    # get_symbols_with_data artık tüm ham sembolleri döner.
+    # 2. Önemli: DB'de klines verisi olan ama görev listesinde olmayanları ekle
     data_symbols = await db_manager.get_symbols_with_data()
     for s in data_symbols:
         s_norm = s.strip()
-        # Pazar tipini bul
         guessed_type = 'spot'
         if ':' in s_norm or '-2' in s_norm or '/USDT' not in s_norm: 
             guessed_type = 'future'
 
         key = f"{s_norm}_{guessed_type}"
+        # Eğer bu veri zaten bir görevle eşleşiyorsa (Anahtarlar tutuyorsa) yeni kayıt açma
         if key not in task_map:
             candle_range = await db_manager.get_candle_range(s_norm)
             task_map[key] = {
