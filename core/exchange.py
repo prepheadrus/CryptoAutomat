@@ -47,17 +47,20 @@ class ExchangeManager:
         for t in tasks:
             # Sadece bitmemiş olanları alıyoruz
             if t['status'] in ['running', 'paused']:
+                m_type = t['market_type'].lower()
+                key = f"{t['symbol']}_{m_type}"
+                
                 # Metadata yükle (UI için)
-                self.active_downloads[t['symbol']] = dict(t)
-                self.download_stops[t['symbol']] = False
-                self.download_pauses[t['symbol']] = (t['status'] == 'paused')
+                self.active_downloads[key] = dict(t)
+                self.download_stops[key] = False
+                self.download_pauses[key] = (t['status'] == 'paused')
                 
                 # Arka plan görevini (coroutine) gerçekten başlat
                 asyncio.create_task(self.download_historical_data(
                     t['symbol'], 
                     t['timeframe'], 
                     t['start_date'], 
-                    t['market_type'],
+                    m_type,
                     is_resume=True
                 ))
                 count += 1
@@ -173,23 +176,25 @@ class ExchangeManager:
         target_start_ts = pd.to_datetime(start_date_str).tz_localize('UTC') if not pd.to_datetime(start_date_str).tzinfo else pd.to_datetime(start_date_str).tz_convert('UTC')
         target_start_ms = int(target_start_ts.timestamp() * 1000)
         
+        # Benzersiz görev anahtarı oluştur (Aynı sembolün spot ve vadelisini ayırmak için)
+        key = f"{symbol}_{market_type}"
+        
         # Eğer bu işlem sıfırdan bir başlatmaysa (Kullanıcı yeni tarih seçtiyse),
-        # Veritabanındaki son tarihe atlamayı DEVRE DIŞI bırakıyoruz ki o aradaki
-        # tüm geçmiş günleri (örneğin 2026-01-01'den itibaren) tek tek indirip kaydetsin.
-        if is_resume and symbol in self.active_downloads and self.active_downloads[symbol].get('current_ts', 0) > target_start_ms:
-            since = self.active_downloads[symbol]['current_ts']
-            logger.info(f"🔄 {symbol} indirme işlemi kaldığı yerden DEVAM EDİYOR: {pd.to_datetime(since, unit='ms')}")
+        # Veritabanındaki son tarihe atlamayı DEVRE DIŞI bırakıyoruz.
+        if is_resume and key in self.active_downloads and self.active_downloads[key].get('current_ts', 0) > target_start_ms:
+            since = self.active_downloads[key]['current_ts']
+            logger.info(f"🔄 {key} indirme işlemi kaldığı yerden DEVAM EDİYOR: {pd.to_datetime(since, unit='ms')}")
         else:
             since = target_start_ms
-            logger.info(f"✨ {symbol} indirme işlemi SIFIRDAN / İSTENEN TARİHTEN başlatıldı: {pd.to_datetime(since, unit='ms')}")
+            logger.info(f"✨ {key} indirme işlemi SIFIRDAN / İSTENEN TARİHTEN başlatıldı: {pd.to_datetime(since, unit='ms')}")
 
         all_downloaded = 0
         limit = 1000 # Binance tek seferde max 1000 mum verir
         
-        logger.info(f"🚀 {symbol} ({timeframe} [{market_type}]) indirme BAŞLADI: {pd.to_datetime(since, unit='ms')}")
-        self.download_stops[symbol] = False
-        self.download_pauses[symbol] = False
-        self.active_downloads[symbol] = {
+        logger.info(f"🚀 {key} ({timeframe}) indirme BAŞLADI: {pd.to_datetime(since, unit='ms')}")
+        self.download_stops[key] = False
+        self.download_pauses[key] = False
+        self.active_downloads[key] = {
             'symbol': symbol,
             'timeframe': timeframe,
             'market_type': market_type,
@@ -199,25 +204,29 @@ class ExchangeManager:
             'target_start_ms': target_start_ms,
             'status': 'running'
         }
-        await db_manager.save_download_task(self.active_downloads[symbol])
+        await db_manager.save_download_task(self.active_downloads[key])
         
         while True:
             try:
                 # Kullanıcı durdurdu mu?
-                if self.download_stops.get(symbol):
-                    logger.info(f"🛑 {symbol} indirme işlemi kullanıcı tarafından DURDURULDU.")
-                    self.active_downloads[symbol]['status'] = 'stopped'
-                    await db_manager.save_download_task(self.active_downloads[symbol])
+                if self.download_stops.get(key):
+                    logger.info(f"🛑 {key} indirme işlemi kullanıcı tarafından DURDURULDU.")
+                    if key in self.active_downloads:
+                        self.active_downloads[key]['status'] = 'stopped'
+                        await db_manager.save_download_task(self.active_downloads[key])
                     break
                 
                 # Kullanıcı duraklattı mı?
-                while self.download_pauses.get(symbol):
-                    if self.active_downloads[symbol]['status'] != 'paused':
-                        self.active_downloads[symbol]['status'] = 'paused'
-                        await db_manager.save_download_task(self.active_downloads[symbol])
+                while self.download_pauses.get(key):
+                    if key in self.active_downloads and self.active_downloads[key]['status'] != 'paused':
+                        self.active_downloads[key]['status'] = 'paused'
+                        await db_manager.save_download_task(self.active_downloads[key])
                     await asyncio.sleep(2) # 2 saniyede bir duraklatma kontrolü yap
                 
-                self.active_downloads[symbol]['status'] = 'running'
+                if key not in self.active_downloads:
+                    break # Görev silinmişse döngüden çık
+                
+                self.active_downloads[key]['status'] = 'running'
                 
                 # CCXT rates limitine göre fetch yap
                 ohlcv = await self.exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=limit, params={'type': market_type})
@@ -247,27 +256,28 @@ class ExchangeManager:
                     break
                     
                 since = last_ts + 1
-                self.active_downloads[symbol]['current_ts'] = last_ts
-                # Her batch sonrası DB'yi güncelle (ilerleme kaydı)
-                await db_manager.save_download_task(self.active_downloads[symbol])
-                await asyncio.sleep(0.02) # Hızlandırıldı (Rate limitlere dikkat ederek)
+                if key in self.active_downloads:
+                    self.active_downloads[key]['current_ts'] = last_ts
+                    # Her batch sonrası DB'yi güncelle (ilerleme kaydı)
+                    await db_manager.save_download_task(self.active_downloads[key])
+                await asyncio.sleep(0.02) # Hızlandırıldı
                 
             except Exception as e:
                 logger.error(f"⚠️ {symbol} Veri İndirme Döngüsünde Hata: {e}")
                 await asyncio.sleep(5)
                 
-        is_stopped = self.download_stops.get(symbol, False)
+        is_stopped = self.download_stops.get(key, False)
         
         if is_stopped:
-            logger.info(f"⏸️ {symbol} Veri İndirme Görevi Beklemeye / İptal Edilmeye Alındı. Toplam {all_downloaded} yeni veri eklendi.")
-            # RAM'de (active_downloads) ve DB'de 'stopped' olarak kalmasına izin veriyoruz.
-            # Sadece loop (döngü) kapandı, liste silinmedi.
+            logger.info(f"⏸️ {key} Veri İndirme Görevi Beklemeye / İptal Edilmeye Alındı. Toplam {all_downloaded} yeni veri eklendi.")
+            if key in self.active_downloads:
+                del self.active_downloads[key]
         else:
-            logger.info(f"✅ {symbol} Veri İndirme TAMAMLANDI. Toplam {all_downloaded} yeni veri eklendi.")
-            if symbol in self.active_downloads:
-                self.active_downloads[symbol]['status'] = 'completed'
-                await db_manager.save_download_task(self.active_downloads[symbol])
-                del self.active_downloads[symbol]
+            logger.info(f"✅ {key} Veri İndirme TAMAMLANDI. Toplam {all_downloaded} yeni veri eklendi.")
+            if key in self.active_downloads:
+                self.active_downloads[key]['status'] = 'completed'
+                await db_manager.save_download_task(self.active_downloads[key])
+                del self.active_downloads[key]
                 
         return all_downloaded
                 

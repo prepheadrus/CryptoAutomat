@@ -149,58 +149,61 @@ async def start_historical_download(data: Dict[str, Any], background_tasks: Back
     if not symbol:
         return {"status": "error", "message": "Sembol belirtilmedi."}
     
-    if symbol in exchange_manager.active_downloads:
-        task = exchange_manager.active_downloads[symbol]
+    m_type = 'future' if market_type.lower() in ['future', 'swap', 'perp', 'perpetual', 'süresiz vadeli (perp)'] else 'spot'
+    key = f"{symbol}_{m_type}"
+    
+    if key in exchange_manager.active_downloads:
+        task = exchange_manager.active_downloads[key]
         return {
             "status": "exists", 
-            "message": f"{symbol} için zaten bir kayıt ({task['status'].upper()}) bulunuyor.",
+            "message": f"{key} için zaten bir kayıt ({task['status'].upper()}) bulunuyor.",
             "task": task
         }
     
     # Arka planda indirmeyi başlat
-    background_tasks.add_task(exchange_manager.download_historical_data, symbol, timeframe, start_date, market_type)
+    background_tasks.add_task(exchange_manager.download_historical_data, symbol, timeframe, start_date, m_type)
     
     return {
         "status": "started",
-        "message": f"{symbol} ({market_type}) için {start_date} tarihinden itibaren veri indirme görevi başlatıldı."
+        "message": f"{key} ({m_type}) için {start_date} tarihinden itibaren veri indirme görevi başlatıldı."
     }
 
 @app.post("/api/v1/data/stop-download")
 async def stop_historical_download(data: Dict[str, str]):
     """Devam eden indirme işlemini durdurur."""
-    symbol = data.get("symbol")
-    if symbol in exchange_manager.active_downloads:
-        exchange_manager.download_stops[symbol] = True
-        return {"status": "success", "message": f"{symbol} durdurma sinyali gönderildi."}
-    
-    # Eğer RAM'de yok ama DB'de 'running' görünüyorsa ona da stop çekelim (Ender durum)
-    exchange_manager.download_stops[symbol] = True
-    return {"status": "success", "message": f"{symbol} için genel durdurma sinyali gönderildi."}
+    key = data.get("symbol") # UI'dan key geliyor (BTC/USDT_spot)
+    if key:
+        exchange_manager.download_stops[key] = True
+        return {"status": "success", "message": f"{key} durdurma sinyali gönderildi."}
+    return {"status": "error", "message": "Görev anahtarı belirtilmedi."}
 
 @app.post("/api/v1/data/resume-download")
 async def resume_historical_download(data: Dict[str, str], background_tasks: BackgroundTasks):
     """Durdurulmuş veya tamamlanmış indirme işlemini kaldığı yerden yeniden başlatır."""
-    symbol = data.get("symbol")
+    key = data.get("symbol") # UI'dan key geliyor
     
-    # RAM'de yoksa ama DB'de varsa, RAM'e yükle ki is_resume çalışsın
-    if symbol not in exchange_manager.active_downloads:
+    # RAM'de yoksa ama DB'de varsa, RAM'e yükle (is_resume için)
+    if key not in exchange_manager.active_downloads:
         tasks = await db_manager.get_all_download_tasks()
-        task_db = next((t for t in tasks if t['symbol'] == symbol), None)
-        if task_db:
-            exchange_manager.active_downloads[symbol] = dict(task_db)
+        # Key'den sembol ve tipi ayır (ya da DB'den tam eşleşme ara)
+        for t in tasks:
+            m_type = t['market_type'].lower()
+            if f"{t['symbol']}_{m_type}" == key:
+                exchange_manager.active_downloads[key] = dict(t)
+                break
             
-    if symbol in exchange_manager.active_downloads:
-        task = exchange_manager.active_downloads[symbol]
+    if key in exchange_manager.active_downloads:
+        task = exchange_manager.active_downloads[key]
         task['status'] = 'running'
-        exchange_manager.download_stops[symbol] = False
-        exchange_manager.download_pauses[symbol] = False
+        exchange_manager.download_stops[key] = False
+        exchange_manager.download_pauses[key] = False
         
-        # Kaldığı yerden devam etmesini söyle: is_resume=True
+        # Kaldığı yerden devam etmesini söyle
         background_tasks.add_task(
             exchange_manager.download_historical_data, 
-            symbol, task['timeframe'], task['start_date'], task['market_type'], is_resume=True
+            task['symbol'], task['timeframe'], task['start_date'], task['market_type'], is_resume=True
         )
-        return {"status": "success", "message": f"{symbol} kaldığı yerden devam ediyor."}
+        return {"status": "success", "message": f"{key} kaldığı yerden devam ediyor."}
         
     return {"status": "error", "message": "Görev bulunamadı. Yeni bir görev başlatın."}
 
@@ -261,41 +264,42 @@ async def get_active_downloads():
 @app.post("/api/v1/data/delete-task")
 async def delete_download_task(data: Dict[str, Any]):
     """Görevi (ve isteğe bağlı olarak verilerini) tamamen siler."""
-    symbol = data.get("symbol")
-    with_data = data.get("with_data", False) # Verileri de silsin mi?
+    key = data.get("symbol") # UI'dan key geliyor (Örn: BTC/USDT_spot)
+    with_data = data.get("with_data", False)
 
     # 1. Eğer çalışıyorsa önce durdurma sinyali gönder
-    exchange_manager.download_stops[symbol] = True
+    exchange_manager.download_stops[key] = True
     
     # 2. RAM'den temizle
-    if symbol in exchange_manager.active_downloads:
-        del exchange_manager.active_downloads[symbol]
+    if key in exchange_manager.active_downloads:
+        del exchange_manager.active_downloads[key]
         
-    # 3. Veritabanından görev kaydını sil
-    # Önemli: Eğer symbol içinde '_' varsa (UI'dan gelmiş olabilir), asıl sembolü ayıkla
-    real_symbol = symbol.split('_')[0] if '_' in symbol else symbol
+    # 3. Veritabanından görev kayıtlarını temizle
+    # Sembol ismini key içinden ayır (BTC/USDT_spot -> BTC/USDT)
+    real_symbol = key.split('_')[0] if '_' in key else key
+    
     await db_manager.delete_download_task(real_symbol)
-    await db_manager.delete_download_task(symbol) # Variyantı da silsin
+    await db_manager.delete_download_task(key)
     
     # 4. Eğer kullanıcı verileri de silmek istediyse
     if with_data:
         await db_manager.delete_klines_for_symbol(real_symbol)
-        await db_manager.delete_klines_for_symbol(symbol)
-        return {"status": "success", "message": f"{symbol} başarıyla silindi."}
+        await db_manager.delete_klines_for_symbol(key) # Variyantı da silsin
+        return {"status": "success", "message": f"{key} başarıyla silindi."}
 
-    return {"status": "success", "message": f"{symbol} görev kaydı silindi."}
+    return {"status": "success", "message": f"{key} görev kaydı silindi."}
 
 @app.post("/api/v1/data/toggle-pause")
 async def toggle_pause_download(data: Dict[str, str]):
     """İndirme işlemini duraklatır veya devam ettirir."""
-    symbol = data.get("symbol")
-    if symbol in exchange_manager.active_downloads:
-        current_state = exchange_manager.download_pauses.get(symbol, False)
-        exchange_manager.download_pauses[symbol] = not current_state
+    key = data.get("symbol") # UI'dan key geliyor
+    if key in exchange_manager.active_downloads:
+        current_state = exchange_manager.download_pauses.get(key, False)
+        exchange_manager.download_pauses[key] = not current_state
         return {
             "status": "success", 
             "paused": not current_state,
-            "message": f"{symbol} {'duraklatıldı' if not current_state else 'devam ettiriliyor'}."
+            "message": f"{key} {'duraklatıldı' if not current_state else 'devam ettiriliyor'}."
         }
     return {"status": "error", "message": "Aktif görev bulunamadı."}
 
