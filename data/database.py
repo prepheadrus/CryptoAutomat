@@ -140,7 +140,14 @@ class DatabaseManager:
             # SQLite'da string/datetime dönebilir, asanp/postgres'de datetime. Unix timestamp (ms) çevirelim.
             import datetime
             def to_ms(val):
-                if isinstance(val, str): val = pd.to_datetime(val).to_pydatetime()
+                if isinstance(val, str): 
+                    # SQLite'dan gelen string'i UTC olarak oku
+                    dt = pd.to_datetime(val)
+                    if dt.tzinfo is None: dt = dt.tz_localize('UTC')
+                    else: dt = dt.tz_convert('UTC')
+                    return int(dt.timestamp() * 1000)
+                # Datetime ise
+                if val.tzinfo is None: val = val.replace(tzinfo=datetime.timezone.utc)
                 return int(val.timestamp() * 1000)
             
             return {
@@ -160,14 +167,7 @@ class DatabaseManager:
                 rows = await cursor.fetchall()
                 symbols = [row[0] for row in rows]
                 
-        # Manuel temizlik: 'BTC/USDT' ve 'BTC/USDT:USDT' gibi çakışmaları temizle
-        clean_symbols = set()
-        for s in symbols:
-            # Sadece ana parite ismini al (Örn: OG/USDT:USDT -> OG/USDT)
-            base = s.split(':')[0].strip()
-            clean_symbols.add(base)
-            
-        return sorted(list(clean_symbols))
+        return sorted(symbols)
     async def save_trade(self, trade_info: dict):
         """Kapatılan bir işlemi kalıcı hafızaya yazar."""
         sql = """

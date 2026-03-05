@@ -919,14 +919,16 @@ async function updateActiveTasks() {
         symbols.forEach(s => {
             const t = tasks[s];
             const now = new Date().getTime();
-            const startPoint = Math.min(t.target_start_ms, t.since);
+            const startPoint = (t.target_start_ms && t.target_start_ms > 0) ? Math.min(t.target_start_ms, (t.since || t.target_start_ms)) : (t.since || now);
             const total = Math.max(1, now - startPoint);
-            const progress = Math.max(0, (t.current_ts || t.since) - startPoint);
-            const percent = Math.max(0, Math.min(100, (progress / total) * 100)).toFixed(1);
+            const progress = Math.max(0, (t.current_ts || t.since || startPoint) - startPoint);
+            let percent = ((progress / total) * 100);
+            if (isNaN(percent)) percent = 0;
+            percent = Math.max(0, Math.min(100, percent)).toFixed(1);
 
             const formatTs = (ts) => (ts && ts > 100000) ? new Date(ts).toLocaleDateString() + ' ' + new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--';
-            const isStarted = t.current_ts >= t.target_start_ms;
-            const dateRange = `<b>Başlangıç:</b> ${t.start_date || formatTs(t.target_start_ms)} <br> <b>Son Veri:</b> ${isStarted ? formatTs(t.current_ts) : '<span style="color:#f39c12">Hazırlanıyor...</span>'}`;
+            const isStarted = t.current_ts && t.current_ts > 0;
+            const dateRange = `<b>Başlangıç:</b> ${t.start_date || formatTs(t.target_start_ms)} <br> <b>Son Veri:</b> ${isStarted ? formatTs(t.current_ts) : '<span style="color:#f39c12">Veri İ bekleniyor...</span>'}`;
 
             let statusColor = 'var(--neon-green)';
             if (t.status === 'paused') statusColor = '#f1c40f';

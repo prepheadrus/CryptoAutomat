@@ -210,35 +210,34 @@ async def get_active_downloads():
     # 1. RAM'deki ve DB'deki indirme görevlerini al
     db_tasks = await db_manager.get_all_download_tasks()
     
-    # Task map'i temizlenmiş sembol isimleriyle kuralım (BTC/USDT:USDT -> BTC/USDT)
+    # Task map'i sembol ve market_type kombinasyonuyla kuralım (Çakışmaları önlemek için)
     task_map = {}
     for t in db_tasks:
-        base = t['symbol'].split(':')[0].strip()
-        task_map[base] = dict(t)
+        key = f"{t['symbol']}_{t['market_type']}"
+        task_map[key] = dict(t)
     
-    # RAM'dekileri de ekle (Üzerine yazabilir, hafıza her zaman günceldir)
+    # RAM'dekileri de ekle (Hafıza her zaman günceldir)
     for s, meta in exchange_manager.active_downloads.items():
-        base = s.split(':')[0].strip()
-        task_map[base] = meta
+        key = f"{s}_{meta['market_type']}"
+        task_map[key] = meta
         
-    # 2. Önemli: DB'de klines verisi olan ama görev listesinde olmayanları da ekle
-    # get_symbols_with_data zaten temizlenmiş (base) isimleri dönüyor.
+    # 2. Önemli: DB'de klines verisi olan ama görev listesinde olmayanları (yetim veriler) ekle
+    # get_symbols_with_data artık tüm ham sembolleri dönsün ki eşleşme tam olsun
+    # DatabaseManager.get_symbols_with_data'yı güncelleyip ham listeyi alıyoruz.
     data_symbols = await db_manager.get_symbols_with_data()
     for s in data_symbols:
-        if s not in task_map:
-            # Gerçek tarih aralığını veritabanından sorgula
-            candle_range = await db_manager.get_candle_range(s)
-            
-            # Market tipini tahmin et veya bul
-            guessed_type = 'spot'
-            if ':' in s or '/USDT' not in s: 
-                guessed_type = 'future'
+        # Pazar tipini bul
+        guessed_type = 'spot'
+        if ':' in s or '-2' in s or '/USDT' not in s: 
+            guessed_type = 'future'
 
-            # Eksik görev kaydı oluştur (Mevcut veriyi yansıt)
-            task_map[s] = {
+        key = f"{s}_{guessed_type}"
+        if key not in task_map:
+            candle_range = await db_manager.get_candle_range(s)
+            task_map[key] = {
                 'symbol': s,
                 'status': 'completed',
-                'timeframe': '1m', 
+                'timeframe': '--', 
                 'market_type': guessed_type,
                 'start_date': None,
                 'target_start_ms': candle_range['start'] if candle_range else 0,

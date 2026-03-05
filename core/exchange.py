@@ -166,7 +166,9 @@ class ExchangeManager:
                 else:
                     raise auth_err
             
-        target_start_ms = int(pd.to_datetime(start_date_str).timestamp() * 1000)
+        # Tarihi UTC olarak işle (Zaman dilimi kaymalarını önlemek için kritik)
+        target_start_ts = pd.to_datetime(start_date_str).tz_localize('UTC') if not pd.to_datetime(start_date_str).tzinfo else pd.to_datetime(start_date_str).tz_convert('UTC')
+        target_start_ms = int(target_start_ts.timestamp() * 1000)
         
         # Eğer bu işlem sıfırdan bir başlatmaysa (Kullanıcı yeni tarih seçtiyse),
         # Veritabanındaki son tarihe atlamayı DEVRE DIŞI bırakıyoruz ki o aradaki
@@ -235,15 +237,17 @@ class ExchangeManager:
                     logger.debug(f"📥 {symbol} {len(ohlcv)} mum indirildi. Son: {pd.to_datetime(last_ts, unit='ms')}")
                 
                 # Eğer son gelen mum anlık zamana çok yakınsa dur
-                if last_ts >= int(datetime.datetime.now().timestamp() * 1000) - 60000:
-                    logger.info(f"🎯 {symbol} indirme işlemi güncel zamana ulaştı.")
+                import time
+                now_ms = int(time.time() * 1000)
+                if last_ts >= now_ms - 60000:
+                    logger.info(f"🎯 {symbol} indirme işlemi güncel zamana (UTC) ulaştı.")
                     break
                     
                 since = last_ts + 1
                 self.active_downloads[symbol]['current_ts'] = last_ts
                 # Her batch sonrası DB'yi güncelle (ilerleme kaydı)
                 await db_manager.save_download_task(self.active_downloads[symbol])
-                await asyncio.sleep(0.05) # Rate limitlere karşı nazik davran
+                await asyncio.sleep(0.02) # Hızlandırıldı (Rate limitlere dikkat ederek)
                 
             except Exception as e:
                 logger.error(f"⚠️ {symbol} Veri İndirme Döngüsünde Hata: {e}")
