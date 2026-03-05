@@ -379,10 +379,20 @@ class DatabaseManager:
             await self.sqlite_conn.commit()
 
     async def close(self):
-        """Bağlantıları temizce kapatır."""
-        if self.db_pool: await self.db_pool.close()
-        if self.sqlite_conn: await self.sqlite_conn.close()
-        logger.info("Veritabanı bağlantıları sonlandırıldı.")
+        """Bağlantıları temizce kapatır ve WAL checkpoint yapar."""
+        if self.db_pool:
+            await self.db_pool.close()
+        if self.sqlite_conn:
+            # WAL modunda checkpoint yap (journal dosyalarını temizle)
+            try:
+                await self.sqlite_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                logger.info("SQLite WAL checkpoint tamamlandı.")
+            except Exception as e:
+                logger.warning(f"WAL checkpoint hatası: {e}")
+
+            # Bağlantıyı kapat
+            await self.sqlite_conn.close()
+            logger.info("Veritabanı bağlantıları sonlandırıldı.")
 
 # Gereken Pandas importu (fonksiyon içinde)
 import pandas as pd
