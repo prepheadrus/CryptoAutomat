@@ -394,7 +394,7 @@ class ExchangeManager:
                         ml_confidence = random.uniform(0.6, 0.9)
 
                     # 9. SİNYAL İŞLEME VE KAĞIT TİCARETİ (HTF Trendi + Market Regime Dahil Edildi)
-                    paper_engine.process_signal(symbol, current_price, df_target, ml_confidence, 
+                    await paper_engine.process_signal(symbol, current_price, df_target, ml_confidence, 
                                                htf_trend=htf_trend, regime=regime_info['regime'])
                     logger.info(f"✅ {symbol} {target_tf} (HTF: {htf_trend} | REJİM: {regime_info['regime']}) analiz tamamlandı.")
 

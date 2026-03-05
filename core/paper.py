@@ -89,7 +89,7 @@ class PaperTrader:
         """Marjin tipini (isolated, cross) belirler."""
         self.margin_types[symbol] = margin_type.lower()
 
-    def process_signal(self, symbol: str, current_price: float, df: pd.DataFrame, ml_confidence: float, htf_trend: str = "NEUTRAL", regime: str = "UNKNOWN"):
+    async def process_signal(self, symbol: str, current_price: float, df: pd.DataFrame, ml_confidence: float, htf_trend: str = "NEUTRAL", regime: str = "UNKNOWN"):
         """Her yeni mum kapandığında botun indikatör ve sinyallerini tarayıp, pozisyon al-kapat kararı verir."""
         if df.empty or len(df) < 50:
             return
@@ -194,7 +194,7 @@ class PaperTrader:
             # İşlem açılmamasının ana sebebi genellikle budur
             logger.debug(f"[FILTER] {symbol} ML Güven Skoru Yetersiz: {ml_confidence:.2f} (Eşik: {threshold})")
 
-    def _open_new_position(self, symbol, direction, price, latest_candle, ml_confidence):
+    async def _open_new_position(self, symbol, direction, price, latest_candle, ml_confidence):
         """Gerçekçi bir biçimde komisyonu (fee) ve kaymayı (slippage) hesaplayarak işleme girer."""
         # Risk hesaplama parametreleri (Config'den oku)
         risk_percent = CONFIG['risk_management'].get('max_risk_per_trade_percent', 0.2)
