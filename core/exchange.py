@@ -100,8 +100,8 @@ class ExchangeManager:
             for symbol, m in markets.items():
                 # Sadece aktif ve USDT bazlı olanları alalım
                 if m.get('active') and m.get('quote') == 'USDT':
-                    m_type = m.get('type', 'spot').lower()
-                    m_sub_type = m.get('subType', '').lower()
+                    m_type = (m.get('type') or 'spot').lower()
+                    m_sub_type = (m.get('subType') or '').lower()
                     
                     # Kullanıcı dostu etiketleme sistemi
                     display_type = "SPOT"

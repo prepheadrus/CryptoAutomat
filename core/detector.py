@@ -1,6 +1,12 @@
 import pandas as pd
 import numpy as np
-import pandas_ta as ta
+try:
+    import pandas_ta as ta
+except ImportError:
+    try:
+        import pandas_ta_classic as ta
+    except ImportError:
+        ta = None
 
 class MarketRegimeDetector:
     """

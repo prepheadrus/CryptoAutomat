@@ -1,5 +1,11 @@
 import pandas as pd
-import pandas_ta as ta
+try:
+    import pandas_ta as ta
+except ImportError:
+    try:
+        import pandas_ta_classic as ta
+    except ImportError:
+        ta = None # Veya boş bir nesne
 import numpy as np
 
 class StrategyIndicators:
