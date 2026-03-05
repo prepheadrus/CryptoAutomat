@@ -12,6 +12,66 @@ Detaylı teknik dokümantasyon için **[Knowledge Base](knowledge/INDEX.md)** kl
 - [🎨 Dashboard](knowledge/frontend/dashboard_and_visualization.md)
 - [📋 Yol Haritası](knowledge/planning/roadmap.md)
 
+## ⚡ Hızlı Başlangıç
+
+### 1. Depoyu Klonla
+
+```bash
+git clone https://github.com/prepheadrus/Crypto_Automat.git
+cd Crypto_Automat
+```
+
+### 2. Otomatik Kurulum
+
+**Ubuntu/Linux:**
+```bash
+chmod +x setup.sh
+./setup.sh
+```
+
+**Windows:**
+```cmd
+setup.bat
+```
+
+### 3. Yapılandırma (Opsiyonel)
+
+**.env dosyası** (API anahtarları için):
+```bash
+nano .env  # Linux
+notepad .env  # Windows
+```
+
+**config.yaml** (Trading ayarları için):
+```bash
+nano config.yaml  # Linux
+notepad config.yaml  # Windows
+```
+
+### 4. Botu Başlat
+
+**Ubuntu/Linux:**
+```bash
+source venv/bin/activate
+python3 main.py
+```
+
+**Windows:**
+```cmd
+venv\Scripts\activate
+python main.py
+```
+
+### 5. Dashboard'a Eriş
+
+Tarayıcınızda şu adresi açın:
+- **Local:** http://localhost:8000
+- **Oracle Cloud:** http://<SUNUCU_IP>:8000
+
+> ⚠️ **Oracle Cloud Kullanıcıları:** Security List'te **8000 portunu** açmayı unutmayın!
+
+---
+
 ## Temel Özellikler
 *   **Gösterge Konfluansı:** Trend, Momentum, Volatilite, Hacim ve Likidite göstergelerinin birleşimiyle onaylı alım/satım sinyalleri.
 *   **Makine Öğrenimi Füzyonu (CFA):** LSTM, Transformers, XGBoost birleşimi ve Meta-Reinforcement Learning optimizasyonları.
