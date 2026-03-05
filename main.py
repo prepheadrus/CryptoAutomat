@@ -13,7 +13,7 @@ def main():
     # Uvicorn, asenkron motoru çok verimli kullanır (Tek potada web + finansal işlemler).
     uvicorn.run(
         "api.server:app", 
-        host="127.0.0.1", 
+        host="0.0.0.0", 
         port=8000, 
         log_level=CONFIG['bot']['log_level'].lower(),
         reload=True if CONFIG['bot']['environment'] == 'development' else False
