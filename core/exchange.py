@@ -154,9 +154,6 @@ class ExchangeManager:
         """Belirli bir tarihten itibaren eksik olan tüm mum verilerini indirir."""
         from data.database import db_manager
         import datetime
-        
-        # DEBUG LOGGING (Giriş)
-        logger.info(f"DEBUG: download_historical_data started. Initial symbol='{symbol}', initial market_type='{market_type}'")
 
         # Sembol ismini temizle (Giriş parametresi kirli gelmiş olabilir: BTC/USDT_spot gibi)
         symbol = symbol.split('_')[0].strip()
@@ -209,9 +206,7 @@ class ExchangeManager:
             'target_start_ms': target_start_ms,
             'status': 'running'
         }
-        
-        # DEBUG LOGGING (Yazma)
-        logger.info(f"DEBUG: Saving task to DB. Task Data: {self.active_downloads[key]}")
+
         await db_manager.save_download_task(self.active_downloads[key])
         
         while True:

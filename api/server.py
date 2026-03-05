@@ -163,11 +163,8 @@ async def start_historical_download(data: Dict[str, Any], background_tasks: Back
     
     if not symbol:
         return {"status": "error", "message": "Sembol belirtilmedi."}
-    
+
     m_type = _normalize_market_type(market_type, symbol)
-    
-    # DEBUG LOGGING
-    logger.info(f"DEBUG: Download request received. UI market_type='{market_type}', symbol='{symbol}', calculated m_type='{m_type}'")
 
     key = f"{symbol}_{m_type}"
     
@@ -242,8 +239,6 @@ async def get_active_downloads():
         # Use the centralized normalization function
         normalized_market_type = _normalize_market_type(t['market_type'], symbol)
         key = f"{symbol}_{normalized_market_type}"
-        
-        logger.info(f"DEBUG: Reading from DB: symbol='{symbol}', market_type='{t['market_type']}', calculated_key='{key}'")
 
         task_map[key] = dict(t)
         task_map[key]['market_type'] = normalized_market_type
@@ -255,7 +250,6 @@ async def get_active_downloads():
         symbol = m_copy.get('symbol', key.split('_')[0])
         m_copy['market_type'] = _normalize_market_type(m_copy.get('market_type', ''), symbol)
         task_map[key] = m_copy
-        logger.info(f"DEBUG: Overwriting with RAM data for key='{key}', final market_type='{m_copy['market_type']}'")
 
 
     # 2. Önemli: DB'de klines verisi olan ama görev listesinde olmayanları ekle
@@ -288,10 +282,9 @@ async def get_active_downloads():
                     'start_date': None,
                     'target_start_ms': candle_range['start'] if candle_range else 0,
                     'current_ts': candle_range['end'] if candle_range else 0,
-                    'is_orphaned': True 
+                    'is_orphaned': True
                 }
-    
-    logger.info(f"DEBUG: Final task map being sent to UI: {list(task_map.keys())}")
+
     return task_map
 
 @app.post("/api/v1/data/delete-task")
