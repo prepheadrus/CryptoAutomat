@@ -248,6 +248,16 @@ class DatabaseManager:
             await self.sqlite_conn.execute(sql, (symbol,))
             await self.sqlite_conn.commit()
 
+    async def delete_klines_for_symbol(self, symbol: str):
+        """Belirli bir sembole ait tüm indirilmiş mum verilerini siler."""
+        sql = "DELETE FROM klines WHERE symbol = ?"
+        if self.engine_type == "postgres":
+            async with self.db_pool.acquire() as conn:
+                await conn.execute("DELETE FROM klines WHERE symbol = $1", symbol)
+        else:
+            await self.sqlite_conn.execute(sql, (symbol,))
+            await self.sqlite_conn.commit()
+
     async def close(self):
         """Bağlantıları temizce kapatır."""
         if self.db_pool: await self.db_pool.close()

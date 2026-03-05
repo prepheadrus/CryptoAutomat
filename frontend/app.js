@@ -788,7 +788,7 @@ async function startDownload() {
                 await fetch('/api/v1/data/delete-task', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ symbol: symbol })
+                    body: JSON.stringify({ symbol: symbol, with_data: true })
                 });
                 // Sonra yeni kaydı tetikle
                 return startDownload();
@@ -952,9 +952,9 @@ async function updateActiveTasks() {
                             ${(t.status === 'stopped' || t.status === 'completed' || t.status === 'error') ? `
                                 <button onclick="resumeDownload('${s}', '${t.timeframe}', '${t.start_date}', '${t.market_type}')" 
                                         class="btn-select" style="padding:3px 8px; font-size:0.6rem; background:rgba(88, 166, 255, 0.1); color:var(--neon-blue); border:1px solid var(--neon-blue)33;">
-                                    ${t.status === 'completed' ? '🔄 Yeniden Başlat' : '🔄 Devam Et'}
+                                    ${t.status === 'completed' ? '🔄 Güncelle' : '🔄 Devam Et'}
                                 </button>
-                                <button onclick="removeTaskPermanently('${s}')" class="btn-select" style="padding:3px 8px; font-size:0.6rem; background:rgba(255,255,255,0.05);">
+                                <button onclick="removeTaskPermanently('${s}')" class="btn-select" style="padding:3px 8px; font-size:0.6rem; background:rgba(255, 77, 77, 0.05); color:#ff4d4d;">
                                     🗑️ Sil
                                 </button>
                             ` : `
@@ -962,7 +962,10 @@ async function updateActiveTasks() {
                                     ${t.status === 'paused' ? '▶️' : '⏸️'}
                                 </button>
                                 <button onclick="stopDownload('${s}')" class="btn-select" title="Durdur" style="padding:3px 8px; font-size:0.6rem; background:rgba(255, 77, 77, 0.1); color:#ff4d4d; border:1px solid #ff4d4d33;">
-                                    🛑
+                                    🛑 Durdur
+                                </button>
+                                <button onclick="removeTaskPermanently('${s}')" class="btn-select" title="Vazgeç ve Sil" style="padding:3px 8px; font-size:0.6rem; background:rgba(255, 255, 255, 0.05);">
+                                    ❌ Vazgeç
                                 </button>
                             `}
                         </div>
@@ -1000,14 +1003,20 @@ async function resumeDownload(symbol, timeframe, startDate, marketType) {
 }
 
 async function removeTaskPermanently(symbol) {
+    const withData = confirm(`🗑️ ${symbol} görev kaydını silmek üzeresiniz.\n\nAYNI ZAMANDA indirilmiş tüm grafikleri (klines) de veritabanından temizlemek ister misiniz? \n\n(Tamam = Her şeyi sil, İptal = Sadece görevi listeden kaldır)`);
+
     try {
         const res = await fetch('/api/v1/data/delete-task', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ symbol: symbol })
+            body: JSON.stringify({
+                symbol: symbol,
+                with_data: withData
+            })
         });
         const result = await res.json();
         if (result.status === 'success') {
+            console.log(result.message);
             updateActiveTasks(); // Listeyi hemen güncelle
         } else {
             alert(result.message);

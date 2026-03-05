@@ -172,7 +172,10 @@ async def stop_historical_download(data: Dict[str, str]):
     if symbol in exchange_manager.active_downloads:
         exchange_manager.download_stops[symbol] = True
         return {"status": "success", "message": f"{symbol} durdurma sinyali gönderildi."}
-    return {"status": "error", "message": "Aktif bir indirme bulunamadı."}
+    
+    # Eğer RAM'de yok ama DB'de 'running' görünüyorsa ona da stop çekelim (Ender durum)
+    exchange_manager.download_stops[symbol] = True
+    return {"status": "success", "message": f"{symbol} için genel durdurma sinyali gönderildi."}
 
 @app.post("/api/v1/data/resume-download")
 async def resume_historical_download(data: Dict[str, str], background_tasks: BackgroundTasks):
@@ -233,21 +236,27 @@ async def get_active_downloads():
     return task_map
 
 @app.post("/api/v1/data/delete-task")
-async def delete_download_task(data: Dict[str, str]):
-    """Durdurulmuş bir görevi ('stopped') veritabanından ve listeden tamamen siler."""
+async def delete_download_task(data: Dict[str, Any]):
+    """Görevi (ve isteğe bağlı olarak verilerini) tamamen siler."""
     symbol = data.get("symbol")
+    with_data = data.get("with_data", False) # Verileri de silsin mi?
+
+    # 1. Eğer çalışıyorsa önce durdurma sinyali gönder
+    exchange_manager.download_stops[symbol] = True
+    
+    # 2. RAM'den temizle
     if symbol in exchange_manager.active_downloads:
-        if exchange_manager.active_downloads[symbol].get('status') == 'stopped':
-            # Önce aktif görevlerden (RAM'den) sil
-            del exchange_manager.active_downloads[symbol]
-            # Sonra veritabanından sil
-            await db_manager.delete_download_task(symbol)
-            return {"status": "success", "message": f"{symbol} görevi kalıcı olarak silindi."}
-        else:
-            return {"status": "error", "message": "Görev henüz tamamen durdurulmadı. Önce durdurmalısınız."}
-    # Eğer RAM'de yok ama DB'de varsa garantilemek için DB'den silmeyi deneriz.
+        del exchange_manager.active_downloads[symbol]
+        
+    # 3. Veritabanından görev kaydını sil
     await db_manager.delete_download_task(symbol)
-    return {"status": "success", "message": f"{symbol} görev kaydı veritabanından silindi."}
+    
+    # 4. Eğer kullanıcı verileri de silmek istediyse
+    if with_data:
+        await db_manager.delete_klines_for_symbol(symbol)
+        return {"status": "success", "message": f"{symbol} görevi ve tüm geçmiş verileri başarıyla silindi."}
+
+    return {"status": "success", "message": f"{symbol} görev kaydı silindi (Veriler korundu)."}
 
 @app.post("/api/v1/data/toggle-pause")
 async def toggle_pause_download(data: Dict[str, str]):
