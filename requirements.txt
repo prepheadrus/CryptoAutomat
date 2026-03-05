@@ -1,19 +1,35 @@
+# Core Dependencies
 ccxt
 aiohttp
 websockets
+
+# Data Processing
 numpy
 pandas
 scipy
 statsmodels
-pandas-ta
+
+# Machine Learning
 torch
 xgboost
 scikit-learn
+
+# Database
 redis
 asyncpg
+aiosqlite
+
+# Web Framework
+fastapi
+uvicorn
+matplotlib
+plotly
+
+# Configuration
 python-dotenv
 PyYAML
 colorlog
-fastapi
-uvicorn
-aiosqlite
+
+# Optional: TA-Lib for faster indicator calculations (if available)
+# pip install TA-Lib (requires libta-lib-dev on Ubuntu)
+# If not available, manual numpy/pandas calculations will be used

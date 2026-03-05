@@ -3,11 +3,43 @@
 Verinin borsadan akıp Yapay Zekaya (ML) sunulduğu hayati damardır.
 
 ## 1. Merkezileştirilmiş İndikatör Motoru (`data/indicators.py`)
+
 Tüm sistemin matematik fabrikası burasıdır. Stratejiler içerisinde indikatör hesaplanmaz. Veri önce buraya girer, "Zenginleştirilir" (Feature Engineering) ve süslenmiş bir Excel (DataFrame) tablosu halinde dışarı çıkar.
 
-Mimarisi `pandas_ta` isimli, C tabanlı son derece hızlı (optimize) bir formül bazına oturur.
-- Basit ve Standart yapılar (RSI, Stochastic, ADX, Bollinger) kütüphaneden tek satırla çekilir.
-- Karmaşık, piyasada bulunmayan indikatörler (Kalman Filtresi, İspanyol Koncorde Osilatörü) Python içerisinde *Özel Döngüler (Custom Logic)* tasarlanarak eklenir.
+### İndikatör Hesaplama Yöntemleri
+
+**Öncelik Sırası:**
+1. **TA-Lib** (C tabanlı, en hızlı) - Opsiyonel
+2. **Manuel Hesaplama** (numpy/pandas) - Varsayılan
+
+**Desteklenen İndikatörler:**
+
+| Kategori | İndikatörler |
+|----------|--------------|
+| **Trend** | EMA, SMA, Kalman Filter, Supertrend, EWO |
+| **Momentum** | RSI, MACD, Stochastic, UO |
+| **Volatilite** | ATR, Bollinger Bands, BTC VIX |
+| **Hacim** | OBV, VWAP, PVI, NVI, Koncorde |
+| **Diğer** | ADX, PSAR, Demand Index, KNN |
+
+### Manuel Hesaplama (pandas-ta Gerektirmez)
+
+```python
+# Örnek: RSI hesaplama
+def rsi(series, length=14):
+    delta = series.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=length).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=length).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
+```
+
+**Avantajlar:**
+- ✅ Hiçbir external kütüphane gerektirmez
+- ✅ Cross-platform (Windows, Linux, Mac)
+- ✅ Derleme sorunları yok
+- ✅ Kolayca yeni indikatör eklenebilir
+
 
 ## 2. Zaman Dilimi Dönüştürme (Resampling)
 Uygulama arka planda Binance'dan hep 1D veya 1H değil, **1m (1 Dakikalık)** en saf (granüler) veriyi indirir. 

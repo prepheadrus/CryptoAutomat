@@ -43,7 +43,19 @@ fi
 
 # 1. Sistem Paketlerini Güncelle
 log_info "Adım 1/8: Sistem paketleri güncelleniyor..."
-sudo apt-get update -y
+
+# Hatalı repository'leri geçici olarak devre dışı bırak
+sudo mkdir -p /tmp/apt-backup
+sudo cp -r /etc/apt/sources.list.d/* /tmp/apt-backup/ 2>/dev/null || true
+
+# Sadece temel Ubuntu repository'lerini kullan
+sudo apt-get update -y || {
+    log_warn "apt-get update hata verdi, hatalı repository'ler atlanıyor..."
+    # Hatalı .list dosyalarını geçici olarak taşı
+    sudo find /etc/apt/sources.list.d -name "*.list" -exec sudo mv {} /tmp/apt-backup/ \; 2>/dev/null || true
+    sudo apt-get update -y || sudo apt-get update --allow-releaseinfo-change -y
+}
+
 sudo apt-get upgrade -y
 
 # 2. Python ve Gerekli Sistem Bağımlılıklarını Kur

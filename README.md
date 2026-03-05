@@ -72,6 +72,22 @@ Tarayıcınızda şu adresi açın:
 
 ---
 
+## 🔧 Teknik Özellikler
+
+### İndikatör Motoru
+
+**pandas-ta Gerektirmez!** Tüm indikatörler numpy/pandas ile manuel hesaplanır:
+
+- ✅ **Trend:** EMA, SMA, Kalman Filter, Supertrend
+- ✅ **Momentum:** RSI, MACD, Stochastic, UO
+- ✅ **Volatilite:** ATR, Bollinger Bands, BTC VIX
+- ✅ **Hacim:** OBV, VWAP, PVI, NVI, Koncorde
+- ✅ **Diğer:** ADX, PSAR, Demand Index, KNN
+
+**Opsiyonel:** TA-Lib kurulumu ile daha hızlı hesaplama (C tabanlı).
+
+---
+
 ## Temel Özellikler
 *   **Gösterge Konfluansı:** Trend, Momentum, Volatilite, Hacim ve Likidite göstergelerinin birleşimiyle onaylı alım/satım sinyalleri.
 *   **Makine Öğrenimi Füzyonu (CFA):** LSTM, Transformers, XGBoost birleşimi ve Meta-Reinforcement Learning optimizasyonları.
