@@ -209,27 +209,30 @@ async def get_active_downloads():
     """Tüm indirme görevlerini (aktif, durdurulmuş, tamamlanmış) veritabanından ve hafızadan listeler."""
     # 1. RAM'deki ve DB'deki indirme görevlerini al
     db_tasks = await db_manager.get_all_download_tasks()
-    task_map = {t['symbol']: dict(t) for t in db_tasks}
     
+    # Task map'i temizlenmiş sembol isimleriyle kuralım (BTC/USDT:USDT -> BTC/USDT)
+    task_map = {}
+    for t in db_tasks:
+        base = t['symbol'].split(':')[0].strip()
+        task_map[base] = dict(t)
+    
+    # RAM'dekileri de ekle (Üzerine yazabilir, hafıza her zaman günceldir)
     for s, meta in exchange_manager.active_downloads.items():
-        task_map[s] = meta
+        base = s.split(':')[0].strip()
+        task_map[base] = meta
         
     # 2. Önemli: DB'de klines verisi olan ama görev listesinde olmayanları da ekle
+    # get_symbols_with_data zaten temizlenmiş (base) isimleri dönüyor.
     data_symbols = await db_manager.get_symbols_with_data()
     for s in data_symbols:
         if s not in task_map:
-            # Gerçek tarih aralığını veritabanından sorgula (Daha profesyonel görünüm)
+            # Gerçek tarih aralığını veritabanından sorgula
             candle_range = await db_manager.get_candle_range(s)
             
             # Market tipini tahmin et veya bul
             guessed_type = 'spot'
-            if ':' in s or '/USDT' not in s: # Heuristic: Suffix veya farklı baz
+            if ':' in s or '/USDT' not in s: 
                 guessed_type = 'future'
-            
-            # Eğer borsa yüklüyse ve sembol oradaysa garantile
-            if exchange_manager.exchange.markets and s in exchange_manager.exchange.markets:
-                m = exchange_manager.exchange.markets[s]
-                guessed_type = (m.get('type') or 'spot').lower()
 
             # Eksik görev kaydı oluştur (Mevcut veriyi yansıt)
             task_map[s] = {
@@ -237,7 +240,7 @@ async def get_active_downloads():
                 'status': 'completed',
                 'timeframe': '1m', 
                 'market_type': guessed_type,
-                'start_date': None, # formatTs'e bırakacağız
+                'start_date': None,
                 'target_start_ms': candle_range['start'] if candle_range else 0,
                 'current_ts': candle_range['end'] if candle_range else 0,
                 'is_orphaned': True 

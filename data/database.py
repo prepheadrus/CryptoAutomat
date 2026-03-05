@@ -126,13 +126,14 @@ class DatabaseManager:
 
     async def get_candle_range(self, symbol, timeframe='1m'):
         """Veritabanındaki bir sembole ait en eski ve en yeni mum tarihlerini mili saniye (ms) cinsinden döner."""
-        sql = "SELECT MIN(timestamp) as start_ts, MAX(timestamp) as end_ts FROM klines WHERE symbol = ? AND timeframe = ?"
+        sql = "SELECT MIN(timestamp) as start_ts, MAX(timestamp) as end_ts FROM klines WHERE (symbol = ? OR symbol LIKE ?) AND timeframe = ?"
+        pattern = f"{symbol}:%"
         if self.engine_type == "postgres":
-            sql = "SELECT MIN(timestamp) as start_ts, MAX(timestamp) as end_ts FROM klines WHERE symbol = $1 AND timeframe = $2"
+            sql = "SELECT MIN(timestamp) as start_ts, MAX(timestamp) as end_ts FROM klines WHERE (symbol = $1 OR symbol LIKE $2) AND timeframe = $3"
             async with self.db_pool.acquire() as conn:
-                row = await conn.fetchrow(sql, symbol, timeframe)
+                row = await conn.fetchrow(sql, symbol, pattern, timeframe)
         else:
-            async with self.sqlite_conn.execute(sql, (symbol, timeframe)) as cursor:
+            async with self.sqlite_conn.execute(sql, (symbol, pattern, timeframe)) as cursor:
                 row = await cursor.fetchone()
         
         if row and row['start_ts']:
@@ -239,23 +240,26 @@ class DatabaseManager:
                 return [dict(row) for row in rows]
 
     async def delete_download_task(self, symbol: str):
-        """Görevi veritabanından siler (Tamamlandığında veya kalıcı iptalde)."""
-        sql = "DELETE FROM download_tasks WHERE symbol = ?"
+        """Görevi veritabanından siler (Varyasyonlar dahil)."""
+        sql = "DELETE FROM download_tasks WHERE symbol = ? OR symbol LIKE ?"
+        pattern = f"{symbol}:%"
         if self.engine_type == "postgres":
             async with self.db_pool.acquire() as conn:
-                await conn.execute("DELETE FROM download_tasks WHERE symbol = $1", symbol)
+                await conn.execute("DELETE FROM download_tasks WHERE symbol = $1 OR symbol LIKE $2", symbol, pattern)
         else:
-            await self.sqlite_conn.execute(sql, (symbol,))
+            await self.sqlite_conn.execute(sql, (symbol, pattern))
             await self.sqlite_conn.commit()
 
     async def delete_klines_for_symbol(self, symbol: str):
-        """Belirli bir sembole ait tüm indirilmiş mum verilerini siler."""
-        sql = "DELETE FROM klines WHERE symbol = ?"
+        """Belirli bir sembole ait tüm indirilmiş mum verilerini siler (Varyasyonlar dahil)."""
+        # Hem tam eşleşenleri hem de 'BTC/USDT:USDT' gibi varyasyonları silmek için
+        sql = "DELETE FROM klines WHERE symbol = ? OR symbol LIKE ?"
+        pattern = f"{symbol}:%"
         if self.engine_type == "postgres":
             async with self.db_pool.acquire() as conn:
-                await conn.execute("DELETE FROM klines WHERE symbol = $1", symbol)
+                await conn.execute("DELETE FROM klines WHERE symbol = $1 OR symbol LIKE $2", symbol, pattern)
         else:
-            await self.sqlite_conn.execute(sql, (symbol,))
+            await self.sqlite_conn.execute(sql, (symbol, pattern))
             await self.sqlite_conn.commit()
 
     async def close(self):
