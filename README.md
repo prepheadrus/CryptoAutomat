@@ -2,6 +2,16 @@
 
 Kripto para piyasalarında, 7/24 dinamik risk yönetimi, makine öğrenimi destekli fiyat tahminlemesi ve on-chain/makroekonomik veri sentezi ile yüksek başarı oranlı bir algoritmik ticaret sistemi projesi.
 
+## 📚 Dokümantasyon
+
+Detaylı teknik dokümantasyon için **[Knowledge Base](knowledge/INDEX.md)** klasörüne bakın.
+
+- [🏗️ Sistem Mimarisi](knowledge/architecture/overview.md)
+- [📈 Stratejiler](knowledge/strategies/concept_and_implementation.md)
+- [⚙️ Trading Engine](knowledge/trading_engine/paper_trader.md)
+- [🎨 Dashboard](knowledge/frontend/dashboard_and_visualization.md)
+- [📋 Yol Haritası](knowledge/planning/roadmap.md)
+
 ## Temel Özellikler
 *   **Gösterge Konfluansı:** Trend, Momentum, Volatilite, Hacim ve Likidite göstergelerinin birleşimiyle onaylı alım/satım sinyalleri.
 *   **Makine Öğrenimi Füzyonu (CFA):** LSTM, Transformers, XGBoost birleşimi ve Meta-Reinforcement Learning optimizasyonları.
