@@ -59,6 +59,18 @@ async def shutdown_event():
 
 # --- API UÇ NOKTALARI (ENDPOINTS) ARAYÜZ İÇİN ---
 
+def _normalize_market_type(market_type_str: str, symbol: str) -> str:
+    """Converts user-facing market type strings into system-level 'spot' or 'future' types."""
+    lowered_str = str(market_type_str).lower()
+    # Check for keywords that strongly indicate a futures market
+    if any(keyword in lowered_str for keyword in ['perp', 'future', 'vadeli', 'swap']):
+        return 'future'
+    # As a robust fallback, check the symbol structure itself.
+    # Binance often uses ':' for futures (e.g., 'BTC/USDT:USDT') or specific suffixes.
+    if ':' in symbol or symbol.endswith('-SWAP'):
+        return 'future'
+    return 'spot'
+
 @app.get("/api/v1/status")
 async def get_system_status() -> Dict[str, Any]:
     """Sistemin ayakta olup olmadığını, hangi modda ve kriptolarda çalıştığını döner."""
@@ -141,7 +153,10 @@ async def get_history_status(symbol: str, timeframe: str = '1m'):
 @app.post("/api/v1/data/download-history")
 async def start_historical_download(data: Dict[str, Any], background_tasks: BackgroundTasks):
     """Arka planda geçmiş veri indirme işlemini başlatır."""
-    symbol = data.get("symbol")
+    raw_symbol = data.get("symbol")
+    # Gelen sembol ismini temizle (Suffix varsa temizle)
+    symbol = raw_symbol.split('_')[0].strip() if raw_symbol and '_' in raw_symbol else raw_symbol
+    
     timeframe = data.get("timeframe", "1m")
     start_date = data.get("start_date", "2024-01-01")
     market_type = data.get("market_type", "future")
@@ -149,7 +164,11 @@ async def start_historical_download(data: Dict[str, Any], background_tasks: Back
     if not symbol:
         return {"status": "error", "message": "Sembol belirtilmedi."}
     
-    m_type = 'future' if market_type.lower() in ['future', 'swap', 'perp', 'perpetual', 'süresiz vadeli (perp)'] else 'spot'
+    m_type = _normalize_market_type(market_type, symbol)
+    
+    # DEBUG LOGGING
+    logger.info(f"DEBUG: Download request received. UI market_type='{market_type}', symbol='{symbol}', calculated m_type='{m_type}'")
+
     key = f"{symbol}_{m_type}"
     
     if key in exchange_manager.active_downloads:
@@ -171,23 +190,26 @@ async def start_historical_download(data: Dict[str, Any], background_tasks: Back
 @app.post("/api/v1/data/stop-download")
 async def stop_historical_download(data: Dict[str, str]):
     """Devam eden indirme işlemini durdurur."""
-    key = data.get("symbol") # UI'dan key geliyor (BTC/USDT_spot)
-    if key:
-        exchange_manager.download_stops[key] = True
-        return {"status": "success", "message": f"{key} durdurma sinyali gönderildi."}
-    return {"status": "error", "message": "Görev anahtarı belirtilmedi."}
+    raw_key = data.get("symbol") # UI'dan key veya symbol gelebilir
+    if not raw_key: return {"status": "error", "message": "Sembol belirtilmedi."}
+    
+    # Eğer gelen şey zaten bir anahtarsa (Örn: BTC/USDT_spot), direkt kullan
+    # Değilse (Örn: BTC/USDT), varsayılan bir tip eklemek riskli olabilir 
+    # ama genelde UI'dan KEY gelir.
+    key = raw_key
+    exchange_manager.download_stops[key] = True
+    return {"status": "success", "message": f"{key} durdurma sinyali gönderildi."}
 
 @app.post("/api/v1/data/resume-download")
 async def resume_historical_download(data: Dict[str, str], background_tasks: BackgroundTasks):
     """Durdurulmuş veya tamamlanmış indirme işlemini kaldığı yerden yeniden başlatır."""
-    key = data.get("symbol") # UI'dan key geliyor
+    key = data.get("symbol") # UI'dan key geliyor (Örn: BTC/USDT_spot)
     
     # RAM'de yoksa ama DB'de varsa, RAM'e yükle (is_resume için)
     if key not in exchange_manager.active_downloads:
         tasks = await db_manager.get_all_download_tasks()
-        # Key'den sembol ve tipi ayır (ya da DB'den tam eşleşme ara)
         for t in tasks:
-            m_type = t['market_type'].lower()
+            m_type = str(t['market_type']).lower()
             if f"{t['symbol']}_{m_type}" == key:
                 exchange_manager.active_downloads[key] = dict(t)
                 break
@@ -198,10 +220,11 @@ async def resume_historical_download(data: Dict[str, str], background_tasks: Bac
         exchange_manager.download_stops[key] = False
         exchange_manager.download_pauses[key] = False
         
-        # Kaldığı yerden devam etmesini söyle
+        # Kaldığı yerden devam etmesini söyle (Real symbol'u kullan!)
+        real_symbol = task['symbol'].split('_')[0] if '_' in task['symbol'] else task['symbol']
         background_tasks.add_task(
             exchange_manager.download_historical_data, 
-            task['symbol'], task['timeframe'], task['start_date'], task['market_type'], is_resume=True
+            real_symbol, task['timeframe'], task['start_date'], task['market_type'], is_resume=True
         )
         return {"status": "success", "message": f"{key} kaldığı yerden devam ediyor."}
         
@@ -210,84 +233,110 @@ async def resume_historical_download(data: Dict[str, str], background_tasks: Bac
 @app.get("/api/v1/data/active-downloads")
 async def get_active_downloads():
     """Tüm indirme görevlerini (aktif, durdurulmuş, tamamlanmış) veritabanından ve hafızadan listeler."""
-    # 1. RAM'deki ve DB'deki indirme görevlerini al
     db_tasks = await db_manager.get_all_download_tasks()
-    
-    # Task map'i sembol ve market_type kombinasyonuyla kuralım
     task_map = {}
-    
-    def normalize_mtype(mt):
-        mt = str(mt).lower().strip()
-        if mt in ['future', 'swap', 'perp', 'perpetual', 'süresiz vadeli (perp)']: return 'future'
-        return 'spot'
 
+    # DB'den gelen görevleri işle
     for t in db_tasks:
-        s_norm = t['symbol'].strip()
-        m_type = normalize_mtype(t['market_type'])
-        key = f"{s_norm}_{m_type}"
+        symbol = t['symbol']
+        # Use the centralized normalization function
+        normalized_market_type = _normalize_market_type(t['market_type'], symbol)
+        key = f"{symbol}_{normalized_market_type}"
+        
+        logger.info(f"DEBUG: Reading from DB: symbol='{symbol}', market_type='{t['market_type']}', calculated_key='{key}'")
+
         task_map[key] = dict(t)
-        task_map[key]['market_type'] = m_type
+        task_map[key]['market_type'] = normalized_market_type
     
-    # RAM'dekileri de ekle (Hafıza her zaman günceldir)
-    for s, meta in exchange_manager.active_downloads.items():
-        s_norm = s.strip()
-        m_type = normalize_mtype(meta['market_type'])
-        key = f"{s_norm}_{m_type}"
-        task_map[key] = meta
-        task_map[key]['market_type'] = m_type
+    # RAM'dekileri de ekle (Hafıza her zaman günceldir ve DB'yi ezer)
+    for key, meta in exchange_manager.active_downloads.items():
+        m_copy = dict(meta)
+        # Ensure symbol is present for normalization
+        symbol = m_copy.get('symbol', key.split('_')[0])
+        m_copy['market_type'] = _normalize_market_type(m_copy.get('market_type', ''), symbol)
+        task_map[key] = m_copy
+        logger.info(f"DEBUG: Overwriting with RAM data for key='{key}', final market_type='{m_copy['market_type']}'")
+
 
     # 2. Önemli: DB'de klines verisi olan ama görev listesinde olmayanları ekle
     data_symbols = await db_manager.get_symbols_with_data()
+    
+    def get_base_symbol(symbol_or_key: str):
+        base = symbol_or_key.split('_')[0]
+        base = base.split(':')[0]
+        return base.strip()
+
+    managed_base_symbols = {get_base_symbol(key) for key in task_map.keys()}
+
     for s in data_symbols:
         s_norm = s.strip()
-        guessed_type = 'spot'
-        if ':' in s_norm or '-2' in s_norm or '/USDT' not in s_norm: 
-            guessed_type = 'future'
+        base_symbol_from_kline = get_base_symbol(s_norm)
+        
+        if base_symbol_from_kline not in managed_base_symbols:
+            guessed_type = 'spot'
+            if ':' in s_norm or s_norm.endswith('-SWAP'): 
+                guessed_type = 'future'
 
-        key = f"{s_norm}_{guessed_type}"
-        # Eğer bu veri zaten bir görevle eşleşiyorsa (Anahtarlar tutuyorsa) yeni kayıt açma
-        if key not in task_map:
-            candle_range = await db_manager.get_candle_range(s_norm)
-            task_map[key] = {
-                'symbol': s_norm,
-                'status': 'completed',
-                'timeframe': '--', 
-                'market_type': guessed_type,
-                'start_date': None,
-                'target_start_ms': candle_range['start'] if candle_range else 0,
-                'current_ts': candle_range['end'] if candle_range else 0,
-                'is_orphaned': True 
-            }
-            
+            key = f"{s_norm}_{guessed_type}"
+            if key not in task_map:
+                candle_range = await db_manager.get_candle_range(s_norm)
+                task_map[key] = {
+                    'symbol': s_norm,
+                    'status': 'completed',
+                    'timeframe': '--', 
+                    'market_type': guessed_type,
+                    'start_date': None,
+                    'target_start_ms': candle_range['start'] if candle_range else 0,
+                    'current_ts': candle_range['end'] if candle_range else 0,
+                    'is_orphaned': True 
+                }
+    
+    logger.info(f"DEBUG: Final task map being sent to UI: {list(task_map.keys())}")
     return task_map
 
 @app.post("/api/v1/data/delete-task")
 async def delete_download_task(data: Dict[str, Any]):
-    """Görevi (ve isteğe bağlı olarak verilerini) tamamen siler."""
-    key = data.get("symbol") # UI'dan key geliyor (Örn: BTC/USDT_spot)
+    """Görevi (ve isteğe bağlı olarak verilerini) tamamen ve hassas bir şekilde siler."""
+    key = data.get("symbol")
+    if not key:
+        return {"status": "error", "message": "Silinecek görev anahtarı belirtilmedi."}
+        
     with_data = data.get("with_data", False)
 
     # 1. Eğer çalışıyorsa önce durdurma sinyali gönder
     exchange_manager.download_stops[key] = True
+    await asyncio.sleep(0.5) # Sinyalin işlenmesi için kısa bir süre bekle
     
     # 2. RAM'den temizle
     if key in exchange_manager.active_downloads:
         del exchange_manager.active_downloads[key]
         
-    # 3. Veritabanından görev kayıtlarını temizle
-    # Sembol ismini key içinden ayır (BTC/USDT_spot -> BTC/USDT)
-    real_symbol = key.split('_')[0] if '_' in key else key
-    
-    await db_manager.delete_download_task(real_symbol)
-    await db_manager.delete_download_task(key)
-    
-    # 4. Eğer kullanıcı verileri de silmek istediyse
-    if with_data:
-        await db_manager.delete_klines_for_symbol(real_symbol)
-        await db_manager.delete_klines_for_symbol(key) # Variyantı da silsin
-        return {"status": "success", "message": f"{key} başarıyla silindi."}
+    # 3. Veritabanından görev kaydını hassas bir şekilde sil
+    # Anahtarı (key) sembol ve market tipine doğru bir şekilde ayır
+    try:
+        last_underscore_idx = key.rfind('_')
+        if last_underscore_idx == -1:
+            raise ValueError("Anahtar formatı geçersiz.")
+            
+        real_symbol = key[:last_underscore_idx]
+        market_type = key[last_underscore_idx+1:]
+        
+        # market_type'ın 'spot' veya 'future' olduğundan emin ol
+        if market_type not in ['spot', 'future']:
+            # If the parsing is not clean, re-normalize based on the symbol
+            market_type = _normalize_market_type(market_type, real_symbol)
 
-    return {"status": "success", "message": f"{key} görev kaydı silindi."}
+        await db_manager.delete_download_task(real_symbol, market_type)
+        
+        # 4. Eğer kullanıcı verileri de silmek istediyse, sadece o sembole ait verileri sil
+        if with_data:
+            await db_manager.delete_klines_for_symbol(real_symbol)
+            
+        return {"status": "success", "message": f"{key} görevi başarıyla silindi."}
+
+    except Exception as e:
+        logger.error(f"Görev silinirken hata oluştu: {key} | Hata: {e}")
+        return {"status": "error", "message": f"Görev silinirken bir hata oluştu: {e}"}
 
 @app.post("/api/v1/data/toggle-pause")
 async def toggle_pause_download(data: Dict[str, str]):

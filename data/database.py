@@ -58,13 +58,14 @@ class DatabaseManager:
         # İndirme Görevleri (Persistent Tasks)
         tasks_sql = """
             CREATE TABLE IF NOT EXISTS download_tasks (
-                symbol TEXT PRIMARY KEY,
+                symbol TEXT NOT NULL,
                 timeframe TEXT NOT NULL,
                 start_date TEXT NOT NULL,
                 market_type TEXT NOT NULL,
                 status TEXT NOT NULL,
                 current_ts BIGINT,
-                target_start_ms BIGINT
+                target_start_ms BIGINT,
+                PRIMARY KEY (symbol, market_type)
             );
         """
         # İşlem Geçmişi
@@ -207,19 +208,17 @@ class DatabaseManager:
         sql = """
             INSERT INTO download_tasks (symbol, timeframe, start_date, market_type, status, current_ts, target_start_ms)
             VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(symbol) DO UPDATE SET
+            ON CONFLICT(symbol, market_type) DO UPDATE SET
                 status=excluded.status, current_ts=excluded.current_ts;
         """
         params = (task['symbol'], task['timeframe'], task['start_date'], task['market_type'], 
                   task['status'], task.get('current_ts'), task['target_start_ms'])
         
         if self.engine_type == "postgres":
-            sql = sql.replace("?", "$").replace("excluded", "EXCLUDED") # Basitleştirilmiş PG uyumu gerekebilir
-            # PG için tam query:
             pg_sql = """
                 INSERT INTO download_tasks (symbol, timeframe, start_date, market_type, status, current_ts, target_start_ms)
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
-                ON CONFLICT(symbol) DO UPDATE SET
+                ON CONFLICT(symbol, market_type) DO UPDATE SET
                     status=EXCLUDED.status, current_ts=EXCLUDED.current_ts;
             """
             async with self.db_pool.acquire() as conn:
@@ -239,15 +238,17 @@ class DatabaseManager:
                 rows = await cursor.fetchall()
                 return [dict(row) for row in rows]
 
-    async def delete_download_task(self, symbol: str):
-        """Görevi veritabanından siler (Varyasyonlar dahil)."""
-        sql = "DELETE FROM download_tasks WHERE symbol = ? OR symbol LIKE ?"
-        pattern = f"{symbol}:%"
+    async def delete_download_task(self, symbol: str, market_type: str):
+        """Görevi veritabanından SADECE sembol ve market tipine göre hassas şekilde siler."""
+        sql = "DELETE FROM download_tasks WHERE symbol = ? AND market_type = ?"
+        params = (symbol, market_type)
+        pg_sql = "DELETE FROM download_tasks WHERE symbol = $1 AND market_type = $2"
+            
         if self.engine_type == "postgres":
             async with self.db_pool.acquire() as conn:
-                await conn.execute("DELETE FROM download_tasks WHERE symbol = $1 OR symbol LIKE $2", symbol, pattern)
+                await conn.execute(pg_sql, *params)
         else:
-            await self.sqlite_conn.execute(sql, (symbol, pattern))
+            await self.sqlite_conn.execute(sql, params)
             await self.sqlite_conn.commit()
 
     async def delete_klines_for_symbol(self, symbol: str):
