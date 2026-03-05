@@ -76,11 +76,22 @@ class ExchangeManager:
         """Borsadaki tüm aktif işlem çiftlerini (Spot ve Vadeli) çeker."""
         try:
             # Hem Vadeli (Future) hem Spot piyasaları yükleyelim (Binance için kritik)
-            # CCXT load_markets cache'lediği için ilk yüklemede her ikisini de kapsama almasını sağlıyoruz.
             if not self.exchange.markets:
                 logger.info("Marketler henüz yüklenmemiş, Binance'ten çekiliyor...")
-                await self.exchange.load_markets({'type': 'future'})
-                await self.exchange.load_markets({'type': 'spot'})
+                try:
+                    await self.exchange.load_markets({'type': 'future'})
+                    await self.exchange.load_markets({'type': 'spot'})
+                except Exception as auth_err:
+                    # EĞER API ANAHTARI HATALIYSA (Code -2008), Anahtarları silip anonim dene
+                    if "AuthenticationError" in str(type(auth_err)) or "-2008" in str(auth_err):
+                        logger.warning("Binance API anahtarları geçersiz! Anonim moda (Public) geçiliyor...")
+                        self.exchange.apiKey = None
+                        self.exchange.secret = None
+                        # Tekrar dene (Bu sefer şifresiz)
+                        await self.exchange.load_markets({'type': 'future'})
+                        await self.exchange.load_markets({'type': 'spot'})
+                    else:
+                        raise auth_err
             
             markets = self.exchange.markets
             logger.info(f"Borsadan toplam {len(markets) if markets else 0} ham market verisi çekildi.")
@@ -100,8 +111,6 @@ class ExchangeManager:
             return sorted(available, key=lambda x: x['symbol'])
         except Exception as e:
             logger.error(f"Market Listesi Çekme Hatası: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
             return []
 
     async def watch_ticker_loop(self, symbol):
