@@ -78,10 +78,13 @@ class ExchangeManager:
             # Hem Vadeli (Future) hem Spot piyasaları yükleyelim (Binance için kritik)
             # CCXT load_markets cache'lediği için ilk yüklemede her ikisini de kapsama almasını sağlıyoruz.
             if not self.exchange.markets:
+                logger.info("Marketler henüz yüklenmemiş, Binance'ten çekiliyor...")
                 await self.exchange.load_markets({'type': 'future'})
                 await self.exchange.load_markets({'type': 'spot'})
             
             markets = self.exchange.markets
+            logger.info(f"Borsadan toplam {len(markets) if markets else 0} ham market verisi çekildi.")
+            
             available = []
             for symbol, m in markets.items():
                 # Sadece aktif, USDT bazlı ve Spot/Future olanları alalım
@@ -92,9 +95,13 @@ class ExchangeManager:
                         'type': m['type'], # 'spot' veya 'swap'/'future'
                         'id': m['id']
                     })
+            
+            logger.info(f"Filtreleme sonrası (Active + USDT) {len(available)} market listeye eklendi.")
             return sorted(available, key=lambda x: x['symbol'])
         except Exception as e:
             logger.error(f"Market Listesi Çekme Hatası: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return []
 
     async def watch_ticker_loop(self, symbol):
