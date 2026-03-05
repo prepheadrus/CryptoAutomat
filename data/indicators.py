@@ -35,8 +35,8 @@ class StrategyIndicators:
             'volume': 'sum'
         }
         
-        # Pandas resample formatına çevir (Örn: 1h -> 1H, 1d -> 1D)
-        rule = timeframe.replace('m', 'min').replace('h', 'H').replace('d', 'D')
+        # Pandas resample formatına çevir (Örn: 1h -> 1h, 1d -> 1D, 5m -> 5min)
+        rule = timeframe.replace('m', 'min').replace('h', 'h').replace('d', 'D')
         
         # Yeniden örnekle
         resampled_df = df.resample(rule, label='left', closed='left').apply(logic)
