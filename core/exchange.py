@@ -154,7 +154,17 @@ class ExchangeManager:
         
         # Market bilgilerini tazele (Hataları önlemek için kritik)
         if not self.exchange.markets or symbol not in self.exchange.markets:
-            await self.exchange.load_markets({'type': market_type})
+            try:
+                await self.exchange.load_markets({'type': market_type})
+            except Exception as auth_err:
+                # EĞER API ANAHTARI HATALIYSA (Code -2008), Anahtarları silip anonim dene
+                if "AuthenticationError" in str(type(auth_err)) or "-2008" in str(auth_err):
+                    logger.warning(f"⚠️ {symbol} indirme hatası: Binance API anahtarları geçersiz! Anonim moda geçiliyor...")
+                    self.exchange.apiKey = None
+                    self.exchange.secret = None
+                    await self.exchange.load_markets({'type': market_type})
+                else:
+                    raise auth_err
             
         target_start_ms = int(pd.to_datetime(start_date_str).timestamp() * 1000)
         
