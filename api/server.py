@@ -221,12 +221,22 @@ async def get_active_downloads():
             # Gerçek tarih aralığını veritabanından sorgula (Daha profesyonel görünüm)
             candle_range = await db_manager.get_candle_range(s)
             
+            # Market tipini tahmin et veya bul
+            guessed_type = 'spot'
+            if ':' in s or '/USDT' not in s: # Heuristic: Suffix veya farklı baz
+                guessed_type = 'future'
+            
+            # Eğer borsa yüklüyse ve sembol oradaysa garantile
+            if exchange_manager.exchange.markets and s in exchange_manager.exchange.markets:
+                m = exchange_manager.exchange.markets[s]
+                guessed_type = (m.get('type') or 'spot').lower()
+
             # Eksik görev kaydı oluştur (Mevcut veriyi yansıt)
             task_map[s] = {
                 'symbol': s,
                 'status': 'completed',
                 'timeframe': '1m', 
-                'market_type': 'unknown',
+                'market_type': guessed_type,
                 'start_date': None, # formatTs'e bırakacağız
                 'target_start_ms': candle_range['start'] if candle_range else 0,
                 'current_ts': candle_range['end'] if candle_range else 0,
