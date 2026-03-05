@@ -26,12 +26,24 @@ class DatabaseManager:
                     logger.info("Aşama 1.5: Kalıcı Veritabanı (PostgreSQL) bağlantı havuzu oluşturuldu.")
                 except Exception as pg_err:
                     logger.warning(f"PostgreSQL bağlantısı başarısız, SQLite'a geçiliyor: {pg_err}")
-            
+
             # 2. SQLite Fallback (Docker/Postgres yoksa devreye girer)
             if self.engine_type == "sqlite":
-                self.sqlite_conn = await aiosqlite.connect(self.sqlite_path)
+                self.sqlite_conn = await aiosqlite.connect(
+                    self.sqlite_path,
+                    timeout=60.0,  # 60 saniye timeout (locked hatası için)
+                    isolation_level=None  # WAL mode için gerekli
+                )
                 self.sqlite_conn.row_factory = aiosqlite.Row
+
+                # SQLite optimizasyonları (Database locked önleme)
+                await self.sqlite_conn.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging
+                await self.sqlite_conn.execute("PRAGMA busy_timeout=60000")  # 60 saniye bekle
+                await self.sqlite_conn.execute("PRAGMA synchronous=NORMAL")  # Daha hızlı yazma
+                await self.sqlite_conn.execute("PRAGMA cache_size=10000")  # 10MB cache
+
                 logger.info(f"Aşama 1.5: Docker Gerektirmeyen Yerel Hafıza (SQLite) aktif -> {self.sqlite_path}")
+                logger.info("SQLite optimizasyonları aktif: WAL mode, 60s timeout, busy_timeout=60000")
 
             # Tabloları ayağa kaldır
             await self.initialize_db()

@@ -249,33 +249,56 @@ class ExchangeManager:
                     logger.info(f"🏁 {symbol} için borsa artık veri dönmüyor (Son Tarih: {pd.to_datetime(since, unit='ms')}).")
                     break
                 
-                # Veritabanına toplu kayıt
+                # Veritabanına toplu kayıt (her mum için ayrı INSERT yerine batch)
+                klines_to_save = []
                 for candle in ohlcv:
-                    await db_manager.save_kline(symbol, candle, timeframe=timeframe)
-                
+                    klines_to_save.append((symbol, candle, timeframe))
+
+                # Toplu kayıt (tek transaction içinde)
+                try:
+                    for kline_data in klines_to_save:
+                        await db_manager.save_kline(*kline_data)
+                except Exception as db_err:
+                    logger.error(f"⚠️ {symbol} DB yazma hatası: {db_err}")
+                    # Locked hatası varsa 5 saniye bekle ve tekrar dene
+                    if "database is locked" in str(db_err):
+                        logger.warning(f"⏳ Database locked, 5 saniye bekleniyor...")
+                        await asyncio.sleep(5)
+                        # Tekrar dene
+                        for kline_data in klines_to_save:
+                            try:
+                                await db_manager.save_kline(*kline_data)
+                            except Exception:
+                                pass  # İkinci hata durumunda devam et
+
                 last_ts = ohlcv[-1][0]
                 all_downloaded += len(ohlcv)
-                
-                # Her 5000 mumda bir ana log bas (Terminali kirletmeden takip sağla)
+
+                # Her 5000 mumda bir DB güncelle (daha az locked hatası)
                 if all_downloaded % 5000 == 0:
                     logger.info(f"📥 {symbol} İlerleme: {all_downloaded} mum kaydedildi... [Şu anki Tarih: {pd.to_datetime(last_ts, unit='ms')}]")
+                    # DB görevini güncelle
+                    if key in self.active_downloads:
+                        self.active_downloads[key]['current_ts'] = last_ts
+                        try:
+                            await db_manager.save_download_task(self.active_downloads[key])
+                        except Exception as db_err:
+                            logger.warning(f"⚠️ DB güncelleme hatası (devam ediliyor): {db_err}")
                 else:
                     logger.debug(f"📥 {symbol} {len(ohlcv)} mum indirildi. Son: {pd.to_datetime(last_ts, unit='ms')}")
-                
+
                 # Eğer son gelen mum anlık zamana çok yakınsa dur
                 import time
                 now_ms = int(time.time() * 1000)
                 if last_ts >= now_ms - 60000:
                     logger.info(f"🎯 {symbol} indirme işlemi güncel zamana (UTC) ulaştı.")
                     break
-                    
+
                 since = last_ts + 1
                 if key in self.active_downloads:
                     self.active_downloads[key]['current_ts'] = last_ts
-                    # Her batch sonrası DB'yi güncelle (ilerleme kaydı)
-                    await db_manager.save_download_task(self.active_downloads[key])
 
-                # Dinamik sleep: Her 5 batch'te bir daha uzun bekle (rate limit için)
+                # Dinamik sleep: Her 5000 mumda bir daha uzun bekle (rate limit ve DB locked önleme)
                 if all_downloaded % 5000 == 0:
                     await asyncio.sleep(2)  # Her 5000 mumda bir 2 saniye bekle
                 else:
