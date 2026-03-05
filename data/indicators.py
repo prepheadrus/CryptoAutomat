@@ -1,15 +1,79 @@
 import pandas as pd
+import numpy as np
+
+# pandas-ta yerine manuel hesaplama veya ta-lib
 try:
-    import pandas_ta as ta
+    import talib as ta
+    USING_TALIB = True
 except ImportError:
     try:
-        import pandas_ta_classic as ta
+        import pandas_ta as ta
+        USING_TALIB = False
     except ImportError:
-        ta = None # Veya boş bir nesne
-import numpy as np
+        ta = None
+        USING_TALIB = False
+        import warnings
+        warnings.warn(
+            "⚠️ Ne TA-Lib ne pandas_ta bulunamadı! Manuel hesaplama kullanılacak.\n"
+            "Kurulum için: sudo apt-get install libta-lib-dev && pip install TA-Lib",
+            UserWarning
+        )
 
 class StrategyIndicators:
     """Verilen OHLCV DataFrame'i üzerine stratejinin ihtiyaç duyacağı tüm teknik göstergeleri işler."""
+
+    @staticmethod
+    def ema(series, length):
+        """Exponential Moving Average - Manuel hesaplama"""
+        return series.ewm(span=length, adjust=False).mean()
+
+    @staticmethod
+    def sma(series, length):
+        """Simple Moving Average - Manuel hesaplama"""
+        return series.rolling(window=length).mean()
+
+    @staticmethod
+    def rsi(series, length=14):
+        """RSI - Manuel hesaplama"""
+        delta = series.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=length).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=length).mean()
+        rs = gain / loss
+        return 100 - (100 / (1 + rs))
+
+    @staticmethod
+    def atr(high, low, close, length=14):
+        """ATR - Manuel hesaplama"""
+        tr1 = high - low
+        tr2 = abs(high - close.shift(1))
+        tr3 = abs(low - close.shift(1))
+        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        return tr.ewm(span=length, adjust=False).mean()
+
+    @staticmethod
+    def macd(series, fast=12, slow=26, signal=9):
+        """MACD - Manuel hesaplama"""
+        ema_fast = series.ewm(span=fast, adjust=False).mean()
+        ema_slow = series.ewm(span=slow, adjust=False).mean()
+        macd_line = ema_fast - ema_slow
+        signal_line = macd_line.ewm(span=signal, adjust=False).mean()
+        hist = macd_line - signal_line
+        return macd_line, signal_line, hist
+
+    @staticmethod
+    def bollinger_bands(series, length=20, std=2):
+        """Bollinger Bands - Manuel hesaplama"""
+        sma = series.rolling(window=length).mean()
+        std_dev = series.rolling(window=length).std()
+        upper = sma + (std_dev * std)
+        lower = sma - (std_dev * std)
+        return upper, sma, lower
+
+    @staticmethod
+    def vwap(high, low, close, volume):
+        """VWAP - Manuel hesaplama"""
+        typical_price = (high + low + close) / 3
+        return (typical_price * volume).cumsum() / volume.cumsum()
     
     @staticmethod
     def resample_data(df: pd.DataFrame, timeframe: str) -> pd.DataFrame:
@@ -75,11 +139,21 @@ class StrategyIndicators:
              df.fillna(0, inplace=True)
 
         # --- TREND (Eğilim) ---
-        df['EMA_5'] = ta.ema(df['close'], length=5)
-        df['EMA_13'] = ta.ema(df['close'], length=13)
-        df['SMA_20'] = ta.sma(df['close'], length=20)
-        df['EMA_50'] = ta.ema(df['close'], length=50)
-        df['EMA_200'] = ta.ema(df['close'], length=200)
+        # Manuel hesaplama veya TA-Lib/pandas_ta kullan
+        if ta is not None:
+            # TA-Lib veya pandas_ta kullan
+            df['EMA_5'] = ta.ema(df['close'], length=5)
+            df['EMA_13'] = ta.ema(df['close'], length=13)
+            df['SMA_20'] = ta.sma(df['close'], length=20)
+            df['EMA_50'] = ta.ema(df['close'], length=50)
+            df['EMA_200'] = ta.ema(df['close'], length=200)
+        else:
+            # Manuel hesaplama
+            df['EMA_5'] = StrategyIndicators.ema(df['close'], 5)
+            df['EMA_13'] = StrategyIndicators.ema(df['close'], 13)
+            df['SMA_20'] = StrategyIndicators.sma(df['close'], 20)
+            df['EMA_50'] = StrategyIndicators.ema(df['close'], 50)
+            df['EMA_200'] = StrategyIndicators.ema(df['close'], 200)
         
         # 1. Kalman Filtresi (Gürültü Temizleyici)
         # PineScript: kalman(src, period, alpha, beta)
@@ -113,26 +187,44 @@ class StrategyIndicators:
             df['EWO'] = 0.0
 
         # --- MOMENTUM (Hız/İvme) ---
-        df['RSI_14'] = ta.rsi(df['close'], length=14)
-        
+        if ta is not None:
+            df['RSI_14'] = ta.rsi(df['close'], length=14)
+        else:
+            df['RSI_14'] = StrategyIndicators.rsi(df['close'], 14)
+
         # --- BTC VIX (Volatilite Endeksi) ---
         # PineScript: ta.stdev(math.log(close/close[1]), 20) * math.sqrt(365) * 100
         log_ret = np.log(df['close'] / df['close'].shift(1))
         df['BTC_VIX'] = log_ret.rolling(20).std() * np.sqrt(365) * 100
 
         # MACD (Trend dönüş noktaları için)
-        macd = ta.macd(df['close'], fast=12, slow=26, signal=9)
-        if macd is not None:
-            df = pd.concat([df, macd], axis=1)
+        if ta is not None:
+            macd = ta.macd(df['close'], fast=12, slow=26, signal=9)
+            if macd is not None:
+                df = pd.concat([df, macd], axis=1)
+        else:
+            macd_line, signal_line, hist = StrategyIndicators.macd(df['close'])
+            df['MACD_12_26_9'] = macd_line
+            df['MACDs_12_26_9'] = signal_line
+            df['MACDh_12_26_9'] = hist
 
         # --- VOLATİLİTE (Oynaklık ve Risk Ayarlama) ---
-        df['ATR_14'] = ta.atr(df['high'], df['low'], df['close'], length=14)
-        
+        if ta is not None:
+            df['ATR_14'] = ta.atr(df['high'], df['low'], df['close'], length=14)
+        else:
+            df['ATR_14'] = StrategyIndicators.atr(df['high'], df['low'], df['close'], 14)
+
         # Bollinger Bantları
         if 'close' in df.columns:
-            bb = ta.bbands(df['close'], length=20, std=2)
-            if bb is not None:
-                df = pd.concat([df, bb], axis=1)
+            if ta is not None:
+                bb = ta.bbands(df['close'], length=20, std=2)
+                if bb is not None:
+                    df = pd.concat([df, bb], axis=1)
+            else:
+                upper, middle, lower = StrategyIndicators.bollinger_bands(df['close'])
+                df['BBU_20_2.0_2.0'] = upper
+                df['BBM_20_2.0_2.0'] = middle
+                df['BBL_20_2.0_2.0'] = lower
 
         # --- KONKORDE (AKILLI PARA İZLEME - PVI & NVI) ---
         if 'volume' in df.columns and len(df) > 1:
@@ -195,27 +287,59 @@ class StrategyIndicators:
 
         # --- HACİM VE LİKİDİTE ---
         if 'volume' in df.columns:
-            df['OBV'] = ta.obv(df['close'], df['volume'])
-            
-            # OBV yönünü veya direncini test edebilmek için kendi basit EMA'sı eklendi (Sinyal çizgisi)
-            if 'OBV' in df.columns:
-                df['OBV_EMA'] = ta.ema(df['OBV'], length=10)
-
-            try:
-                df['VWAP'] = ta.vwap(df['high'], df['low'], df['close'], df['volume'], anchor="D")
-            except Exception:
-                pass
+            if ta is not None:
+                df['OBV'] = ta.obv(df['close'], df['volume'])
+                if 'OBV' in df.columns:
+                    df['OBV_EMA'] = ta.ema(df['OBV'], length=10)
+                try:
+                    df['VWAP'] = ta.vwap(df['high'], df['low'], df['close'], df['volume'], anchor="D")
+                except Exception:
+                    pass
+            else:
+                # Manuel OBV hesaplama
+                df['OBV'] = (np.sign(df['close'].diff()) * df['volume']).fillna(0).cumsum()
+                df['OBV_EMA'] = StrategyIndicators.ema(df['OBV'], 10)
+                # Manuel VWAP
+                df['VWAP'] = StrategyIndicators.vwap(df['high'], df['low'], df['close'], df['volume'])
 
         # --- YENİ EKLENEN ŞABLON İNDİKATÖRLERİ (ADX, Stoch) ---
-        # 1. ADX (Trend Gücü)
-        adx_res = ta.adx(df['high'], df['low'], df['close'], length=14)
-        if adx_res is not None:
-            df = pd.concat([df, adx_res], axis=1)
+        # 1. ADX (Trend Gücü) - Manuel hesaplama
+        if ta is not None:
+            adx_res = ta.adx(df['high'], df['low'], df['close'], length=14)
+            if adx_res is not None:
+                df = pd.concat([df, adx_res], axis=1)
+        else:
+            # Manuel ADX hesaplama
+            plus_dm = df['high'].diff()
+            minus_dm = -df['low'].diff()
+            plus_dm = np.where((plus_dm > minus_dm) & (plus_dm > 0), plus_dm, 0)
+            minus_dm = np.where((minus_dm > plus_dm) & (minus_dm > 0), minus_dm, 0)
 
-        # 2. Stochastic Osilatör
-        stoch_res = ta.stoch(df['high'], df['low'], df['close'], k=14, d=3, smooth_k=3)
-        if stoch_res is not None:
-            df = pd.concat([df, stoch_res], axis=1)
+            tr = np.maximum(df['high'] - df['low'],
+                           np.maximum(abs(df['high'] - df['close'].shift(1)),
+                                     abs(df['low'] - df['close'].shift(1))))
+
+            tr_smooth = pd.Series(tr).rolling(14).sum()
+            plus_di = 100 * pd.Series(plus_dm).rolling(14).sum() / tr_smooth
+            minus_di = 100 * pd.Series(minus_dm).rolling(14).sum() / tr_smooth
+
+            dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di)
+            df['ADX_14'] = dx.rolling(14).mean()
+            df['DMP_14'] = plus_di
+            df['DMN_14'] = minus_di
+
+        # 2. Stochastic Osilatör - Manuel hesaplama
+        if ta is not None:
+            stoch_res = ta.stoch(df['high'], df['low'], df['close'], k=14, d=3, smooth_k=3)
+            if stoch_res is not None:
+                df = pd.concat([df, stoch_res], axis=1)
+        else:
+            lowest_low = df['low'].rolling(14).min()
+            highest_high = df['high'].rolling(14).max()
+            stoch_k = 100 * (df['close'] - lowest_low) / (highest_high - lowest_low)
+            stoch_d = stoch_k.rolling(3).mean()
+            df['STOCH_K_14_3_3'] = stoch_k
+            df['STOCH_D_14_3_3'] = stoch_d
 
         # 3. Ultimate Oscillator (UO)
         try:
