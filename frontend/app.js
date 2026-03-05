@@ -1182,9 +1182,21 @@ async function runMLVisualAnalysis() {
         // 2. Teknik Strateji Sinyalleri (Sadece Nokta - Arka Plan Bilgisi)
         stratSignals.forEach(s => {
             if (s.signal === 2) {
-                markers.push({ time: Math.floor(s.timestamp / 1000), position: 'belowBar', color: '#bc8cff', shape: 'circle', text: '' });
+                markers.push({
+                    time: Math.floor(s.timestamp / 1000),
+                    position: 'belowBar',
+                    color: '#bc8cff',
+                    shape: 'circle',
+                    text: 'STRAT:AL'  // ← Etiket eklendi
+                });
             } else if (s.signal === 0) {
-                markers.push({ time: Math.floor(s.timestamp / 1000), position: 'aboveBar', color: '#ffcc00', shape: 'circle', text: '' });
+                markers.push({
+                    time: Math.floor(s.timestamp / 1000),
+                    position: 'aboveBar',
+                    color: '#ffcc00',
+                    shape: 'circle',
+                    text: 'STRAT:SAT'  // ← Etiket eklendi
+                });
             }
         });
 

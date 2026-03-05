@@ -544,14 +544,19 @@ async def get_ml_visual_analysis(symbol: str = "BTC/USDT", limit: int = 200, str
 
             if not in_trade:
                 # İŞLEME GİRİŞ (Strateji + ML + HTF Teyidi)
-                if sig == 2 and m_idx == 2 and m_cnf >= threshold and not htf_bear:
-                    actual_trades.append({"timestamp": ts, "action": "LONG_ENTER", "price": close_p})
-                    in_trade = True
-                    trade_dir = "LONG"
-                elif sig == 0 and m_idx == 0 and m_cnf >= threshold and not htf_bull:
-                    actual_trades.append({"timestamp": ts, "action": "SHORT_ENTER", "price": close_p})
-                    in_trade = True
-                    trade_dir = "SHORT"
+                # HTF filtresini esnettik - sadece zıt trendi engelle
+                if sig == 2 and m_idx == 2 and m_cnf >= threshold:
+                    # LONG için: HTF BEAR değilse gir (BULL veya nötr olabilir)
+                    if not htf_bear:
+                        actual_trades.append({"timestamp": ts, "action": "LONG_ENTER", "price": close_p})
+                        in_trade = True
+                        trade_dir = "LONG"
+                elif sig == 0 and m_idx == 0 and m_cnf >= threshold:
+                    # SHORT için: HTF BULL değilse gir (BEAR veya nötr olabilir)
+                    if not htf_bull:
+                        actual_trades.append({"timestamp": ts, "action": "SHORT_ENTER", "price": close_p})
+                        in_trade = True
+                        trade_dir = "SHORT"
             else:
                 # İŞLEMDEN ÇIKIŞ (Tam tersi sinyal gelirse veya ATR Stobu patlarsa)
                 if trade_dir == "LONG" and (sig == 0 or m_idx == 0):
