@@ -76,6 +76,90 @@ class StrategyIndicators:
         return (typical_price * volume).cumsum() / volume.cumsum()
 
     @staticmethod
+    def mfi(high, low, close, volume, period=14):
+        """Money Flow Index - Manuel hesaplama"""
+        typical_price = (high + low + close) / 3
+        money_flow = typical_price * volume
+
+        # Positive/Negative Money Flow
+        tpp = typical_price.diff()
+        pmf = pd.Series(0.0, index=close.index)
+        nmf = pd.Series(0.0, index=close.index)
+
+        pmf[tpp > 0] = money_flow[tpp > 0]
+        nmf[tpp < 0] = money_flow[tpp < 0]
+
+        # Money Ratio
+        mr = pmf.rolling(window=period).sum() / nmf.rolling(window=period).sum()
+
+        # MFI
+        return 100 - (100 / (1 + mr))
+
+    @staticmethod
+    def uo(high, low, close, fast=7, medium=14, slow=28):
+        """Ultimate Oscillator - Manuel hesaplama"""
+        # Buying pressure ve true range
+        bp = close - pd.concat([low, close.shift(1)], axis=1).min(axis=1)
+        tr = pd.concat([high - low, abs(high - close.shift(1)), abs(low - close.shift(1))], axis=1).max(axis=1)
+
+        # Averages
+        avg_fast = bp.rolling(window=fast).sum() / tr.rolling(window=fast).sum()
+        avg_medium = bp.rolling(window=medium).sum() / tr.rolling(window=medium).sum()
+        avg_slow = bp.rolling(window=slow).sum() / tr.rolling(window=slow).sum()
+
+        # Ultimate Oscillator
+        return 100 * (4 * avg_fast + 2 * avg_medium + avg_slow) / (4 + 2 + 1)
+
+    @staticmethod
+    def psar(high, low, close=None, af0=0.02, af=0.02, max_af=0.2):
+        """Parabolic SAR - Manuel hesaplama (basitleştirilmiş)"""
+        if close is None:
+            close = (high + low) / 2
+
+        psar = pd.Series(index=close.index)
+        trend = pd.Series(1, index=close.index)  # 1 = up, -1 = down
+        ep = pd.Series(0.0, index=close.index)  # Extreme point
+        accel = pd.Series(af0, index=close.index)
+
+        # İlk değerler
+        psar.iloc[0] = low.iloc[0]
+        ep.iloc[0] = high.iloc[0]
+
+        for i in range(1, len(close)):
+            psar.iloc[i] = psar.iloc[i-1] + accel.iloc[i-1] * (ep.iloc[i-1] - psar.iloc[i-1])
+
+            if trend.iloc[i-1] == 1:  # Uptrend
+                if low.iloc[i] > psar.iloc[i]:
+                    trend.iloc[i] = 1
+                    if high.iloc[i] > ep.iloc[i-1]:
+                        ep.iloc[i] = high.iloc[i]
+                        accel.iloc[i] = min(accel.iloc[i-1] + af, max_af)
+                    else:
+                        ep.iloc[i] = ep.iloc[i-1]
+                        accel.iloc[i] = accel.iloc[i-1]
+                else:
+                    trend.iloc[i] = -1
+                    psar.iloc[i] = ep.iloc[i-1]
+                    ep.iloc[i] = low.iloc[i]
+                    accel.iloc[i] = af0
+            else:  # Downtrend
+                if high.iloc[i] < psar.iloc[i]:
+                    trend.iloc[i] = -1
+                    if low.iloc[i] < ep.iloc[i-1]:
+                        ep.iloc[i] = low.iloc[i]
+                        accel.iloc[i] = min(accel.iloc[i-1] + af, max_af)
+                    else:
+                        ep.iloc[i] = ep.iloc[i-1]
+                        accel.iloc[i] = accel.iloc[i-1]
+                else:
+                    trend.iloc[i] = 1
+                    psar.iloc[i] = ep.iloc[i-1]
+                    ep.iloc[i] = high.iloc[i]
+                    accel.iloc[i] = af0
+
+        return psar, trend
+
+    @staticmethod
     def supertrend(high, low, close, multiplier=3.0, period=10):
         """SuperTrend - Manuel hesaplama"""
         # ATR hesapla
@@ -301,25 +385,33 @@ class StrategyIndicators:
             
             # Koncorde Bileşenleri
             try:
-                pvim = ta.ema(df['PVI'], length=15)
+                if ta is not None:
+                    pvim = ta.ema(df['PVI'], length=15)
+                    nvim = ta.ema(df['NVI'], length=15)
+                    xrsi = ta.rsi(df['close'], length=14)
+                    mfi = ta.mfi(df['high'], df['low'], df['close'], df['volume'], length=14)
+                else:
+                    # Manuel hesaplama
+                    pvim = StrategyIndicators.ema(df['PVI'], 15)
+                    nvim = StrategyIndicators.ema(df['NVI'], 15)
+                    xrsi = StrategyIndicators.rsi(df['close'], 14)
+                    # MFI manuel hesaplama (basitleştirilmiş)
+                    mfi = StrategyIndicators.mfi(df['high'], df['low'], df['close'], df['volume'], 14)
+
                 df['PVIM'] = pvim if pvim is not None else df['PVI']
-                
-                nvim = ta.ema(df['NVI'], length=15)
                 df['NVIM'] = nvim if nvim is not None else df['NVI']
-                
+
                 # Azul (Smart Money - Mavi Alan)
                 nvim_max = df['NVIM'].rolling(90, min_periods=1).max()
                 nvim_min = df['NVIM'].rolling(90, min_periods=1).min()
                 df['KONKORDE_AZUL'] = (df['NVI'] - df['NVIM']) * 100 / (nvim_max - nvim_min).replace(0, 1)
-                
+
                 # Verde (Retail - Yeşil Alan)
                 pvim_max = df['PVIM'].rolling(90, min_periods=1).max()
                 pvim_min = df['PVIM'].rolling(90, min_periods=1).min()
                 oscp = (df['PVI'] - df['PVIM']) * 100 / (pvim_max - pvim_min).replace(0, 1)
-                
+
                 # Marron (Trend Ortalama)
-                xrsi = ta.rsi(df['close'], length=14)
-                mfi = ta.mfi(df['high'], df['low'], df['close'], df['volume'], length=14)
                 if isinstance(xrsi, pd.Series) and isinstance(mfi, pd.Series):
                     df['KONKORDE_MARRON'] = (xrsi + mfi) / 2 # Simüle edilmiş basitleştirilmiş trend
                     df['KONKORDE_VERDE'] = df['KONKORDE_MARRON'] + oscp
@@ -387,23 +479,24 @@ class StrategyIndicators:
             df['STOCH_K_14_3_3'] = stoch_k
             df['STOCH_D_14_3_3'] = stoch_d
 
-        # 3. Ultimate Oscillator (UO)
-        try:
+        # 3. Ultimate Oscillator (UO) - Manuel hesaplama
+        if ta is not None:
             uo_res = ta.uo(df['high'], df['low'], df['close'], fast=7, medium=14, slow=28)
             if uo_res is not None:
                 df['UO'] = uo_res
-        except Exception:
-            pass
+        else:
+            # Manuel UO hesaplama
+            df['UO'] = StrategyIndicators.uo(df['high'], df['low'], df['close'], 7, 14, 28)
 
-        # 4. Parabolic SAR (PSAR)
-        try:
+        # 4. Parabolic SAR (PSAR) - Manuel hesaplama
+        if ta is not None:
             psar_res = ta.psar(df['high'], df['low'], df['close'], af0=0.02, af=0.02, max_af=0.2)
             if psar_res is not None:
                 df = pd.concat([df, psar_res], axis=1)
-                
+
                 psar_cols_l = [c for c in psar_res.columns if 'PSARl' in c]
                 psar_cols_s = [c for c in psar_res.columns if 'PSARs' in c]
-                
+
                 # PSAR konsolide değeri
                 if len(psar_cols_l) > 0 and len(psar_cols_s) > 0:
                     df['PSAR'] = df[psar_cols_l[0]].fillna(df[psar_cols_s[0]])
