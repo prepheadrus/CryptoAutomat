@@ -6,14 +6,15 @@ from core.logger import logger
 from core.config import TIMESCALE_DB_URL, REDIS_URL
 
 class DatabaseManager:
-    """Modüler Veritabanı Yöneticisi: 
+    """Modüler Veritabanı Yöneticisi:
     PostgreSQL (Docker/Sunucu) varsa ona bağlanır, yoksa yerel SQLite (Dosya) kullanır."""
-    
+
     def __init__(self):
         self.db_pool = None      # PostgreSQL için
         self.sqlite_conn = None  # SQLite için
         self.engine_type = "sqlite" # Varsayılan
         self.sqlite_path = "cryptobot.db"
+        self._lock = asyncio.Lock()  # Database lock mekanizması
 
     async def connect(self):
         """Kalıcı veritabanı bağlantılarını başlatır."""
@@ -217,11 +218,16 @@ class DatabaseManager:
             await self.sqlite_conn.execute(trades_sql)
             await self.sqlite_conn.commit()
 
+    async def _execute_with_lock(self, func, *args, **kwargs):
+        """Database işlemlerini lock ile serialize eder (concurrent access önleme)."""
+        async with self._lock:
+            return await func(*args, **kwargs)
+
     async def save_kline(self, symbol, kline_data, timeframe='1m'):
         """Veriyi UPSERT (Varsa güncelle yoksa ekle) yöntemiyle kaydeder."""
         # kline_data: [ts, o, h, l, c, v]
         ts_iso = pd.to_datetime(kline_data[0], unit='ms').to_pydatetime() if self.engine_type == "sqlite" else kline_data[0]
-        
+
         if self.engine_type == "postgres":
             async with self.db_pool.acquire() as conn:
                 await conn.execute("""
@@ -231,13 +237,16 @@ class DatabaseManager:
                         open=EXCLUDED.open, high=EXCLUDED.high, low=EXCLUDED.low, close=EXCLUDED.close, volume=EXCLUDED.volume;
                 """, kline_data[0], symbol, timeframe, kline_data[1], kline_data[2], kline_data[3], kline_data[4], kline_data[5])
         else:
-            # SQLite Kaydı
-            await self.sqlite_conn.execute("""
+            # SQLite Kaydı - LOCK İLE
+            await self._execute_with_lock(
+                self.sqlite_conn.execute,
+                """
                 INSERT INTO klines (timestamp, symbol, timeframe, open, high, low, close, volume)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (timestamp, symbol, timeframe) DO UPDATE SET
                     open=excluded.open, high=excluded.high, low=excluded.low, close=excluded.close, volume=excluded.volume;
-            """, (ts_iso, symbol, timeframe, kline_data[1], kline_data[2], kline_data[3], kline_data[4], kline_data[5]))
+            """, (ts_iso, symbol, timeframe, kline_data[1], kline_data[2], kline_data[3], kline_data[4], kline_data[5])
+            )
             await self.sqlite_conn.commit()
 
     async def get_candle_range(self, symbol, timeframe='1m'):
@@ -326,9 +335,9 @@ class DatabaseManager:
             ON CONFLICT(symbol, market_type) DO UPDATE SET
                 status=excluded.status, current_ts=excluded.current_ts;
         """
-        params = (task['symbol'], task['timeframe'], task['start_date'], task['market_type'], 
+        params = (task['symbol'], task['timeframe'], task['start_date'], task['market_type'],
                   task['status'], task.get('current_ts'), task['target_start_ms'])
-        
+
         if self.engine_type == "postgres":
             pg_sql = """
                 INSERT INTO download_tasks (symbol, timeframe, start_date, market_type, status, current_ts, target_start_ms)
@@ -339,7 +348,11 @@ class DatabaseManager:
             async with self.db_pool.acquire() as conn:
                 await conn.execute(pg_sql, *params)
         else:
-            await self.sqlite_conn.execute(sql, params)
+            # SQLite - LOCK İLE
+            await self._execute_with_lock(
+                self.sqlite_conn.execute,
+                sql, params
+            )
             await self.sqlite_conn.commit()
 
     async def get_all_download_tasks(self):
