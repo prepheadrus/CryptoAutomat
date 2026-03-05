@@ -98,17 +98,28 @@ class ExchangeManager:
             
             available = []
             for symbol, m in markets.items():
-                # Sadece aktif, USDT bazlı ve Spot/Future olanları alalım
+                # Sadece aktif ve USDT bazlı olanları alalım
                 if m.get('active') and m.get('quote') == 'USDT':
+                    m_type = m.get('type', 'spot').lower()
+                    m_sub_type = m.get('subType', '').lower()
+                    
+                    # Kullanıcı dostu etiketleme sistemi
+                    display_type = "SPOT"
+                    if m_type == 'swap' or m_sub_type == 'perpetual':
+                        display_type = "SÜRESİZ VADELİ (PERP)"
+                    elif m_type == 'future' or m_sub_type == 'delivery':
+                        display_type = f"TARİHLİ VADELİ ({m.get('info', {}).get('deliveryDate', 'DUR')})"
+                    
                     available.append({
                         'symbol': symbol,
                         'base': m['base'],
-                        'type': m['type'], # 'spot' veya 'swap'/'future'
-                        'id': m['id']
+                        'type': display_type,
+                        'id': m['id'], # Bu ham Binance ID'sidir (BTCUSDT, ETHUSDT vb.)
+                        'raw_type': m_type
                     })
             
             logger.info(f"Filtreleme sonrası (Active + USDT) {len(available)} market listeye eklendi.")
-            return sorted(available, key=lambda x: x['symbol'])
+            return sorted(available, key=lambda x: (x['symbol'], x['type']))
         except Exception as e:
             logger.error(f"Market Listesi Çekme Hatası: {e}")
             return []
