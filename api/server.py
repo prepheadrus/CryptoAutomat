@@ -210,32 +210,38 @@ async def get_active_downloads():
     # 1. RAM'deki ve DB'deki indirme görevlerini al
     db_tasks = await db_manager.get_all_download_tasks()
     
-    # Task map'i sembol ve market_type kombinasyonuyla kuralım (Çakışmaları önlemek için)
+    # Task map'i sembol ve market_type kombinasyonuyla kuralım (Mükerrerleri önlemek için her şeyi küçültüyoruz)
     task_map = {}
     for t in db_tasks:
-        key = f"{t['symbol']}_{t['market_type']}"
+        s_norm = t['symbol'].strip()
+        m_type = t['market_type'].lower()
+        key = f"{s_norm}_{m_type}"
         task_map[key] = dict(t)
+        task_map[key]['market_type'] = m_type # Normalize et
     
     # RAM'dekileri de ekle (Hafıza her zaman günceldir)
     for s, meta in exchange_manager.active_downloads.items():
-        key = f"{s}_{meta['market_type']}"
+        s_norm = s.strip()
+        m_type = meta['market_type'].lower()
+        key = f"{s_norm}_{m_type}"
         task_map[key] = meta
-        
+        task_map[key]['market_type'] = m_type
+
     # 2. Önemli: DB'de klines verisi olan ama görev listesinde olmayanları (yetim veriler) ekle
-    # get_symbols_with_data artık tüm ham sembolleri dönsün ki eşleşme tam olsun
-    # DatabaseManager.get_symbols_with_data'yı güncelleyip ham listeyi alıyoruz.
+    # get_symbols_with_data artık tüm ham sembolleri döner.
     data_symbols = await db_manager.get_symbols_with_data()
     for s in data_symbols:
+        s_norm = s.strip()
         # Pazar tipini bul
         guessed_type = 'spot'
-        if ':' in s or '-2' in s or '/USDT' not in s: 
+        if ':' in s_norm or '-2' in s_norm or '/USDT' not in s_norm: 
             guessed_type = 'future'
 
-        key = f"{s}_{guessed_type}"
+        key = f"{s_norm}_{guessed_type}"
         if key not in task_map:
-            candle_range = await db_manager.get_candle_range(s)
+            candle_range = await db_manager.get_candle_range(s_norm)
             task_map[key] = {
-                'symbol': s,
+                'symbol': s_norm,
                 'status': 'completed',
                 'timeframe': '--', 
                 'market_type': guessed_type,
@@ -261,14 +267,18 @@ async def delete_download_task(data: Dict[str, Any]):
         del exchange_manager.active_downloads[symbol]
         
     # 3. Veritabanından görev kaydını sil
-    await db_manager.delete_download_task(symbol)
+    # Önemli: Eğer symbol içinde '_' varsa (UI'dan gelmiş olabilir), asıl sembolü ayıkla
+    real_symbol = symbol.split('_')[0] if '_' in symbol else symbol
+    await db_manager.delete_download_task(real_symbol)
+    await db_manager.delete_download_task(symbol) # Variyantı da silsin
     
     # 4. Eğer kullanıcı verileri de silmek istediyse
     if with_data:
+        await db_manager.delete_klines_for_symbol(real_symbol)
         await db_manager.delete_klines_for_symbol(symbol)
-        return {"status": "success", "message": f"{symbol} görevi ve tüm geçmiş verileri başarıyla silindi."}
+        return {"status": "success", "message": f"{symbol} başarıyla silindi."}
 
-    return {"status": "success", "message": f"{symbol} görev kaydı silindi (Veriler korundu)."}
+    return {"status": "success", "message": f"{symbol} görev kaydı silindi."}
 
 @app.post("/api/v1/data/toggle-pause")
 async def toggle_pause_download(data: Dict[str, str]):
