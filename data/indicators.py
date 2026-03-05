@@ -489,21 +489,27 @@ class StrategyIndicators:
             df['UO'] = StrategyIndicators.uo(df['high'], df['low'], df['close'], 7, 14, 28)
 
         # 4. Parabolic SAR (PSAR) - Manuel hesaplama
-        if ta is not None:
-            psar_res = ta.psar(df['high'], df['low'], df['close'], af0=0.02, af=0.02, max_af=0.2)
-            if psar_res is not None:
-                df = pd.concat([df, psar_res], axis=1)
+        try:
+            if ta is not None:
+                psar_res = ta.psar(df['high'], df['low'], df['close'], af0=0.02, af=0.02, max_af=0.2)
+                if psar_res is not None:
+                    df = pd.concat([df, psar_res], axis=1)
 
-                psar_cols_l = [c for c in psar_res.columns if 'PSARl' in c]
-                psar_cols_s = [c for c in psar_res.columns if 'PSARs' in c]
+                    psar_cols_l = [c for c in psar_res.columns if 'PSARl' in c]
+                    psar_cols_s = [c for c in psar_res.columns if 'PSARs' in c]
 
-                # PSAR konsolide değeri
-                if len(psar_cols_l) > 0 and len(psar_cols_s) > 0:
-                    df['PSAR'] = df[psar_cols_l[0]].fillna(df[psar_cols_s[0]])
-                elif len(psar_cols_l) > 0:
-                    df['PSAR'] = df[psar_cols_l[0]]
-                elif len(psar_cols_s) > 0:
-                    df['PSAR'] = df[psar_cols_s[0]]
+                    # PSAR konsolide değeri
+                    if len(psar_cols_l) > 0 and len(psar_cols_s) > 0:
+                        df['PSAR'] = df[psar_cols_l[0]].fillna(df[psar_cols_s[0]])
+                    elif len(psar_cols_l) > 0:
+                        df['PSAR'] = df[psar_cols_l[0]]
+                    elif len(psar_cols_s) > 0:
+                        df['PSAR'] = df[psar_cols_s[0]]
+            else:
+                # Manuel PSAR hesaplama
+                psar, direction = StrategyIndicators.psar(df['high'], df['low'], df['close'])
+                df['PSAR'] = psar
+                df['PSAR_DIR'] = direction
         except Exception:
             pass
             
