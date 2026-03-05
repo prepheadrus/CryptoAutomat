@@ -237,8 +237,15 @@ class ExchangeManager:
                 self.active_downloads[key]['status'] = 'running'
                 
                 # CCXT rates limitine göre fetch yap
-                ohlcv = await self.exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=limit, params={'type': market_type})
-                
+                try:
+                    ohlcv = await self.exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=limit, params={'type': market_type})
+                except Exception as fetch_err:
+                    # Binance rate limit veya network hatası
+                    logger.warning(f"⚠️ {symbol} veri çekme hatası: {fetch_err}")
+                    logger.info(f"⏳ 10 saniye bekleniyor...")
+                    await asyncio.sleep(10)
+                    continue
+
                 if not ohlcv or len(ohlcv) < 1:
                     logger.info(f"🏁 {symbol} için borsa artık veri dönmüyor (Son Tarih: {pd.to_datetime(since, unit='ms')}).")
                     break
@@ -268,7 +275,7 @@ class ExchangeManager:
                     self.active_downloads[key]['current_ts'] = last_ts
                     # Her batch sonrası DB'yi güncelle (ilerleme kaydı)
                     await db_manager.save_download_task(self.active_downloads[key])
-                await asyncio.sleep(0.02) # Hızlandırıldı
+                await asyncio.sleep(0.5) # Rate limit için bekleme süresi artırıldı
                 
             except Exception as e:
                 logger.error(f"⚠️ {symbol} Veri İndirme Döngüsünde Hata: {e}")

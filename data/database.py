@@ -40,7 +40,112 @@ class DatabaseManager:
             logger.error(f"Veritabanı Başlatma Hatası: {e}")
 
     async def initialize_db(self):
-        """Gerekli tabloları oluşturur (Hem PG hem SQLite uyumlu SQL)."""
+        """Gerekli tabloları oluşturur ve şema hatalarını otomatik düzeltir."""
+        # 1. Önce şema doğrulama ve migration (Cross-platform uyumluluk için kritik)
+        await self._validate_and_migrate_schemas()
+
+        # 2. Standart tabloları oluştur
+        await self._create_standard_tables()
+
+        logger.info(f"Veritabanı şeması ({self.engine_type}) doğrulandı.")
+
+    async def _validate_and_migrate_schemas(self):
+        """Veritabanı şemalarını doğrular ve gerekirse otomatik düzeltir."""
+        if self.engine_type == "sqlite":
+            # download_tasks tablosunu kontrol et
+            await self._validate_download_tasks_schema()
+
+    async def _validate_download_tasks_schema(self):
+        """download_tasks tablosunun PRIMARY KEY şemasını doğrular ve düzeltir."""
+        try:
+            async with self.sqlite_conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='download_tasks'"
+            ) as cursor:
+                result = await cursor.fetchone()
+
+                if result:
+                    schema = result[0]
+                    # PRIMARY KEY (symbol, market_type) var mı kontrol et
+                    has_correct_pk = (
+                        "PRIMARY KEY" in schema.upper() and
+                        "symbol" in schema.lower() and
+                        "market_type" in schema.lower()
+                    )
+
+                    if not has_correct_pk:
+                        logger.warning("⚠️ download_tasks şeması hatalı, otomatik düzeltiliyor...")
+                        await self._migrate_download_tasks_schema()
+                # Tablo yoksa, _create_standard_tables oluşturacak
+
+        except Exception as e:
+            logger.error(f"download_tasks şema doğrulama hatası: {e}")
+
+    async def _migrate_download_tasks_schema(self):
+        """download_tasks tablosunu doğru şema ile yeniden oluşturur, verileri korur."""
+        try:
+            # Mevcut verileri yedekle
+            async with self.sqlite_conn.execute("SELECT * FROM download_tasks") as cursor:
+                rows = await cursor.fetchall()
+                saved_data = []
+                if rows:
+                    columns = [d[0] for d in cursor.description]
+                    saved_data = [dict(zip(columns, row)) for row in rows]
+
+            logger.info(f"📦 {len(saved_data)} indirme görevi yedeklendi.")
+
+            # Eski tabloyu sil
+            await self.sqlite_conn.execute("DROP TABLE IF EXISTS download_tasks")
+
+            # Yeni doğru şema ile oluştur
+            await self.sqlite_conn.execute("""
+                CREATE TABLE download_tasks (
+                    symbol TEXT NOT NULL,
+                    timeframe TEXT NOT NULL,
+                    start_date TEXT NOT NULL,
+                    market_type TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    current_ts BIGINT,
+                    target_start_ms BIGINT,
+                    PRIMARY KEY (symbol, market_type)
+                )
+            """)
+
+            # Verileri geri yükle
+            if saved_data:
+                for row in saved_data:
+                    await self.sqlite_conn.execute("""
+                        INSERT OR REPLACE INTO download_tasks
+                        (symbol, timeframe, start_date, market_type, status, current_ts, target_start_ms)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        row.get('symbol'), row.get('timeframe'), row.get('start_date'),
+                        row.get('market_type'), row.get('status'),
+                        row.get('current_ts'), row.get('target_start_ms')
+                    ))
+
+            await self.sqlite_conn.commit()
+            logger.info("✅ download_tasks şeması düzeltildi ve veriler korundu!")
+
+        except Exception as e:
+            logger.error(f"download_tasks migration hatası: {e}")
+            # Hata durumunda tabloyu yeniden oluştur (verisiz)
+            await self.sqlite_conn.execute("DROP TABLE IF EXISTS download_tasks")
+            await self.sqlite_conn.execute("""
+                CREATE TABLE download_tasks (
+                    symbol TEXT NOT NULL,
+                    timeframe TEXT NOT NULL,
+                    start_date TEXT NOT NULL,
+                    market_type TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    current_ts BIGINT,
+                    target_start_ms BIGINT,
+                    PRIMARY KEY (symbol, market_type)
+                )
+            """)
+            await self.sqlite_conn.commit()
+
+    async def _create_standard_tables(self):
+        """Standart veritabanı tablolarını oluşturur."""
         # Mum Verileri
         kline_sql = """
             CREATE TABLE IF NOT EXISTS klines (
@@ -99,8 +204,6 @@ class DatabaseManager:
             await self.sqlite_conn.execute(tasks_sql)
             await self.sqlite_conn.execute(trades_sql)
             await self.sqlite_conn.commit()
-            
-        logger.info(f"Veritabanı şeması ({self.engine_type}) doğrulandı.")
 
     async def save_kline(self, symbol, kline_data, timeframe='1m'):
         """Veriyi UPSERT (Varsa güncelle yoksa ekle) yöntemiyle kaydeder."""
