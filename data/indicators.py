@@ -74,6 +74,41 @@ class StrategyIndicators:
         """VWAP - Manuel hesaplama"""
         typical_price = (high + low + close) / 3
         return (typical_price * volume).cumsum() / volume.cumsum()
+
+    @staticmethod
+    def supertrend(high, low, close, multiplier=3.0, period=10):
+        """SuperTrend - Manuel hesaplama"""
+        # ATR hesapla
+        tr1 = high - low
+        tr2 = abs(high - close.shift(1))
+        tr3 = abs(low - close.shift(1))
+        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        atr = tr.ewm(span=period, adjust=False).mean()
+
+        # Temel bantlar
+        hl2 = (high + low) / 2
+        upper_band = hl2 + multiplier * atr
+        lower_band = hl2 - multiplier * atr
+
+        # SuperTrend yönü
+        supertrend = pd.Series(index=close.index)
+        direction = pd.Series(1, index=close.index)  # 1 = yukarı, -1 = aşağı
+
+        for i in range(1, len(close)):
+            if close.iloc[i] > supertrend.iloc[i-1] if i > 0 and pd.notna(supertrend.iloc[i-1]) else True:
+                direction.iloc[i] = 1
+                supertrend.iloc[i] = lower_band.iloc[i]
+            elif close.iloc[i] < supertrend.iloc[i-1] if i > 0 and pd.notna(supertrend.iloc[i-1]) else False:
+                direction.iloc[i] = -1
+                supertrend.iloc[i] = upper_band.iloc[i]
+            else:
+                direction.iloc[i] = direction.iloc[i-1] if i > 0 else 1
+                if direction.iloc[i] == 1:
+                    supertrend.iloc[i] = max(lower_band.iloc[i], supertrend.iloc[i-1] if i > 0 and pd.notna(supertrend.iloc[i-1]) else lower_band.iloc[i])
+                else:
+                    supertrend.iloc[i] = min(upper_band.iloc[i], supertrend.iloc[i-1] if i > 0 and pd.notna(supertrend.iloc[i-1]) else upper_band.iloc[i])
+
+        return supertrend, direction
     
     @staticmethod
     def resample_data(df: pd.DataFrame, timeframe: str) -> pd.DataFrame:
@@ -169,16 +204,27 @@ class StrategyIndicators:
             return pd.Series(res, index=src.index)
         
         df['KALMAN'] = apply_kalman(df['close'])
-        
+
         # Supertrend (Piyasa yönü ve dinamik destek/direnç için)
-        st = ta.supertrend(df['high'], df['low'], df['close'], length=10, multiplier=3.0)
-        if st is not None:
-            df = pd.concat([df, st], axis=1)
+        if ta is not None:
+            st = ta.supertrend(df['high'], df['low'], df['close'], length=10, multiplier=3.0)
+            if st is not None:
+                df = pd.concat([df, st], axis=1)
+        else:
+            # Manuel Supertrend hesaplama
+            st, direction = StrategyIndicators.supertrend(df['high'], df['low'], df['close'], 3.0, 10)
+            df['SUPERTREND'] = st
+            df['SUPERTREND_DIR'] = direction
 
         # 2. Elliott Wave Oscillator (EWO)
         try:
-            sma5 = ta.sma(df['close'], length=5)
-            sma35 = ta.sma(df['close'], length=35)
+            if ta is not None:
+                sma5 = ta.sma(df['close'], length=5)
+                sma35 = ta.sma(df['close'], length=35)
+            else:
+                sma5 = StrategyIndicators.sma(df['close'], 5)
+                sma35 = StrategyIndicators.sma(df['close'], 35)
+
             if isinstance(sma5, pd.Series) and isinstance(sma35, pd.Series):
                 df['EWO'] = (sma5 - sma35) / df['close'] * 100
             else:
