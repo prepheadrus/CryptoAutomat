@@ -8,6 +8,7 @@ from core.config import CONFIG
 from data.database import db_manager
 from core.exchange import exchange_manager
 from api.routers.strategy_builder import router as strategy_builder_router
+from api.routers.backtest import router as backtest_router
 import asyncio
 import pandas as pd
 import numpy as np
@@ -51,6 +52,9 @@ app.add_middleware(
 
 # Strategy Builder Router
 app.include_router(strategy_builder_router)
+
+# Backtest Router
+app.include_router(backtest_router)
 
 @app.on_event("startup")
 async def startup_event():
