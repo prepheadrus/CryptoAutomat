@@ -8,14 +8,21 @@ class PaperTrader:
     """
     Sanal (Kağıt Üzerinde) kripto para al-sat borsa mekanizması.
     Gerçek parayı riske atmadan; slipaj, komisyon ve bakiye takibini gerçekçi bir şekilde simüle eder.
+
+    Binance Gerçek Komisyon Oranları (2026):
+    - Spot: Maker %0.1, Taker %0.1
+    - Futures: Maker %0.02, Taker %0.04
     """
-    def __init__(self, initial_balance=10000.0, fee_rate=0.0004):
+    def __init__(self, initial_balance=10000.0, fee_rate_spot=0.001, fee_rate_futures=0.0004):
         self.initial_balance = initial_balance
         self.balance = initial_balance
         self.free_margin = initial_balance # Boştaki Kasa Parası
         self.used_margin = 0.0 # İşlemdeki Kasa Parası
-        
-        self.fee_rate = fee_rate # Borsa Komisyon oranı (Örn: Binde 0.4)
+
+        # Komisyon oranları (Binance gerçek oranları)
+        self.fee_rate_spot = fee_rate_spot      # %0.1 (Spot)
+        self.fee_rate_futures = fee_rate_futures # %0.04 (Futures)
+        self.fee_rate = fee_rate_futures  # Varsayılan: Futures
         
         # Açık pozisyonları bir list of dict olarak tut
         self.open_positions = []
@@ -237,10 +244,12 @@ class PaperTrader:
             
         # Slipaj Simülasyonu
         execution_price = price * 1.0001 if direction == "LONG" else price * 0.9999
-        
-        # Giriş Komisyonu
-        fee = position_value_usd * self.fee_rate
-        
+
+        # Giriş Komisyonu (Spot vs Futures)
+        is_spot = self.market_types.get(symbol, 'swap') == 'spot'
+        fee_rate = self.fee_rate_spot if is_spot else self.fee_rate_futures
+        fee = position_value_usd * fee_rate
+
         self.free_margin -= (required_margin + fee)
         self.used_margin += required_margin
         
@@ -368,11 +377,14 @@ class PaperTrader:
     async def _close_position(self, index: int, pos: dict, current_price: float, reason: str):
         """Açık pozisyonu sanal borsadan temizler ve ana bakiyeye kârları ekler/zararları çıkarır."""
         from data.database import db_manager # İçeride aktararak döngüsel bağımlılığı önle
-        
-        # Çıkış Komisyonu
+
+        # Çıkış Komisyonu (Spot vs Futures)
         exit_value_usd = pos['size'] * current_price
-        exit_fee = exit_value_usd * self.fee_rate
-        
+        # Pozisyon açılışındaki market type'ı kullan
+        is_spot = pos.get('market_type', 'futures') == 'spot'
+        fee_rate = self.fee_rate_spot if is_spot else self.fee_rate_futures
+        exit_fee = exit_value_usd * fee_rate
+
         final_pnl_usd = pos['unrealized_usd'] - exit_fee
         
         # Serbest marjini serbest bırak (Girişteki bloke kalkar)
