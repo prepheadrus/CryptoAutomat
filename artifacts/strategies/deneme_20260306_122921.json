@@ -1,0 +1,42 @@
+{
+  "name": "Deneme",
+  "description": "",
+  "timeframe": "15m",
+  "indicators": [
+    {
+      "id": "ema_1772789291125",
+      "type": "EMA",
+      "parameters": {
+        "length": 20
+      }
+    },
+    {
+      "id": "ema_1772789326325",
+      "type": "EMA",
+      "parameters": {
+        "length": 20
+      }
+    }
+  ],
+  "conditions": {
+    "long": {
+      "logic": "AND",
+      "rules": []
+    },
+    "short": {
+      "logic": "AND",
+      "rules": []
+    }
+  },
+  "risk": {
+    "stop_loss": {
+      "type": "ATR",
+      "multiplier": 2
+    },
+    "take_profit": {
+      "type": "ATR",
+      "multiplier": 3
+    },
+    "max_risk_percent": 2
+  }
+}
