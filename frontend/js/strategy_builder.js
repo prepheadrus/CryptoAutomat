@@ -366,37 +366,135 @@ async function loadStrategies() {
 async function loadStrategy(filename) {
     try {
         console.log('[INFO] Strateji yükleniyor:', filename);
-        
+
         const response = await fetch(`/api/v1/strategy/info/${filename}`);
         const result = await response.json();
-        
+
         if (response.ok && result.status === 'success') {
             const data = result.data;
-            
-            // Formu doldur
+
+            // 1. Önce formu tamamen temizle
+            clearForm();
+
+            // 2. Strateji bilgilerini doldur
             document.getElementById('strategy-name').value = data.name || '';
             document.getElementById('strategy-description').value = data.description || '';
-            
-            // Risk parametreleri
+
+            // 3. Risk parametrelerini doldur
             if (data.risk) {
                 document.getElementById('stop-loss-atr').value = data.risk.stop_loss_atr_multiplier || 2.0;
                 document.getElementById('take-profit-atr').value = data.risk.take_profit_atr_multiplier || 4.0;
                 document.getElementById('max-risk-percent').value = data.risk.max_risk_percent || 2.0;
             }
-            
-            // İndikatörleri işaretle
-            // TODO: İndikatör butonlarını seçili yap
-            
-            // Koşulları yükle
-            // TODO: LONG ve SHORT koşullarını ekle
-            
+
+            // 4. İndikatörleri işaretle
+            if (data.indicators && data.indicators.length > 0) {
+                data.indicators.forEach(ind => {
+                    // İndikatör butonunu bul ve işaretle
+                    const buttons = document.querySelectorAll('.indicator-btn');
+                    buttons.forEach(btn => {
+                        if (btn.dataset.type === ind.name) {
+                            btn.classList.add('selected');
+                            selectedIndicators.push({
+                                name: ind.name,
+                                ...ind
+                            });
+                        }
+                    });
+                });
+            }
+
+            // 5. LONG koşullarını yükle
+            if (data.conditions && data.conditions.LONG) {
+                // Logic operatörünü ayarla
+                if (data.conditions.LONG.logic === 'OR') {
+                    longLogic = 'OR';
+                    document.querySelectorAll('#long-logic-selector .logic-btn').forEach(btn => {
+                        btn.classList.remove('active');
+                        if (btn.dataset.logic === 'OR') btn.classList.add('active');
+                    });
+                }
+
+                // Her LONG koşulunu ekle
+                if (data.conditions.LONG.conditions && data.conditions.LONG.conditions.length > 0) {
+                    // İlk koşulu temizle (clearForm'dan gelen)
+                    const longContainer = document.getElementById('long-conditions-container');
+                    if (longContainer) longContainer.innerHTML = '';
+                    longConditions = [];
+
+                    // Tüm koşulları ekle
+                    data.conditions.LONG.conditions.forEach((cond, index) => {
+                        addCondition('long');
+
+                        // Son eklenen koşulu bul ve değerleri ata
+                        const conditionId = longConditions[longConditions.length - 1].id;
+                        const row = document.getElementById(conditionId);
+                        if (row) {
+                            row.querySelector('.condition-indicator').value = cond.indicator || '';
+                            row.querySelector('.condition-operator').value = cond.operator || '<';
+                            row.querySelector('.condition-value').value = cond.value || '';
+
+                            // Array'i güncelle
+                            const condition = longConditions.find(c => c.id === conditionId);
+                            if (condition) {
+                                condition.indicator = cond.indicator || '';
+                                condition.operator = cond.operator || '<';
+                                condition.value = cond.value || '';
+                            }
+                        }
+                    });
+                }
+            }
+
+            // 6. SHORT koşullarını yükle
+            if (data.conditions && data.conditions.SHORT) {
+                // Logic operatörünü ayarla
+                if (data.conditions.SHORT.logic === 'OR') {
+                    shortLogic = 'OR';
+                    document.querySelectorAll('#short-logic-selector .logic-btn').forEach(btn => {
+                        btn.classList.remove('active');
+                        if (btn.dataset.logic === 'OR') btn.classList.add('active');
+                    });
+                }
+
+                // Her SHORT koşulunu ekle
+                if (data.conditions.SHORT.conditions && data.conditions.SHORT.conditions.length > 0) {
+                    // İlk koşulu temizle (clearForm'dan gelen)
+                    const shortContainer = document.getElementById('short-conditions-container');
+                    if (shortContainer) shortContainer.innerHTML = '';
+                    shortConditions = [];
+
+                    // Tüm koşulları ekle
+                    data.conditions.SHORT.conditions.forEach((cond, index) => {
+                        addCondition('short');
+
+                        // Son eklenen koşulu bul ve değerleri ata
+                        const conditionId = shortConditions[shortConditions.length - 1].id;
+                        const row = document.getElementById(conditionId);
+                        if (row) {
+                            row.querySelector('.condition-indicator').value = cond.indicator || '';
+                            row.querySelector('.condition-operator').value = cond.operator || '<';
+                            row.querySelector('.condition-value').value = cond.value || '';
+
+                            // Array'i güncelle
+                            const condition = shortConditions.find(c => c.id === conditionId);
+                            if (condition) {
+                                condition.indicator = cond.indicator || '';
+                                condition.operator = cond.operator || '<';
+                                condition.value = cond.value || '';
+                            }
+                        }
+                    });
+                }
+            }
+
             console.log('[OK] Strateji yüklendi:', filename);
             alert(`✅ Strateji '${data.name}' yüklendi`);
         } else {
             console.error('[HATA] Strateji yüklenemedi:', result);
             alert(`❌ Hata: ${result.detail || 'Bilinmeyen hata'}`);
         }
-        
+
     } catch (error) {
         console.error('[HATA] Strateji yükleme hatası:', error);
         alert(`❌ Bağlantı hatası: ${error.message}`);
@@ -409,6 +507,15 @@ async function loadStrategy(filename) {
 async function testStrategy() {
     try {
         console.log('[INFO] Backtest çalıştırılıyor...');
+
+        // GUARD CLAUSE: En az 1 koşul var mı kontrol et
+        const totalConditions = longConditions.filter(c => c.indicator && c.value).length +
+                               shortConditions.filter(c => c.indicator && c.value).length;
+
+        if (totalConditions === 0) {
+            alert('⚠️ Lütfen test etmeden önce en az bir LONG veya SHORT koşulu ekleyin veya strateji yükleyin!');
+            return;
+        }
 
         // UI güncelle (loading state)
         const testBtn = document.querySelector('button[onclick="testStrategy()"]');
@@ -424,15 +531,6 @@ async function testStrategy() {
 
         // Strateji JSON oluştur
         const strategyData = buildStrategyJSON();
-
-        // Validasyon
-        if (strategyData.conditions.LONG.conditions.length === 0 &&
-            strategyData.conditions.SHORT.conditions.length === 0) {
-            alert('⚠️ En az bir LONG veya SHORT koşulu eklemelisiniz!');
-            testBtn.innerHTML = originalText;
-            testBtn.disabled = false;
-            return;
-        }
 
         // API çağrısı
         const response = await fetch('/api/v1/backtest/run', {
@@ -670,34 +768,56 @@ function displayTradesTable(trades) {
  * Formu temizle
  */
 function clearForm() {
-    // Strateji bilgileri
+    console.log('[INFO] Form temizleniyor...');
+
+    // 1. Strateji bilgilerini sıfırla
     document.getElementById('strategy-name').value = 'Yeni Strateji';
     document.getElementById('strategy-description').value = '';
-    
-    // Risk parametreleri
+
+    // 2. Risk parametrelerini varsayılana döndür
     document.getElementById('stop-loss-atr').value = 2.0;
     document.getElementById('take-profit-atr').value = 4.0;
     document.getElementById('max-risk-percent').value = 2.0;
-    
-    // İndikatörleri temizle
+
+    // 3. İndikatörleri temizle (seçili butonları kaldır)
     selectedIndicators = [];
     document.querySelectorAll('.indicator-btn').forEach(btn => {
         btn.classList.remove('selected');
     });
-    
-    // Koşulları temizle
+
+    // 4. LONG koşullarını tamamen temizle
     longConditions = [];
+    const longContainer = document.getElementById('long-conditions-container');
+    if (longContainer) {
+        longContainer.innerHTML = '';
+    }
+
+    // 5. SHORT koşullarını tamamen temizle
     shortConditions = [];
-    document.getElementById('long-conditions-container').innerHTML = '';
-    document.getElementById('short-conditions-container').innerHTML = '';
-    
-    // Varsayılan koşulları ekle
+    const shortContainer = document.getElementById('short-conditions-container');
+    if (shortContainer) {
+        shortContainer.innerHTML = '';
+    }
+
+    // 6. Varsayılan koşulları ekle (1'er tane)
     addCondition('long');
     addCondition('short');
-    
-    // Test sonuçlarını gizle
+
+    // 7. Logic selector'ları sıfırla
+    longLogic = 'AND';
+    shortLogic = 'AND';
+    document.querySelectorAll('#long-logic-selector .logic-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.logic === 'AND') btn.classList.add('active');
+    });
+    document.querySelectorAll('#short-logic-selector .logic-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.logic === 'AND') btn.classList.add('active');
+    });
+
+    // 8. Test sonuçlarını gizle
     document.getElementById('test-results').style.display = 'none';
-    
+
     console.log('[OK] Form temizlendi');
 }
 
