@@ -447,8 +447,14 @@ async function fetchStrategies() {
                             </div>
                         </td>
                         <td>
-                             <button class="btn btn-primary" style="padding:4px 8px; font-size:0.7rem;" 
-                                onclick="window.selectStrategy('${symbol}')">Uygula</button>
+                            <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                                <button class="btn btn-primary" style="padding:4px 8px; font-size:0.7rem;"
+                                    onclick="window.selectStrategy('${symbol}')" title="Stratejiyi Uygula ve Başlat">▶ Uygula</button>
+                                <button class="btn btn-danger" style="padding:4px 8px; font-size:0.7rem;"
+                                    onclick="window.stopStrategy('${symbol}')" title="Botu Durdur">⏹ Durdur</button>
+                                <button class="btn btn-success" style="padding:4px 8px; font-size:0.7rem;"
+                                    onclick="window.restartStrategy('${symbol}')" title="Botu Yeniden Başlat">🔄 Yeniden Başlat</button>
+                            </div>
                         </td>
                         <td><span class="${isActuallyRunning ? 'success-text' : 'text-muted'}" id="status-${symbol.replace('/', '-')}">${isActuallyRunning ? '● Aktif' : '○ Bekliyor'}</span></td>
                     `;
@@ -1373,6 +1379,195 @@ async function fetchAnalysableSymbols() {
 // Global'e bağla
 window.runMLVisualAnalysis = runMLVisualAnalysis;
 window.fetchAnalysableSymbols = fetchAnalysableSymbols;
+
+// Strateji Yönetimi Fonksiyonları
+window.selectStrategy = selectStrategy;
+window.stopStrategy = stopStrategy;
+window.restartStrategy = restartStrategy;
+
+/**
+ * Strateji uygula ve başlat
+ */
+async function selectStrategy(symbol) {
+    const strategyId = document.getElementById(`strat-sel-${symbol.replace('/', '-')}`).value;
+    const timeframe = document.getElementById(`tf-sel-${symbol.replace('/', '-')}`).value;
+    const marketType = document.getElementById(`market-sel-${symbol.replace('/', '-')}`).value;
+    const marginType = document.getElementById(`margin-sel-${symbol.replace('/', '-')}`).value;
+
+    if (!strategyId) {
+        alert("Lütfen önce bir strateji seçin!");
+        return;
+    }
+
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '⏳ Uygulanıyor...';
+    btn.disabled = true;
+
+    try {
+        const res = await fetch('/api/v1/strategy/select', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                strategy_id: strategyId,
+                symbol: symbol,
+                timeframe: timeframe,
+                market_type: marketType,
+                margin_type: marginType
+            })
+        });
+
+        const result = await res.json();
+
+        if (result.status === 'success') {
+            btn.innerHTML = '✅ Uygulandı!';
+            btn.style.background = 'var(--neon-green)';
+
+            // Status güncelle
+            const statusEl = document.getElementById(`status-${symbol.replace('/', '-')}`);
+            if (statusEl) {
+                statusEl.innerHTML = '● Aktif';
+                statusEl.className = 'success-text';
+            }
+
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                btn.style.background = '';
+                fetchStrategies(); // Tabloyu yenile
+            }, 2000);
+        } else {
+            alert("Hata: " + result.message);
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    } catch (e) {
+        alert("Bağlantı hatası: " + e.message);
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+
+/**
+ * Stratejiyi durdur
+ */
+async function stopStrategy(symbol) {
+    if (!confirm(`${symbol} için botu DURDURMAK istediğinize emin misiniz?\n\nBu işlem botu durdurur ama pozisyonları kapatmaz.`)) {
+        return;
+    }
+
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '⏹ Durduruluyor...';
+    btn.disabled = true;
+
+    try {
+        // Şimdilik sadece stratejiyi sıfırlıyoruz
+        const res = await fetch('/api/v1/strategy/select', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                strategy_id: '', // Boş strateji = durdur
+                symbol: symbol,
+                timeframe: '1m',
+                market_type: 'swap',
+                margin_type: 'isolated'
+            })
+        });
+
+        const result = await res.json();
+
+        if (result.status === 'success') {
+            btn.innerHTML = '✅ Durduruldu';
+            btn.style.background = 'var(--neon-red)';
+
+            // Status güncelle
+            const statusEl = document.getElementById(`status-${symbol.replace('/', '-')}`);
+            if (statusEl) {
+                statusEl.innerHTML = '○ Durduruldu';
+                statusEl.className = 'text-muted';
+            }
+
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                btn.style.background = '';
+                fetchStrategies(); // Tabloyu yenile
+            }, 2000);
+        } else {
+            alert("Hata: " + result.message);
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    } catch (e) {
+        alert("Bağlantı hatası: " + e.message);
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+
+/**
+ * Stratejiyi yeniden başlat
+ */
+async function restartStrategy(symbol) {
+    if (!confirm(`${symbol} için botu YENİDEN BAŞLATMAK istediğinize emin misiniz?\n\nMevcut ayarlarla bot yeniden başlatılacak.`)) {
+        return;
+    }
+
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '🔄 Başlatılıyor...';
+    btn.disabled = true;
+
+    try {
+        // Mevcut ayarları al
+        const strategyId = document.getElementById(`strat-sel-${symbol.replace('/', '-')}`).value;
+        const timeframe = document.getElementById(`tf-sel-${symbol.replace('/', '-')}`).value;
+        const marketType = document.getElementById(`market-sel-${symbol.replace('/', '-')}`).value;
+        const marginType = document.getElementById(`margin-sel-${symbol.replace('/', '-')}`).value;
+
+        const res = await fetch('/api/v1/strategy/select', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                strategy_id: strategyId || 'trend_master', // Varsayılan
+                symbol: symbol,
+                timeframe: timeframe || '1m',
+                market_type: marketType || 'swap',
+                margin_type: marginType || 'isolated'
+            })
+        });
+
+        const result = await res.json();
+
+        if (result.status === 'success') {
+            btn.innerHTML = '✅ Başlatıldı';
+            btn.style.background = 'var(--neon-green)';
+
+            // Status güncelle
+            const statusEl = document.getElementById(`status-${symbol.replace('/', '-')}`);
+            if (statusEl) {
+                statusEl.innerHTML = '● Aktif';
+                statusEl.className = 'success-text';
+            }
+
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                btn.style.background = '';
+                fetchStrategies(); // Tabloyu yenile
+            }, 2000);
+        } else {
+            alert("Hata: " + result.message);
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    } catch (e) {
+        alert("Bağlantı hatası: " + e.message);
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
 
 // İlk yükleme
 setTimeout(() => {
