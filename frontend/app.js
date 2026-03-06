@@ -202,9 +202,20 @@ async function fetchBotData() {
                     </div>
                 `;
             } else {
-                statusSummary.innerHTML = '';
+                // MEVCUT KARTLARI GÜNCELLE (Yeniden oluşturma yerine)
+                const existingCards = statusSummary.querySelectorAll('.system-status-card');
+                const symbolMap = new Map();
 
-                symbols.forEach(sym => {
+                // Mevcut kartları sembole göre map'le
+                existingCards.forEach(card => {
+                    const symbolEl = card.querySelector('.status-symbol');
+                    if (symbolEl) {
+                        symbolMap.set(symbolEl.textContent, card);
+                    }
+                });
+
+                // Yeni semboller için kartları güncelle veya oluştur
+                symbols.forEach((sym, index) => {
                     const activeStrategy = stratData.active_strategies[sym] || 'trend_master';
                     const activeTimeframe = stratData.active_timeframes[sym] || '1m';
                     const marketType = stratData.market_types[sym] || 'swap';
@@ -223,8 +234,17 @@ async function fetchBotData() {
                         (decision.signal_val === 2 ? '#2ea043' : decision.signal_val === 0 ? '#f85149' : '#8b949e') :
                         '#8b949e';
 
-                    const card = document.createElement('div');
-                    card.className = 'system-status-card';
+                    // Mevcut kartı bul veya yeni oluştur
+                    let card = symbolMap.get(sym);
+
+                    if (!card) {
+                        // Yeni kart oluştur
+                        card = document.createElement('div');
+                        card.className = 'system-status-card';
+                        statusSummary.appendChild(card);
+                    }
+
+                    // İçeriği güncelle
                     card.innerHTML = `
                         <div class="status-card-header">
                             <span class="status-symbol">${sym}</span>
@@ -249,7 +269,14 @@ async function fetchBotData() {
                             </div>
                         </div>
                     `;
-                    statusSummary.appendChild(card);
+
+                    // Map'ten kaldır (ki silebilmek için)
+                    symbolMap.delete(sym);
+                });
+
+                // Kullanılmayan kartları sil (sembol listeden kaldırılmışsa)
+                symbolMap.forEach((card, sym) => {
+                    card.remove();
                 });
             }
         }
