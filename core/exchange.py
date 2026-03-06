@@ -454,12 +454,17 @@ class ExchangeManager:
 
                     # 7.5 STRATEJİ KONTROLÜ - Eğer strateji yoksa işlem yapma
                     strategy = paper_engine.strategies.get(symbol)
-                    if strategy is None or paper_engine.active_strategies.get(symbol) == "":
+                    active_strat_id = paper_engine.active_strategies.get(symbol, 'NOT_SET')
+
+                    if strategy is None or active_strat_id == "":
                         # Strateji durdurulmuş, sadece fiyat güncellemesi yap
                         await paper_engine.update_live_prices(symbol, current_price)
                         logger.debug(f"⏸️ {symbol} için strateji durduruldu, sadece fiyat güncelleniyor.")
+                        logger.debug(f"   strategy={strategy}, active_strategies[{symbol}]='{active_strat_id}'")
                         await asyncio.sleep(30)
                         continue
+
+                    logger.debug(f"▶️ {symbol} strateji aktif: {active_strat_id}, strategy={strategy}")
 
                     # 8. YAPAY ZEKA TAHMİNİ (Hedef Vade Verileriyle)
                     ml_confidence = 0.50

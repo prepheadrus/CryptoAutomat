@@ -617,6 +617,8 @@ async def change_strategy(req: StrategySelectSchema):
     """Arayüzden gelen komutla botun beynini anında değiştirir."""
     from core.paper import paper_engine
 
+    logger.info(f"📥 Strateji isteği alındı: symbol={req.symbol}, strategy_id={req.strategy_id or 'DURDUR'}")
+
     # Eğer sembol izlenmiyorsa ve strateji varsa başlat
     if req.symbol and req.strategy_id:
         await start_symbol_tasks(req.symbol, req.market_type, req.margin_type)
@@ -630,7 +632,9 @@ async def change_strategy(req: StrategySelectSchema):
         # Strateji boş ise (durdurma), paper_engine'de temizle
         paper_engine.strategies[req.symbol] = None
         paper_engine.active_strategies[req.symbol] = ""
-        logger.info(f"⏹️ {req.symbol} için strateji durduruldu.")
+        logger.info(f"⏹️ {req.symbol} için strateji durduruldu. active_strategies[{req.symbol}]=''")
+        logger.info(f"   paper_engine.strategies keys: {list(paper_engine.strategies.keys())}")
+        logger.info(f"   paper_engine.active_strategies: {paper_engine.active_strategies}")
 
     return {
         "status": "success",
