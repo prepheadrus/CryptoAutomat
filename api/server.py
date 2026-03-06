@@ -623,16 +623,14 @@ async def change_strategy(req: StrategySelectSchema):
         # Mevcut izleniyorsa da tiplerini güncelle
         paper_engine.set_market_type(req.symbol, req.market_type)
         paper_engine.set_margin_type(req.symbol, req.margin_type)
+        paper_engine.set_strategy(req.strategy_id, req.symbol, req.timeframe)
+        logger.info(f"▶️ {req.symbol} için strateji başlatıldı: {req.strategy_id}")
+
     elif req.symbol and not req.strategy_id:
-        # Strateji boş ise (durdurma), sadece paper_engine'de temizle
-        logger.info(f"⏹️ {req.symbol} için strateji durduruldu.")
-        # Not: Ticker hala çalışıyor (pozisyonlar için gerekli), ama poller strateji çalıştırmayacak
+        # Strateji boş ise (durdurma), paper_engine'de temizle
         paper_engine.strategies[req.symbol] = None
         paper_engine.active_strategies[req.symbol] = ""
-
-    # Strateji varsa ayarla
-    if req.strategy_id:
-        paper_engine.set_strategy(req.strategy_id, req.symbol, req.timeframe)
+        logger.info(f"⏹️ {req.symbol} için strateji durduruldu.")
 
     return {
         "status": "success",
