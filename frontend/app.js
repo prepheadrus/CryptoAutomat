@@ -196,7 +196,13 @@ async function fetchBotData() {
 
             const symbols = statusData.tracking_symbols || [];
 
-            if (symbols.length === 0) {
+            // SADECE AKTİF STRATEJİLERİ GÖSTER (strategy_id boş olmayanlar)
+            const activeSymbols = symbols.filter(sym => {
+                const activeStrategy = stratData.active_strategies[sym] || '';
+                return activeStrategy && activeStrategy !== '';
+            });
+
+            if (activeSymbols.length === 0) {
                 statusSummary.innerHTML = `
                     <div style="text-align: center; padding: 40px; color: var(--text-muted); grid-column: span 100%;">
                         📭 Henüz aktif strateji yok
@@ -221,7 +227,7 @@ async function fetchBotData() {
                 });
 
                 // Yeni semboller için kartları güncelle veya oluştur
-                symbols.forEach((sym, index) => {
+                activeSymbols.forEach((sym, index) => {
                     const activeStrategy = stratData.active_strategies[sym] || 'trend_master';
                     const activeTimeframe = stratData.active_timeframes[sym] || '1m';
                     const marketType = stratData.market_types[sym] || 'swap';
@@ -250,7 +256,7 @@ async function fetchBotData() {
                         statusSummary.appendChild(card);
                     }
 
-                    // İçeriği güncelle (kompakt)
+                    // İçeriği güncelle (kompakt - tüm bilgiler)
                     card.innerHTML = `
                         <div class="status-card-header-compact">
                             <span class="status-symbol">${sym.replace('/USDT', '')}</span>
@@ -259,7 +265,7 @@ async function fetchBotData() {
                         <div class="status-card-body-compact">
                             <div class="status-row-compact">
                                 <span class="status-label">🤖</span>
-                                <span class="status-value">${strategyName.split(' ')[0]}</span>
+                                <span class="status-value" title="${strategyName}">${strategyName.split(' ')[0]}</span>
                             </div>
                             <div class="status-row-compact">
                                 <span class="status-label">⏱️</span>
@@ -267,7 +273,11 @@ async function fetchBotData() {
                             </div>
                             <div class="status-row-compact">
                                 <span class="status-label">💰</span>
-                                <span class="status-value">${marketType.toUpperCase()}</span>
+                                <span class="status-value" title="${marketType === 'spot' ? 'Spot' : 'Futures'}">${marketType.toUpperCase()}</span>
+                            </div>
+                            <div class="status-row-compact">
+                                <span class="status-label">🔒</span>
+                                <span class="status-value" title="${marginType === 'isolated' ? 'İzole Marjin' : 'Çapraz Marjin'}">${marginType.toUpperCase()}</span>
                             </div>
                         </div>
                     `;
