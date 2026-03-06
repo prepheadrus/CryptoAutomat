@@ -25,6 +25,8 @@ from strategy.builder.executor import StrategyExecutor
 # Bot modüllerinden import
 from core.logger import logger
 from data.indicators import StrategyIndicators
+from data.database import db_manager
+import ccxt.pro as ccxtpro
 
 # Router oluştur
 router = APIRouter(prefix="/api/v1/backtest", tags=["Backtest"])
@@ -95,10 +97,10 @@ class BacktestResponse(BaseModel):
 def clean_value(value: Any) -> Any:
     """
     NaN/Infinity değerlerini temizle.
-    
+
     Args:
         value: Temizlenecek değer
-        
+
     Returns:
         Temizlenmiş değer
     """
@@ -111,94 +113,101 @@ def clean_value(value: Any) -> Any:
     return value
 
 
+async def fetch_real_data(
+    symbol: str,
+    timeframe: str,
+    days: int
+) -> pd.DataFrame:
+    """
+    Veritabanından gerçek OHLCV verisi çek.
+
+    Args:
+        symbol: Sembol (örn: BTC/USDT)
+        timeframe: Zaman dilimi (1m, 5m, 15m, 1h, 4h, 1d)
+        days: Kaç günlük veri
+
+    Returns:
+        pd.DataFrame: OHLCV verisi
+
+    Raises:
+        ValueError: Yeterli veri yoksa
+    """
+    logger.info(f"📊 Veritabanından veri çekiliyor: {symbol} ({timeframe}, {days} gün)")
+
+    try:
+        # Veritabanından veri çek
+        # TODO: db_manager'a get_ohlcv metodu eklenecek
+        # Şimdilik ccxt ile çekiyoruz (gelecekte veritabanından çekilecek)
+
+        # CCXT ile borsadan çek (geçici çözüm)
+        exchange = ccxtpro.binance({
+            'enableRateLimit': True,
+            'options': {'defaultType': 'future'}
+        })
+
+        # timeframe'e göre limit hesapla
+        if timeframe == "1m":
+            bars_per_day = 1440
+        elif timeframe == "5m":
+            bars_per_day = 288
+        elif timeframe == "15m":
+            bars_per_day = 96
+        elif timeframe == "1h":
+            bars_per_day = 24
+        elif timeframe == "4h":
+            bars_per_day = 6
+        elif timeframe == "1d":
+            bars_per_day = 1
+        else:
+            bars_per_day = 24
+
+        total_bars = days * bars_per_day
+
+        # Veriyi çek
+        ohlcv = await exchange.fetch_ohlcv(symbol, timeframe, limit=min(total_bars, 5000))
+
+        if not ohlcv or len(ohlcv) < 100:
+            await exchange.close()
+            raise ValueError(f"Yetersiz veri: {len(ohlcv)} mum. En az 100 mum gerekli.")
+
+        # DataFrame'e çevir
+        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        df.set_index('timestamp', inplace=True)
+
+        # ATR ekle (backtest için gerekli)
+        df['ATR_14'] = StrategyIndicators.atr(df['high'], df['low'], df['close'], 14)
+
+        await exchange.close()
+
+        logger.info(f"✅ Veri çekildi: {len(df)} mum, {symbol} ({timeframe})")
+
+        return df
+
+    except Exception as e:
+        logger.error(f"❌ Veri çekme hatası: {e}")
+        raise ValueError(f"Veri çekilemedi: {str(e)}")
+
+
 def generate_mock_data(
     symbol: str,
     timeframe: str,
     days: int
 ) -> pd.DataFrame:
     """
-    Mock OHLCV verisi oluştur (test için).
-    
+    Mock OHLCV verisi oluştur (test için - kullanılmıyor).
+
     Args:
         symbol: Sembol (örn: BTC/USDT)
         timeframe: Zaman dilimi
         days: Gün sayısı
-        
+
     Returns:
         pd.DataFrame: OHLCV verisi
     """
-    # Timeframe'e göre mum sayısı
-    if timeframe == "1m":
-        bars_per_day = 1440
-    elif timeframe == "5m":
-        bars_per_day = 288
-    elif timeframe == "15m":
-        bars_per_day = 96
-    elif timeframe == "1h":
-        bars_per_day = 24
-    elif timeframe == "4h":
-        bars_per_day = 6
-    elif timeframe == "1d":
-        bars_per_day = 1
-    else:
-        bars_per_day = 24  # Varsayılan 1h
-    
-    n_rows = days * bars_per_day
-    
-    # Random walk fiyat simülasyonu
-    np.random.seed(42)
-    
-    # Başlangıç fiyatı (sembol'e göre)
-    if "BTC" in symbol:
-        base_price = 50000
-    elif "ETH" in symbol:
-        base_price = 3000
-    elif "BNB" in symbol:
-        base_price = 300
-    else:
-        base_price = 100
-    
-    # Fiyat serisi (random walk)
-    returns = np.random.randn(n_rows) * 0.001  # %0.1 günlük volatilite
-    close_prices = base_price * np.cumprod(1 + returns)
-    
-    # OHLCV oluştur
-    high_prices = close_prices * (1 + np.abs(np.random.randn(n_rows)) * 0.001)
-    low_prices = close_prices * (1 - np.abs(np.random.randn(n_rows)) * 0.001)
-    open_prices = close_prices * (1 + np.random.randn(n_rows) * 0.0005)
-    volumes = np.random.randint(100, 10000, n_rows)
-    
-    # Zaman damgaları
-    if timeframe == "1h":
-        freq = "h"
-    elif timeframe == "4h":
-        freq = "4h"
-    elif timeframe == "1d":
-        freq = "d"
-    else:
-        freq = "h"  # Varsayılan
-    
-    index = pd.date_range(
-        end=datetime.now(),
-        periods=n_rows,
-        freq=freq
-    )
-    
-    # DataFrame oluştur
-    df = pd.DataFrame({
-        'open': open_prices,
-        'high': high_prices,
-        'low': low_prices,
-        'close': close_prices,
-        'volume': volumes
-    }, index=index)
-    
-    # ATR ekle (basit - close'un %2'si)
-    df['ATR_14'] = df['close'] * 0.02
-    
-    logger.info(f"📊 Mock data oluşturuldu: {len(df)} satır, {symbol} ({timeframe})")
-    
-    return df
+    # Bu fonksiyon artık kullanılmıyor - gerçek veri çekiliyor
+    # Sadece test amaçlı saklanıyor
+    raise NotImplementedError("Mock data kullanımı devre dışı. Gerçek veri çekiliyor.")
 
 
 def calculate_signals(df: pd.DataFrame, strategy_data: Dict[str, Any]) -> pd.Series:
@@ -269,24 +278,35 @@ async def run_backtest(request: BacktestRequest):
             # Kaydedilmiş dosyadan yükle
             strategies_dir = Path("artifacts/strategies")
             filepath = strategies_dir / request.strategy_filename
-            
+
             if not filepath.exists():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Strateji dosyası bulunamadı: {request.strategy_filename}"
                 )
-            
+
             with open(filepath, 'r', encoding='utf-8') as f:
                 strategy_data = json.load(f)
         else:
             # Direkt JSON kullan
             strategy_data = request.strategy
-        
-        # 2. Veri çek (mock veya gerçek)
-        # TODO: Gerçek veri için core/exchange.py veya veritabanından çek
-        logger.info("📊 Veri çekiliyor...")
-        df = generate_mock_data(request.symbol, request.timeframe, request.days)
-        
+
+        # 2. GERÇEK VERİ ÇEK (Mock yerine)
+        logger.info("📊 Gerçek veri çekiliyor...")
+        try:
+            df = await fetch_real_data(request.symbol, request.timeframe, request.days)
+        except ValueError as e:
+            # Yeterli veri yoksa anlamlı hata mesajı
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"{str(e)} Lütfen önce Veri Laboratuvarı'ndan veri indirin."
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Veri çekme hatası: {str(e)}"
+            )
+
         if df.empty:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
