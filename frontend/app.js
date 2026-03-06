@@ -1185,18 +1185,10 @@ async function runMLVisualAnalysis() {
 
     try {
         const encodedSymbol = encodeURIComponent(symbolValue);
-        // Strateji seçimini de sunucuya bildir ki paper engine ayarlarını güncelleyebilsin
-        await fetch('/api/v1/strategy/select', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                strategy_id: strategyId,
-                symbol: symbolValue,
-                timeframe: tfValue,
-                market_type: marketType,
-                margin_type: marginType
-            })
-        });
+
+        // ⚠️ DİKKAT: ML analizi için strateji başlatmıyoruz!
+        // Sadece görselleştirme yapıyoruz, gerçek strateji değişikliği yapmıyoruz.
+        // Eğer kullanıcı strateji değiştirmek isterse "Sistem Ayarları" sayfasını kullanmalı.
 
         const res = await fetch(`/api/v1/ml/visual-analysis?symbol=${encodedSymbol}&strategy_id=${strategyId}&timeframe=${tfValue}&limit=300`);
         const data = await res.json();
