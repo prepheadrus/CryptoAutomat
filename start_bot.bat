@@ -20,15 +20,16 @@ echo.
 :: Kısa bir bekleme (opsiyonel)
 timeout /t 2 /nobreak >nul
 
-:: Tarayıcıyı otomatik olarak aç (Sunucu birazdan başlayacağı için)
-echo [2/3] Arayuz (Dashboard) tarayicida aciliyor...
-start http://localhost:8000
-echo.
-
 :: Ana python dosyasını çalıştır
-echo [3/3] Fast_API Sunucusu ve Core Engine calistiriliyor...
+echo [2/3] Fast_API Sunucusu ve Core Engine calistiriliyor...
 echo.
 python main.py
+
+:: Sunucu başladıktan sonra tarayıcıyı aç (3 saniye bekle)
+timeout /t 3 /nobreak >nul
+echo [3/3] Arayuz (Dashboard) tarayicida aciliyor...
+start http://localhost:8000
+echo.
 
 :: Hata durumunda pencerenin hemen kapanmasını önlemek için duraklat
 pause
