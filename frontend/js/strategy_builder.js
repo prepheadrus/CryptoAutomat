@@ -432,8 +432,11 @@ async function loadStrategy(filename) {
                     });
                 }
 
-                // Her LONG koşulunu ekle (conditionData ile)
-                if (data.conditions.LONG.conditions && data.conditions.LONG.conditions.length > 0) {
+                // Her LONG koşulunu ekle (conditionData ile) - BOŞ ARRAY KONTROLÜ
+                if (data.conditions.LONG.conditions &&
+                    Array.isArray(data.conditions.LONG.conditions) &&
+                    data.conditions.LONG.conditions.length > 0) {
+
                     // Container'ı temizle
                     const longContainer = document.getElementById('long-conditions-container');
                     if (longContainer) longContainer.innerHTML = '';
@@ -461,8 +464,11 @@ async function loadStrategy(filename) {
                     });
                 }
 
-                // Her SHORT koşulunu ekle (conditionData ile)
-                if (data.conditions.SHORT.conditions && data.conditions.SHORT.conditions.length > 0) {
+                // Her SHORT koşulunu ekle (conditionData ile) - BOŞ ARRAY KONTROLÜ
+                if (data.conditions.SHORT.conditions &&
+                    Array.isArray(data.conditions.SHORT.conditions) &&
+                    data.conditions.SHORT.conditions.length > 0) {
+
                     // Container'ı temizle
                     const shortContainer = document.getElementById('short-conditions-container');
                     if (shortContainer) shortContainer.innerHTML = '';
