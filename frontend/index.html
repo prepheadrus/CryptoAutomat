@@ -45,9 +45,6 @@
         <main class="main-content">
             <header class="top-nav glass-panel">
                 <div class="metric"><span class="label">Borsa:</span> <strong id="exchange-val">--</strong></div>
-                <div class="metric"><span class="label">🚀 Canlı Takip:</span>
-                    <div id="active-symbols-badges" class="badges-container"></div>
-                </div>
                 <div class="user-profile"><img src="https://api.dicebear.com/7.x/identicon/svg?seed=CryptoAlgoBot"
                         alt="Avatar"></div>
             </header>
@@ -223,10 +220,13 @@
             <!-- SEKME 3: AKTİF EMİRLER -->
             <div id="tab-orders" class="tab-content" style="display: none;">
 
-                <!-- SİSTEM DURUM ÖZETİ (YENİ) -->
+                <!-- SİSTEM DURUM ÖZETİ (KOMPAKT) -->
                 <div class="card glass-panel" style="margin-bottom: 20px;">
-                    <h3 style="margin-bottom: 15px;">🖥️ Sistem Durum Özeti</h3>
-                    <div id="system-status-summary" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                        <h3 style="margin:0;">🖥️ Aktif Stratejiler</h3>
+                        <span class="info-label" style="font-size:0.85rem;">📊 Borsa: <strong id="exchange-info" style="color:var(--neon-blue);">BINANCE</strong></span>
+                    </div>
+                    <div id="system-status-summary" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px;">
                         <!-- Dinamik olarak doldurulacak -->
                         <div style="text-align: center; padding: 40px; color: var(--text-muted); grid-column: span 100%;">
                             ⏳ Sistem yükleniyor...

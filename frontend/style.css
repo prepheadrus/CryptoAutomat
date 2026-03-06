@@ -656,91 +656,67 @@ body {
     border: 1px solid rgba(46, 160, 67, 0.3);
 }
 
-/* System Status Cards - SİSTEM ÖZET KARTLARI */
+/* System Status Cards - SİSTEM ÖZET KARTLARI (KOMPAKT) */
 .system-status-card {
     background: linear-gradient(135deg, rgba(30, 35, 45, 0.95) 0%, rgba(22, 27, 34, 0.95) 100%);
     border: 1px solid rgba(88, 166, 255, 0.3);
-    border-radius: 12px;
-    overflow: hidden;
+    border-radius: 10px;
+    padding: 10px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
     transition: all 0.3s ease;
+    min-width: 200px;
 }
 
 .system-status-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 25px rgba(88, 166, 255, 0.25);
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(88, 166, 255, 0.25);
     border-color: rgba(88, 166, 255, 0.6);
 }
 
-.status-card-header {
+.status-card-header-compact {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 15px;
-    background: rgba(88, 166, 255, 0.1);
-    border-bottom: 1px solid rgba(88, 166, 255, 0.2);
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .status-symbol {
-    font-size: 1rem;
+    font-size: 0.85rem;
     font-weight: 700;
     color: var(--neon-blue);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
-.status-market {
-    font-size: 0.65rem;
-    padding: 3px 10px;
-    border-radius: 12px;
-    font-weight: 700;
-    text-transform: uppercase;
+.status-signal {
+    font-size: 0.75rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
 }
 
-.status-market.spot {
-    background: rgba(255, 204, 0, 0.2);
-    color: #ffcc00;
-    border: 1px solid rgba(255, 204, 0, 0.4);
+.status-card-body-compact {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
 
-.status-market.swap, .status-market.future {
-    background: rgba(88, 166, 255, 0.2);
-    color: #58a6ff;
-    border: 1px solid rgba(88, 166, 255, 0.4);
-}
-
-.status-card-body {
-    padding: 15px;
-}
-
-.status-row {
+.status-row-compact {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.status-row:last-child {
-    border-bottom: none;
+    font-size: 0.75rem;
 }
 
 .status-label {
-    font-size: 0.75rem;
     color: var(--text-muted);
-    font-weight: 500;
+    margin-right: 5px;
 }
 
 .status-value {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     color: var(--text-main);
     font-weight: 600;
-}
-
-.status-value.timeframe {
-    background: rgba(46, 160, 67, 0.15);
-    color: var(--neon-green);
-    padding: 3px 8px;
-    border-radius: 6px;
-    font-weight: 700;
 }

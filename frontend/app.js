@@ -186,68 +186,15 @@ async function fetchBotData() {
         }
         document.getElementById('exchange-val').innerText = statusData.exchange.toUpperCase();
 
-        // --- DİNAMİK PARİTE ROZETLERİ (CANLI TAKİP) ---
-        const badgeContainer = document.getElementById('active-symbols-badges');
-        if (badgeContainer) {
-            // Strateji bilgilerini al
-            const stratRes = await fetch('/api/v1/strategies');
-            const stratData = await stratRes.json();
-
-            // MEVCUT ROZETLERİ KORU (Yeniden oluşturma yerine)
-            const existingBadges = badgeContainer.querySelectorAll('.symbol-badge-card');
-            const badgeMap = new Map();
-
-            // Mevcut rozetleri sembole göre map'le
-            existingBadges.forEach(badge => {
-                const symbolEl = badge.querySelector('.symbol-name');
-                if (symbolEl) {
-                    badgeMap.set(symbolEl.textContent.replace('USDT', '') + '/USDT', badge);
-                }
-            });
-
-            // Yeni semboller için rozetleri güncelle veya oluştur
-            statusData.tracking_symbols.forEach(sym => {
-                // Strateji bilgisi
-                const activeStrategy = stratData.active_strategies[sym] || 'trend_master';
-                const activeTimeframe = stratData.active_timeframes[sym] || '1m';
-                const marketType = stratData.market_types[sym] || 'swap';
-
-                // Strateji adını bul
-                const strategyInfo = stratData.strategies.find(s => s.id === activeStrategy);
-                const strategyName = strategyInfo ? strategyInfo.name.split(' ')[0] : 'Unknown';
-
-                // Mevcut rozeti bul veya yeni oluştur
-                let badge = badgeMap.get(sym);
-
-                if (!badge) {
-                    // Yeni rozet oluştur
-                    badge = document.createElement('div');
-                    badge.className = 'symbol-badge-card';
-                    badgeContainer.appendChild(badge);
-                }
-
-                // İçeriği güncelle
-                badge.innerHTML = `
-                    <div class="symbol-badge-header">
-                        <span class="symbol-name">${sym.replace('/USDT', '')}</span>
-                        <span class="market-type ${marketType}">${marketType === 'spot' ? '🟡 Spot' : '🔵 Futures'}</span>
-                    </div>
-                    <div class="symbol-badge-info">
-                        <span class="strategy-name">🤖 ${strategyName}</span>
-                        <span class="timeframe-badge">⏱️ ${activeTimeframe}</span>
-                    </div>
-                `;
-
-                // Map'ten kaldır
-                badgeMap.delete(sym);
-            });
-
-            // Kullanılmayan rozetleri sil
-            badgeMap.forEach(badge => {
-                badge.remove();
-            });
-        }
+        // --- SİSTEM DURUM ÖZETİ (AKTİF EMİRLER SAYFASI İÇİN) ---
         const statusSummary = document.getElementById('system-status-summary');
+        const exchangeInfo = document.getElementById('exchange-info');
+
+        // Borsa bilgisini güncelle
+        if (exchangeInfo) {
+            exchangeInfo.innerText = statusData.exchange.toUpperCase();
+        }
+
         if (statusSummary) {
             // Strateji bilgilerini al
             const stratRes = await fetch('/api/v1/strategies');
@@ -258,24 +205,24 @@ async function fetchBotData() {
             if (symbols.length === 0) {
                 statusSummary.innerHTML = `
                     <div style="text-align: center; padding: 40px; color: var(--text-muted); grid-column: span 100%;">
-                        📭 Henüz aktif sembol yok
+                        📭 Henüz aktif strateji yok
                     </div>
                 `;
             } else {
                 // Dashboard metriklerini al (latest_decisions için gerekli)
                 const metricsRes = await fetch('/api/v1/dashboard-metrics');
                 const metricsData = await metricsRes.json();
-                const metrics = metricsData; // latest_decisions burada
+                const metrics = metricsData;
 
                 // MEVCUT KARTLARI GÜNCELLE (Yeniden oluşturma yerine)
                 const existingCards = statusSummary.querySelectorAll('.system-status-card');
-                const symbolMap = new Map();
+                const cardMap = new Map();
 
                 // Mevcut kartları sembole göre map'le
                 existingCards.forEach(card => {
                     const symbolEl = card.querySelector('.status-symbol');
                     if (symbolEl) {
-                        symbolMap.set(symbolEl.textContent, card);
+                        cardMap.set(symbolEl.textContent, card);
                     }
                 });
 
@@ -300,7 +247,7 @@ async function fetchBotData() {
                         '#8b949e';
 
                     // Mevcut kartı bul veya yeni oluştur
-                    let card = symbolMap.get(sym);
+                    let card = cardMap.get(sym);
 
                     if (!card) {
                         // Yeni kart oluştur
@@ -309,38 +256,34 @@ async function fetchBotData() {
                         statusSummary.appendChild(card);
                     }
 
-                    // İçeriği güncelle
+                    // İçeriği güncelle (kompakt)
                     card.innerHTML = `
-                        <div class="status-card-header">
-                            <span class="status-symbol">${sym}</span>
-                            <span class="status-market ${marketType}">${marketType.toUpperCase()}</span>
+                        <div class="status-card-header-compact">
+                            <span class="status-symbol">${sym.replace('/USDT', '')}</span>
+                            <span class="status-signal" style="color: ${signalColor}; font-weight: 700; font-size: 0.75rem;">${signalText}</span>
                         </div>
-                        <div class="status-card-body">
-                            <div class="status-row">
-                                <span class="status-label">🤖 Strateji:</span>
-                                <span class="status-value">${strategyName}</span>
+                        <div class="status-card-body-compact">
+                            <div class="status-row-compact">
+                                <span class="status-label">🤖</span>
+                                <span class="status-value">${strategyName.split(' ')[0]}</span>
                             </div>
-                            <div class="status-row">
-                                <span class="status-label">⏱️ Zaman:</span>
-                                <span class="status-value timeframe">${activeTimeframe}</span>
+                            <div class="status-row-compact">
+                                <span class="status-label">⏱️</span>
+                                <span class="status-value">${activeTimeframe}</span>
                             </div>
-                            <div class="status-row">
-                                <span class="status-label">💰 Marjin:</span>
-                                <span class="status-value">${marginType.toUpperCase()}</span>
-                            </div>
-                            <div class="status-row">
-                                <span class="status-label">📊 Sinyal:</span>
-                                <span class="status-value" style="color: ${signalColor}; font-weight: 700;">${signalText}</span>
+                            <div class="status-row-compact">
+                                <span class="status-label">💰</span>
+                                <span class="status-value">${marketType.toUpperCase()}</span>
                             </div>
                         </div>
                     `;
 
-                    // Map'ten kaldır (ki silebilmek için)
-                    symbolMap.delete(sym);
+                    // Map'ten kaldır
+                    cardMap.delete(sym);
                 });
 
-                // Kullanılmayan kartları sil (sembol listeden kaldırılmışsa)
-                symbolMap.forEach((card, sym) => {
+                // Kullanılmayan kartları sil
+                cardMap.forEach((card, sym) => {
                     card.remove();
                 });
             }
