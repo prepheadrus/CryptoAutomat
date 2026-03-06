@@ -404,87 +404,266 @@ async function loadStrategy(filename) {
 }
 
 /**
- * Stratejiyi test et
+ * Stratejiyi test et (Backtest)
  */
 async function testStrategy() {
     try {
-        console.log('[INFO] Strateji test ediliyor...');
-        
-        // JSON oluştur
+        console.log('[INFO] Backtest çalıştırılıyor...');
+
+        // UI güncelle (loading state)
+        const testBtn = document.querySelector('button[onclick="testStrategy()"]');
+        const originalText = testBtn.innerHTML;
+        testBtn.innerHTML = '⏳ Test ediliyor...';
+        testBtn.disabled = true;
+
+        // Form verilerini al
+        const symbol = document.getElementById('backtest-symbol').value || 'BTC/USDT';
+        const timeframe = document.getElementById('backtest-timeframe').value || '1h';
+        const days = parseInt(document.getElementById('backtest-days').value) || 30;
+        const initialBalance = parseFloat(document.getElementById('backtest-balance').value) || 10000;
+
+        // Strateji JSON oluştur
         const strategyData = buildStrategyJSON();
-        
-        // Test parametreleri
-        const testData = {
-            strategy: strategyData,
-            symbol: 'BTC/USDT',
-            timeframe: '1h',
-            days: 30
-        };
-        
+
+        // Validasyon
+        if (strategyData.conditions.LONG.conditions.length === 0 &&
+            strategyData.conditions.SHORT.conditions.length === 0) {
+            alert('⚠️ En az bir LONG veya SHORT koşulu eklemelisiniz!');
+            testBtn.innerHTML = originalText;
+            testBtn.disabled = false;
+            return;
+        }
+
         // API çağrısı
-        const response = await fetch('/api/v1/strategy/test', {
+        const response = await fetch('/api/v1/backtest/run', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(testData)
+            body: JSON.stringify({
+                strategy: strategyData,
+                symbol: symbol,
+                timeframe: timeframe,
+                days: days,
+                initial_balance: initialBalance,
+                risk_per_trade: 0.01
+            })
         });
-        
+
         const result = await response.json();
-        
+
         if (response.ok && result.status === 'success') {
-            console.log('[OK] Test tamamlandı:', result.metrics);
-            
+            console.log('[OK] Backtest tamamlandı:', result.metrics);
+
             // Test sonuçlarını göster
-            displayTestResults(result.metrics);
+            displayBacktestResults(result);
+
+            testBtn.innerHTML = '✅ Test Tamamlandı';
+            testBtn.style.background = 'var(--neon-green)';
         } else {
-            console.error('[HATA] Test başarısız:', result);
+            console.error('[HATA] Backtest başarısız:', result);
             alert(`❌ Hata: ${result.detail || 'Bilinmeyen hata'}`);
+            testBtn.innerHTML = originalText;
+            testBtn.disabled = false;
         }
-        
+
     } catch (error) {
-        console.error('[HATA] Test hatası:', error);
+        console.error('[HATA] Backtest hatası:', error);
         alert(`❌ Bağlantı hatası: ${error.message}`);
+
+        const testBtn = document.querySelector('button[onclick="testStrategy()"]');
+        testBtn.innerHTML = '🧪 Test Et';
+        testBtn.disabled = false;
     }
 }
 
 /**
- * Test sonuçlarını göster
+ * Backtest sonuçlarını göster
  */
-function displayTestResults(metrics) {
-    const container = document.getElementById('test-results-content');
+function displayBacktestResults(result) {
+    const metrics = result.metrics;
+    const equityCurve = result.equity_curve;
+    const recentTrades = result.recent_trades;
+
+    // Test sonuçları div'ini göster
     const resultsDiv = document.getElementById('test-results');
-    
     resultsDiv.style.display = 'block';
-    
+
+    // 1. Metrik kartlarını güncelle
+    document.getElementById('metric-winrate').textContent = `${metrics.win_rate.toFixed(1)}%`;
+    document.getElementById('metric-pnl').textContent = `$${metrics.net_pnl.toFixed(2)}`;
+    document.getElementById('metric-profit-factor').textContent = metrics.profit_factor.toFixed(2);
+    document.getElementById('metric-drawdown').textContent = `${metrics.max_drawdown.toFixed(2)}%`;
+
+    // PnL rengini ayarla
+    const pnlEl = document.getElementById('metric-pnl');
+    if (metrics.net_pnl > 0) {
+        pnlEl.style.color = 'var(--neon-green)';
+    } else if (metrics.net_pnl < 0) {
+        pnlEl.style.color = 'var(--neon-red)';
+    } else {
+        pnlEl.style.color = 'var(--neon-blue)';
+    }
+
+    // 2. Equity curve grafiğini çiz
+    drawEquityCurve(equityCurve);
+
+    // 3. İşlem geçmişini tabloya ekle
+    displayTradesTable(recentTrades);
+}
+
+/**
+ * Equity curve grafiğini çiz (Simple Line Chart)
+ */
+function drawEquityCurve(equityCurve) {
+    const container = document.getElementById('equity-curve-chart');
+
+    if (!equityCurve || equityCurve.length === 0) {
+        container.innerHTML = `
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--text-muted); font-size: 0.85rem;">
+                Veri yok
+            </div>
+        `;
+        return;
+    }
+
+    // Basit SVG line chart oluştur
+    const width = container.offsetWidth;
+    const height = container.offsetHeight;
+    const padding = 20;
+
+    // Veri analizi
+    const equities = equityCurve.map(p => p.equity);
+    const minEquity = Math.min(...equities);
+    const maxEquity = Math.max(...equities);
+    const equityRange = maxEquity - minEquity || 1;
+
+    // SVG path oluştur
+    let pathD = '';
+    equityCurve.forEach((point, i) => {
+        const x = padding + (i / (equityCurve.length - 1)) * (width - 2 * padding);
+        const y = height - padding - ((point.equity - minEquity) / equityRange) * (height - 2 * padding);
+
+        if (i === 0) {
+            pathD += `M ${x} ${y}`;
+        } else {
+            pathD += ` L ${x} ${y}`;
+        }
+    });
+
+    // Gradient color (yeşil -> kırmızı)
+    const startColor = equities[0] >= equities[equities.length - 1] ? '#f85149' : '#2ea043';
+    const endColor = equities[0] >= equities[equities.length - 1] ? '#2ea043' : '#f85149';
+
+    // SVG HTML
     container.innerHTML = `
-        <div style="margin-bottom: 10px;">
-            <strong>Toplam Mum:</strong> ${metrics.total_candles}
+        <svg width="${width}" height="${height}" style="overflow: visible;">
+            <!-- Grid lines -->
+            <line x1="${padding}" y1="${height/2}" x2="${width-padding}" y2="${height/2}"
+                  stroke="rgba(255,255,255,0.1)" stroke-dasharray="4"/>
+
+            <!-- Equity line -->
+            <path d="${pathD}" fill="none" stroke="url(#gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+
+            <!-- Gradient definition -->
+            <defs>
+                <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" style="stop-color:${startColor};stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:${endColor};stop-opacity:1" />
+                </linearGradient>
+            </defs>
+
+            <!-- Start point -->
+            <circle cx="${padding}" cy="${height - padding - ((equities[0] - minEquity) / equityRange) * (height - 2 * padding)}"
+                    r="4" fill="${startColor}"/>
+
+            <!-- End point -->
+            <circle cx="${width-padding}" cy="${height - padding - ((equities[equities.length-1] - minEquity) / equityRange) * (height - 2 * padding)}"
+                    r="4" fill="${endColor}"/>
+        </svg>
+
+        <!-- Labels -->
+        <div style="position: absolute; top: ${padding/2}px; left: ${padding}px; font-size: 0.7rem; color: var(--text-muted);">
+            $${maxEquity.toFixed(0)}
         </div>
-        <div style="margin-bottom: 10px;">
-            <strong>Toplam Sinyal:</strong> ${metrics.total_signals} (${metrics.signal_ratio})
-        </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px;">
-            <div style="background: rgba(46, 160, 67, 0.1); padding: 10px; border-radius: 6px; text-align: center;">
-                <div style="font-size: 1.5rem; color: var(--neon-green);">${metrics.long_signals}</div>
-                <div style="font-size: 0.75rem; color: var(--text-muted);">AL Sinyali</div>
-            </div>
-            <div style="background: rgba(248, 81, 73, 0.1); padding: 10px; border-radius: 6px; text-align: center;">
-                <div style="font-size: 1.5rem; color: var(--neon-red);">${metrics.short_signals}</div>
-                <div style="font-size: 0.75rem; color: var(--text-muted);">SAT Sinyali</div>
-            </div>
-            <div style="background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 6px; text-align: center;">
-                <div style="font-size: 1.5rem; color: var(--text-muted);">${metrics.hold_signals}</div>
-                <div style="font-size: 0.75rem; color: var(--text-muted);">BEKLE</div>
-            </div>
-        </div>
-        <div style="margin-bottom: 10px;">
-            <strong>İndikatörler:</strong>
-            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 5px;">
-                ${metrics.indicators_calculated.join(', ')}
-            </div>
+        <div style="position: absolute; bottom: ${padding/2}px; left: ${padding}px; font-size: 0.7rem; color: var(--text-muted);">
+            $${minEquity.toFixed(0)}
         </div>
     `;
+}
+
+/**
+ * İşlem geçmişini tabloya ekle
+ */
+function displayTradesTable(trades) {
+    const tbody = document.getElementById('trades-table-body');
+
+    if (!trades || trades.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="4" style="padding: 20px; text-align: center; color: var(--text-muted);">
+                    Henüz işlem yok
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    let html = '';
+    trades.forEach(trade => {
+        // Entry/Exit zamanlarını formatla
+        const entryTime = new Date(trade.entry_time).toLocaleString('tr-TR', {
+            month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+        });
+        const exitTime = new Date(trade.exit_time).toLocaleString('tr-TR', {
+            month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+        });
+
+        // PnL rengi
+        const pnlColor = trade.pnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+
+        // Direction badge
+        const directionBadge = trade.direction === 'LONG'
+            ? '<span style="background: rgba(46,160,67,0.2); color: var(--neon-green); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem;">LONG</span>'
+            : '<span style="background: rgba(248,81,73,0.2); color: var(--neon-red); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem;">SHORT</span>';
+
+        // Exit reason badge
+        let reasonBadge = '';
+        if (trade.exit_reason === 'TARGET') {
+            reasonBadge = '<span style="background: rgba(46,160,67,0.2); color: var(--neon-green); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem;">🎯 TARGET</span>';
+        } else if (trade.exit_reason === 'STOP') {
+            reasonBadge = '<span style="background: rgba(248,81,73,0.2); color: var(--neon-red); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem;">🛑 STOP</span>';
+        } else {
+            reasonBadge = '<span style="background: rgba(255,255,255,0.1); color: var(--text-muted); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem;">SIGNAL</span>';
+        }
+
+        html += `
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <td style="padding: 8px;">
+                    <div style="margin-bottom: 4px;">${directionBadge}</div>
+                    <div style="font-size: 0.7rem; color: var(--text-muted);">${entryTime}</div>
+                    <div style="font-size: 0.7rem;">$${trade.entry_price.toFixed(2)}</div>
+                </td>
+                <td style="padding: 8px;">
+                    <div style="font-size: 0.7rem; color: var(--text-muted);">${exitTime}</div>
+                    <div style="font-size: 0.7rem;">$${trade.exit_price.toFixed(2)}</div>
+                </td>
+                <td style="padding: 8px; text-align: right;">
+                    <div style="font-size: 0.85rem; font-weight: 700; color: ${pnlColor};">
+                        ${trade.pnl >= 0 ? '+' : ''}$${trade.pnl.toFixed(2)}
+                    </div>
+                    <div style="font-size: 0.7rem; color: ${pnlColor};">
+                        ${trade.pnl_percent >= 0 ? '+' : ''}${trade.pnl_percent.toFixed(2)}%
+                    </div>
+                </td>
+                <td style="padding: 8px; text-align: center;">
+                    ${reasonBadge}
+                </td>
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = html;
 }
 
 /**

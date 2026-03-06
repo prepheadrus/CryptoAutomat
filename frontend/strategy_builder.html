@@ -321,32 +321,113 @@
         <!-- SAĞ PANEL: Risk ve Aksiyon -->
         <div class="panel">
             <div class="panel-header">🎯 Risk Parametreleri</div>
-            
+
             <div class="risk-input-group">
                 <label>Stop Loss (ATR Çarpanı)</label>
                 <input type="number" class="form-input" id="stop-loss-atr" value="2.0" step="0.1" min="0.5" max="10">
             </div>
-            
+
             <div class="risk-input-group">
                 <label>Take Profit (ATR Çarpanı)</label>
                 <input type="number" class="form-input" id="take-profit-atr" value="4.0" step="0.1" min="1" max="20">
             </div>
-            
+
             <div class="risk-input-group">
                 <label>Max Risk (%)</label>
                 <input type="number" class="form-input" id="max-risk-percent" value="2.0" step="0.1" min="0.1" max="10">
             </div>
-            
+
+            <!-- Backtest Parametreleri -->
+            <div class="risk-input-group" style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+                <label style="color: var(--neon-blue);">📊 Backtest Ayarları</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+                    <div>
+                        <label style="font-size: 0.7rem;">Sembol</label>
+                        <input type="text" class="form-input" id="backtest-symbol" value="BTC/USDT">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.7rem;">Timeframe</label>
+                        <select class="form-select" id="backtest-timeframe">
+                            <option value="15m">15m</option>
+                            <option value="1h" selected>1h</option>
+                            <option value="4h">4h</option>
+                            <option value="1d">1d</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 0.7rem;">Gün Sayısı</label>
+                        <input type="number" class="form-input" id="backtest-days" value="30" min="1" max="365">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.7rem;">Başlangıç Bakiye ($)</label>
+                        <input type="number" class="form-input" id="backtest-balance" value="10000">
+                    </div>
+                </div>
+            </div>
+
             <div class="action-buttons">
                 <button class="btn-primary" onclick="testStrategy()">🧪 Test Et</button>
                 <button class="btn-success" onclick="saveStrategy()">💾 Kaydet</button>
                 <button class="btn-danger" onclick="clearForm()">🗑️ Temizle</button>
             </div>
-            
+
             <!-- Test Sonuçları -->
             <div id="test-results" style="margin-top: 20px; display: none;">
-                <div class="panel-header">📊 Test Sonuçları</div>
-                <div id="test-results-content"></div>
+                <div class="panel-header" style="color: var(--neon-green);">📊 Backtest Sonuçları</div>
+
+                <!-- Metrik Kartları -->
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 15px 0;">
+                    <div class="metric-card" style="background: rgba(46, 160, 67, 0.1); border: 1px solid rgba(46, 160, 67, 0.3); padding: 12px; border-radius: 6px;">
+                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px;">Win Rate</div>
+                        <div id="metric-winrate" style="font-size: 1.5rem; color: var(--neon-green); font-weight: 700;">-</div>
+                    </div>
+                    <div class="metric-card" style="background: rgba(88, 166, 255, 0.1); border: 1px solid rgba(88, 166, 255, 0.3); padding: 12px; border-radius: 6px;">
+                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px;">Net PnL</div>
+                        <div id="metric-pnl" style="font-size: 1.5rem; color: var(--neon-blue); font-weight: 700;">-</div>
+                    </div>
+                    <div class="metric-card" style="background: rgba(188, 140, 255, 0.1); border: 1px solid rgba(188, 140, 255, 0.3); padding: 12px; border-radius: 6px;">
+                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px;">Profit Factor</div>
+                        <div id="metric-profit-factor" style="font-size: 1.5rem; color: var(--neon-purple); font-weight: 700;">-</div>
+                    </div>
+                    <div class="metric-card" style="background: rgba(248, 81, 73, 0.1); border: 1px solid rgba(248, 81, 73, 0.3); padding: 12px; border-radius: 6px;">
+                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px;">Max Drawdown</div>
+                        <div id="metric-drawdown" style="font-size: 1.5rem; color: var(--neon-red); font-weight: 700;">-</div>
+                    </div>
+                </div>
+
+                <!-- Equity Curve Grafik -->
+                <div style="margin: 15px 0;">
+                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px;">📈 Equity Eğrisi</div>
+                    <div id="equity-curve-chart" style="height: 200px; background: rgba(0,0,0,0.2); border-radius: 6px; position: relative;">
+                        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--text-muted); font-size: 0.85rem;">
+                            Grafik yükleniyor...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- İşlem Geçmişi Tablosu -->
+                <div style="margin: 15px 0;">
+                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px;">📋 İşlem Geçmişi (Son 10)</div>
+                    <div style="max-height: 300px; overflow-y: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
+                            <thead style="position: sticky; top: 0; background: rgba(30,35,45,0.95);">
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                                    <th style="padding: 8px; text-align: left; color: var(--text-muted);">Entry</th>
+                                    <th style="padding: 8px; text-align: left; color: var(--text-muted);">Exit</th>
+                                    <th style="padding: 8px; text-align: right; color: var(--text-muted);">PnL</th>
+                                    <th style="padding: 8px; text-align: center; color: var(--text-muted);">Reason</th>
+                                </tr>
+                            </thead>
+                            <tbody id="trades-table-body">
+                                <tr>
+                                    <td colspan="4" style="padding: 20px; text-align: center; color: var(--text-muted);">
+                                        Henüz işlem yok
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
