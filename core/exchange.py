@@ -442,7 +442,7 @@ class ExchangeManager:
                 df_target = StrategyIndicators.add_all_indicators(df_target)
                 df_target['volatility_ema'] = AdvancedFeatures.get_volatility(df_target['close'], span=20)
                 df_target.ffill(inplace=True); df_target.bfill(inplace=True)
-                
+
                 if not df_target.empty:
                     current_price = df_target.iloc[-1]['close']
                     last_processed_ts = current_timestamp_min
@@ -466,35 +466,67 @@ class ExchangeManager:
 
                     logger.debug(f"▶️ {symbol} strateji aktif: {active_strat_id}, strategy={strategy}")
 
+                    # 7.6 TÜM STRATEJİLERDEN SİNYAL TOPLA (Sabit + Dinamik JSON)
+                    from strategy.manager import StrategyManager
+
+                    try:
+                        # Tüm stratejiler için sinyal üret
+                        all_signals = StrategyManager.generate_signals(df_target)
+
+                        # Her strateji için sinyal işleme
+                        for strat_name, signal in all_signals.items():
+                            # Bu strateji bu sembol için aktif mi kontrol et
+                            if strat_name != active_strat_id and strat_name != 'trend_master':
+                                continue  # Sadece aktif stratejiyi işle
+
+                            # Sinyal işleme
+                            if signal == 2:  # AL (LONG)
+                                # Açık LONG pozisyon yoksa işleme gir
+                                has_open_long = any(
+                                    pos['symbol'] == symbol and pos['direction'] == 'LONG'
+                                    for pos in paper_engine.open_positions
+                                )
+
+                                if not has_open_long:
+                                    logger.info(f"🟢 {strat_name} AL sinyali: {symbol} @ {current_price:.2f}")
+                                    await paper_engine.process_signal(
+                                        symbol, current_price, df_target,
+                                        ml_confidence=0.70,  # Yüksek güven
+                                        htf_trend=htf_trend, regime=regime_info['regime']
+                                    )
+
+                            elif signal == 0:  # SAT (SHORT)
+                                # Açık LONG pozisyon varsa kapat
+                                for i, pos in enumerate(paper_engine.open_positions):
+                                    if pos['symbol'] == symbol and pos['direction'] == 'LONG':
+                                        logger.info(f"🔴 {strat_name} SAT sinyali: {symbol} @ {current_price:.2f} (LONG kapatılıyor)")
+                                        await paper_engine._close_position(
+                                            i, pos, current_price,
+                                            f"{strat_name} SAT sinyali"
+                                        )
+                                        break
+
+                            # signal == 1 (BEKLE) → Aksiyon yok
+
+                    except Exception as e:
+                        logger.error(f"❌ Strateji sinyalleri işlenirken hata ({symbol}): {e}")
+                        # Hata durumunda mevcut process_signal'a devam et
+                        ml_confidence = 0.50
+                        await paper_engine.process_signal(
+                            symbol, current_price, df_target,
+                            ml_confidence=ml_confidence,
+                            htf_trend=htf_trend, regime=regime_info['regime']
+                        )
+
                     # 8. YAPAY ZEKA TAHMİNİ (Hedef Vade Verileriyle)
+                    # Not: StrategyManager.generate_signals() zaten kullanıldı
+                    # ML confidence artık process_signal içinde kullanılmıyor (StrategyExecutor kendi içinde hesaplıyor)
                     ml_confidence = 0.50
-                    if xgb_model:
-                        try:
-                            feature_cols = [
-                                'open', 'high', 'low', 'close', 'volume', 
-                                'SMA_20', 'EMA_50', 'RSI_14', 
-                                'MACD_12_26_9', 'MACDs_12_26_9', 'MACDh_12_26_9',
-                                'ATR_14', 'BBU_20_2.0_2.0', 'BBL_20_2.0_2.0', 'VWAP', 'volatility_ema'
-                            ]
-                            # Sadece mevcut kolonları seç
-                            valid_cols = [c for c in feature_cols if c in df_target.columns]
-                            last_row = df_target[valid_cols].iloc[[-1]].fillna(0)
-                            
-                            if len(valid_cols) == len(feature_cols):
-                                probs = xgb_model.predict_proba(last_row)
-                                ml_confidence = float(np.max(probs[0]))
-                            else:
-                                logger.warning(f"⚠️ {symbol} için eksik feature kolonları var. Skips ML.")
-                        except Exception as e:
-                            logger.error(f"ML Tahmin Hatası ({symbol}): {e}")
-                    else:
-                        import random
-                        ml_confidence = random.uniform(0.6, 0.9)
 
                     # 9. SİNYAL İŞLEME VE KAĞIT TİCARETİ (HTF Trendi + Market Regime Dahil Edildi)
-                    await paper_engine.process_signal(symbol, current_price, df_target, ml_confidence, 
-                                               htf_trend=htf_trend, regime=regime_info['regime'])
-                    logger.info(f"✅ {symbol} {target_tf} (HTF: {htf_trend} | REJİM: {regime_info['regime']}) analiz tamamlandı.")
+                    # Not: Yukarıdaki StrategyManager.generate_signals() zaten process_signal'ı çağırdı
+                    # Bu kısım artık sadece loglama için
+                    logger.info(f"✅ {symbol} {target_tf} (HTF: {htf_trend} | REJİM: {regime_info['regime']}) analiz tamamlandı. Sinyaller işlendi.")
 
                 # Bir sonraki kontrol için bekle
                 await asyncio.sleep(30)
