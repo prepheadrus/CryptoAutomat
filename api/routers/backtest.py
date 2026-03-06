@@ -120,25 +120,11 @@ async def fetch_real_data(
 ) -> pd.DataFrame:
     """
     Veritabanından gerçek OHLCV verisi çek.
-
-    Args:
-        symbol: Sembol (örn: BTC/USDT)
-        timeframe: Zaman dilimi (1m, 5m, 15m, 1h, 4h, 1d)
-        days: Kaç günlük veri
-
-    Returns:
-        pd.DataFrame: OHLCV verisi
-
-    Raises:
-        ValueError: Yeterli veri yoksa
     """
     logger.info(f"📊 Veritabanından veri çekiliyor: {symbol} ({timeframe}, {days} gün)")
 
+    exchange = None
     try:
-        # Veritabanından veri çek
-        # TODO: db_manager'a get_ohlcv metodu eklenecek
-        # Şimdilik ccxt ile çekiyoruz (gelecekte veritabanından çekilecek)
-
         # CCXT ile borsadan çek (geçici çözüm)
         exchange = ccxtpro.binance({
             'enableRateLimit': True,
@@ -167,7 +153,6 @@ async def fetch_real_data(
         ohlcv = await exchange.fetch_ohlcv(symbol, timeframe, limit=min(total_bars, 5000))
 
         if not ohlcv or len(ohlcv) < 100:
-            await exchange.close()
             raise ValueError(f"Yetersiz veri: {len(ohlcv)} mum. En az 100 mum gerekli.")
 
         # DataFrame'e çevir
@@ -178,8 +163,6 @@ async def fetch_real_data(
         # ATR ekle (backtest için gerekli)
         df['ATR_14'] = StrategyIndicators.atr(df['high'], df['low'], df['close'], 14)
 
-        await exchange.close()
-
         logger.info(f"✅ Veri çekildi: {len(df)} mum, {symbol} ({timeframe})")
 
         return df
@@ -187,6 +170,11 @@ async def fetch_real_data(
     except Exception as e:
         logger.error(f"❌ Veri çekme hatası: {e}")
         raise ValueError(f"Veri çekilemedi: {str(e)}")
+
+    finally:
+        # Exchange connection'ı her zaman kapat
+        if exchange:
+            await exchange.close()
 
 
 def generate_mock_data(
@@ -213,13 +201,6 @@ def generate_mock_data(
 def calculate_signals(df: pd.DataFrame, strategy_data: Dict[str, Any]) -> pd.Series:
     """
     Strateji JSON'undan sinyaller üret.
-    
-    Args:
-        df: OHLCV verisi
-        strategy_data: Strateji JSON
-        
-    Returns:
-        pd.Series: Sinyaller (0=SAT, 1=BEKLE, 2=AL)
     """
     try:
         # Geçici JSON dosyası oluştur
@@ -227,25 +208,47 @@ def calculate_signals(df: pd.DataFrame, strategy_data: Dict[str, Any]) -> pd.Ser
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as f:
             json.dump(strategy_data, f, indent=2, ensure_ascii=False)
             temp_json_path = f.name
-        
+
         # StrategyExecutor'ı başlat
         executor = StrategyExecutor(temp_json_path)
-        
+
         # Veriyi hazırla (indikatörleri hesapla)
         prepared_df = executor.prepare_data(df.copy())
-        
+
+        # Eğer indikatör hesaplanmamışsa (JSON'da yoksa), yaygın indikatörleri otomatik hesapla
+        if 'RSI_14' not in prepared_df.columns:
+            logger.warning("RSI_14 bulunamadı, otomatik hesaplanıyor...")
+            prepared_df['RSI_14'] = StrategyIndicators.rsi(prepared_df['close'], 14)
+
+        if 'MACD_12_26_9' not in prepared_df.columns:
+            logger.warning("MACD_12_26_9 bulunamadı, otomatik hesaplanıyor...")
+            macd, signal, hist = StrategyIndicators.macd(prepared_df['close'], 12, 26, 9)
+            prepared_df['MACD_12_26_9'] = macd
+            prepared_df['MACD_Signal_12_26_9'] = signal
+
+        if 'EMA_20' not in prepared_df.columns:
+            prepared_df['EMA_20'] = StrategyIndicators.ema(prepared_df['close'], 20)
+
+        if 'SMA_20' not in prepared_df.columns:
+            prepared_df['SMA_20'] = StrategyIndicators.sma(prepared_df['close'], 20)
+
+        if 'ATR_14' not in prepared_df.columns:
+            prepared_df['ATR_14'] = StrategyIndicators.atr(
+                prepared_df['high'], prepared_df['low'], prepared_df['close'], 14
+            )
+
         # Sinyalleri üret
         signals = []
         for i in range(len(prepared_df)):
             signal = executor.generate_signal(prepared_df.iloc[:i+1])
             signals.append(signal)
-        
+
         # Geçici dosyayı temizle
         import os
         os.unlink(temp_json_path)
-        
+
         return pd.Series(signals, index=df.index)
-        
+
     except Exception as e:
         logger.error(f"❌ Sinyal hesaplama hatası: {e}")
         # Varsayılan: Hepsi BEKLE
