@@ -1,0 +1,57 @@
+{
+  "name": "EMA Crossover",
+  "description": "Hızlı ve yavaş EMA kesişimi ile trend takibi",
+  "version": "1.0",
+  "author": "CryptoAlgoBot",
+  "created_at": "2026-03-06T00:00:00",
+  "timeframe": "1h",
+  "indicators": [
+    {
+      "id": "ema_fast",
+      "type": "EMA",
+      "parameters": {
+        "length": 9
+      }
+    },
+    {
+      "id": "ema_slow",
+      "type": "EMA",
+      "parameters": {
+        "length": 21
+      }
+    }
+  ],
+  "conditions": {
+    "long": {
+      "logic": "AND",
+      "rules": [
+        {
+          "indicator": "ema_fast",
+          "operator": ">",
+          "value": "ema_slow"
+        }
+      ]
+    },
+    "short": {
+      "logic": "AND",
+      "rules": [
+        {
+          "indicator": "ema_fast",
+          "operator": "<",
+          "value": "ema_slow"
+        }
+      ]
+    }
+  },
+  "risk": {
+    "stop_loss": {
+      "type": "ATR",
+      "multiplier": 2.5
+    },
+    "take_profit": {
+      "type": "ATR",
+      "multiplier": 3.5
+    },
+    "max_risk_percent": 2.0
+  }
+}

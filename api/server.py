@@ -7,6 +7,7 @@ from core.logger import logger
 from core.config import CONFIG
 from data.database import db_manager
 from core.exchange import exchange_manager
+from api.strategy_builder_api import router as strategy_builder_router
 import asyncio
 import pandas as pd
 import numpy as np
@@ -47,6 +48,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Strategy Builder Router
+app.include_router(strategy_builder_router)
 
 @app.on_event("startup")
 async def startup_event():
