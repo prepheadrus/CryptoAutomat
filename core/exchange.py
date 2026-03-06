@@ -132,19 +132,34 @@ class ExchangeManager:
             return []
 
     async def watch_ticker_loop(self, symbol):
-        """WebSocket üzerinden gerçek zamanlı anlık fiyat dinleyicisi"""
+        """
+        WebSocket üzerinden gerçek zamanlı anlık fiyat dinleyicisi.
+
+        ADIM 4 ENTEGRASYONU:
+        - WebSocket'ten ticker alır
+        - Açık pozisyon varsa paper_engine.update_live_prices() çağırır
+        - Bu metod içinde update_trailing_stop() ve check_exit_condition() çalışır
+        """
         from core.paper import paper_engine # Loop delayı önlemek için içe aktarıldı
-        
+
         logger.info(f"{symbol} için WebSocket Ticker akışı başlatıldı.")
         while True:
             try:
                 # Gerçek zamanlı itme (push) teknolojisi ile anlık veriyi çek
                 ticker = await self.exchange.watch_ticker(symbol)
                 current_price = ticker['last']
-                
-                # Sanal Ticaret (Paper Trade) Modülü - Açık pozisyonları canlı saniyede güncelle
-                await paper_engine.update_live_prices(symbol, current_price)
-                
+
+                # === ADIM 4: TRAILING STOP ENTEGRASYONU ===
+                # Açık pozisyonları kontrol et ve trailing stop güncelle
+                # update_live_prices() içinde:
+                #   1. update_trailing_stop() - Trailing stop güncelleme
+                #   2. check_exit_condition() - Stop patlama kontrolü
+                if symbol in [pos['symbol'] for pos in paper_engine.open_positions]:
+                    # Sadece açık pozisyon varsa güncelle (performans optimizasyonu)
+                    await paper_engine.update_live_prices(symbol, current_price)
+                    # Not: current_price hem high hem low olarak kullanılıyor
+                    # Gelecek iyileştirme: 1m mum high/low kullanmak için fetch_ohlcv gerekebilir
+
                 # Terminal kirletilmemesi için artık debug'a basmıyoruz
                 # logger.debug(f"[WS] {symbol} Fiyat: {current_price}, Hacim: {ticker['baseVolume']}")
             except asyncio.CancelledError:

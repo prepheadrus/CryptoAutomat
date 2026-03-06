@@ -282,11 +282,13 @@ class PaperTrader:
             'liquidation_price': liq_price,
             'pnl_percent': 0.0,
             'unrealized_usd': -fee, # Komisyon anında zarara yansır
-            # Dinamik İzleyen Stop (Trailing Stop) Metrikleri
-            'highest_price': execution_price,
-            'lowest_price': execution_price,
-            'atr': atr,
-            'atr_multiplier': multiplier,
+
+            # ADIM 1: Dinamik İzleyen Stop (Trailing Stop) için gerekli state değişkenleri
+            'atr': atr,                    # İşleme girildiği anki ATR değeri
+            'atr_multiplier': multiplier,  # Piyasa gürültüsünden korunmak için çarpan (Örn: 2.0)
+            'highest_seen': execution_price, # LONG için: Fiyatın ulaştığı en yüksek nokta
+            'lowest_seen': execution_price,  # SHORT için: Fiyatın ulaştığı en düşük nokta
+
             # Raporlama için ek meta veriler
             'strategy': strategy.name(),
             'timeframe': self.active_timeframes.get(symbol, '1m')
@@ -298,28 +300,26 @@ class PaperTrader:
         logger.info(f"[PAPER TRADE] {direction} İşlemi Açıldı: {symbol} | Giriş: {execution_price:.2f} | Kaldıraç: {leverage}x")
 
     async def update_live_prices(self, symbol: str, current_price: float):
-        """WebSocket ile Borsa Ticker'ından gelen her yeni fiyatta açık pozisyonların anlık PnL'sini hesaplar."""
+        """
+        WebSocket ile Borsa Ticker'ından gelen her yeni fiyatta
+        açık pozisyonların anlık PnL'sini hesaplar.
+
+        ADIM 3 ENTEGRASYONU:
+        - update_trailing_stop() ile trailing stop güncellenir
+        - check_exit_condition() ile stop patlama kontrolü yapılır (current_high/low kullanılır)
+        """
         for i, pos in enumerate(self.open_positions):
             if pos['symbol'] == symbol:
                 pos['current_price'] = current_price
-                
-                # --- DİNAMİK İZLEYEN STOP (TRAILING STOP) ---
-                # Fiyat lehimize (kâra) geçtikçe Stop seviyemizi arkasından çekeriz.
-                if pos['direction'] == "LONG":
-                    if current_price > pos['highest_price']:
-                        pos['highest_price'] = current_price
-                        # Yeni Stop = En Yüksek Fiyat - (ATR * Çarpan)
-                        new_stop = current_price - (pos['atr'] * pos['atr_multiplier'])
-                        if new_stop > pos['stop_loss']: # Stop'u sadece YUKARI taşıyabiliriz
-                            pos['stop_loss'] = new_stop
-                else: # SHORT
-                    if current_price < pos['lowest_price']:
-                        pos['lowest_price'] = current_price
-                        # Yeni Stop = En Düşük Fiyat + (ATR * Çarpan)
-                        new_stop = current_price + (pos['atr'] * pos['atr_multiplier'])
-                        if new_stop < pos['stop_loss']: # Stop'u sadece AŞAĞI taşıyabiliriz
-                            pos['stop_loss'] = new_stop
-                
+
+                # --- ADIM 2: İz Süren Stop (Trailing) Güncelleme Fonksiyonu ---
+                # Yeni bir metod olarak ayrılmıştır: update_trailing_stop
+                await self.update_trailing_stop(pos, current_price, current_price)
+
+                # --- ADIM 3: Çıkış Koşulu Kontrolü (Stop Patlama) ---
+                # Şu anlık current_price kullanıyoruz, gelecek adımda mum high/low kullanılacak
+                await self.check_exit_condition(pos, current_price, current_price)
+
                 # Karşılaştırma / Yüzdelik PnL ve USD PnL
                 if pos['direction'] == "LONG":
                     price_diff_percent = ((current_price - pos['entry_price']) / pos['entry_price']) * 100
@@ -327,18 +327,224 @@ class PaperTrader:
                 else: # SHORT
                     price_diff_percent = ((pos['entry_price'] - current_price) / pos['entry_price']) * 100
                     pnl_usd = (pos['entry_price'] - current_price) * pos['size']
-                    
+
                 # Kaldıraçlı ROE (Return on Equity - Ana Paranın Yüzdesi)
                 pos['pnl_percent'] = price_diff_percent * pos['leverage']
                 pos['unrealized_usd'] = pnl_usd
-                
+
                 # Stop Loss veya Take Profit Kesişimi var mı?
                 await self._check_closure(i, pos, current_price)
-                
+
                 # Likidasyon Kontrolü
                 if (pos['direction'] == "LONG" and current_price <= pos['liquidation_price']) or \
                    (pos['direction'] == "SHORT" and current_price >= pos['liquidation_price']):
                     await self._close_position(i, pos, current_price, "LİKİDASYON (Marjin Sıfırlandı)")
+
+    async def update_trailing_stop(self, pos: dict, current_high: float, current_low: float):
+        """
+        ADIM 2: İz Süren Stop (Trailing Stop) güncelleme fonksiyonu.
+
+        Args:
+            pos: Pozisyon dictionary (open_positions içindeki kayıt)
+            current_high: O anki mumun en yüksek fiyatı (high)
+            current_low: O anki mumun en düşük fiyatı (low)
+
+        LONG İşlemler:
+            - current_high > highest_seen ise yeni zirve gelmiş demektir
+            - Zirveden (ATR × Çarpan) çıkararak potansiyel yeni stop hesapla
+            - Eğer yeni stop > eski stop ise stobu güncelle (SADECE YUKARI)
+
+        SHORT İşlemler:
+            - current_low < lowest_seen ise yeni dip gelmiş demektir
+            - Dipten (ATR × Çarpan) ekleyerek potansiyel yeni stop hesapla
+            - Eğer yeni stop < eski stop ise stobu güncelle (SADECE AŞAĞI)
+        """
+        if pos['direction'] == "LONG":
+            # LONG için: Yeni zirve kontrolü
+            if current_high > pos['highest_seen']:
+                # Yeni zirve geldi, highest_seen güncelle
+                pos['highest_seen'] = current_high
+
+                # Potansiyel yeni stop = Zirve - (ATR × Çarpan)
+                new_stop = current_high - (pos['atr'] * pos['atr_multiplier'])
+
+                # Stop'u SADECE YUKARI taşıyabiliriz
+                if new_stop > pos['stop_loss']:
+                    pos['stop_loss'] = new_stop
+                    logger.debug(f"[TRAILING STOP] {pos['symbol']} LONG stop yukarı taşındı: {pos['stop_loss']:.2f}")
+
+        else:  # SHORT
+            # SHORT için: Yeni dip kontrolü
+            if current_low < pos['lowest_seen']:
+                # Yeni dip geldi, lowest_seen güncelle
+                pos['lowest_seen'] = current_low
+
+                # Potansiyel yeni stop = Dip + (ATR × Çarpan)
+                new_stop = current_low + (pos['atr'] * pos['atr_multiplier'])
+
+                # Stop'u SADECE AŞAĞI taşıyabiliriz
+                if new_stop < pos['stop_loss']:
+                    pos['stop_loss'] = new_stop
+                    logger.debug(f"[TRAILING STOP] {pos['symbol']} SHORT stop aşağı taşındı: {pos['stop_loss']:.2f}")
+
+    async def check_exit_condition(self, pos: dict, current_high: float, current_low: float):
+        """
+        ADIM 3: Çıkış Koşulu Kontrolü ve Gerçekçi Simülasyon.
+
+        Stop patlama kontrolü + Slipaj + Komisyon hesaplama.
+
+        Args:
+            pos: Pozisyon dictionary (open_positions içindeki kayıt)
+            current_high: O anki mumun en yüksek fiyatı (high)
+            current_low: O anki mumun en düşük fiyatı (low)
+
+        LONG İşlemler:
+            - Eğer current_low <= pos['stop_loss'] ise STOP PATLADI (çıkış tetiklenir)
+
+        SHORT İşlemler:
+            - Eğer current_high >= pos['stop_loss'] ise STOP PATLADI (çıkış tetiklenir)
+
+        Gerçekçi Simülasyon:
+            - Çıkış fiyatı olarak stop_loss seviyesi baz alınır
+            - Slipaj (1.0001) uygulanır:
+              * LONG çıkış (satış): exit_price / 1.0001 (biraz daha aşağıdan sat)
+              * SHORT çıkış (alış): exit_price * 1.0001 (biraz daha yukarıdan al)
+            - Komisyon (fee_rate) uygulanır
+            - Net PnL hesaplanır
+        """
+        should_close = False
+        reason = ""
+        exit_price = 0.0
+
+        # --- STOP PATLAMA KONTROLÜ ---
+        if pos['direction'] == "LONG":
+            # LONG için: current_low <= stop_loss ise stop patladı
+            if current_low <= pos['stop_loss']:
+                should_close = True
+                reason = "STOP PATLADI (Long Stop-Loss)"
+                # Çıkış fiyatı olarak stop_loss'u baz al
+                exit_price = pos['stop_loss']
+
+        else:  # SHORT
+            # SHORT için: current_high >= stop_loss ise stop patladı
+            if current_high >= pos['stop_loss']:
+                should_close = True
+                reason = "STOP PATLADI (Short Stop-Loss)"
+                # Çıkış fiyatı olarak stop_loss'u baz al
+                exit_price = pos['stop_loss']
+
+        # --- ÇIKIŞ TETİKLENDİ Mİ? ---
+        if should_close:
+            # === GERÇEKÇİ SİMÜLASYON KALKANI (SLIPAJ + KOMİSYON) ===
+
+            # 1. Slipaj (Slippage) Simülasyonu
+            # Stop-market emriyle çıkıldığı için fiyat kayması olur
+            is_spot = pos.get('market_type', 'swap') == 'spot'
+            fee_rate = self.fee_rate_spot if is_spot else self.fee_rate_futures
+
+            if pos['direction'] == "LONG":
+                # LONG çıkış (satış): Biraz daha AŞAĞIDAN sat (kötü fiyat)
+                # exit_price / 1.0001 = %0.01 daha aşağıdan satış
+                actual_exit_price = exit_price / 1.0001
+            else:  # SHORT
+                # SHORT çıkış (alış): Biraz daha YUKARIDAN al (kötü fiyat)
+                # exit_price * 1.0001 = %0.01 daha yukarıdan alış
+                actual_exit_price = exit_price * 1.0001
+
+            # 2. Komisyon Hesaplama
+            # Çıkış işlemi için komisyon
+            exit_value_usd = pos['size'] * actual_exit_price
+            exit_fee = exit_value_usd * fee_rate
+
+            # 3. Net PnL Hesaplama
+            # Giriş komisyonu zaten unrealized_usd'de var
+            # Çıkış komisyonunu da ekle
+            if pos['direction'] == "LONG":
+                # LONG: (Çıkış Fiyatı - Giriş Fiyatı) × Boyut - Komisyonlar
+                gross_pnl = (actual_exit_price - pos['entry_price']) * pos['size']
+            else:  # SHORT
+                # SHORT: (Giriş Fiyatı - Çıkış Fiyatı) × Boyut - Komisyonlar
+                gross_pnl = (pos['entry_price'] - actual_exit_price) * pos['size']
+
+            # Net PnL (Giriş komisyonu + Çıkış komisyonu)
+            # unrealized_usd zaten giriş komisyonunu içeriyor (-fee)
+            net_pnl = gross_pnl + pos['unrealized_usd'] - exit_fee
+
+            # 4. Pozisyonu Kapat
+            # İndeks bul
+            pos_index = self.open_positions.index(pos)
+
+            # Pozisyonu kapat (manuel çağrı)
+            await self._close_position_with_pnl(
+                index=pos_index,
+                pos=pos,
+                exit_price=actual_exit_price,
+                net_pnl=net_pnl,
+                exit_fee=exit_fee,
+                reason=reason
+            )
+
+            # 5. Log Kaydı
+            logger.warning(
+                f"🚨 {reason} | {pos['symbol']} | "
+                f"Giriş: {pos['entry_price']:.2f} | "
+                f"Çıkış: {actual_exit_price:.2f} | "
+                f"Stop: {pos['stop_loss']:.2f} | "
+                f"PnL: ${net_pnl:.2f} | "
+                f"Komisyon: ${exit_fee:.2f}"
+            )
+
+    async def _close_position_with_pnl(self, index: int, pos: dict, exit_price: float,
+                                        net_pnl: float, exit_fee: float, reason: str):
+        """
+        Yardımcı metod: Pozisyonu hesaplanmış PnL ile kapatır.
+
+        Args:
+            index: Pozisyon indeksi (open_positions listesinde)
+            pos: Pozisyon dictionary
+            exit_price: Gerçek çıkış fiyatı (slipaj uygulanmış)
+            net_pnl: Hesaplanmış net PnL (giriş + çıkış komisyonları dahil)
+            exit_fee: Çıkış komisyonu
+            reason: Kapanış nedeni
+        """
+        from data.database import db_manager
+
+        # Serbest marjini serbest bırak (Girişteki bloke kalkar)
+        self.used_margin -= pos['margin']
+        self.free_margin += pos['margin']
+
+        # PnL ana bakiyeyi doğrudan günceller
+        self.balance += net_pnl
+        self.free_margin += net_pnl
+
+        # Veri Kaydı Hazırla
+        trade_record = {
+            'symbol': pos['symbol'],
+            'direction': pos['direction'],
+            'entry_price': pos['entry_price'],
+            'exit_price': exit_price,
+            'size': pos['size'],
+            'leverage': pos['leverage'],
+            'pnl_usd': net_pnl,
+            'pnl_percent': pos['pnl_percent'],
+            'reason': reason,
+            'strategy': pos.get('strategy', 'Bilinmiyor'),
+            'timeframe': pos.get('timeframe', '1m')
+        }
+
+        # --- VERİTABANI KAYIT ---
+        await db_manager.save_trade(trade_record)
+
+        # Geçmişe logla ve listeden sil
+        self.trade_history.append(trade_record)
+        self.open_positions.pop(index)
+
+        # Global İstatistik Güncelleme
+        self.total_trades += 1
+        if net_pnl > 0:
+            self.total_wins += 1
+        self.total_pnl += net_pnl
+        self.total_commission += exit_fee
 
     async def close_position_by_symbol(self, symbol: str):
         """Dışarıdan (Arayüzden) gelen kapatma isteğini işler."""
