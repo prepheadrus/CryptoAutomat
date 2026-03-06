@@ -186,7 +186,41 @@ async function fetchBotData() {
         }
         document.getElementById('exchange-val').innerText = statusData.exchange.toUpperCase();
 
-        // --- SİSTEM DURUM ÖZETİ (YENİ) ---
+        // --- DİNAMİK PARİTE ROZETLERİ (CANLI TAKİP) ---
+        const badgeContainer = document.getElementById('active-symbols-badges');
+        if (badgeContainer) {
+            badgeContainer.innerHTML = '';
+
+            // Strateji bilgilerini al
+            const stratRes = await fetch('/api/v1/strategies');
+            const stratData = await stratRes.json();
+
+            statusData.tracking_symbols.forEach(sym => {
+                const badge = document.createElement('div');
+                badge.className = 'symbol-badge-card';
+
+                // Strateji bilgisi
+                const activeStrategy = stratData.active_strategies[sym] || 'trend_master';
+                const activeTimeframe = stratData.active_timeframes[sym] || '1m';
+                const marketType = stratData.market_types[sym] || 'swap';
+
+                // Strateji adını bul
+                const strategyInfo = stratData.strategies.find(s => s.id === activeStrategy);
+                const strategyName = strategyInfo ? strategyInfo.name.split(' ')[0] : 'Unknown'; // Kısa isim
+
+                badge.innerHTML = `
+                    <div class="symbol-badge-header">
+                        <span class="symbol-name">${sym.replace('/USDT', '')}</span>
+                        <span class="market-type ${marketType}">${marketType === 'spot' ? '🟡 Spot' : '🔵 Futures'}</span>
+                    </div>
+                    <div class="symbol-badge-info">
+                        <span class="strategy-name">🤖 ${strategyName}</span>
+                        <span class="timeframe-badge">⏱️ ${activeTimeframe}</span>
+                    </div>
+                `;
+                badgeContainer.appendChild(badge);
+            });
+        }
         const statusSummary = document.getElementById('system-status-summary');
         if (statusSummary) {
             // Strateji bilgilerini al
@@ -202,6 +236,11 @@ async function fetchBotData() {
                     </div>
                 `;
             } else {
+                // Dashboard metriklerini al (latest_decisions için gerekli)
+                const metricsRes = await fetch('/api/v1/dashboard-metrics');
+                const metricsData = await metricsRes.json();
+                const metrics = metricsData; // latest_decisions burada
+
                 // MEVCUT KARTLARI GÜNCELLE (Yeniden oluşturma yerine)
                 const existingCards = statusSummary.querySelectorAll('.system-status-card');
                 const symbolMap = new Map();
@@ -226,7 +265,7 @@ async function fetchBotData() {
                     const strategyName = strategyInfo ? strategyInfo.name : 'Unknown';
 
                     // Son kararı bul
-                    const decision = metrics.latest_decisions[sym] || null;
+                    const decision = metrics.latest_decisions ? metrics.latest_decisions[sym] : null;
                     const signalText = decision ?
                         (decision.signal_val === 2 ? '🟢 AL' : decision.signal_val === 0 ? '🔴 SAT' : '⚪ BEKLE') :
                         '⚪ Başlatılıyor...';
