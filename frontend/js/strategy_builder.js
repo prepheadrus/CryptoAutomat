@@ -68,33 +68,49 @@ function setupIndicatorButtons() {
 // KOŞUL OLUŞTURUCU
 // ============================================================================
 
-function addCondition(type) {
+function addCondition(type, conditionData = null) {
     const container = document.getElementById(`${type}-conditions-container`);
-    const conditionId = `${type}-${Date.now()}`;
-    
+    const conditionId = `${type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
     // Koşul objesi oluştur
     const condition = {
         id: conditionId,
-        indicator: '',
-        operator: '<',
-        value: ''
+        indicator: conditionData?.indicator || '',
+        operator: conditionData?.operator || '<',
+        value: conditionData?.value || ''
     };
-    
+
     // Array'e ekle
     if (type === 'long') {
         longConditions.push(condition);
     } else {
         shortConditions.push(condition);
     }
-    
+
     // HTML oluştur
     const conditionHTML = createConditionHTML(condition, type);
     container.insertAdjacentHTML('beforeend', conditionHTML);
-    
+
+    // Satırı bul ve değerleri doldur (eğer conditionData varsa)
+    if (conditionData) {
+        setTimeout(() => {
+            const row = document.getElementById(conditionId);
+            if (row) {
+                const indicatorSelect = row.querySelector('.condition-indicator');
+                const operatorSelect = row.querySelector('.condition-operator');
+                const valueInput = row.querySelector('.condition-value');
+
+                if (indicatorSelect) indicatorSelect.value = conditionData.indicator || '';
+                if (operatorSelect) operatorSelect.value = conditionData.operator || '<';
+                if (valueInput) valueInput.value = conditionData.value || '';
+            }
+        }, 0);
+    }
+
     // Event listener'ları ekle
     setupConditionListeners(conditionId, type);
-    
-    console.log(`[OK] ${type.toUpperCase()} koşulu eklendi:`, conditionId);
+
+    console.log(`[OK] ${type.toUpperCase()} koşulu eklendi:`, conditionId, conditionData || '');
 }
 
 function createConditionHTML(condition, type) {
@@ -387,7 +403,7 @@ async function loadStrategy(filename) {
                 document.getElementById('max-risk-percent').value = data.risk.max_risk_percent || 2.0;
             }
 
-            // 4. İndikatörleri işaretle
+            // 4. İndikatörleri işaretle ve seçili olarak ekle
             if (data.indicators && data.indicators.length > 0) {
                 data.indicators.forEach(ind => {
                     // İndikatör butonunu bul ve işaretle
@@ -395,11 +411,12 @@ async function loadStrategy(filename) {
                     buttons.forEach(btn => {
                         if (btn.dataset.type === ind.name) {
                             btn.classList.add('selected');
-                            selectedIndicators.push({
-                                name: ind.name,
-                                ...ind
-                            });
                         }
+                    });
+                    // Seçili indikatörler listesine ekle
+                    selectedIndicators.push({
+                        name: ind.name,
+                        ...ind
                     });
                 });
             }
@@ -415,33 +432,20 @@ async function loadStrategy(filename) {
                     });
                 }
 
-                // Her LONG koşulunu ekle
+                // Her LONG koşulunu ekle (conditionData ile)
                 if (data.conditions.LONG.conditions && data.conditions.LONG.conditions.length > 0) {
-                    // İlk koşulu temizle (clearForm'dan gelen)
+                    // Container'ı temizle
                     const longContainer = document.getElementById('long-conditions-container');
                     if (longContainer) longContainer.innerHTML = '';
                     longConditions = [];
 
                     // Tüm koşulları ekle
-                    data.conditions.LONG.conditions.forEach((cond, index) => {
-                        addCondition('long');
-
-                        // Son eklenen koşulu bul ve değerleri ata
-                        const conditionId = longConditions[longConditions.length - 1].id;
-                        const row = document.getElementById(conditionId);
-                        if (row) {
-                            row.querySelector('.condition-indicator').value = cond.indicator || '';
-                            row.querySelector('.condition-operator').value = cond.operator || '<';
-                            row.querySelector('.condition-value').value = cond.value || '';
-
-                            // Array'i güncelle
-                            const condition = longConditions.find(c => c.id === conditionId);
-                            if (condition) {
-                                condition.indicator = cond.indicator || '';
-                                condition.operator = cond.operator || '<';
-                                condition.value = cond.value || '';
-                            }
-                        }
+                    data.conditions.LONG.conditions.forEach((cond) => {
+                        addCondition('long', {
+                            indicator: cond.indicator || '',
+                            operator: cond.operator || '<',
+                            value: cond.value !== undefined ? cond.value : ''
+                        });
                     });
                 }
             }
@@ -457,33 +461,20 @@ async function loadStrategy(filename) {
                     });
                 }
 
-                // Her SHORT koşulunu ekle
+                // Her SHORT koşulunu ekle (conditionData ile)
                 if (data.conditions.SHORT.conditions && data.conditions.SHORT.conditions.length > 0) {
-                    // İlk koşulu temizle (clearForm'dan gelen)
+                    // Container'ı temizle
                     const shortContainer = document.getElementById('short-conditions-container');
                     if (shortContainer) shortContainer.innerHTML = '';
                     shortConditions = [];
 
                     // Tüm koşulları ekle
-                    data.conditions.SHORT.conditions.forEach((cond, index) => {
-                        addCondition('short');
-
-                        // Son eklenen koşulu bul ve değerleri ata
-                        const conditionId = shortConditions[shortConditions.length - 1].id;
-                        const row = document.getElementById(conditionId);
-                        if (row) {
-                            row.querySelector('.condition-indicator').value = cond.indicator || '';
-                            row.querySelector('.condition-operator').value = cond.operator || '<';
-                            row.querySelector('.condition-value').value = cond.value || '';
-
-                            // Array'i güncelle
-                            const condition = shortConditions.find(c => c.id === conditionId);
-                            if (condition) {
-                                condition.indicator = cond.indicator || '';
-                                condition.operator = cond.operator || '<';
-                                condition.value = cond.value || '';
-                            }
-                        }
+                    data.conditions.SHORT.conditions.forEach((cond) => {
+                        addCondition('short', {
+                            indicator: cond.indicator || '',
+                            operator: cond.operator || '<',
+                            value: cond.value !== undefined ? cond.value : ''
+                        });
                     });
                 }
             }
