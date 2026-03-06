@@ -6,6 +6,13 @@ function setupTabs() {
     buttons.forEach(btn => {
         btn.addEventListener('click', () => {
             if (!btn.hasAttribute('data-target')) return;
+
+            // Strateji Laboratuvarı linki → strategy_builder.html'e yönlendir
+            if (btn.getAttribute('data-target') === 'tab-strategy-lab') {
+                window.location.href = 'strategy_builder.html';
+                return;
+            }
+
             buttons.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             const targetId = btn.getAttribute('data-target');
