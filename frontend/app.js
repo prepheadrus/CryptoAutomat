@@ -188,12 +188,6 @@ async function fetchBotData() {
 
         // --- SİSTEM DURUM ÖZETİ (AKTİF EMİRLER SAYFASI İÇİN) ---
         const statusSummary = document.getElementById('system-status-summary');
-        const exchangeInfo = document.getElementById('exchange-info');
-
-        // Borsa bilgisini güncelle
-        if (exchangeInfo) {
-            exchangeInfo.innerText = statusData.exchange.toUpperCase();
-        }
 
         if (statusSummary) {
             // Strateji bilgilerini al
