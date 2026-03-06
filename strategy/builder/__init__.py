@@ -12,8 +12,8 @@ from .condition_parser import (
     parse_condition_json,
     evaluate_strategy
 )
-from .json_validator import StrategyValidator
 from .executor import StrategyExecutor
+from .json_validator import StrategyValidator
 
 __all__ = [
     'StrategyBuilder',
@@ -23,6 +23,6 @@ __all__ = [
     'LogicOperator',
     'parse_condition_json',
     'evaluate_strategy',
-    'StrategyValidator',
-    'StrategyExecutor'
+    'StrategyExecutor',
+    'StrategyValidator'
 ]
