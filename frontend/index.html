@@ -31,7 +31,7 @@
                 <button class="menu-item" data-target="tab-orders">⚡ Aktif Emirler</button>
                 <button class="menu-item" data-target="tab-history">📜 İşlem Geçmişi</button>
                 <button class="menu-item" data-target="tab-reports">📈 Performans Raporları</button>
-                <button class="menu-item" data-target="tab-strategy-lab">🎨 Strateji Laboratuvarı</button>
+                <button class="menu-item" data-target="tab-strategy-builder">🎨 Strateji Oluşturucu</button>
                 <button class="menu-item" data-target="tab-strategies">📚 Strateji Kütüphanesi</button>
                 <button class="menu-item" data-target="tab-settings">⚙️ Sistem Ayarları</button>
                 <button class="menu-item" data-target="tab-data">💾 Veri Laboratuvarı</button>
@@ -385,49 +385,239 @@
                 </div>
             </div>
 
-            <!-- SEKME 6: STRATEJİ LABORATUVARI (NO-CODE OLUŞTURUCU) -->
-            <div id="tab-strategy-lab" class="tab-content" style="display: none;">
-                <!-- INLINE CSS: Grid Layout -->
-                <style>
-                    .builder-container {
-                        display: grid !important;
-                        grid-template-columns: 300px 1fr 300px !important;
-                        gap: 20px !important;
-                        height: calc(100vh - 150px) !important;
-                        padding: 20px !important;
-                    }
-                    .panel {
-                        background: rgba(30, 35, 45, 0.8) !important;
-                        border: 1px solid rgba(255, 255, 255, 0.1) !important;
-                        border-radius: 12px !important;
-                        padding: 15px !important;
-                        overflow-y: auto !important;
-                        display: block !important;
-                    }
-                    .panel-header {
-                        font-size: 1.1rem !important;
-                        font-weight: 700 !important;
-                        color: #58a6ff !important;
-                        margin-bottom: 15px !important;
-                        padding-bottom: 10px !important;
-                        border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
-                        display: block !important;
-                    }
-                    .indicator-category { margin-bottom: 20px !important; display: block !important; }
-                    .category-title { font-size: 0.85rem !important; color: #8b949e !important; text-transform: uppercase !important; letter-spacing: 1px !important; margin-bottom: 10px !important; display: block !important; }
-                    .indicator-item { display: flex !important; justify-content: space-between !important; align-items: center !important; padding: 10px !important; background: rgba(255, 255, 255, 0.05) !important; border-radius: 6px !important; margin-bottom: 8px !important; cursor: pointer !important; }
-                    .indicator-name { font-weight: 600 !important; color: #e6edf3 !important; }
-                    .btn-add { background: #58a6ff !important; color: #fff !important; border: none !important; padding: 5px 12px !important; border-radius: 4px !important; cursor: pointer !important; font-size: 0.75rem !important; }
-                    .condition-builder { background: rgba(0, 0, 0, 0.3) !important; border-radius: 8px !important; padding: 15px !important; margin-bottom: 15px !important; display: block !important; }
-                    .condition-side { font-size: 1rem !important; font-weight: 700 !important; margin-bottom: 10px !important; display: block !important; }
-                    .condition-side.long { color: #2ea043 !important; }
-                    .condition-side.short { color: #f85149 !important; }
-                    .btn-add-rule { background: transparent !important; border: 1px dashed #8b949e !important; color: #8b949e !important; padding: 8px !important; width: 100% !important; border-radius: 4px !important; cursor: pointer !important; margin-top: 10px !important; }
-                    .preview-code { background: rgba(0, 0, 0, 0.5) !important; padding: 15px !important; border-radius: 6px !important; font-family: 'JetBrains Mono', monospace !important; font-size: 0.75rem !important; color: #8b949e !important; white-space: pre-wrap !important; max-height: 400px !important; overflow-y: auto !important; }
-                    .info-row { display: flex !important; justify-content: space-between !important; padding: 8px 0 !important; border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important; }
-                    .info-label { color: #8b949e !important; }
-                    .info-value { color: #e6edf3 !important; font-weight: 600 !important; }
-                    .modal { display: none !important; position: fixed !important; top: 0 !important; left: 0 !important; width: 100% !important; height: 100% !important; background: rgba(0, 0, 0, 0.8) !important; z-index: 1000 !important; justify-content: center !important; align-items: center !important; }
+            <!-- SEKME: STRATEJİ OLUŞTURUCU -->
+            <div id="tab-strategy-builder" class="tab-content" style="display: none;">
+                <div class="builder-container" style="display: grid; grid-template-columns: 300px 1fr 300px; gap: 20px; height: calc(100vh - 150px);">
+
+                    <!-- SOL PANEL: İndikatör Kütüphanesi -->
+                    <div class="panel">
+                        <div class="panel-header">📚 İndikatör Kütüphanesi</div>
+
+                        <input type="text" id="indicator-search" class="form-input" placeholder="🔍 İndikatör ara..." style="width: 100%; margin-bottom: 15px;">
+
+                        <div id="indicator-library">
+                            <!-- Trend -->
+                            <div class="indicator-category">
+                                <div class="category-title">📈 TREND</div>
+                                <div class="indicator-item" data-type="EMA" data-params='{"period": 20}'>
+                                    <span class="indicator-name">EMA</span>
+                                    <button class="btn-add">+</button>
+                                </div>
+                                <div class="indicator-item" data-type="SMA" data-params='{"period": 20}'>
+                                    <span class="indicator-name">SMA</span>
+                                    <button class="btn-add">+</button>
+                                </div>
+                                <div class="indicator-item" data-type="ATR" data-params='{"period": 14}'>
+                                    <span class="indicator-name">ATR</span>
+                                    <button class="btn-add">+</button>
+                                </div>
+                            </div>
+
+                            <!-- Momentum -->
+                            <div class="indicator-category">
+                                <div class="category-title">🚀 MOMENTUM</div>
+                                <div class="indicator-item" data-type="RSI" data-params='{"period": 14}'>
+                                    <span class="indicator-name">RSI</span>
+                                    <button class="btn-add">+</button>
+                                </div>
+                                <div class="indicator-item" data-type="MACD" data-params='{"fast": 12, "slow": 26, "signal": 9}'>
+                                    <span class="indicator-name">MACD</span>
+                                    <button class="btn-add">+</button>
+                                </div>
+                                <div class="indicator-item" data-type="Stochastic" data-params='{"k": 14, "d": 3}'>
+                                    <span class="indicator-name">Stochastic</span>
+                                    <button class="btn-add">+</button>
+                                </div>
+                            </div>
+
+                            <!-- Volatilite -->
+                            <div class="indicator-category">
+                                <div class="category-title">📊 VOLATİLİTE</div>
+                                <div class="indicator-item" data-type="Bollinger" data-params='{"period": 20, "std": 2.0}'>
+                                    <span class="indicator-name">Bollinger</span>
+                                    <button class="btn-add">+</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Kaydedilmiş Stratejiler -->
+                        <div style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+                            <div class="panel-header" style="font-size: 0.9rem;">💾 Kaydedilmiş Stratejiler</div>
+                            <div id="saved-strategies-list" style="max-height: 200px; overflow-y: auto;">
+                                <div style="text-align: center; padding: 20px; color: var(--text-muted);">
+                                    ⏳ Yükleniyor...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ORTA PANEL: Koşul Oluşturucu -->
+                    <div class="panel">
+                        <div class="panel-header">⚙️ Koşul Oluşturucu</div>
+
+                        <!-- Strateji Adı -->
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px;">
+                                Strateji Adı
+                            </label>
+                            <input type="text" id="strategy-name" class="form-input" value="Yeni Strateji" style="width: 100%;">
+                        </div>
+
+                        <!-- Strateji Açıklaması -->
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px;">
+                                Açıklama
+                            </label>
+                            <textarea id="strategy-description" class="form-input" rows="2" placeholder="Strateji açıklaması..." style="width: 100%;"></textarea>
+                        </div>
+
+                        <!-- LONG Koşulları -->
+                        <div class="condition-builder">
+                            <div class="condition-side long">🟢 LONG Koşulları</div>
+
+                            <div class="logic-selector" id="long-logic-selector" style="display: flex; gap: 10px; margin-bottom: 15px;">
+                                <div class="logic-btn active" data-logic="AND" style="flex: 1; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; cursor: pointer; text-align: center;">VE (AND)</div>
+                                <div class="logic-btn" data-logic="OR" style="flex: 1; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; cursor: pointer; text-align: center;">VEYA (OR)</div>
+                            </div>
+
+                            <div id="long-conditions-container">
+                                <!-- Koşullar buraya eklenecek -->
+                            </div>
+
+                            <button class="btn-add-rule" onclick="addCondition('long')">➕ LONG Koşulu Ekle</button>
+                        </div>
+
+                        <!-- SHORT Koşulları -->
+                        <div class="condition-builder" style="margin-top: 20px;">
+                            <div class="condition-side short">🔴 SHORT Koşulları</div>
+
+                            <div class="logic-selector" id="short-logic-selector" style="display: flex; gap: 10px; margin-bottom: 15px;">
+                                <div class="logic-btn active" data-logic="AND" style="flex: 1; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; cursor: pointer; text-align: center;">VE (AND)</div>
+                                <div class="logic-btn" data-logic="OR" style="flex: 1; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; cursor: pointer; text-align: center;">VEYA (OR)</div>
+                            </div>
+
+                            <div id="short-conditions-container">
+                                <!-- Koşullar buraya eklenecek -->
+                            </div>
+
+                            <button class="btn-add-rule" onclick="addCondition('short')">➕ SHORT Koşulu Ekle</button>
+                        </div>
+                    </div>
+
+                    <!-- SAĞ PANEL: Risk ve Aksiyon -->
+                    <div class="panel">
+                        <div class="panel-header">🎯 Risk Parametreleri</div>
+
+                        <div class="risk-input-group" style="margin-bottom: 15px;">
+                            <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px;">Stop Loss (ATR Çarpanı)</label>
+                            <input type="number" id="stop-loss-atr" class="form-input" value="2.0" step="0.1" min="0.5" max="10" style="width: 100%;">
+                        </div>
+
+                        <div class="risk-input-group" style="margin-bottom: 15px;">
+                            <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px;">Take Profit (ATR Çarpanı)</label>
+                            <input type="number" id="take-profit-atr" class="form-input" value="4.0" step="0.1" min="1" max="20" style="width: 100%;">
+                        </div>
+
+                        <div class="risk-input-group" style="margin-bottom: 15px;">
+                            <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px;">Max Risk (%)</label>
+                            <input type="number" id="max-risk-percent" class="form-input" value="2.0" step="0.1" min="0.1" max="10" style="width: 100%;">
+                        </div>
+
+                        <!-- Backtest Parametreleri -->
+                        <div class="risk-input-group" style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+                            <label style="color: var(--neon-blue); display: block; margin-bottom: 10px;">📊 Backtest Ayarları</label>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                <div>
+                                    <label style="font-size: 0.7rem; color: var(--text-muted);">Sembol</label>
+                                    <input type="text" id="backtest-symbol" class="form-input" value="BTC/USDT" style="font-size: 0.85rem;">
+                                </div>
+                                <div>
+                                    <label style="font-size: 0.7rem; color: var(--text-muted);">Timeframe</label>
+                                    <select id="backtest-timeframe" class="form-select" style="font-size: 0.85rem;">
+                                        <option value="15m">15m</option>
+                                        <option value="1h" selected>1h</option>
+                                        <option value="4h">4h</option>
+                                        <option value="1d">1d</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style="font-size: 0.7rem; color: var(--text-muted);">Gün Sayısı</label>
+                                    <input type="number" id="backtest-days" class="form-input" value="30" min="1" max="365" style="font-size: 0.85rem;">
+                                </div>
+                                <div>
+                                    <label style="font-size: 0.7rem; color: var(--text-muted);">Başlangıç Bakiye ($)</label>
+                                    <input type="number" id="backtest-balance" class="form-input" value="10000" style="font-size: 0.85rem;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="action-buttons" style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px;">
+                            <button class="btn btn-primary" onclick="testStrategy()" style="padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.9rem; background: var(--neon-blue); color: #fff;">🧪 Test Et</button>
+                            <button class="btn btn-success" onclick="saveStrategy()" style="padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.9rem; background: var(--neon-green); color: #fff;">💾 Kaydet</button>
+                            <button class="btn btn-danger" onclick="clearForm()" style="padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.9rem; background: var(--neon-red); color: #fff;">🗑️ Temizle</button>
+                        </div>
+
+                        <!-- Test Sonuçları -->
+                        <div id="test-results" style="margin-top: 20px; display: none;">
+                            <div class="panel-header" style="color: var(--neon-green); font-size: 0.9rem;">📊 Backtest Sonuçları</div>
+
+                            <!-- Metrik Kartları -->
+                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 15px 0;">
+                                <div style="background: rgba(46,160,67,0.1); border: 1px solid rgba(46,160,67,0.3); padding: 12px; border-radius: 6px;">
+                                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px;">Win Rate</div>
+                                    <div id="metric-winrate" style="font-size: 1.5rem; color: var(--neon-green); font-weight: 700;">-</div>
+                                </div>
+                                <div style="background: rgba(88,166,255,0.1); border: 1px solid rgba(88,166,255,0.3); padding: 12px; border-radius: 6px;">
+                                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px;">Net PnL</div>
+                                    <div id="metric-pnl" style="font-size: 1.5rem; color: var(--neon-blue); font-weight: 700;">-</div>
+                                </div>
+                                <div style="background: rgba(188,140,255,0.1); border: 1px solid rgba(188,140,255,0.3); padding: 12px; border-radius: 6px;">
+                                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px;">Profit Factor</div>
+                                    <div id="metric-profit-factor" style="font-size: 1.5rem; color: var(--neon-purple); font-weight: 700;">-</div>
+                                </div>
+                                <div style="background: rgba(248,81,73,0.1); border: 1px solid rgba(248,81,73,0.3); padding: 12px; border-radius: 6px;">
+                                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px;">Max Drawdown</div>
+                                    <div id="metric-drawdown" style="font-size: 1.5rem; color: var(--neon-red); font-weight: 700;">-</div>
+                                </div>
+                            </div>
+
+                            <!-- Equity Curve -->
+                            <div style="margin: 15px 0;">
+                                <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px;">📈 Equity Eğrisi</div>
+                                <div id="equity-curve-chart" style="height: 200px; background: rgba(0,0,0,0.2); border-radius: 6px; position: relative;">
+                                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--text-muted); font-size: 0.85rem;">
+                                        Grafik yükleniyor...
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- İşlem Geçmişi -->
+                            <div style="margin: 15px 0;">
+                                <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px;">📋 İşlem Geçmişi (Son 10)</div>
+                                <div style="max-height: 300px; overflow-y: auto;">
+                                    <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
+                                        <thead style="position: sticky; top: 0; background: rgba(30,35,45,0.95);">
+                                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                                                <th style="padding: 8px; text-align: left; color: var(--text-muted);">Entry</th>
+                                                <th style="padding: 8px; text-align: left; color: var(--text-muted);">Exit</th>
+                                                <th style="padding: 8px; text-align: right; color: var(--text-muted);">PnL</th>
+                                                <th style="padding: 8px; text-align: center; color: var(--text-muted);">Reason</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="trades-table-body">
+                                            <tr>
+                                                <td colspan="4" style="padding: 20px; text-align: center; color: var(--text-muted);">
+                                                    Henüz işlem yok
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
                     .modal-content { background: #0d1117 !important; border: 1px solid rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 30px !important; max-width: 500px !important; width: 90% !important; }
                     .modal-header { font-size: 1.3rem !important; font-weight: 700 !important; margin-bottom: 20px !important; color: #58a6ff !important; }
                     .param-group { margin-bottom: 15px !important; }

@@ -7,24 +7,28 @@ function setupTabs() {
         btn.addEventListener('click', () => {
             if (!btn.hasAttribute('data-target')) return;
 
-            // Strateji Laboratuvarı linki → strategy_builder.html'e yönlendir
-            if (btn.getAttribute('data-target') === 'tab-strategy-lab') {
-                window.location.href = 'strategy_builder.html';
-                return;
-            }
-
             buttons.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             const targetId = btn.getAttribute('data-target');
             tabs.forEach(tab => { tab.style.display = 'none'; });
             document.getElementById(targetId).style.display = 'block';
-            if (targetId === 'tab-history') { fetchTradeHistory(); }
-            if (targetId === 'tab-ml') { fetchAnalysableSymbols(); }
+
+            // Sekmelere özel işlemler
+            if (targetId === 'tab-history') {
+                fetchTradeHistory();
+            }
+            if (targetId === 'tab-ml') {
+                fetchAnalysableSymbols();
+            }
             if (targetId === 'tab-settings' || targetId === 'tab-strategies') {
                 fetchStrategies();
             }
             if (targetId === 'tab-data') {
-                fetchMarkets(); // Artık tüm piyasalar buradan seçiliyor
+                fetchMarkets();
+            }
+            if (targetId === 'tab-strategy-builder') {
+                // Strateji Oluşturucu sekmesi açıldığında
+                loadStrategies(); // Kaydedilmiş stratejileri yükle
             }
         });
     });
