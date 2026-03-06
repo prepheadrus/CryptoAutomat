@@ -446,12 +446,21 @@ class ExchangeManager:
                 if not df_target.empty:
                     current_price = df_target.iloc[-1]['close']
                     last_processed_ts = current_timestamp_min
-                    
+
                     # 7. MARKET REGİME (PİYASA REJİMİ) TESPİTİ
                     regime_info = MarketRegimeDetector.detect_regime(df_target)
                     paper_engine.market_regime = regime_info['regime'] # Global durum güncellemesi
                     logger.debug(f"Exchange Poller paper_engine ID: {id(paper_engine)}, updated regime to: {regime_info['regime']}")
-                    
+
+                    # 7.5 STRATEJİ KONTROLÜ - Eğer strateji yoksa işlem yapma
+                    strategy = paper_engine.strategies.get(symbol)
+                    if strategy is None or paper_engine.active_strategies.get(symbol) == "":
+                        # Strateji durdurulmuş, sadece fiyat güncellemesi yap
+                        await paper_engine.update_live_prices(symbol, current_price)
+                        logger.debug(f"⏸️ {symbol} için strateji durduruldu, sadece fiyat güncelleniyor.")
+                        await asyncio.sleep(30)
+                        continue
+
                     # 8. YAPAY ZEKA TAHMİNİ (Hedef Vade Verileriyle)
                     ml_confidence = 0.50
                     if xgb_model:

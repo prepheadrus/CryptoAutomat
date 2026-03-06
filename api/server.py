@@ -615,14 +615,25 @@ class StrategySelectSchema(BaseModel):
 @app.post("/api/v1/strategy/select")
 async def change_strategy(req: StrategySelectSchema):
     """Arayüzden gelen komutla botun beynini anında değiştirir."""
-    # Eğer sembol izlenmiyorsa başlat
-    if req.symbol:
+    from core.paper import paper_engine
+
+    # Eğer sembol izlenmiyorsa ve strateji varsa başlat
+    if req.symbol and req.strategy_id:
         await start_symbol_tasks(req.symbol, req.market_type, req.margin_type)
         # Mevcut izleniyorsa da tiplerini güncelle
         paper_engine.set_market_type(req.symbol, req.market_type)
         paper_engine.set_margin_type(req.symbol, req.margin_type)
-        
-    paper_engine.set_strategy(req.strategy_id, req.symbol, req.timeframe)
+    elif req.symbol and not req.strategy_id:
+        # Strateji boş ise (durdurma), sadece paper_engine'de temizle
+        logger.info(f"⏹️ {req.symbol} için strateji durduruldu.")
+        # Not: Ticker hala çalışıyor (pozisyonlar için gerekli), ama poller strateji çalıştırmayacak
+        paper_engine.strategies[req.symbol] = None
+        paper_engine.active_strategies[req.symbol] = ""
+
+    # Strateji varsa ayarla
+    if req.strategy_id:
+        paper_engine.set_strategy(req.strategy_id, req.symbol, req.timeframe)
+
     return {
         "status": "success",
         "symbol": req.symbol if req.symbol else "GLOBAL",
