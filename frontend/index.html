@@ -380,6 +380,61 @@
 
             <!-- SEKME 6: STRATEJİ LABORATUVARI (NO-CODE OLUŞTURUCU) -->
             <div id="tab-strategy-lab" class="tab-content" style="display: none;">
+                <!-- INLINE CSS: Grid Layout -->
+                <style>
+                    .builder-container {
+                        display: grid !important;
+                        grid-template-columns: 300px 1fr 300px !important;
+                        gap: 20px !important;
+                        height: calc(100vh - 150px) !important;
+                        padding: 20px !important;
+                    }
+                    .panel {
+                        background: rgba(30, 35, 45, 0.8) !important;
+                        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+                        border-radius: 12px !important;
+                        padding: 15px !important;
+                        overflow-y: auto !important;
+                        display: block !important;
+                    }
+                    .panel-header {
+                        font-size: 1.1rem !important;
+                        font-weight: 700 !important;
+                        color: #58a6ff !important;
+                        margin-bottom: 15px !important;
+                        padding-bottom: 10px !important;
+                        border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+                        display: block !important;
+                    }
+                    .indicator-category { margin-bottom: 20px !important; display: block !important; }
+                    .category-title { font-size: 0.85rem !important; color: #8b949e !important; text-transform: uppercase !important; letter-spacing: 1px !important; margin-bottom: 10px !important; display: block !important; }
+                    .indicator-item { display: flex !important; justify-content: space-between !important; align-items: center !important; padding: 10px !important; background: rgba(255, 255, 255, 0.05) !important; border-radius: 6px !important; margin-bottom: 8px !important; cursor: pointer !important; }
+                    .indicator-name { font-weight: 600 !important; color: #e6edf3 !important; }
+                    .btn-add { background: #58a6ff !important; color: #fff !important; border: none !important; padding: 5px 12px !important; border-radius: 4px !important; cursor: pointer !important; font-size: 0.75rem !important; }
+                    .condition-builder { background: rgba(0, 0, 0, 0.3) !important; border-radius: 8px !important; padding: 15px !important; margin-bottom: 15px !important; display: block !important; }
+                    .condition-side { font-size: 1rem !important; font-weight: 700 !important; margin-bottom: 10px !important; display: block !important; }
+                    .condition-side.long { color: #2ea043 !important; }
+                    .condition-side.short { color: #f85149 !important; }
+                    .btn-add-rule { background: transparent !important; border: 1px dashed #8b949e !important; color: #8b949e !important; padding: 8px !important; width: 100% !important; border-radius: 4px !important; cursor: pointer !important; margin-top: 10px !important; }
+                    .preview-code { background: rgba(0, 0, 0, 0.5) !important; padding: 15px !important; border-radius: 6px !important; font-family: 'JetBrains Mono', monospace !important; font-size: 0.75rem !important; color: #8b949e !important; white-space: pre-wrap !important; max-height: 400px !important; overflow-y: auto !important; }
+                    .info-row { display: flex !important; justify-content: space-between !important; padding: 8px 0 !important; border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important; }
+                    .info-label { color: #8b949e !important; }
+                    .info-value { color: #e6edf3 !important; font-weight: 600 !important; }
+                    .modal { display: none !important; position: fixed !important; top: 0 !important; left: 0 !important; width: 100% !important; height: 100% !important; background: rgba(0, 0, 0, 0.8) !important; z-index: 1000 !important; justify-content: center !important; align-items: center !important; }
+                    .modal-content { background: #0d1117 !important; border: 1px solid rgba(255, 255, 255, 0.2) !important; border-radius: 12px !important; padding: 30px !important; max-width: 500px !important; width: 90% !important; }
+                    .modal-header { font-size: 1.3rem !important; font-weight: 700 !important; margin-bottom: 20px !important; color: #58a6ff !important; }
+                    .param-group { margin-bottom: 15px !important; }
+                    .param-label { display: block !important; font-size: 0.85rem !important; color: #8b949e !important; margin-bottom: 5px !important; }
+                    .param-input { width: 100% !important; background: rgba(255, 255, 255, 0.1) !important; border: 1px solid rgba(255, 255, 255, 0.2) !important; color: #e6edf3 !important; padding: 10px !important; border-radius: 4px !important; }
+                    .modal-actions { display: flex !important; gap: 10px !important; margin-top: 20px !important; }
+                    .logic-selector { display: flex !important; gap: 10px !important; margin-bottom: 15px !important; }
+                    .logic-btn { flex: 1 !important; padding: 8px !important; background: rgba(255, 255, 255, 0.1) !important; border: 1px solid rgba(255, 255, 255, 0.2) !important; color: #8b949e !important; border-radius: 4px !important; cursor: pointer !important; text-align: center !important; }
+                    .logic-btn.active { background: #58a6ff !important; color: #fff !important; border-color: #58a6ff !important; }
+                    .condition-rule { display: grid !important; grid-template-columns: 2fr 1fr 2fr auto !important; gap: 10px !important; margin-bottom: 10px !important; align-items: center !important; }
+                    .condition-select, .condition-input { background: rgba(255, 255, 255, 0.1) !important; border: 1px solid rgba(255, 255, 255, 0.2) !important; color: #e6edf3 !important; padding: 8px !important; border-radius: 4px !important; font-size: 0.85rem !important; }
+                    .btn-remove { background: #f85149 !important; color: #fff !important; border: none !important; padding: 5px 10px !important; border-radius: 4px !important; cursor: pointer !important; }
+                    .strategy-info { margin-bottom: 20px !important; display: block !important; }
+                </style>
                 <!-- Strateji Builder Container -->
                 <div class="builder-container">
                     <!-- SOL PANEL: İndikatör Kütüphanesi -->
