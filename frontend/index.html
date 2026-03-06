@@ -380,8 +380,204 @@
 
             <!-- SEKME 6: STRATEJİ LABORATUVARI (NO-CODE OLUŞTURUCU) -->
             <div id="tab-strategy-lab" class="tab-content" style="display: none;">
-                <!-- Iframe ile strategy-lab.html'i yükle -->
-                <iframe src="strategy-lab.html" style="width: 100%; height: calc(100vh - 150px); border: none;"></iframe>
+                <!-- Strateji Builder Container -->
+                <div class="builder-container">
+                    <!-- SOL PANEL: İndikatör Kütüphanesi -->
+                    <div class="panel">
+                        <div class="panel-header">📚 Gösterge Kütüphanesi</div>
+
+                        <input type="text" id="indicator-search" class="condition-input"
+                               placeholder="🔍 Ara..." style="width: 100%; margin-bottom: 15px;">
+
+                        <div id="indicator-list">
+                            <!-- Trend -->
+                            <div class="indicator-category">
+                                <div class="category-title">📈 TREND</div>
+                                <div class="indicator-item" data-type="EMA">
+                                    <span class="indicator-name">EMA</span>
+                                    <button class="btn-add" onclick="addIndicator('EMA')">+</button>
+                                </div>
+                                <div class="indicator-item" data-type="SMA">
+                                    <span class="indicator-name">SMA</span>
+                                    <button class="btn-add" onclick="addIndicator('SMA')">+</button>
+                                </div>
+                                <div class="indicator-item" data-type="Supertrend">
+                                    <span class="indicator-name">Supertrend</span>
+                                    <button class="btn-add" onclick="addIndicator('Supertrend')">+</button>
+                                </div>
+                            </div>
+
+                            <!-- Momentum -->
+                            <div class="indicator-category">
+                                <div class="category-title">🚀 MOMENTUM</div>
+                                <div class="indicator-item" data-type="RSI">
+                                    <span class="indicator-name">RSI</span>
+                                    <button class="btn-add" onclick="addIndicator('RSI')">+</button>
+                                </div>
+                                <div class="indicator-item" data-type="MACD">
+                                    <span class="indicator-name">MACD</span>
+                                    <button class="btn-add" onclick="addIndicator('MACD')">+</button>
+                                </div>
+                                <div class="indicator-item" data-type="Stochastic">
+                                    <span class="indicator-name">Stochastic</span>
+                                    <button class="btn-add" onclick="addIndicator('Stochastic')">+</button>
+                                </div>
+                            </div>
+
+                            <!-- Volatilite -->
+                            <div class="indicator-category">
+                                <div class="category-title">📊 VOLATİLİTE</div>
+                                <div class="indicator-item" data-type="ATR">
+                                    <span class="indicator-name">ATR</span>
+                                    <button class="btn-add" onclick="addIndicator('ATR')">+</button>
+                                </div>
+                                <div class="indicator-item" data-type="Bollinger">
+                                    <span class="indicator-name">Bollinger</span>
+                                    <button class="btn-add" onclick="addIndicator('Bollinger')">+</button>
+                                </div>
+                            </div>
+
+                            <!-- Hacim -->
+                            <div class="indicator-category">
+                                <div class="category-title">💰 HACİM</div>
+                                <div class="indicator-item" data-type="OBV">
+                                    <span class="indicator-name">OBV</span>
+                                    <button class="btn-add" onclick="addIndicator('OBV')">+</button>
+                                </div>
+                                <div class="indicator-item" data-type="VWAP">
+                                    <span class="indicator-name">VWAP</span>
+                                    <button class="btn-add" onclick="addIndicator('VWAP')">+</button>
+                                </div>
+                                <div class="indicator-item" data-type="MFI">
+                                    <span class="indicator-name">MFI</span>
+                                    <button class="btn-add" onclick="addIndicator('MFI')">+</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ORTA PANEL: Koşul Oluşturucu -->
+                    <div class="panel">
+                        <div class="panel-header">⚙️ Koşul Oluşturucu</div>
+
+                        <!-- Strateji Bilgileri -->
+                        <div class="strategy-info">
+                            <div class="info-row">
+                                <span class="info-label">Strateji Adı:</span>
+                                <input type="text" id="strategy-name" class="condition-input"
+                                       value="Yeni Strateji" style="flex: 1; text-align: right;">
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Zaman Dilimi:</span>
+                                <select id="timeframe" class="condition-select" style="flex: 1; text-align: right;">
+                                    <option value="1m">1m</option>
+                                    <option value="5m">5m</option>
+                                    <option value="15m" selected>15m</option>
+                                    <option value="1h">1h</option>
+                                    <option value="4h">4h</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- LONG Koşulları -->
+                        <div class="condition-builder">
+                            <div class="condition-side long">🟢 LONG Koşulları</div>
+
+                            <div class="logic-selector">
+                                <div class="logic-btn active" onclick="setLogic('long', 'AND')">VE (AND)</div>
+                                <div class="logic-btn" onclick="setLogic('long', 'OR')">VEYA (OR)</div>
+                            </div>
+
+                            <div id="long-conditions">
+                                <!-- Dinamik koşullar buraya eklenecek -->
+                            </div>
+
+                            <button class="btn-add-rule" onclick="addConditionRule('long')">
+                                ➕ Koşul Ekle
+                            </button>
+                        </div>
+
+                        <!-- SHORT Koşulları -->
+                        <div class="condition-builder">
+                            <div class="condition-side short">🔴 SHORT Koşulları</div>
+
+                            <div class="logic-selector">
+                                <div class="logic-btn active" onclick="setLogic('short', 'AND')">VE (AND)</div>
+                                <div class="logic-btn" onclick="setLogic('short', 'OR')">VEYA (OR)</div>
+                            </div>
+
+                            <div id="short-conditions">
+                                <!-- Dinamik koşullar buraya eklenecek -->
+                            </div>
+
+                            <button class="btn-add-rule" onclick="addConditionRule('short')">
+                                ➕ Koşul Ekle
+                            </button>
+                        </div>
+
+                        <!-- Risk Ayarları -->
+                        <div class="condition-builder">
+                            <div class="condition-side">🎯 Risk Ayarları</div>
+                            <div class="condition-rule">
+                                <span class="info-label">Stop Loss (ATR çarpanı):</span>
+                                <input type="number" id="stop-loss" class="condition-input" value="2.0" step="0.1">
+                                <span class="info-label">Take Profit:</span>
+                                <input type="number" id="take-profit" class="condition-input" value="3.0" step="0.1">
+                            </div>
+                            <div class="condition-rule">
+                                <span class="info-label">Max Risk (%):</span>
+                                <input type="number" id="max-risk" class="condition-input" value="2.0" step="0.1">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SAĞ PANEL: Preview ve Aksiyonlar -->
+                    <div class="panel">
+                        <div class="panel-header">👁️ Önizleme</div>
+
+                        <div class="strategy-info">
+                            <div class="info-row">
+                                <span class="info-label">İndikatörler:</span>
+                                <span class="info-value" id="preview-indicators">0</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">LONG Koşulları:</span>
+                                <span class="info-value" id="preview-long">0</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">SHORT Koşulları:</span>
+                                <span class="info-value" id="preview-short">0</span>
+                            </div>
+                        </div>
+
+                        <div class="panel-header">📄 JSON Önizleme</div>
+                        <div class="preview-code" id="json-preview">
+// Strateji JSON'u burada görünecek...
+                        </div>
+
+                        <div class="modal-actions" style="margin-top: 20px;">
+                            <button class="btn btn-secondary" onclick="testStrategy()">🧪 Test Et</button>
+                            <button class="btn btn-primary" onclick="saveStrategy()">💾 Kaydet</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Parametre Modal -->
+                <div id="param-modal" class="modal">
+                    <div class="modal-content">
+                        <div class="modal-header" id="modal-title">İndikatör Parametreleri</div>
+                        <div id="modal-params">
+                            <!-- Dinamik parametreler -->
+                        </div>
+                        <div class="modal-actions">
+                            <button class="btn btn-secondary" onclick="closeModal()">İptal</button>
+                            <button class="btn btn-primary" onclick="confirmIndicator()">Ekle</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Strategy Builder Script -->
+                <script src="strategy-builder.js"></script>
             </div>
 
             <!-- SEKME 6: AYARLAR -->
