@@ -17,19 +17,26 @@ call venv\Scripts\activate.bat
 echo [OK] Ortam aktif.
 echo.
 
-:: Kısa bir bekleme (opsiyonel)
-timeout /t 2 /nobreak >nul
-
-:: Ana python dosyasını çalıştır
+:: Ana python dosyasını arka planda başlat
 echo [2/3] Fast_API Sunucusu ve Core Engine calistiriliyor...
+start /B python main.py
+echo [OK] Sunucu arka planda başlatıldı.
 echo.
-python main.py
 
-:: Sunucu başladıktan sonra tarayıcıyı aç (3 saniye bekle)
-timeout /t 3 /nobreak >nul
-echo [3/3] Arayuz (Dashboard) tarayicida aciliyor...
+:: Sunucunun başlaması için bekle
+echo [3/3] Sunucu hazirlaniyor (5 saniye)...
+timeout /t 5 /nobreak >nul
+
+:: Tarayıcıyı otomatik aç
+echo [OK] Dashboard aciliyor...
 start http://localhost:8000
 echo.
 
-:: Hata durumunda pencerenin hemen kapanmasını önlemek için duraklat
+echo ========================================================
+echo        BOT CALISIYOR - Tarayici acildi!
+echo        Kapatmak icin bu pencereyi kapatabilirsiniz
+echo ========================================================
+echo.
+
+:: Pencereyi açık tut (kullanıcı kapatabilir)
 pause
