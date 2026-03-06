@@ -7,7 +7,7 @@ from core.logger import logger
 from core.config import CONFIG
 from data.database import db_manager
 from core.exchange import exchange_manager
-from api.strategy_builder_api import router as strategy_builder_router
+from api.routers.strategy_builder import router as strategy_builder_router
 import asyncio
 import pandas as pd
 import numpy as np
