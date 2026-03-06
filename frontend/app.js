@@ -189,16 +189,24 @@ async function fetchBotData() {
         // --- DİNAMİK PARİTE ROZETLERİ (CANLI TAKİP) ---
         const badgeContainer = document.getElementById('active-symbols-badges');
         if (badgeContainer) {
-            badgeContainer.innerHTML = '';
-
             // Strateji bilgilerini al
             const stratRes = await fetch('/api/v1/strategies');
             const stratData = await stratRes.json();
 
-            statusData.tracking_symbols.forEach(sym => {
-                const badge = document.createElement('div');
-                badge.className = 'symbol-badge-card';
+            // MEVCUT ROZETLERİ KORU (Yeniden oluşturma yerine)
+            const existingBadges = badgeContainer.querySelectorAll('.symbol-badge-card');
+            const badgeMap = new Map();
 
+            // Mevcut rozetleri sembole göre map'le
+            existingBadges.forEach(badge => {
+                const symbolEl = badge.querySelector('.symbol-name');
+                if (symbolEl) {
+                    badgeMap.set(symbolEl.textContent.replace('USDT', '') + '/USDT', badge);
+                }
+            });
+
+            // Yeni semboller için rozetleri güncelle veya oluştur
+            statusData.tracking_symbols.forEach(sym => {
                 // Strateji bilgisi
                 const activeStrategy = stratData.active_strategies[sym] || 'trend_master';
                 const activeTimeframe = stratData.active_timeframes[sym] || '1m';
@@ -206,8 +214,19 @@ async function fetchBotData() {
 
                 // Strateji adını bul
                 const strategyInfo = stratData.strategies.find(s => s.id === activeStrategy);
-                const strategyName = strategyInfo ? strategyInfo.name.split(' ')[0] : 'Unknown'; // Kısa isim
+                const strategyName = strategyInfo ? strategyInfo.name.split(' ')[0] : 'Unknown';
 
+                // Mevcut rozeti bul veya yeni oluştur
+                let badge = badgeMap.get(sym);
+
+                if (!badge) {
+                    // Yeni rozet oluştur
+                    badge = document.createElement('div');
+                    badge.className = 'symbol-badge-card';
+                    badgeContainer.appendChild(badge);
+                }
+
+                // İçeriği güncelle
                 badge.innerHTML = `
                     <div class="symbol-badge-header">
                         <span class="symbol-name">${sym.replace('/USDT', '')}</span>
@@ -218,7 +237,14 @@ async function fetchBotData() {
                         <span class="timeframe-badge">⏱️ ${activeTimeframe}</span>
                     </div>
                 `;
-                badgeContainer.appendChild(badge);
+
+                // Map'ten kaldır
+                badgeMap.delete(sym);
+            });
+
+            // Kullanılmayan rozetleri sil
+            badgeMap.forEach(badge => {
+                badge.remove();
             });
         }
         const statusSummary = document.getElementById('system-status-summary');
@@ -388,8 +414,21 @@ async function fetchBotData() {
         const decGrid = document.getElementById('decision-grid');
         if (decGrid) {
             const decisions = metrics.latest_decisions || {};
+
+            // MEVCUT KARTLARI KORU (Yeniden oluşturma yerine)
+            const existingCards = decGrid.querySelectorAll('.decision-card-multi');
+            const cardMap = new Map();
+
+            // Mevcut kartları sembole göre map'le
+            existingCards.forEach(card => {
+                const symbolEl = card.querySelector('strong');
+                if (symbolEl) {
+                    cardMap.set(symbolEl.textContent, card);
+                }
+            });
+
+            // Yeni kararlar için kartları güncelle veya oluştur
             if (Object.keys(decisions).length > 0) {
-                decGrid.innerHTML = '';
                 for (const sym in decisions) {
                     const dec = decisions[sym];
                     let sigText = "HOLD"; let sigColor = "var(--text-muted)";
@@ -405,8 +444,17 @@ async function fetchBotData() {
                         <div class="mini-item"><span>EMA 5/13:</span> <strong>${dec.ema_5} / ${dec.ema_13}</strong></div>
                     `;
 
-                    const card = document.createElement('div');
-                    card.className = "card glass-panel decision-card-multi";
+                    // Mevcut kartı bul veya yeni oluştur
+                    let card = cardMap.get(sym);
+
+                    if (!card) {
+                        // Yeni kart oluştur
+                        card = document.createElement('div');
+                        card.className = "card glass-panel decision-card-multi";
+                        decGrid.appendChild(card);
+                    }
+
+                    // İçeriği güncelle
                     card.innerHTML = `
                         <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
                             <strong style="color:var(--neon-blue)">${dec.symbol}</strong>
@@ -424,9 +472,16 @@ async function fetchBotData() {
                             <strong style="color:${sigColor}">${sigText}</strong>
                         </div>
                     `;
-                    decGrid.appendChild(card);
+
+                    // Map'ten kaldır
+                    cardMap.delete(sym);
                 }
             }
+
+            // Kullanılmayan kartları sil
+            cardMap.forEach(card => {
+                card.remove();
+            });
         }
 
         // --- DETAYLI POZİSYON TABLOSU --- (Güncellendi)
