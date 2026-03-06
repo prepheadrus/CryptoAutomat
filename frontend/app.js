@@ -186,16 +186,72 @@ async function fetchBotData() {
         }
         document.getElementById('exchange-val').innerText = statusData.exchange.toUpperCase();
 
-        // --- DİNAMİK PARİTE ROZETLERİ ---
-        const badgeContainer = document.getElementById('active-symbols-badges');
-        if (badgeContainer) {
-            badgeContainer.innerHTML = '';
-            statusData.tracking_symbols.forEach(sym => {
-                const badge = document.createElement('span');
-                badge.className = 'active-badge';
-                badge.innerText = sym;
-                badgeContainer.appendChild(badge);
-            });
+        // --- SİSTEM DURUM ÖZETİ (YENİ) ---
+        const statusSummary = document.getElementById('system-status-summary');
+        if (statusSummary) {
+            // Strateji bilgilerini al
+            const stratRes = await fetch('/api/v1/strategies');
+            const stratData = await stratRes.json();
+
+            const symbols = statusData.tracking_symbols || [];
+
+            if (symbols.length === 0) {
+                statusSummary.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: var(--text-muted); grid-column: span 100%;">
+                        📭 Henüz aktif sembol yok
+                    </div>
+                `;
+            } else {
+                statusSummary.innerHTML = '';
+
+                symbols.forEach(sym => {
+                    const activeStrategy = stratData.active_strategies[sym] || 'trend_master';
+                    const activeTimeframe = stratData.active_timeframes[sym] || '1m';
+                    const marketType = stratData.market_types[sym] || 'swap';
+                    const marginType = stratData.margin_types[sym] || 'isolated';
+
+                    // Strateji adını bul
+                    const strategyInfo = stratData.strategies.find(s => s.id === activeStrategy);
+                    const strategyName = strategyInfo ? strategyInfo.name : 'Unknown';
+
+                    // Son kararı bul
+                    const decision = metrics.latest_decisions[sym] || null;
+                    const signalText = decision ?
+                        (decision.signal_val === 2 ? '🟢 AL' : decision.signal_val === 0 ? '🔴 SAT' : '⚪ BEKLE') :
+                        '⚪ Başlatılıyor...';
+                    const signalColor = decision ?
+                        (decision.signal_val === 2 ? '#2ea043' : decision.signal_val === 0 ? '#f85149' : '#8b949e') :
+                        '#8b949e';
+
+                    const card = document.createElement('div');
+                    card.className = 'system-status-card';
+                    card.innerHTML = `
+                        <div class="status-card-header">
+                            <span class="status-symbol">${sym}</span>
+                            <span class="status-market ${marketType}">${marketType.toUpperCase()}</span>
+                        </div>
+                        <div class="status-card-body">
+                            <div class="status-row">
+                                <span class="status-label">🤖 Strateji:</span>
+                                <span class="status-value">${strategyName}</span>
+                            </div>
+                            <div class="status-row">
+                                <span class="status-label">⏱️ Zaman:</span>
+                                <span class="status-value timeframe">${activeTimeframe}</span>
+                            </div>
+                            <div class="status-row">
+                                <span class="status-label">💰 Marjin:</span>
+                                <span class="status-value">${marginType.toUpperCase()}</span>
+                            </div>
+                            <div class="status-row">
+                                <span class="status-label">📊 Sinyal:</span>
+                                <span class="status-value" style="color: ${signalColor}; font-weight: 700;">${signalText}</span>
+                            </div>
+                        </div>
+                    `;
+                    statusSummary.appendChild(card);
+                });
+            }
         }
 
         const res = await fetch('/api/v1/dashboard-metrics');

@@ -567,3 +567,180 @@ body {
 .param-label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 5px; }
 .param-input { width: 100%; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); color: var(--text-main); padding: 10px; border-radius: 4px; }
 .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+
+/* Active Symbols Badges - YENİ KART TASARIMI */
+#active-symbols-badges {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+}
+
+.symbol-badge-card {
+    background: linear-gradient(135deg, rgba(30, 35, 45, 0.95) 0%, rgba(22, 27, 34, 0.95) 100%);
+    border: 1px solid rgba(88, 166, 255, 0.3);
+    border-radius: 12px;
+    padding: 12px 15px;
+    min-width: 180px;
+    max-width: 220px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+}
+
+.symbol-badge-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(88, 166, 255, 0.2);
+    border-color: rgba(88, 166, 255, 0.6);
+}
+
+.symbol-badge-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.symbol-name {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--neon-blue);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.market-type {
+    font-size: 0.65rem;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.market-type.spot {
+    background: rgba(255, 204, 0, 0.2);
+    color: #ffcc00;
+    border: 1px solid rgba(255, 204, 0, 0.4);
+}
+
+.market-type.swap, .market-type.future {
+    background: rgba(88, 166, 255, 0.2);
+    color: #58a6ff;
+    border: 1px solid rgba(88, 166, 255, 0.4);
+}
+
+.symbol-badge-info {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.strategy-name {
+    font-size: 0.75rem;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.timeframe-badge {
+    font-size: 0.7rem;
+    background: rgba(46, 160, 67, 0.15);
+    color: var(--neon-green);
+    padding: 4px 8px;
+    border-radius: 6px;
+    text-align: center;
+    font-weight: 600;
+    display: inline-block;
+    border: 1px solid rgba(46, 160, 67, 0.3);
+}
+
+/* System Status Cards - SİSTEM ÖZET KARTLARI */
+.system-status-card {
+    background: linear-gradient(135deg, rgba(30, 35, 45, 0.95) 0%, rgba(22, 27, 34, 0.95) 100%);
+    border: 1px solid rgba(88, 166, 255, 0.3);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+}
+
+.system-status-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(88, 166, 255, 0.25);
+    border-color: rgba(88, 166, 255, 0.6);
+}
+
+.status-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    background: rgba(88, 166, 255, 0.1);
+    border-bottom: 1px solid rgba(88, 166, 255, 0.2);
+}
+
+.status-symbol {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--neon-blue);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-market {
+    font-size: 0.65rem;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.status-market.spot {
+    background: rgba(255, 204, 0, 0.2);
+    color: #ffcc00;
+    border: 1px solid rgba(255, 204, 0, 0.4);
+}
+
+.status-market.swap, .status-market.future {
+    background: rgba(88, 166, 255, 0.2);
+    color: #58a6ff;
+    border: 1px solid rgba(88, 166, 255, 0.4);
+}
+
+.status-card-body {
+    padding: 15px;
+}
+
+.status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.status-row:last-child {
+    border-bottom: none;
+}
+
+.status-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.status-value {
+    font-size: 0.8rem;
+    color: var(--text-main);
+    font-weight: 600;
+}
+
+.status-value.timeframe {
+    background: rgba(46, 160, 67, 0.15);
+    color: var(--neon-green);
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-weight: 700;
+}
