@@ -1950,7 +1950,7 @@ async function loadTrainingHistory() {
                         <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Sembol</th>
                         <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Zaman Dilimi</th>
                         <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Mum Sayısı</th>
-                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);" colspan="3" style="text-align: center;">Model Doğrulukları</th>
+                        <th colspan="3" style="padding: 12px; text-align: center; color: var(--neon-blue);">Model Doğrulukları</th>
                         <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Eğitim Zamanı</th>
                         <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Durum</th>
                     </tr>
