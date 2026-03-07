@@ -5,13 +5,16 @@ import numpy as np
 try:
     import talib as ta
     USING_TALIB = True
+    USING_PANDAS_TA = False
 except ImportError:
     try:
         import pandas_ta as ta
         USING_TALIB = False
+        USING_PANDAS_TA = True
     except ImportError:
         ta = None
         USING_TALIB = False
+        USING_PANDAS_TA = False
         import warnings
         warnings.warn(
             "⚠️ Ne TA-Lib ne pandas_ta bulunamadı! Manuel hesaplama kullanılacak.\n"
@@ -259,8 +262,15 @@ class StrategyIndicators:
 
         # --- TREND (Eğilim) ---
         # Manuel hesaplama veya TA-Lib/pandas_ta kullan
-        if ta is not None:
-            # TA-Lib veya pandas_ta kullan
+        if USING_TALIB:
+            # TA-Lib kullan (büyük harf fonksiyonlar)
+            df['EMA_5'] = ta.EMA(df['close'], timeperiod=5)
+            df['EMA_13'] = ta.EMA(df['close'], timeperiod=13)
+            df['SMA_20'] = ta.SMA(df['close'], timeperiod=20)
+            df['EMA_50'] = ta.EMA(df['close'], timeperiod=50)
+            df['EMA_200'] = ta.EMA(df['close'], timeperiod=200)
+        elif USING_PANDAS_TA:
+            # pandas_ta kullan (küçük harf fonksiyonlar)
             df['EMA_5'] = ta.ema(df['close'], length=5)
             df['EMA_13'] = ta.ema(df['close'], length=13)
             df['SMA_20'] = ta.sma(df['close'], length=20)
@@ -290,7 +300,11 @@ class StrategyIndicators:
         df['KALMAN'] = apply_kalman(df['close'])
 
         # Supertrend (Piyasa yönü ve dinamik destek/direnç için)
-        if ta is not None:
+        if USING_TALIB:
+            st = ta.SUPERTREND(df['high'], df['low'], df['close'], period=10, multiplier=3.0)
+            if st is not None:
+                df = pd.concat([df, st], axis=1)
+        elif USING_PANDAS_TA:
             st = ta.supertrend(df['high'], df['low'], df['close'], length=10, multiplier=3.0)
             if st is not None:
                 df = pd.concat([df, st], axis=1)
@@ -302,7 +316,10 @@ class StrategyIndicators:
 
         # 2. Elliott Wave Oscillator (EWO)
         try:
-            if ta is not None:
+            if USING_TALIB:
+                sma5 = ta.SMA(df['close'], timeperiod=5)
+                sma35 = ta.SMA(df['close'], timeperiod=35)
+            elif USING_PANDAS_TA:
                 sma5 = ta.sma(df['close'], length=5)
                 sma35 = ta.sma(df['close'], length=35)
             else:
@@ -317,7 +334,9 @@ class StrategyIndicators:
             df['EWO'] = 0.0
 
         # --- MOMENTUM (Hız/İvme) ---
-        if ta is not None:
+        if USING_TALIB:
+            df['RSI_14'] = ta.RSI(df['close'], timeperiod=14)
+        elif USING_PANDAS_TA:
             df['RSI_14'] = ta.rsi(df['close'], length=14)
         else:
             df['RSI_14'] = StrategyIndicators.rsi(df['close'], 14)
@@ -328,7 +347,11 @@ class StrategyIndicators:
         df['BTC_VIX'] = log_ret.rolling(20).std() * np.sqrt(365) * 100
 
         # MACD (Trend dönüş noktaları için)
-        if ta is not None:
+        if USING_TALIB:
+            macd = ta.MACD(df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
+            if macd is not None:
+                df = pd.concat([df, macd], axis=1)
+        elif USING_PANDAS_TA:
             macd = ta.macd(df['close'], fast=12, slow=26, signal=9)
             if macd is not None:
                 df = pd.concat([df, macd], axis=1)
@@ -339,14 +362,20 @@ class StrategyIndicators:
             df['MACDh_12_26_9'] = hist
 
         # --- VOLATİLİTE (Oynaklık ve Risk Ayarlama) ---
-        if ta is not None:
+        if USING_TALIB:
+            df['ATR_14'] = ta.ATR(df['high'], df['low'], df['close'], timeperiod=14)
+        elif USING_PANDAS_TA:
             df['ATR_14'] = ta.atr(df['high'], df['low'], df['close'], length=14)
         else:
             df['ATR_14'] = StrategyIndicators.atr(df['high'], df['low'], df['close'], 14)
 
         # Bollinger Bantları
         if 'close' in df.columns:
-            if ta is not None:
+            if USING_TALIB:
+                bb = ta.BBANDS(df['close'], timeperiod=20, nbdevup=2, nbdevdn=2)
+                if bb is not None:
+                    df = pd.concat([df, bb], axis=1)
+            elif USING_PANDAS_TA:
                 bb = ta.bbands(df['close'], length=20, std=2)
                 if bb is not None:
                     df = pd.concat([df, bb], axis=1)
@@ -385,7 +414,12 @@ class StrategyIndicators:
             
             # Koncorde Bileşenleri
             try:
-                if ta is not None:
+                if USING_TALIB:
+                    pvim = ta.EMA(df['PVI'], timeperiod=15)
+                    nvim = ta.EMA(df['NVI'], timeperiod=15)
+                    xrsi = ta.RSI(df['close'], timeperiod=14)
+                    mfi = ta.MFI(df['high'], df['low'], df['close'], df['volume'], timeperiod=14)
+                elif USING_PANDAS_TA:
                     pvim = ta.ema(df['PVI'], length=15)
                     nvim = ta.ema(df['NVI'], length=15)
                     xrsi = ta.rsi(df['close'], length=14)
@@ -425,7 +459,15 @@ class StrategyIndicators:
 
         # --- HACİM VE LİKİDİTE ---
         if 'volume' in df.columns:
-            if ta is not None:
+            if USING_TALIB:
+                df['OBV'] = ta.OBV(df['close'], df['volume'])
+                if 'OBV' in df.columns:
+                    df['OBV_EMA'] = ta.EMA(df['OBV'], timeperiod=10)
+                try:
+                    df['VWAP'] = ta.VWAP(df['high'], df['low'], df['close'], df['volume'])
+                except Exception:
+                    pass
+            elif USING_PANDAS_TA:
                 df['OBV'] = ta.obv(df['close'], df['volume'])
                 if 'OBV' in df.columns:
                     df['OBV_EMA'] = ta.ema(df['OBV'], length=10)
@@ -441,8 +483,12 @@ class StrategyIndicators:
                 df['VWAP'] = StrategyIndicators.vwap(df['high'], df['low'], df['close'], df['volume'])
 
         # --- YENİ EKLENEN ŞABLON İNDİKATÖRLERİ (ADX, Stoch) ---
-        # 1. ADX (Trend Gücü) - Manuel hesaplama
-        if ta is not None:
+        # 1. ADX (Trend Gücü)
+        if USING_TALIB:
+            adx_res = ta.ADX(df['high'], df['low'], df['close'], timeperiod=14)
+            if adx_res is not None:
+                df = pd.concat([df, adx_res], axis=1)
+        elif USING_PANDAS_TA:
             adx_res = ta.adx(df['high'], df['low'], df['close'], length=14)
             if adx_res is not None:
                 df = pd.concat([df, adx_res], axis=1)
@@ -466,8 +512,12 @@ class StrategyIndicators:
             df['DMP_14'] = plus_di
             df['DMN_14'] = minus_di
 
-        # 2. Stochastic Osilatör - Manuel hesaplama
-        if ta is not None:
+        # 2. Stochastic Osilatör
+        if USING_TALIB:
+            stoch_res = ta.STOCH(df['high'], df['low'], df['close'], fastk_period=14, slowk_period=3, slowk_matype=0, slowd_period=3, slowd_matype=0)
+            if stoch_res is not None:
+                df = pd.concat([df, stoch_res], axis=1)
+        elif USING_PANDAS_TA:
             stoch_res = ta.stoch(df['high'], df['low'], df['close'], k=14, d=3, smooth_k=3)
             if stoch_res is not None:
                 df = pd.concat([df, stoch_res], axis=1)
@@ -479,8 +529,12 @@ class StrategyIndicators:
             df['STOCH_K_14_3_3'] = stoch_k
             df['STOCH_D_14_3_3'] = stoch_d
 
-        # 3. Ultimate Oscillator (UO) - Manuel hesaplama
-        if ta is not None:
+        # 3. Ultimate Oscillator (UO)
+        if USING_TALIB:
+            uo_res = ta.ULTOSC(df['high'], df['low'], df['close'], timeperiod1=7, timeperiod2=14, timeperiod3=28)
+            if uo_res is not None:
+                df['UO'] = uo_res
+        elif USING_PANDAS_TA:
             uo_res = ta.uo(df['high'], df['low'], df['close'], fast=7, medium=14, slow=28)
             if uo_res is not None:
                 df['UO'] = uo_res
