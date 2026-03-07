@@ -208,10 +208,9 @@ class ModelTrainer:
         logger.info(f"Precision: {metrics['precision']:.4f}")
         logger.info(f"Recall:    {metrics['recall']:.4f}")
         logger.info(f"F1-Score:  {metrics['f1']:.4f}")
-
-        # Best iteration (early stopping kullanılmadıysa None)
-        best_iter = getattr(self.model, 'best_iteration', None)
-        logger.info(f"Best Iteration: {best_iter if best_iter is not None else 'N/A (no early stopping)'}")
+        logger.info(f"XGBoost Accuracy:  {metrics.get('xgb_accuracy', 0):.4f}")
+        logger.info(f"RF Accuracy:       {metrics.get('rf_accuracy', 0):.4f}")
+        logger.info(f"Ensemble Accuracy: {metrics.get('ensemble_accuracy', 0):.4f}")
         logger.info("=" * 60)
 
         logger.info("\nClassification Report:")
