@@ -1949,11 +1949,19 @@ async function loadTrainingHistory() {
                         <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Sembol</th>
                         <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Zaman Dilimi</th>
                         <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Mum Sayısı</th>
-                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Accuracy</th>
-                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Precision</th>
-                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);">F1 Score</th>
+                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);" colspan="3" style="text-align: center;">Model Doğrulukları</th>
                         <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Eğitim Zamanı</th>
                         <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Durum</th>
+                    </tr>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.75rem;">
+                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);"></th>
+                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);"></th>
+                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);"></th>
+                        <th style="padding: 12px; text-align: center; color: #26a69a;">📊 XGBoost</th>
+                        <th style="padding: 12px; text-align: center; color: #66bb6a;">🌲 RF</th>
+                        <th style="padding: 12px; text-align: center; color: var(--neon-blue);">🔗 Ensemble</th>
+                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);"></th>
+                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1966,9 +1974,16 @@ async function loadTrainingHistory() {
                 hour: '2-digit', minute: '2-digit'
             });
 
-            const accuracy = (model.metrics.accuracy * 100).toFixed(1);
-            const precision = (model.metrics.precision * 100).toFixed(1);
-            const f1 = (model.metrics.f1 * 100).toFixed(1);
+            // Model doğrulukları
+            const xgb_acc = (model.metrics.xgb_accuracy * 100).toFixed(1);
+            const rf_acc = (model.metrics.rf_accuracy * 100).toFixed(1);
+            const ensemble_acc = (model.metrics.ensemble_accuracy * 100).toFixed(1);
+
+            // En yüksek doğruluğu vurgula
+            const bestModel = Math.max(xgb_acc, rf_acc, ensemble_acc);
+            const xgbColor = xgb_acc == bestModel && ensemble_acc < xgb_acc ? 'var(--neon-green)' : (xgb_acc >= 60 ? '#26a69a' : 'var(--text-muted)');
+            const rfColor = rf_acc == bestModel && ensemble_acc < rf_acc ? 'var(--neon-green)' : (rf_acc >= 60 ? '#66bb6a' : 'var(--text-muted)');
+            const ensembleColor = ensemble_acc >= 60 ? 'var(--neon-blue)' : 'var(--text-muted)');
 
             const rowColor = index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)';
 
@@ -1977,9 +1992,9 @@ async function loadTrainingHistory() {
                     <td style="padding: 12px; font-weight: bold; color: var(--neon-blue);">${model.symbol.replace('USDT', '/USDT')}</td>
                     <td style="padding: 12px;">${model.timeframe}</td>
                     <td style="padding: 12px;">${model.limit.toLocaleString()}</td>
-                    <td style="padding: 12px; color: ${accuracy >= 60 ? 'var(--neon-green)' : 'var(--neon-red)'};">%${accuracy}</td>
-                    <td style="padding: 12px;">%${precision}</td>
-                    <td style="padding: 12px;">%${f1}</td>
+                    <td style="padding: 12px; text-align: center; color: ${xgbColor}; font-weight: ${xgb_acc == bestModel ? 'bold' : 'normal'};">%${xgb_acc}</td>
+                    <td style="padding: 12px; text-align: center; color: ${rfColor}; font-weight: ${rf_acc == bestModel ? 'bold' : 'normal'};">%${rf_acc}</td>
+                    <td style="padding: 12px; text-align: center; color: ${ensembleColor}; font-weight: bold;">%${ensemble_acc}</td>
                     <td style="padding: 12px; color: var(--text-muted);">${dateStr}</td>
                     <td style="padding: 12px;">
                         <span style="display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; background: rgba(0, 255, 136, 0.1); border-radius: 4px; color: var(--neon-green); font-size: 0.75rem;">

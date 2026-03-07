@@ -187,7 +187,7 @@
                 <!-- EĞİTİM GEÇMİŞİ TABLOSU -->
                 <div class="card glass-panel" style="margin-bottom: 20px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h3 style="color: var(--neon-blue);">📚 Eğitilmiş Modeller</h3>
+                        <h3 style="color: var(--neon-blue);">📚 Eğitilmiş Modeller (Ensemble)</h3>
                         <button class="btn btn-primary" onclick="loadTrainingHistory()" style="padding: 8px 15px; font-size: 0.85rem;">
                             🔄 Yenile
                         </button>
@@ -197,6 +197,10 @@
                             Yükleniyor...
                         </p>
                     </div>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 10px; text-align: center;">
+                        💡 <strong>Ensemble Learning:</strong> XGBoost + Random Forest modellerinin ortak kararı (Soft Voting).
+                        Ensemble accuracy genellikle tek modellerden daha yüksektir.
+                    </p>
                 </div>
 
                 <div class="header-row" style="margin-bottom: 20px;">
