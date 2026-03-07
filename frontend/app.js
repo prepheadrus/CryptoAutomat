@@ -1982,8 +1982,8 @@ async function loadTrainingHistory() {
 
             // En yüksek doğruluğu vurgula
             const bestModel = Math.max(xgb_acc, rf_acc, ensemble_acc);
-            const xgbColor = xgb_acc == bestModel && ensemble_acc < xgb_acc ? 'var(--neon-green)' : (xgb_acc >= 60 ? '#26a69a' : 'var(--text-muted)');
-            const rfColor = rf_acc == bestModel && ensemble_acc < rf_acc ? 'var(--neon-green)' : (rf_acc >= 60 ? '#66bb6a' : 'var(--text-muted)');
+            let xgbColor = xgb_acc >= 60 ? '#26a69a' : 'var(--text-muted)'; if (xgb_acc == bestModel && ensemble_acc < xgb_acc) xgbColor = 'var(--neon-green)';
+            let rfColor = rf_acc >= 60 ? '#66bb6a' : 'var(--text-muted)'; if (rf_acc == bestModel && ensemble_acc < rf_acc) rfColor = 'var(--neon-green)';
             const ensembleColor = ensemble_acc >= 60 ? 'var(--neon-blue)' : 'var(--text-muted)');
 
             const rowColor = index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)';
@@ -2024,3 +2024,5 @@ document.addEventListener('click', (e) => {
         loadStrategyReport();
     }
 });
+
+
