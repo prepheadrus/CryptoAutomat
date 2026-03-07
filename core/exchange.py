@@ -76,8 +76,20 @@ class ExchangeManager:
             data = await self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit, params=params)
             return data
         except Exception as e:
-            logger.error(f"OHLCV Çekme Hatası ({symbol}): {e}")
-            return []
+            # API key hatası varsa, anonim moda geç ve tekrar dene
+            if "-2008" in str(e) or "AuthenticationError" in str(type(e)):
+                logger.warning(f"⚠️ {symbol} API key hatası! Anonim moda geçiliyor...")
+                self.exchange.apiKey = None
+                self.exchange.secret = None
+                try:
+                    data = await self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit, params=params)
+                    return data
+                except Exception as retry_err:
+                    logger.error(f"OHLCV Çekme Hatası ({symbol}): {retry_err}")
+                    return []
+            else:
+                logger.error(f"OHLCV Çekme Hatası ({symbol}): {e}")
+                return []
 
     async def fetch_available_markets(self):
         """Borsadaki tüm aktif işlem çiftlerini (Spot ve Vadeli) çeker."""
@@ -251,8 +263,10 @@ class ExchangeManager:
                 self.active_downloads[key]['status'] = 'running'
                 
                 # CCXT rates limitine göre fetch yap
+                # NOT: params={'type': market_type} API key gerektiriyor, bu yüzden kaldırdık
+                # API key yoksa otomatik olarak public endpoint kullanılır
                 try:
-                    ohlcv = await self.exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=limit, params={'type': market_type})
+                    ohlcv = await self.exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=limit)
                 except Exception as fetch_err:
                     # Binance rate limit veya network hatası
                     logger.warning(f"⚠️ {symbol} veri çekme hatası: {fetch_err}")
