@@ -106,7 +106,7 @@ class ModelTrainer:
         self.is_trained = False
         self.feature_names = None
         self.training_metrics = {}
-        self.class_mapping = {0: 'NEUTRAL', 1: 'LONG', 2: 'SHORT'}
+        self.class_mapping = {0: 'SHORT', 1: 'LONG', 2: 'NEUTRAL'}
 
     def train(
         self,

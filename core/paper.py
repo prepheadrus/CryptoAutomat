@@ -286,14 +286,13 @@ class PaperTrader:
         # ============================================
         # CONFLUENCE MEKANİZMASI (Strateji + ML Onayı)
         # ============================================
-        # Kural 1: Strateji ve ML çakışıyorsa (LONG+LONG veya SHORT+SHORT) işleme devam et
-        # Kural 2: Çakışma varsa (LONG+SHORT) işlemi iptal et
-        # Kural 3: ML güven skoru <%65 ise işlemi iptal et
+        # ML Model Sınıfları: 0=SHORT, 1=LONG, 2=NEUTRAL
+        # Strateji Sinyalleri: 0=SAT, 1=HOLD, 2=AL
 
         final_signal = 1  # Varsayılan: HOLD
 
-        if strategy_signal == 2:  # Strateji LONG diyor
-            if ml_signal == 2 or ml_recommendation in ["LONG", "STRONG_LONG"]:
+        if strategy_signal == 2:  # Strateji LONG diyor (AL)
+            if ml_signal == 1 or ml_recommendation in ["LONG", "STRONG_LONG"]:
                 # ML de LONG diyor → ONAYLANDI
                 final_signal = 2
                 logger.debug(f"[CONFLUENCE] {symbol} LONG onaylandı: Strateji=AL, ML={ml_recommendation} ({ml_confidence_pct:.1f}%)")
@@ -306,7 +305,7 @@ class PaperTrader:
                 log_ai_decision(symbol, strategy.name(), strategy_signal, ml_recommendation, ml_confidence_pct, "REJECT_LOW_CONFIDENCE")
                 return
 
-        elif strategy_signal == 0:  # Strateji SHORT diyor
+        elif strategy_signal == 0:  # Strateji SHORT diyor (SAT)
             if ml_signal == 0 or ml_recommendation in ["SHORT", "STRONG_SHORT"]:
                 # ML de SHORT diyor → ONAYLANDI
                 final_signal = 0
