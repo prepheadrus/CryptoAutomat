@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoAlgoBot | Pro Dashboard</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js" charset="utf-8"></script>
+    <script src="lightweight-charts.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="dashboard-container">
+        <!-- Sol Menü -->
+        <aside class="sidebar glass-panel">
+            <div class="logo">
+                <span class="pulse-dot"></span>
+                <h2>Algo<span>Bot</span></h2>
+            </div>
+            <div class="status-box">
+                <p>Sistem Çevresi</p>
+                <h3 id="env-status" class="neon-text">Yükleniyor...</h3>
+            </div>
+            <nav class="menu" id="side-menu">
+                <button class="menu-item active" data-target="tab-portfolio">📊 Portföy Analizi</button>
+                <button class="menu-item" data-target="tab-ml">🧠 ML Karar Motoru</button>
+                <button class="menu-item" data-target="tab-orders">⚡ Aktif Emirler</button>
+                <button class="menu-item" data-target="tab-history">📜 İşlem Geçmişi</button>
+                <button class="menu-item" data-target="tab-reports">📈 Performans Raporları</button>
+                <button class="menu-item" data-target="tab-strategy-builder">🎨 Strateji Oluşturucu</button>
+                <button class="menu-item" data-target="tab-strategies">📚 Strateji Kütüphanesi</button>
+                <button class="menu-item" data-target="tab-settings">⚙️ Sistem Ayarları</button>
+                <button class="menu-item" data-target="tab-data">💾 Veri Laboratuvarı</button>
+            </nav>
+            <div class="bot-control">
+                <button class="btn btn-danger" id="kill-switch">ACİL DURDURMA</button>
+            </div>
+        </aside>
+
+        <!-- Ana İçerik -->
+        <main class="main-content">
+            <header class="top-nav glass-panel">
+                <div class="metric"><span class="label">Borsa:</span> <strong id="exchange-val">--</strong></div>
+                <div class="user-profile"><img src="https://api.dicebear.com/7.x/identicon/svg?seed=CryptoAlgoBot"
+                        alt="Avatar"></div>
+            </header>
+
+            <!-- SEKME 1: PORTFÖY ANALİZİ -->
+            <div id="tab-portfolio" class="tab-content active-tab">
+                <div class="grid-content">
+                    <div class="card glass-panel">
+                        <div class="card-info">
+                            <h3>💰 Toplam Bakiye (Equity)</h3>
+                            <h1 id="total-balance">$0.00</h1>
+                            <p style="font-size:0.75rem; color:var(--text-muted); margin-top:5px;">İlk Kasa: $10,000.00
+                            </p>
+                        </div>
+                    </div>
+                    <div class="card glass-panel">
+                        <div class="card-info">
+                            <h3>📊 Gerçekleşen P&L (Net)</h3>
+                            <h1 id="realized-pnl" class="success-text">+$0.00</h1>
+                            <p style="font-size:0.75rem; color:var(--text-muted); margin-top:5px;">Komisyonlar Düşülmüş
+                            </p>
+                        </div>
+                    </div>
+                    <div class="card glass-panel">
+                        <div class="card-info">
+                            <h3>🚀 Toplam Getiri (ROI)</h3>
+                            <h1 id="daily-roi">%0.00</h1>
+                            <p id="roi-status" style="font-size:0.75rem; color:var(--neon-green); margin-top:5px;">
+                                Piyasa Üstü Performans</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid-content" style="margin-top:20px;">
+                    <div class="card glass-panel" style="padding: 15px;">
+                        <h4 style="color:var(--text-muted); font-size:0.8rem; margin-bottom:10px;">Envanter Özeti</h4>
+                        <div class="mini-stats-grid">
+                            <div class="mini-stat"><span>Kâr Faktörü:</span> <strong
+                                    id="stat-profit-factor">1.0</strong></div>
+                            <div class="mini-stat"><span>Max Drawdown:</span> <strong id="stat-drawdown"
+                                    class="danger-text">0.0%</strong></div>
+                            <div class="mini-stat"><span>Sharpe Ratio:</span> <strong id="stat-sharpe">0.0</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card glass-panel chart-span">
+                        <h4 style="color:var(--text-muted); font-size:0.8rem; margin-bottom:10px;">📈 Bakiye Gelişim
+                            Grafiği (Equity Curve)</h4>
+                        <div id="plotly-chart" class="chart-container" style="height: 250px;"></div>
+                    </div>
+                </div>
+
+                <div class="grid-content" style="margin-top:20px;">
+                    <div class="card glass-panel">
+                        <h3>🍕 Varlık Dağılımı</h3>
+                        <div id="allocation-chart" style="height: 180px;"></div>
+                        <p style="font-size:0.7rem; color:var(--text-muted); text-align:center;">Marjin ve Nakit Dengesi
+                        </p>
+                    </div>
+                    <div class="card glass-panel" style="grid-column: span 2;">
+                        <h3>🔥 Piyasa İzleme Listesi</h3>
+                        <div id="market-heatmap" class="heatmap-container"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEKME 2: ML KARAR MOTORU -->
+            <div id="tab-ml" class="tab-content" style="display: none;">
+                <div class="header-row" style="margin-bottom: 20px;">
+                    <div
+                        style="display:flex; justify-content:space-between; align-items:center; width:100%; flex-wrap:wrap; gap:15px;">
+                        <div>
+                            <h2>🧠 Strateji Karar Merkezi</h2>
+                            <p style="color:var(--text-muted);">Yapay Zeka ve Teknik Stratejilerin Karşılaştırmalı
+                                Analizi.</p>
+                        </div>
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <select id="ml-analysis-strategy" class="strategy-select" style="min-width:160px;">
+                                <option value="trend_master">Trend Master Pro</option>
+                                <option value="scalper_ninja">Scalper Ninja</option>
+                                <option value="adaptive_koncorde">Adaptive Koncorde X</option>
+                                <option value="golden_combo">Golden Combo (Kitap Şablonu)</option>
+                                <option value="divergence_hunter">Senkronize Uyuşmazlık Avcısı</option>
+                                <option value="knn_quant_atr">Nicel (Quant) KNN Kalkanı</option>
+                            </select>
+                            <select id="ml-analysis-symbol" class="strategy-select" style="min-width:140px;">
+                                <option value="">Yükleniyor...</option>
+                            </select>
+                            <select id="ml-analysis-timeframe" class="strategy-select" style="width:70px;">
+                                <option value="1m">1m</option>
+                                <option value="3m">3m</option>
+                                <option value="5m">5m</option>
+                                <option value="15m" selected>15m</option>
+                                <option value="30m">30m</option>
+                                <option value="1h">1h</option>
+                                <option value="4h">4h</option>
+                                <option value="1d">1d</option>
+                            </select>
+
+                            <select id="ml-analysis-market-type" class="strategy-select" style="min-width:100px;">
+                                <option value="swap" selected>Vadeli (Swap)</option>
+                                <option value="spot">Spot Piyasa</option>
+                            </select>
+
+                            <select id="ml-analysis-margin-type" class="strategy-select" style="min-width:100px;">
+                                <option value="isolated" selected>İzole Marjin</option>
+                                <option value="cross">Çapraz Marjin</option>
+                            </select>
+                            <button class="btn btn-primary" onclick="runMLVisualAnalysis()"
+                                style="padding: 10px 20px; font-weight:bold;">🚀 Simülasyonu Başlat</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Görsel Analiz Bölümü -->
+                <div class="grid-content" style="margin-bottom: 20px;">
+                    <div class="card glass-panel chart-span" style="grid-column: span 3;">
+                        <h3
+                            style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+                            <span>🔍 Görsel Karar Simülasyonu</span>
+                            <div style="font-size:0.75rem; font-weight:normal; display:flex; gap:15px;">
+                                <span style="display:flex; align-items:center; gap:5px;"><span
+                                        style="display:inline-block; width:8px; height:8px; border-radius:50%; background-color:#00FA9A;"></span>GERÇEK
+                                    AL</span>
+                                <span style="display:flex; align-items:center; gap:5px;"><span
+                                        style="display:inline-block; width:8px; height:8px; border-radius:50%; background-color:#FF4500;"></span>GERÇEK
+                                    SAT</span>
+                                <span style="display:flex; align-items:center; gap:5px;"><span
+                                        style="display:inline-block; width:8px; height:8px; background-color:#FFFFFF;"></span>İŞLEM
+                                    KAPANIŞ</span>
+                                <span style="display:flex; align-items:center; gap:5px;"><span
+                                        style="display:inline-block; width:8px; height:8px; border-radius:50%; background-color:rgba(0, 255, 136, 0.4);"></span>ML
+                                    Sinyali</span>
+                                <span style="display:flex; align-items:center; gap:5px;"><span
+                                        style="display:inline-block; width:8px; height:8px; border-radius:50%; background-color:#bc8cff;"></span>Strateji
+                                    Sinyali</span>
+                            </div>
+                        </h3>
+                        <div style="position:relative; width:100%; height:450px;">
+                            <div id="ml-analysis-chart" style="position:absolute; width:100%; height:100%;">
+                                <div style="text-align:center; padding-top:180px; color:var(--text-muted);">
+                                    <p>Sembol seçip "Analiz Et" butonuna basarak modelin kararlarını grafik üzerinde
+                                        görebilirsiniz.</p>
+                                </div>
+                            </div>
+                            <div id="chart-tooltip"
+                                style="position: absolute; display: none; padding: 10px; box-sizing: border-box; font-size: 12px; text-align: left; z-index: 1000; top: 12px; left: 12px; pointer-events: none; border-radius: 8px; font-family: 'Inter', sans-serif; background: rgba(30, 35, 45, 0.9); border: 1px solid rgba(255,255,255,0.1); color: #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.5);">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Model Analizi (Grafiğin Altında) -->
+                <div class="grid-content" style="margin-bottom: 20px;">
+                    <div class="card glass-panel" style="grid-column: span 3;">
+                        <h3 style="margin-bottom:15px;">🧬 Model Ağırlık Analizi</h3>
+                        <div id="feature-importance-chart" style="height: 350px;">
+                            <p style="text-align:center; padding-top:150px; color:var(--text-muted); font-size:0.8rem;">
+                                Analiz sonrası veriler burada görünecektir.</p>
+                        </div>
+                        <p style="font-size:0.75rem; color:var(--text-muted); margin-top:10px; text-align:center;">
+                            Modelin karar verirken en çok hangi indikatörleri dikkate aldığını (yüzdelik etki) gösterir.
+                        </p>
+                    </div>
+                </div>
+
+                <div id="decision-grid" class="decision-grid">
+                    <!-- Dinamik olarak doldurulacak -->
+                </div>
+            </div>
+
+            <!-- SEKME 3: AKTİF EMİRLER -->
+            <div id="tab-orders" class="tab-content" style="display: none;">
+
+                <!-- SİSTEM DURUM ÖZETİ (KOMPAKT) -->
+                <div class="card glass-panel" style="margin-bottom: 20px;">
+                    <h3 style="margin:0 0 15px 0;">🖥️ Aktif Stratejiler</h3>
+                    <div id="system-status-summary"
+                        style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px;">
+                        <!-- Dinamik olarak doldurulacak -->
+                        <div
+                            style="text-align: center; padding: 40px; color: var(--text-muted); grid-column: span 100%;">
+                            ⏳ Sistem yükleniyor...
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 25px;">
+                    <h3 style="margin-bottom: 15px;">📊 Paper Trading - Canlı Performans</h3>
+                    <div class="kpi-dashboard">
+                        <!-- Bakiye -->
+                        <div class="kpi-card glass-panel">
+                            <div class="kpi-icon" style="background: rgba(0, 255, 136, 0.1); color: #00fa9a;">💰</div>
+                            <div class="kpi-details">
+                                <span class="kpi-label">Bakiye</span>
+                                <span class="kpi-value" id="perf-balance">$10,000.00</span>
+                            </div>
+                        </div>
+
+                        <!-- Equity -->
+                        <div class="kpi-card glass-panel">
+                            <div class="kpi-icon" style="background: rgba(188, 140, 255, 0.1); color: #bc8cff;">📈</div>
+                            <div class="kpi-details">
+                                <span class="kpi-label">Toplam Varlık (Equity)</span>
+                                <span class="kpi-value" id="perf-equity">$10,000.00</span>
+                            </div>
+                        </div>
+
+                        <!-- Win Rate -->
+                        <div class="kpi-card glass-panel">
+                            <div class="kpi-icon" style="background: rgba(255, 204, 0, 0.1); color: #ffcc00;">🎯</div>
+                            <div class="kpi-details">
+                                <span class="kpi-label">Kazanma Oranı (Win Rate)</span>
+                                <span class="kpi-value" id="perf-winrate">0.0%</span>
+                            </div>
+                        </div>
+
+                        <!-- İşlem Sayısı -->
+                        <div class="kpi-card glass-panel">
+                            <div class="kpi-icon" style="background: rgba(0, 204, 255, 0.1); color: #00ccff;">📊</div>
+                            <div class="kpi-details">
+                                <span class="kpi-label">Açık / Toplam İşlem</span>
+                                <div class="kpi-value">
+                                    <span id="perf-count" style="color:#00ccff;">0</span>
+                                    <span style="font-size: 0.9rem; color: var(--text-muted); padding-left: 5px;">/
+                                        <span id="perf-total-trades">0</span></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Toplam P&L -->
+                        <div class="kpi-card glass-panel">
+                            <div class="kpi-icon" style="background: rgba(255, 51, 102, 0.1); color: #ff3366;">💵</div>
+                            <div class="kpi-details">
+                                <span class="kpi-label">Toplam P&L (Kâr/Zarar)</span>
+                                <span class="kpi-value" id="perf-total-pnl">$0.00</span>
+                            </div>
+                        </div>
+
+                        <!-- Toplam Komisyon -->
+                        <div class="kpi-card glass-panel">
+                            <div class="kpi-icon" style="background: rgba(255, 255, 255, 0.1); color: #fff;">💸</div>
+                            <div class="kpi-details">
+                                <span class="kpi-label">Ödenen Komisyon</span>
+                                <span class="kpi-value" id="perf-total-fees">$0.00</span>
+                            </div>
+                        </div>
+
+                        <!-- PİYASA REJİMİ -->
+                        <div class="kpi-card glass-panel" style="border: 1px solid rgba(0, 204, 255, 0.2);">
+                            <div class="kpi-icon" id="perf-regime-icon"
+                                style="background: rgba(0, 204, 255, 0.1); color: #00ccff;">🌐</div>
+                            <div class="kpi-details">
+                                <span class="kpi-label">Piyasa Rejimi</span>
+                                <span class="kpi-value" id="perf-regime"
+                                    style="color:var(--neon-blue); font-size: 1rem;">UNKNOWN</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card glass-panel chart-span" style="margin-bottom: 20px;">
+                    <h3>🔓 Açık Pozisyonlar</h3>
+                    <div class="table-container">
+                        <table class="positions-table" style="font-size: 0.8rem;">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Yön / Parite</th>
+                                    <th>Miktar / Kaldıraç</th>
+                                    <th>Giriş / Pozisyon Değeri</th>
+                                    <th>Mevcut / P&L ($)</th>
+                                    <th>ROE (%)</th>
+                                    <th>SL / TP / Liq</th>
+                                    <th>İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody id="positions-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="grid-content">
+                    <div class="card glass-panel chart-span">
+                        <h3>📊 Sermaye Kullanımı</h3>
+                        <div class="usage-grid">
+                            <div class="usage-item">
+                                <span class="label">💵 Kullanılan Marjin</span>
+                                <h4 id="usage-used-margin">$0.00</h4>
+                            </div>
+                            <div class="usage-item">
+                                <span class="label">💰 Kullanılabilir Bakiye</span>
+                                <h4 id="usage-free-margin">$10,000.00</h4>
+                            </div>
+                            <div class="usage-item">
+                                <span class="label">📊 Toplam Pozisyon Değeri</span>
+                                <h4 id="usage-notional">$0.00</h4>
+                            </div>
+                            <div class="usage-item">
+                                <span class="label">⚡ Ortalama Kaldıraç</span>
+                                <h4 id="usage-leverage">1x</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEKME 4: GEÇMİŞ -->
+            <div id="tab-history" class="tab-content" style="display: none;">
+                <div class="card glass-panel chart-span">
+                    <h3>📜 İşlem Geçmişi (Hafızadan)</h3>
+                    <div class="table-container">
+                        <table class="positions-table">
+                            <thead>
+                                <tr>
+                                    <th>Tarih</th>
+                                    <th>Varlık</th>
+                                    <th>Giriş/Çıkış</th>
+                                    <th>PnL</th>
+                                    <th>Neden</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEKME 5: STRATEJİ KÜTÜPHANESİ (YENİ - AYRI SAYFA) -->
+            <div id="tab-strategies" class="tab-content" style="display: none;">
+                <div class="header-row" style="margin-bottom: 20px;">
+                    <h2>📚 Strateji Kütüphanesi & Çalışma Mantığı</h2>
+                    <p style="color:var(--text-muted);">Sistemdeki uzmanların çalışma prensiplerini ve teknik
+                        reçetelerini inceleyin.</p>
+                </div>
+
+                <div id="strategy-library-container"
+                    style="display:grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap:20px;">
+                    <div style="text-align:center; padding:40px; color:var(--text-muted); grid-column:span 2;">Uzman
+                        bilgileri yükleniyor...</div>
+                </div>
+            </div>
+
+            <!-- SEKME: STRATEJİ OLUŞTURUCU -->
+            <div id="tab-strategy-builder" class="tab-content" style="display: none;">
+                <div class="builder-container"
+                    style="display: grid; grid-template-columns: 310px 1fr 310px; gap: 20px; height: calc(100vh - 160px); padding: 15px;">
+
+                    <!-- SOL PANEL: İndikatör Kütüphanesi -->
+                    <div class="panel glass-panel" style="overflow-y: auto;">
+                        <div class="panel-header">📚 Gösterge Kütüphanesi</div>
+
+                        <input type="text" id="indicator-search" class="condition-input"
+                            placeholder="🔍 İndikatör ara..."
+                            style="width: 100%; margin-bottom: 20px; background: rgba(255,255,255,0.05);">
+
+                        <div id="indicator-list">
+                            <div class="indicator-category">
+                                <div class="category-title">📈 TREND</div>
+                                <div class="indicator-item indicator-btn" data-type="EMA" data-params='{"period": 20}'>
+                                    <span class="indicator-name">EMA (20)</span>
+                                    <button class="btn-add">+</button>
+                                </div>
+                                <div class="indicator-item indicator-btn" data-type="SMA" data-params='{"period": 20}'>
+                                    <span class="indicator-name">SMA (20)</span>
+                                    <button class="btn-add">+</button>
+                                </div>
+                                <div class="indicator-item indicator-btn" data-type="Supertrend"
+                                    data-params='{"period": 10, "multiplier": 3}'>
+                                    <span class="indicator-name">Supertrend</span>
+                                    <button class="btn-add">+</button>
+                                </div>
+                            </div>
+                            <div class="indicator-category">
+                                <div class="category-title">🚀 MOMENTUM</div>
+                                <div class="indicator-item indicator-btn" data-type="RSI" data-params='{"period": 14}'>
+                                    <span class="indicator-name">RSI (14)</span>
+                                    <button class="btn-add">+</button>
+                                </div>
+                                <div class="indicator-item indicator-btn" data-type="MACD"
+                                    data-params='{"fast": 12, "slow": 26, "signal": 9}'>
+                                    <span class="indicator-name">MACD</span>
+                                    <button class="btn-add">+</button>
+                                </div>
+                            </div>
+                            <div class="indicator-category">
+                                <div class="category-title">📊 VOLATİLİTE</div>
+                                <div class="indicator-item indicator-btn" data-type="ATR" data-params='{"period": 14}'>
+                                    <span class="indicator-name">ATR (14)</span>
+                                    <button class="btn-add">+</button>
+                                </div>
+                                <div class="indicator-item indicator-btn" data-type="Bollinger"
+                                    data-params='{"period": 20, "std": 2}'>
+                                    <span class="indicator-name">Bollinger</span>
+                                    <button class="btn-add">+</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.05);">
+                            <div class="category-title">💾 KAYDEDİLMİŞ STRATEJİLER</div>
+                            <div id="saved-strategies-list" style="max-height: 250px; overflow-y: auto;">
+                                <div
+                                    style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.8rem;">
+                                    Yükleniyor...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ORTA PANEL: Koşul Oluşturucu -->
+                    <div class="panel glass-panel" style="overflow-y: auto;">
+                        <div class="panel-header">⚙️ Koşul Oluşturucu</div>
+                        <div style="margin-bottom: 20px;">
+                            <label
+                                style="display: block; font-size: 0.7rem; color: var(--text-muted); margin-bottom: 5px;">Strateji
+                                Adı</label>
+                            <input type="text" id="strategy-name" class="condition-input" value="Yeni Strateji"
+                                style="width: 100%; margin-bottom: 10px;">
+                            <label
+                                style="display: block; font-size: 0.7rem; color: var(--text-muted); margin-bottom: 5px;">Açıklama</label>
+                            <textarea id="strategy-description" class="condition-input"
+                                placeholder="Opsiyonel açıklama..."
+                                style="width: 100%; height: 50px; resize: none;"></textarea>
+                        </div>
+
+                        <div class="condition-builder" style="border-left: 3px solid var(--neon-green);">
+                            <div class="condition-side long">🟢 LONG Koşulları</div>
+                            <div class="logic-selector" id="long-logic-selector">
+                                <div class="logic-btn active" data-logic="AND">VE (AND)</div>
+                                <div class="logic-btn" data-logic="OR">VEYA (OR)</div>
+                            </div>
+                            <div id="long-conditions-container"></div>
+                            <button class="btn-add-rule" onclick="addCondition('long')">➕ LONG Koşulu Ekle</button>
+                        </div>
+
+                        <div class="condition-builder"
+                            style="border-left: 3px solid var(--neon-red); margin-top: 25px;">
+                            <div class="condition-side short">🔴 SHORT Koşulları</div>
+                            <div class="logic-selector" id="short-logic-selector">
+                                <div class="logic-btn active" data-logic="AND">VE (AND)</div>
+                                <div class="logic-btn" data-logic="OR">VEYA (OR)</div>
+                            </div>
+                            <div id="short-conditions-container"></div>
+                            <button class="btn-add-rule" onclick="addCondition('short')">➕ SHORT Koşulu Ekle</button>
+                        </div>
+                    </div>
+
+                    <!-- SAĞ PANEL: Test ve Analiz -->
+                    <div class="panel glass-panel" style="overflow-y: auto;">
+                        <div class="panel-header">🎯 Backtest & Risk</div>
+                        <div
+                            style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                                <div><label style="font-size:0.65rem; color:var(--text-muted);">Sembol</label><input
+                                        type="text" id="backtest-symbol" class="condition-input" value="BTC/USDT"
+                                        style="width: 100%;"></div>
+                                <div><label style="font-size:0.65rem; color:var(--text-muted);">TF</label><select
+                                        id="backtest-timeframe" class="condition-select" style="width: 100%;">
+                                        <option value="15m">15m</option>
+                                        <option value="1h" selected>1h</option>
+                                        <option value="4h">4h</option>
+                                    </select></div>
+                                <div><label style="font-size:0.65rem; color:var(--text-muted);">Gün</label><input
+                                        type="number" id="backtest-days" class="condition-input" value="30"
+                                        style="width: 100%;"></div>
+                                <div><label style="font-size:0.65rem; color:var(--text-muted);">Bakiye</label><input
+                                        type="number" id="backtest-balance" class="condition-input" value="10000"
+                                        style="width: 100%;"></div>
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                            <div><label style="font-size:0.7rem; color:var(--text-muted);">SL (ATR)</label><input
+                                    type="number" id="stop-loss-atr" class="condition-input" value="2.0" step="0.1"
+                                    style="width: 100%;"></div>
+                            <div><label style="font-size:0.7rem; color:var(--text-muted);">TP (ATR)</label><input
+                                    type="number" id="take-profit-atr" class="condition-input" value="4.0" step="0.1"
+                                    style="width: 100%;"></div>
+                            <div style="grid-column: span 2;"><label
+                                    style="font-size:0.7rem; color:var(--text-muted);">Max Risk (%)</label><input
+                                    type="number" id="max-risk-percent" class="condition-input" value="2.0" step="0.1"
+                                    style="width: 100%;"></div>
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
+                            <button class="btn btn-primary" onclick="testStrategy()"
+                                style="padding: 12px; font-weight: bold;">🧪 Backtest Başlat</button>
+                            <button class="btn btn-success" onclick="saveStrategy()" style="padding: 10px;">💾
+                                Stratejiyi Kaydet</button>
+                            <button class="btn" onclick="clearForm()"
+                                style="padding: 10px; background: rgba(255,255,255,0.05); color: var(--text-muted);">🗑️
+                                Temizle</button>
+                        </div>
+
+                        <div id="test-results" style="margin-top: 25px; display: none;">
+                            <div class="category-title">📊 SONUÇLAR</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                                <div class="metric-box"
+                                    style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; text-align: center;">
+                                    <div style="font-size: 0.65rem; color: var(--text-muted);">Win Rate</div>
+                                    <div id="metric-winrate"
+                                        style="font-size: 1.1rem; font-weight: bold; color: var(--neon-green);">0%</div>
+                                </div>
+                                <div class="metric-box"
+                                    style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; text-align: center;">
+                                    <div style="font-size: 0.65rem; color: var(--text-muted);">Net PnL</div>
+                                    <div id="metric-pnl"
+                                        style="font-size: 1.1rem; font-weight: bold; color: var(--neon-blue);">$0</div>
+                                </div>
+                                <div class="metric-box"
+                                    style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; text-align: center;">
+                                    <div style="font-size: 0.65rem; color: var(--text-muted);">Profit Factor</div>
+                                    <div id="metric-profit-factor"
+                                        style="font-size: 1.1rem; font-weight: bold; color: var(--neon-purple);">0</div>
+                                </div>
+                                <div class="metric-box"
+                                    style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; text-align: center;">
+                                    <div style="font-size: 0.65rem; color: var(--text-muted);">Max DD</div>
+                                    <div id="metric-drawdown"
+                                        style="font-size: 1.1rem; font-weight: bold; color: var(--neon-red);">0%</div>
+                                </div>
+                            </div>
+                            <div id="equity-curve-chart"
+                                style="height: 150px; background: rgba(0,0,0,0.3); border-radius: 8px; position: relative; margin-bottom: 20px;">
+                            </div>
+                            <div class="category-title">📋 SON İŞLEMLER</div>
+                            <div
+                                style="max-height: 250px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 0.7rem;">
+                                    <tbody id="trades-table-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Parametre Modal -->
+                <div id="param-modal" class="modal">
+                    <div class="modal-content glass-panel" style="max-width: 400px; padding: 25px;">
+                        <div class="modal-header" id="modal-title"
+                            style="font-size: 1.1rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 15px;">
+                            İndikatör Detayı</div>
+                        <div id="modal-params"></div>
+                        <div class="modal-actions" style="justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                            <button class="btn btn-close-pos" onclick="closeModal()"
+                                style="background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid rgba(255,255,255,0.1);">Vazgeç</button>
+                            <button class="btn btn-primary" onclick="confirmIndicator()"
+                                style="padding: 8px 20px;">Ekle</button>
+                        </div>
+                    </div>
+                </div>
+
+                <script src="strategy-builder.js"></script>
+            </div>
+
+
+
+            <!-- SEKME 6: AYARLAR -->
+            <div id="tab-settings" class="tab-content" style="display: none;">
+                <div class="card glass-panel chart-span">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                        <div>
+                            <h3>🤖 Strateji Atama Masası</h3>
+                            <p style="color:var(--text-muted); font-size:0.9rem;">Hangi coin üzerinde hangi Yapay Zeka
+                                Uzmanı çalışsın?</p>
+                        </div>
+                        <div class="timeframe-tag">DİNAMİK MOD AKTİF</div>
+                    </div>
+
+                    <div class="table-container">
+                        <table class="positions-table" style="font-family: var(--font-heading);">
+                            <thead>
+                                <tr>
+                                    <th style="width:20%">Parite</th>
+                                    <th style="width:30%">Aktif Uzman</th>
+                                    <th style="width:40%">Strateji Değiştir</th>
+                                    <th style="width:10%">Durum</th>
+                                </tr>
+                            </thead>
+                            <tbody id="strategy-allocation-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEKME 7: VERİ LABORATUVARI -->
+            <div id="tab-data" class="tab-content" style="display: none;">
+                <div class="header-row" style="margin-bottom: 20px;">
+                    <h2>💾 Veri Laboratuvarı & Geçmiş Veri İndirme</h2>
+                    <p style="color:var(--text-muted);">Yapay zekayı eğitmek için Binance üzerinden veri toplayın.</p>
+                </div>
+                <div class="grid-content">
+                    <div class="card glass-panel">
+                        <div
+                            style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                            <h3>📡 Piyasa & Veri Seçimi</h3>
+                            <button class="btn-select" style="width:auto; padding:6px 15px; font-size:0.8rem;"
+                                onclick="saveMarketSelection()">✅ Takibi Güncelle</button>
+                        </div>
+                        <div style="display:flex; gap:8px; margin-bottom:12px;">
+                            <input type="text" id="market-search" placeholder="Coin Ara..." class="strategy-select"
+                                style="flex:1;">
+                            <select id="market-type-filter" class="strategy-select" style="width:100px;">
+                                <option value="all">Tümü</option>
+                                <option value="spot">Spot</option>
+                                <option value="swap">Futures</option>
+                            </select>
+                        </div>
+                        <div id="market-selection-list" style="max-height: 350px; overflow-y: auto;"></div>
+                    </div>
+
+                    <div class="card glass-panel">
+                        <h3>📥 Geçmiş Veri İndir</h3>
+                        <div style="margin-top:15px; display:flex; flex-direction:column; gap:10px;">
+                            <div
+                                style="background:rgba(88, 166, 255, 0.05); padding:10px; border-radius:8px; border-left:3px solid var(--neon-blue);">
+                                <label
+                                    style="font-size:0.7rem; color:var(--text-muted); display:block; margin-bottom:2px;">Seçili
+                                    Sembol:</label>
+                                <strong id="selected-symbol-val" style="font-size:1.1rem; color:var(--text-main)">--
+                                    SEÇİNİZ --</strong>
+                            </div>
+                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                                <div>
+                                    <label style="font-size:0.7rem; color:var(--text-muted);">Başlangıç:</label>
+                                    <input type="date" id="download-start-date" class="strategy-select"
+                                        value="2025-01-01">
+                                </div>
+                                <div>
+                                    <label style="font-size:0.7rem; color:var(--text-muted);">Zaman:</label>
+                                    <select id="download-timeframe" class="strategy-select">
+                                        <option value="1m">1m</option>
+                                        <option value="5m">5m</option>
+                                        <option value="15m">15m</option>
+                                        <option value="1h">1h</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- İLERLEME GÖSTERGESİ -->
+                            <div id="progress-container"
+                                style="display:none; margin:10px 0; background:rgba(0,0,0,0.3); padding:12px; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
+                                <div id="progress-text"
+                                    style="font-size:0.65rem; color:var(--text-muted); margin-bottom:8px; display:none;">
+                                    Hazırlanıyor...</div>
+                                <div
+                                    style="height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">
+                                    <div id="progress-bar"
+                                        style="width:0%; height:100%; background:var(--neon-blue); transition: width 0.3s;">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button id="start-download-btn" class="btn-select"
+                                style="background:var(--neon-green); color:black; font-weight:700; border:none;"
+                                onclick="startDownload()">🚀 İndirmeyi Başlat</button>
+                            <button id="stop-download-btn" class="btn-select"
+                                style="background:rgba(255,25,25,0.2); color:#ff4d4d; border:1px solid #ff4d4d33; display:none;"
+                                onclick="stopDownload()">🛑 İndirmeyi Durdur</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card glass-panel chart-span" style="margin-top:20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                        <h3>🚀 Veri Laboratuvarı Görev Geçmişi</h3>
+                        <div id="active-tasks-count" class="timeframe-tag">0 Görev / Geçmiş</div>
+                    </div>
+                    <div id="active-tasks-list"></div>
+                </div>
+            </div>
+
+            <!-- SEKME: STRATEJİ RAPORLARI -->
+            <div id="tab-reports" class="tab-content" style="display: none;">
+                <div class="card glass-panel" style="margin-bottom: 25px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <h3>📈 Gelişmiş Strateji ve Başarı Raporu (Röntgen)</h3>
+                            <p style="color:var(--text-muted); font-size: 0.9rem; margin-top:5px;">Hangi bot modelinin
+                                hangi paritelerde daha verimli olduğunu detaylı analiz eder ve tavsiye sunar.</p>
+                        </div>
+                        <button class="btn btn-select" style="background:var(--neon-blue); color:white"
+                            onclick="loadStrategyReport()">🔄 Raporu Güncelle</button>
+                    </div>
+                </div>
+                <!-- Kartların yerleşeceği alan -->
+                <div id="strategy-report-container"
+                    style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px;">
+                    <p style="text-align:center; padding: 40px; color:var(--text-muted); grid-column: span 100%;">
+                        Veriler sunucudan çekiliyor...</p>
+                </div>
+            </div>
+
+        </main>
+    </div>
+    <script src="app.js"></script>
+</body>
+
+</html>
