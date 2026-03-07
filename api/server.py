@@ -703,7 +703,7 @@ async def _run_ml_training(req: MLTrainRequest):
         logger.info("🧠 [ML] Eğitim başlatılıyor...")
 
         # 1. Veri çek
-        from core.database import db_manager
+        from data.database import db_manager
         from data.indicators import StrategyIndicators
         from ml.model_training import run_training_pipeline
 
