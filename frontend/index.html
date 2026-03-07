@@ -188,9 +188,14 @@
                 <div class="card glass-panel" style="margin-bottom: 20px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                         <h3 style="color: var(--neon-blue);">📚 Eğitilmiş Modeller (Ensemble)</h3>
-                        <button class="btn btn-primary" onclick="loadTrainingHistory()" style="padding: 8px 15px; font-size: 0.85rem;">
-                            🔄 Yenile
-                        </button>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn btn-primary" onclick="loadTrainingHistory()" style="padding: 8px 15px; font-size: 0.85rem;">
+                                🔄 Yenile
+                            </button>
+                            <button class="btn btn-danger" onclick="clearTrainingHistory()" style="padding: 8px 15px; font-size: 0.85rem;">
+                                🗑️ Geçmişi Temizle
+                            </button>
+                        </div>
                     </div>
                     <div id="training-history-table" style="overflow-x: auto;">
                         <p style="text-align: center; padding: 40px; color: var(--text-muted);">

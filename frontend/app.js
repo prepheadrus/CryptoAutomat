@@ -2018,6 +2018,36 @@ async function loadTrainingHistory() {
 // Global scope'a ekle
 window.loadTrainingHistory = loadTrainingHistory;
 
+
+// ============================================
+// EĞİTİM GEÇMİŞİNİ TEMİZLE
+// ============================================
+
+async function clearTrainingHistory() {
+    if (!confirm('⚠️ Tüm eğitim geçmişini silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz!')) return;
+
+    try {
+        const response = await fetch('/api/v1/ml/training-history', {
+            method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            alert('✅ ' + result.message);
+            loadTrainingHistory(); // Tabloyu yenile
+        } else {
+            alert('❌ Hata: ' + result.message);
+        }
+    } catch (error) {
+        console.error('Geçmiş silme hatası:', error);
+        alert('❌ Geçmiş silinemedi: ' + error.message);
+    }
+}
+
+// Global scope'a ekle
+window.clearTrainingHistory = clearTrainingHistory;
+
 // Sekme dinleyicisini ezmeden global bağlama yap
 document.addEventListener('click', (e) => {
     if (e.target.matches('.menu-item') && e.target.dataset.target === 'tab-reports') {

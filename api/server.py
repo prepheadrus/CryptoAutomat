@@ -876,6 +876,34 @@ async def get_ml_training_history():
         "history": training_history
     }
 
+
+@app.delete("/api/v1/ml/training-history")
+async def clear_ml_training_history():
+    """Eğitim geçmişini temizler."""
+    import json
+    import os
+
+    history_file = "artifacts/ml_training_history.json"
+    try:
+        # Dosyayı sil
+        if os.path.exists(history_file):
+            os.remove(history_file)
+            logger.info("🧹 Training history dosyası silindi.")
+
+        # Belleği temizle
+        training_history.clear()
+
+        return {
+            "status": "success",
+            "message": "Eğitim geçmişi temizlendi!"
+        }
+    except Exception as e:
+        logger.error(f"Training history silinemedi: {e}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
 # ----------------------------------------------------------------------------------
 # FRONTEND ARAYÜZ YAYINI (DASHBOARD)
 # "frontend" klasörünün içindeki index.html web sitesini http://localhost:8000/ da açar.
