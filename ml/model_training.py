@@ -171,7 +171,10 @@ class ModelTrainer:
         logger.info(f"Precision: {metrics['precision']:.4f}")
         logger.info(f"Recall:    {metrics['recall']:.4f}")
         logger.info(f"F1-Score:  {metrics['f1']:.4f}")
-        logger.info(f"Best Iteration: {self.model.best_iteration}")
+
+        # Best iteration (early stopping kullanılmadıysa None)
+        best_iter = getattr(self.model, 'best_iteration', None)
+        logger.info(f"Best Iteration: {best_iter if best_iter is not None else 'N/A (no early stopping)'}")
         logger.info("=" * 60)
 
         logger.info("\nClassification Report:")
@@ -187,7 +190,7 @@ class ModelTrainer:
         return {
             'metrics': metrics,
             'feature_importance': feature_importance,
-            'best_iteration': self.model.best_iteration
+            'best_iteration': getattr(self.model, 'best_iteration', None)
         }
 
     def _calculate_metrics(
