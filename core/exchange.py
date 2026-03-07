@@ -493,7 +493,14 @@ class ExchangeManager:
                             if strat_name != active_strat_id and strat_name != 'trend_master':
                                 continue  # Sadece aktif stratejiyi işle
 
-                            # Sinyal işleme
+                            # HER SİNYALDE process_signal ÇAĞIR (latest_decisions için kritik!)
+                            await paper_engine.process_signal(
+                                symbol, current_price, df_target,
+                                ml_confidence=0.70 if signal == 2 else 0.50,
+                                htf_trend=htf_trend, regime=regime_info['regime']
+                            )
+
+                            # Sinyal tipine göre aksiyon al
                             if signal == 2:  # AL (LONG)
                                 # Açık LONG pozisyon yoksa işleme gir
                                 has_open_long = any(
@@ -503,11 +510,6 @@ class ExchangeManager:
 
                                 if not has_open_long:
                                     logger.info(f"🟢 {strat_name} AL sinyali: {symbol} @ {current_price:.2f}")
-                                    await paper_engine.process_signal(
-                                        symbol, current_price, df_target,
-                                        ml_confidence=0.70,  # Yüksek güven
-                                        htf_trend=htf_trend, regime=regime_info['regime']
-                                    )
 
                             elif signal == 0:  # SAT (SHORT)
                                 # Açık LONG pozisyon varsa kapat
@@ -520,15 +522,14 @@ class ExchangeManager:
                                         )
                                         break
 
-                            # signal == 1 (BEKLE) → Aksiyon yok
+                            # signal == 1 (BEKLE) → process_signal zaten çağrıldı, kart güncellendi
 
                     except Exception as e:
                         logger.error(f"❌ Strateji sinyalleri işlenirken hata ({symbol}): {e}")
-                        # Hata durumunda mevcut process_signal'a devam et
-                        ml_confidence = 0.50
+                        # Hata durumunda process_signal çağır (latest_decisions için)
                         await paper_engine.process_signal(
                             symbol, current_price, df_target,
-                            ml_confidence=ml_confidence,
+                            ml_confidence=0.50,
                             htf_trend=htf_trend, regime=regime_info['regime']
                         )
 
