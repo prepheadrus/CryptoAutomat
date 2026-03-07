@@ -114,15 +114,49 @@ class PaperTrader:
         # ML Model Yükleme (Eğitilmiş model varsa)
         self.ml_model = None
         self.ml_enabled = False
+        self.ml_timeframe_mismatch = False  # Timeframe uyumsuzluğu flag
 
         if ML_AVAILABLE:
             try:
                 model_path = CONFIG.get('ml', {}).get('model_path', 'artifacts/models/xgb_model.json')
                 logger.info(f"🤖 ML modeli yükleniyor: {model_path}...")
-                self.ml_model = ModelTrainer()
-                self.ml_model.load_model(model_path)
-                self.ml_enabled = True
-                logger.info(f"✅ ML modeli BAŞARIYLA yüklendi! (enabled={self.ml_enabled})")
+
+                # Model dosyası var mı kontrol et
+                import os
+                if not os.path.exists(model_path):
+                    logger.error(f"❌ ML model dosyası bulunamadı: {model_path}")
+                    logger.warning("⚠️ ML olmadan devam ediliyor (sadece strateji sinyalleri).")
+                    self.ml_enabled = False
+                else:
+                    # Metadata kontrolü - timeframe uyumlu mu?
+                    metadata_path = model_path.replace('.json', '_metadata.json')
+                    if os.path.exists(metadata_path):
+                        import json
+                        with open(metadata_path, 'r') as f:
+                            metadata = json.load(f)
+
+                        trained_timeframe = metadata.get('trained_timeframe', 'unknown')
+                        current_timeframe = self.active_timeframes.get(list(self.active_timeframes.keys())[0], '1m')
+
+                        if trained_timeframe != current_timeframe:
+                            logger.error(f"⚠️ TIMEFRAME UYUMSUZLUĞU! Model {trained_timeframe} için eğitilmiş, ama bot {current_timeframe} çalışıyor!")
+                            logger.error(f"❌ ML modeli yüklenmedi - yanlış timeframe!")
+                            self.ml_timeframe_mismatch = True
+                            self.ml_enabled = False
+                        else:
+                            # Timeframe uyumlu, modeli yükle
+                            self.ml_model = ModelTrainer()
+                            self.ml_model.load_model(model_path)
+                            self.ml_enabled = True
+                            logger.info(f"✅ ML modeli BAŞARIYLA yüklendi! (enabled={self.ml_enabled}, timeframe={trained_timeframe})")
+                    else:
+                        logger.warning(f"⚠️ Metadata dosyası bulunamadı: {metadata_path}")
+                        # Metadata yoksa yine de model yükle (eski modeller için)
+                        self.ml_model = ModelTrainer()
+                        self.ml_model.load_model(model_path)
+                        self.ml_enabled = True
+                        logger.info(f"✅ ML modeli yüklendi (metadata yok)!")
+
             except Exception as e:
                 logger.error(f"❌ ML modeli yüklenemedi: {str(e)}")
                 logger.warning("⚠️ ML olmadan devam ediliyor (sadece strateji sinyalleri).")

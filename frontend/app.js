@@ -670,6 +670,33 @@ window.selectStrategy = async function (symbol) {
         return;
     }
 
+    // FAZ 2: MODEL TIMEFRAME KONTROLÜ (GÜVENLİK KALKANI)
+    // Kullanıcı botu başlatmadan önce model-frame uyumluluğunu kontrol et
+    const modelCheck = await checkModelCompatibility(symbol, timeframe);
+
+    if (!modelCheck.compatible) {
+        // Model yok veya timeframe uyuşmuyor - kullanıcıyı uyar
+        showErrorToast(
+            `⚠️ <strong>Model Bulunamadı!</strong><br>${modelCheck.error}`,
+            8000
+        );
+
+        // Yine de devam etmek istiyor mu? (ML olmadan çalışacak)
+        const confirmContinue = confirm(
+            `⚠️ UYARI: ${symbol} için ${timeframe} timeframe'inde eğitilmiş ML modeli bulunamadı.\n\n` +
+            `Bot ML olmadan (sadece teknik indikatörlerle) çalışacak.\n\n` +
+            `Devam etmek istiyor musunuz?\n\n` +
+            `İPTAL: Botu başlatma\n` +
+            `TAMAM: ML olmadan devam et`
+        );
+
+        if (!confirmContinue) {
+            statusEl.innerText = '● İptal';
+            statusEl.className = 'danger-text';
+            return;
+        }
+    }
+
     try {
         statusEl.innerText = '● Atanıyor...';
         statusEl.className = 'warning-text'; // Sarımsı bir renk (CSS'e eklenebilir)
@@ -688,6 +715,14 @@ window.selectStrategy = async function (symbol) {
         const result = await res.json();
         if (result.status === 'success') {
             console.log("Strateji ve Periyot başarıyla atandı:", result.symbol, result.active_timeframe);
+
+            // Kullanıcıya bilgi ver (ML varsa veya yoksa)
+            if (modelCheck.compatible) {
+                showErrorToast(`✅ <strong>${symbol}</strong> başlatıldı!<br>ML Model: ${timeframe} timeframe için hazır.`, 3000);
+            } else {
+                showErrorToast(`⚠️ <strong>${symbol}</strong> başlatıldı!<br>ML olmadan çalışıyor (sadece indikatörler).`, 5000);
+            }
+
             setTimeout(() => {
                 fetchStrategies(); // Tabloyu tazele
                 fetchBotData();
@@ -697,6 +732,7 @@ window.selectStrategy = async function (symbol) {
         console.error("Strateji Seçim Hatası:", e);
         statusEl.innerText = '● Hata!';
         statusEl.className = 'danger-text';
+        showErrorToast(`❌ Hata: ${e.message}`, 5000);
     }
 }
 
@@ -2047,6 +2083,97 @@ async function clearTrainingHistory() {
 
 // Global scope'a ekle
 window.clearTrainingHistory = clearTrainingHistory;
+
+
+// ============================================
+// MODEL TIMEFRAME KONTROLÜ (GÜVENLİK KALKANI)
+// ============================================
+
+async function checkModelCompatibility(symbol, timeframe) {
+    /**
+     * Seçili sembol ve timeframe için modelin var olup olmadığını kontrol eder.
+     * @returns {Promise<{compatible: boolean, error: string|null}>}
+     */
+    try {
+        const response = await fetch(`/api/v1/ml/check-model?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}`);
+        const result = await response.json();
+
+        if (result.error) {
+            return {
+                compatible: false,
+                error: result.error
+            };
+        }
+
+        return {
+            compatible: result.timeframe_match,
+            error: null
+        };
+    } catch (error) {
+        console.error('Model kontrol hatası:', error);
+        return {
+            compatible: false,
+            error: 'Model kontrolü yapılamadı: ' + error.message
+        };
+    }
+}
+
+function showErrorToast(message, duration = 5000) {
+    /**
+     * Ekrana kırmızı uyarı mesajı (toast) gösterir.
+     */
+    // Toast container oluştur (yoksa)
+    let container = document.getElementById('error-toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'error-toast-container';
+        container.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        `;
+        document.body.appendChild(container);
+    }
+
+    // Toast oluştur
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+        background: linear-gradient(135deg, #ff4500, #ff6347);
+        color: white;
+        padding: 15px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(255, 69, 0, 0.4);
+        font-size: 0.9rem;
+        font-weight: 500;
+        max-width: 400px;
+        animation: slideIn 0.3s ease-out;
+        border-left: 4px solid #fff;
+    `;
+    toast.innerHTML = `
+        <div style="display: flex; align-items: start; gap: 10px;">
+            <span style="font-size: 1.2rem;">⚠️</span>
+            <div style="flex: 1;">${message}</div>
+            <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; color: white; cursor: pointer; font-size: 1.2rem;">&times;</button>
+        </div>
+    `;
+
+    container.appendChild(toast);
+
+    // Otomatik kaldır
+    setTimeout(() => {
+        if (toast.parentElement) {
+            toast.remove();
+        }
+    }, duration);
+}
+
+// Global scope'a ekle
+window.checkModelCompatibility = checkModelCompatibility;
+window.showErrorToast = showErrorToast;
 
 // Sekme dinleyicisini ezmeden global bağlama yap
 document.addEventListener('click', (e) => {

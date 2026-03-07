@@ -906,6 +906,69 @@ async def clear_ml_training_history():
             "message": str(e)
         }
 
+
+@app.get("/api/v1/ml/check-model")
+async def check_model_availability(symbol: str, timeframe: str):
+    """
+    Belirli bir sembol ve timeframe için modelin var olup olmadığını ve uyumlu olup olmadığını kontrol eder.
+
+    Args:
+        symbol: Sembol adı (örn: BTCUSDT)
+        timeframe: Zaman dilimi (örn: 15m)
+
+    Returns:
+        Model durumu ve hata mesajları
+    """
+    import os
+    import json
+
+    # Sembol ve timeframe'den dosya adını oluştur
+    symbol_clean = symbol.replace('/', '').replace(':', '').lower()
+    model_path = f"artifacts/models/xgb_model_{symbol_clean}_{timeframe}.json"
+    metadata_path = model_path.replace('.json', '_metadata.json')
+
+    result = {
+        "status": "success",
+        "model_exists": False,
+        "metadata_exists": False,
+        "timeframe_match": False,
+        "trained_timeframe": None,
+        "requested_timeframe": timeframe,
+        "error": None
+    }
+
+    # Model dosyası var mı?
+    if not os.path.exists(model_path):
+        result["error"] = f"Zaman dilimi uyumsuzluğu! Seçili zaman dilimi ({timeframe}) için eğitilmiş bir yapay zeka modeli bulunamadı. Lütfen önce ML Laboratuvarından bu zaman dilimi için model eğitin."
+        return result
+
+    result["model_exists"] = True
+
+    # Metadata dosyası var mı?
+    if not os.path.exists(metadata_path):
+        result["error"] = f"Model bulundu ancak metadata dosyası eksik. Modeli yeniden eğitmeniz gerekebilir."
+        return result
+
+    result["metadata_exists"] = True
+
+    # Timeframe uyumlu mu?
+    try:
+        with open(metadata_path, 'r') as f:
+            metadata = json.load(f)
+
+        trained_timeframe = metadata.get('trained_timeframe', 'unknown')
+        result["trained_timeframe"] = trained_timeframe
+
+        if trained_timeframe != timeframe:
+            result["error"] = f"Zaman dilimi uyumsuzluğu! Model {trained_timeframe} için eğitilmiş, ama siz {timeframe} seçtiniz. Lütfen doğru timeframe için model eğitin veya {trained_timeframe} timeframe'ini seçin."
+        else:
+            result["timeframe_match"] = True
+
+    except Exception as e:
+        result["error"] = f"Metadata okuma hatası: {str(e)}"
+
+    return result
+
 # ----------------------------------------------------------------------------------
 # FRONTEND ARAYÜZ YAYINI (DASHBOARD)
 # "frontend" klasörünün içindeki index.html web sitesini http://localhost:8000/ da açar.
