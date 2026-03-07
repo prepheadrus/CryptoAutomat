@@ -26,6 +26,7 @@ from strategy.builder.json_validator import StrategyValidator
 # Bot modüllerinden import
 from data.indicators import StrategyIndicators
 from core.logger import logger
+from strategy.manager import StrategyManager
 
 # Router oluştur
 router = APIRouter(prefix="/api/v1/strategy", tags=["Strategy Builder"])
@@ -151,7 +152,15 @@ async def save_strategy(request: StrategySaveRequest):
             json.dump(strategy_json, f, indent=2, ensure_ascii=False)
         
         logger.info(f"✅ Strateji kaydedildi: {filepath}")
-        
+
+        # Stratejileri yeniden yükle (Hot Reload)
+        try:
+            StrategyManager.reload_strategies()
+            logger.info("🔄 Stratejiler yeniden yüklendi (Hot Reload).")
+        except Exception as e:
+            logger.error(f"🔥 Hot Reload hatası: {e}")
+            # Bu bir hata olmamalı, sadece loglayalım. API response'u etkilemesin.
+
         return StrategySaveResponse(
             status="success",
             message=f"Strateji '{request.name}' başarıyla kaydedildi",

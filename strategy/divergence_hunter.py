@@ -30,7 +30,8 @@ class DivergenceHunter(BaseStrategy):
         """
         # Gerekli indikatörlerin olup olmadığını kontrol et
         required_cols = ['DEMAND_INDEX', 'UO', 'ADX_14', 'DMP_14', 'DMN_14', 'PSAR', 'close', 
-                         'DIV_PRICE_LOWER', 'DIV_DEMAND_HIGHER', 'DIV_UO_HIGHER', 'ADX_BULL_CROSS']
+                         'DIV_PRICE_LOWER', 'DIV_DEMAND_HIGHER', 'DIV_UO_HIGHER', 'ADX_BULL_CROSS',
+                         'RSI_14', 'MACDh_12_26_9', 'BBU_20_2.0_2.0']
         
         for col in required_cols:
             if col not in current_row:
@@ -59,19 +60,27 @@ class DivergenceHunter(BaseStrategy):
         if is_pos_divergence and is_bull_trend and is_psar_bull:
             return 2
             
-        # --- SHORT (SAT) ŞARTLARI ---
-        # Kısa pozisyon için zıt yönde benzer uyuşmazlıklar (Fiyat tepe yaparken osilatörler düşüyor)
-        # Şimdilik sadece PNL (Kar/Zarar) üzerinden LONG sistemine odaklanalım dediniz ama SHORT da ekleyelim
-        is_neg_divergence = (
-            current_row['close'] >= current_row.get('high_max_10', current_row['high']) and # Basit tepe kontrolü
-            current_row['DEMAND_INDEX'] < current_row.get('DEMAND_MAX_10', 0) and
-            current_row['DEMAND_INDEX'] > 0
-        )
+        # --- SHORT (SAT) ŞARTLARI (Geçici Düzeltme) ---
+        # Hatalı olan orijinal `is_neg_divergence` mantığı, sistemde mevcut olan ve daha güvenilir göstergelerle değiştirildi.
+        # RSI'ın aşırı alımda olması, MACD'nin negatif kesişim yapması ve fiyatın üst Bollinger Bandı'na dokunması gibi bir kombinasyon arıyoruz.
+        
+        # 1. RSI aşırı alım bölgesinde mi? (Örn: 70'in üstü)
+        is_rsi_overbought = current_row.get('RSI_14', 50) > 70
+        
+        # 2. MACD histogramı negatif mi? (Ayı kesişimi teyidi)
+        is_macd_bearish = current_row.get('MACDh_12_26_9', 0) < 0
+        
+        # 3. Fiyat üst Bollinger Bandına ulaştı veya geçti mi?
+        is_price_at_bb_upper = current_row.get('close', 0) >= current_row.get('BBU_20_2.0_2.0', float('inf'))
+
+        # Bu üç koşul birleştiğinde bir SHORT sinyali oluşturabiliriz.
+        is_neg_confluence = is_rsi_overbought and is_macd_bearish and is_price_at_bb_upper
+
+        # Orijinal PSAR ve Trend koşullarını koruyalım
         is_bear_trend = current_row['DMN_14'] > current_row['DMP_14']
         is_psar_bear = current_row['close'] < current_row['PSAR']
         
-        # Sadece basit SHORT varsayımı ekliyoruz, detayı kitap kurallarına sadık.
-        if is_neg_divergence and is_bear_trend and is_psar_bear:
+        if is_neg_confluence and is_bear_trend and is_psar_bear:
             return 0
 
         return 1

@@ -170,7 +170,7 @@ class PaperTrader:
                     return
                 
                 logger.info(f"🚀 [LONG] {symbol} Sinyali Yakalandı! Güven: {ml_confidence:.2f} (HTF: {htf_trend})")
-                self._open_new_position(symbol, "LONG", current_price, latest_candle, ml_confidence)
+                await self._open_new_position(symbol, "LONG", current_price, latest_candle, ml_confidence)
                 
             elif signal == 0:
                 # --- SPOT MARKET ÖZEL MANTIĞI ---
