@@ -202,6 +202,8 @@ class StrategyIndicators:
         """
         1 dakikalık verileri istenen her türlü zaman dilimine (3m, 5m, 15m, 1h, 1d vb.) dönüştürür.
         GMT+3 (Türkiye) saatiyle 03:00 günlük kapanışı (UTC 00:00) ile tam uyumludur.
+
+        Desteklenen Timeframe'ler: 1m, 3m, 5m, 10m, 15m, 20m, 30m, 45m, 1h, 2h, 3h, 4h, 6h, 8h, 12h, 1d
         """
         if df.empty or timeframe == "1m":
             return df
@@ -220,17 +222,29 @@ class StrategyIndicators:
             'close': 'last',
             'volume': 'sum'
         }
-        
-        # Pandas resample formatına çevir (Örn: 1h -> 1h, 1d -> 1D, 5m -> 5min)
-        rule = timeframe.replace('m', 'min').replace('h', 'h').replace('d', 'D')
-        
+
+        # Pandas resample formatına çevir
+        # 1m -> 1min, 3m -> 3min, 15m -> 15min, 1h -> 1h, 2h -> 2h, 1d -> 1D
+        if timeframe.endswith('m'):
+            # Dakika: 3m -> 3min
+            rule = timeframe.replace('m', 'min')
+        elif timeframe.endswith('h'):
+            # Saat: 2h -> 2h
+            rule = timeframe.replace('h', 'h')
+        elif timeframe.endswith('d'):
+            # Gün: 1d -> 1D (büyük D kullan)
+            rule = timeframe.replace('d', 'D')
+        else:
+            # Varsayılan
+            rule = timeframe
+
         # Yeniden örnekle
         resampled_df = df.resample(rule, label='left', closed='left').apply(logic)
-        
+
         # Eksik mumları doldur (Hacim 0, diğerleri son fiyat)
         resampled_df['volume'] = resampled_df['volume'].fillna(0)
         resampled_df.ffill(inplace=True)
-        
+
         # Index'i tekrar sütuna al ve temizle
         resampled_df.reset_index(inplace=True)
         return resampled_df

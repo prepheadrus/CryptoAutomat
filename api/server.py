@@ -792,15 +792,17 @@ async def _run_ml_training(req: MLTrainRequest):
         training_state["message"] = "Model eğitiliyor..."
         training_state["progress"] = 50
 
-        # 3. Model eğit
-        model_path = f"artifacts/models/xgb_model_{req.symbol.lower()}.json"
+        # 3. Model eğit - Timeframe'i dosya adına ekle
+        symbol_clean = req.symbol.replace('/', '').replace(':', '').lower()
+        model_path = f"artifacts/models/xgb_model_{symbol_clean}_{req.timeframe}.json"
         trainer = run_training_pipeline(
             df,
             model_save_path=model_path,
             tp_multiplier=req.tp_multiplier,
             sl_multiplier=req.sl_multiplier,
             time_horizon=req.time_horizon,
-            train_ratio=req.train_ratio
+            train_ratio=req.train_ratio,
+            timeframe=req.timeframe  # Timeframe bilgisini de geçir
         )
 
         training_state["progress"] = 90
