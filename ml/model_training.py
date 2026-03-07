@@ -208,6 +208,9 @@ class ModelTrainer:
         Returns:
             Dict[str, Any]: Metrikler sözlüğü
         """
+        # Mevcut sınıfları dinamik olarak tespit et (volatil coinlerde tüm sınıflar olmayabilir)
+        unique_labels = np.unique(np.concatenate([y_true, y_pred]))
+
         # Temel metrikler (macro average)
         accuracy = accuracy_score(y_true, y_pred)
         precision = precision_score(y_true, y_pred, average='macro', zero_division=0)
@@ -216,21 +219,23 @@ class ModelTrainer:
 
         # Sınıf bazlı metrikler
         class_metrics = {}
-        for cls in np.unique(y_true):
+        for cls in unique_labels:
             class_metrics[f'class_{cls}'] = {
                 'precision': precision_score(y_true, y_pred, labels=[cls], average='macro', zero_division=0),
                 'recall': recall_score(y_true, y_pred, labels=[cls], average='macro', zero_division=0),
                 'f1': f1_score(y_true, y_pred, labels=[cls], average='macro', zero_division=0)
             }
 
-        # Raporlar
+        # Raporlar (dinamik target_names - sadece mevcut sınıflar)
+        target_names = [self.class_mapping.get(i, f'Class_{i}') for i in unique_labels]
         report = classification_report(
             y_true,
             y_pred,
-            target_names=[self.class_mapping.get(i, f'Class_{i}') for i in range(self.num_class)],
+            labels=unique_labels,
+            target_names=target_names,
             zero_division=0
         )
-        conf_matrix = confusion_matrix(y_true, y_pred)
+        conf_matrix = confusion_matrix(y_true, y_pred, labels=unique_labels)
 
         return {
             'accuracy': accuracy,
