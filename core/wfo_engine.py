@@ -28,6 +28,14 @@ except ImportError:
     AUTO_GRID_AVAILABLE = False
     logger.warning("⚠️ Auto-Grid Generator bulunamadı, manuel PARAM_GRID kullanılıyor.")
 
+# Optuna - Bayesian Optimization (opsiyonel)
+try:
+    import optuna
+    OPTUNA_AVAILABLE = True
+except ImportError:
+    OPTUNA_AVAILABLE = False
+    logger.warning("⚠️ Optuna bulunamadı, Grid Search kullanılıyor. Kurulum: pip install optuna")
+
 
 class WalkForwardOptimizer:
     """
@@ -132,35 +140,52 @@ class WalkForwardOptimizer:
             df_test = df.iloc[-test_size:].copy()
             
             logger.info(f"📊 [WFO] Veri bölündü: Train={len(df_train)} mum, Test={len(df_test)} mum")
-            
-            # 3. In-Sample üzerinde Grid Search
-            logger.info("🔬 [WFO] In-Sample optimizasyon (Grid Search)...")
-            best_params, best_score = await self._grid_search(
-                df_train, strategy_class, param_grid, optimization_metric
+
+            # 3. In-Sample üzerinde Bayesian Optimization
+            logger.info("🔬 [WFO] In-Sample optimizasyon (Bayesian Search)...")
+
+            # Grid Search kombinasyon sayısını hesapla (karşılaştırma için)
+            import itertools
+            param_names = list(param_grid.keys())
+            param_values = list(param_grid.values())
+            total_combinations = sum(1 for _ in itertools.product(*param_values))
+
+            logger.info(f"📊 [BAYES-OPT] Geleneksel Grid Search ile {total_combinations} ihtimal vardı")
+
+            best_params, best_score = await self._bayesian_search(
+                df_train, strategy_class, param_grid, optimization_metric, n_trials=50
             )
-            
+
             if best_params is None:
                 logger.error("❌ [WFO] Optimum parametre bulunamadı!")
                 return {"status": "no_optimal_params"}
-            
+
             logger.info(f"✅ [WFO] En iyi parametreler bulundu: {best_params}")
             logger.info(f"📈 [WFO] In-Sample {optimization_metric}: {best_score:.4f}")
-            
+
             # 4. Out-of-Sample üzerinde test et
             logger.info("🧪 [WFO] Out-of-Sample test...")
             oos_score = await self._test_params(
                 df_test, strategy_class, best_params, optimization_metric
             )
-            
+
             logger.info(f"📊 [WFO] Out-of-Sample {optimization_metric}: {oos_score:.4f}")
-            
+
             # 5. Mevcut parametrelerle karşılaştır
             improvement = self._calculate_improvement(best_score, oos_score)
-            
+
             # 6. İyileştirme yeterli mi?
             if improvement >= self.min_improvement:
                 logger.info(f"✅ [WFO] İyileştirme tespit edildi: +{improvement*100:.1f}%")
-                
+
+                # Performans karşılaştırması log
+                logger.info(
+                    f"🎯 [BAYES-OPT] {strategy_class.__name__} analiz edildi. "
+                    f"Geleneksel Grid Search ile {total_combinations} ihtimal vardı. "
+                    f"Bayes motoru 50 iterasyonda en iyi ayarı buldu ({optimization_metric.title()}: {best_score:.2f}). "
+                    f"Yeni Parametreler: {best_params}"
+                )
+
                 # Parametreleri güncelle
                 old_params = self.current_params.copy()
                 self.current_params = best_params
@@ -211,6 +236,129 @@ class WalkForwardOptimizer:
         finally:
             self.is_optimizing = False
     
+    async def _bayesian_search(
+        self,
+        df: pd.DataFrame,
+        strategy_class: Any,
+        param_grid: Dict[str, List[Any]],
+        metric: str,
+        n_trials: int = 50
+    ) -> Tuple[Optional[Dict], float]:
+        """
+        Bayesian Optimization (Optuna) ile en iyi parametreleri bulur.
+
+        Grid Search yerine sadece 50 deneme ile optimum noktayı bulur.
+        TPE (Tree-structured Parzen Estimator) algoritması kullanır.
+
+        Args:
+            df: Eğitim verisi
+            strategy_class: Strateji sınıfı
+            param_grid: Parametre aralıkları
+            metric: Optimizasyon metriği
+            n_trials: Maksimum deneme sayısı
+
+        Returns:
+            Tuple: (En iyi parametreler, En iyi skor)
+        """
+        if not OPTUNA_AVAILABLE:
+            logger.warning("⚠️ [WFO] Optuna yok, Grid Search'e dönülüyor...")
+            return await self._grid_search(df, strategy_class, param_grid, metric)
+
+        logger.info(f"🧠 [BAYES-OPT] Bayesian Optimization başlatılıyor ({n_trials} trial)...")
+
+        # Auto-Grid'den gelen param_grid'i search space'e dönüştür
+        search_space = self._convert_to_search_space(param_grid)
+
+        logger.debug(f"📊 [BAYES-OPT] Arama uzayı: {len(search_space)} parametre")
+
+        # Optuna study oluştur (TPE sampler)
+        sampler = optuna.samplers.TPESampler(seed=42)
+        study = optuna.create_study(
+            direction="maximize",
+            sampler=sampler,
+            study_name=f"wfo_{strategy_class.__name__}"
+        )
+
+        # Objective fonksiyon
+        async def objective(trial):
+            # Search space'den parametre öner
+            params = {}
+            for param_name, param_range in search_space.items():
+                if param_range['type'] == 'categorical':
+                    params[param_name] = trial.suggest_categorical(param_name, param_range['values'])
+                elif param_range['type'] == 'float':
+                    params[param_name] = trial.suggest_float(param_name, param_range['low'], param_range['high'])
+                else:  # int
+                    params[param_name] = trial.suggest_int(param_name, param_range['low'], param_range['high'])
+
+            # Backtest yap
+            try:
+                score = await self._backtest_params(df, strategy_class, params, metric)
+                return score
+            except Exception as e:
+                logger.debug(f"⚠️ [BAYES-OPT] Trial hatası: {str(e)}")
+                return float('-inf')
+
+        # Optimizasyonu çalıştır
+        logger.info(f"🔍 [BAYES-OPT] Optimum parametreler aranıyor...")
+
+        # Optuna'yı async context'te çalıştır
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, study.optimize, objective, n_trials, show_progress_bar=False)
+
+        # En iyi sonuçları al
+        best_params = study.best_params
+        best_score = study.best_value
+
+        logger.info(f"✅ [BAYES-OPT] Optimizasyon tamamlandı!")
+        logger.info(f"📈 [BAYES-OPT] En iyi {metric}: {best_score:.4f}")
+        logger.info(f"🎯 [BAYES-OPT] En iyi parametreler: {best_params}")
+
+        return best_params, best_score
+
+    def _convert_to_search_space(
+        self,
+        param_grid: Dict[str, List[Any]]
+    ) -> Dict[str, Dict]:
+        """
+        Auto-Grid param_grid'i Optuna search space'e dönüştürür.
+
+        Args:
+            param_grid: {'rsi_period': [10, 14, 20], 'atr_multiplier': [2.45, 3.5, 4.55]}
+
+        Returns:
+            Dict: {'rsi_period': {'type': 'int', 'low': 10, 'high': 20}, ...}
+        """
+        search_space = {}
+
+        for param_name, values in param_grid.items():
+            if not values or len(values) == 0:
+                continue
+
+            # Değerlerin tipini kontrol et
+            if all(isinstance(v, int) for v in values):
+                # Integer parametre
+                search_space[param_name] = {
+                    'type': 'int',
+                    'low': min(values),
+                    'high': max(values)
+                }
+            elif all(isinstance(v, float) for v in values):
+                # Float parametre
+                search_space[param_name] = {
+                    'type': 'float',
+                    'low': min(values),
+                    'high': max(values)
+                }
+            else:
+                # Categorical parametre
+                search_space[param_name] = {
+                    'type': 'categorical',
+                    'values': values
+                }
+
+        return search_space
+
     async def _grid_search(
         self,
         df: pd.DataFrame,
@@ -220,54 +368,55 @@ class WalkForwardOptimizer:
     ) -> Tuple[Optional[Dict], float]:
         """
         Grid Search ile en iyi parametreleri bulur.
-        
+        (Artık sadece fallback olarak kullanılıyor - Optuna yoksa)
+
         Args:
             df: Eğitim verisi
             strategy_class: Strateji sınıfı
             param_grid: Parametre aralıkları
             metric: Optimizasyon metriği
-            
+
         Returns:
             Tuple: (En iyi parametreler, En iyi skor)
         """
         import itertools
-        
+
         # Parametre kombinasyonlarını oluştur
         param_names = list(param_grid.keys())
         param_values = list(param_grid.values())
-        
+
         best_params = None
         best_score = float('-inf')
         total_combinations = sum(1 for _ in itertools.product(*param_values))
-        
-        logger.debug(f"🔢 [WFO] Toplam {total_combinations} kombinasyon denenecek...")
-        
+
+        logger.warning(f"⚠️ [WFO] Grid Search kullanılıyor ({total_combinations} kombinasyon) - Optuna kurun!")
+
         combination_count = 0
-        
+
         for combination in itertools.product(*param_values):
             combination_count += 1
             current_params = dict(zip(param_names, combination))
-            
+
             try:
                 # Parametrelerle backtest yap
                 score = await self._backtest_params(
                     df, strategy_class, current_params, metric
                 )
-                
+
                 # En iyi skoru güncelle
                 if score > best_score:
                     best_score = score
                     best_params = current_params.copy()
-                    
+
                 if combination_count % 10 == 0:
                     logger.debug(f"📊 [WFO] İlerleme: {combination_count}/{total_combinations} - En iyi: {best_score:.4f}")
-                    
+
             except Exception as e:
                 logger.debug(f"⚠️ [WFO] Kombinasyon hatası: {current_params} - {str(e)}")
                 continue
-        
+
         logger.info(f"✅ [WFO] Grid Search tamamlandı: {combination_count} kombinasyon")
-        
+
         return best_params, best_score
     
     async def _backtest_params(

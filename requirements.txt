@@ -14,6 +14,7 @@ torch
 xgboost
 scikit-learn
 joblib  # Random Forest model kaydetme/yükleme için
+optuna  # Bayesian Optimization (WFO için)
 
 # Database
 redis
