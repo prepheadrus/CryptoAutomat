@@ -19,6 +19,7 @@ function setupTabs() {
             }
             if (targetId === 'tab-ml') {
                 fetchAnalysableSymbols();
+                loadMLTrainingSymbols(); // ML Training için sembolleri yükle
             }
             if (targetId === 'tab-settings' || targetId === 'tab-strategies') {
                 fetchStrategies();
@@ -1782,6 +1783,40 @@ window.loadStrategyReport = loadStrategyReport;
 // ============================================
 // ML MODEL EĞİTİM FONKSİYONLARI
 // ============================================
+
+// Veri laboratuvarından indirilmiş coinleri ML training dropdown'una yükle
+async function loadMLTrainingSymbols() {
+    try {
+        const response = await fetch('/api/v1/data/symbols-with-data');
+        const data = await response.json();
+
+        const select = document.getElementById('ml-train-symbol');
+        if (!select || !data.symbols || data.symbols.length === 0) return;
+
+        // Mevcut option'ları temizle (sabit coinleri koru)
+        const existingOptions = Array.from(select.options);
+        existingOptions.forEach(opt => {
+            if (['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'SOLUSDT'].includes(opt.value)) {
+                return; // Sabit coinleri koru
+            }
+            opt.remove();
+        });
+
+        // Veri laboratuvarından gelen coinleri ekle
+        data.symbols.forEach(symbol => {
+            // Eğer zaten yoksa ekle
+            if (!Array.from(select.options).some(opt => opt.value === symbol)) {
+                const option = document.createElement('option');
+                option.value = symbol;
+                option.textContent = symbol.replace('USDT', '/USDT');
+                select.appendChild(option);
+            }
+        });
+
+    } catch (error) {
+        console.error('ML Training sembolleri yüklenemedi:', error);
+    }
+}
 
 async function startMLTraining() {
     const symbol = document.getElementById('ml-train-symbol').value;
