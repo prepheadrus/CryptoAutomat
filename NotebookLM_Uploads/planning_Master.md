@@ -1,5 +1,5 @@
 # PLANNING BILGI BANKASI
-Son Guncelleme: 06/03/2026 19:28
+Son Guncelleme: 07/03/2026 10:28
 
 ---
 
