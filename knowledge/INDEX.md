@@ -26,9 +26,17 @@ knowledge/
 │   ├── tech_stack.md     # Teknoloji yığını ve araçlar
 │   └── tasks.md          # Görev takibi ve öncelikler
 │
+├── features/             # Özellik dokümantasyonu
+│   ├── no_code_strategy_builder.md  # No-Code Strateji Oluşturucu
+│   ├── strategy_builder_guide.md    # Strateji Oluşturucu Kılavuzu
+│   ├── no_code_strategy_builder_implementation.md  # Implementasyon
+│   └── ATR_TRAILING_STOP_SYSTEM.md  # ATR Trailing Stop Sistemi
+│
 └── documentation/        # Genel dokümantasyon
     ├── session_history.md  # Geliştirme oturum geçmişi
-    └── ai_skill.md         # AI asistan yetenek tanımlaması
+    ├── ai_skill.md         # AI asistan yetenek tanımlaması
+    ├── technical_improvements.md  # Teknik iyileştirmeler
+    └── RECENT_IMPROVEMENTS.md  # Son geliştirmeler (Mart 2026)
 ```
 
 ---
@@ -60,9 +68,14 @@ knowledge/
 - **İçerik:** Yol haritası, teknoloji kararları, aktif görevler
 - **Başlangıç:** `planning/roadmap.md`
 
+### 🆕 Features (Özellikler)
+- **Kimler İçin:** Geliştiriciler, kullanıcılar
+- **İçerik:** No-Code Strateji Oluşturucu, Backtest Engine, UI iyileştirmeleri
+- **Başlangıç:** `features/no_code_strategy_builder.md`
+
 ### 📝 Documentation (Genel Dokümantasyon)
 - **Kimler İçin:** Tüm ekip üyeleri, AI asistanlar
-- **İçerik:** Geliştirme geçmişi, yetenek tanımları, yardım kılavuzları
+- **İçerik:** Geliştirme geçmişi, yetenek tanımları, yardım kılavuzları, son iyileştirmeler
 - **Başlangıç:** `documentation/session_history.md`
 
 ---
@@ -79,8 +92,13 @@ knowledge/
 | Yol Haritası | `planning/roadmap.md` |
 | Teknolojiler | `planning/tech_stack.md` |
 | Görevler | `planning/tasks.md` |
+| **No-Code Strateji** | `features/no_code_strategy_builder.md` |
+| **Strateji Oluşturucu** | `features/strategy_builder_guide.md` |
+| **Backtest Engine** | `features/backtest_engine.md` |
+| **Son Geliştirmeler** | `documentation/RECENT_IMPROVEMENTS.md` |
 | Oturum Geçmişi | `documentation/session_history.md` |
 | AI Skill | `documentation/ai_skill.md` |
+| Teknik İyileştirmeler | `documentation/technical_improvements.md` |
 
 ---
 
@@ -93,5 +111,5 @@ knowledge/
 
 ---
 
-*Son Güncelleme: 05 Mart 2026*
+*Son Güncelleme: 7 Mart 2026*
 *CryptoAlgoBot Documentation Team*
