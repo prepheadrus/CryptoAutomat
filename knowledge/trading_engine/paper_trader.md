@@ -16,4 +16,4 @@ Bota "Elimdeki 100 Doların Tümüyle İşleme Gir" denilmez. Bot kendisi şu he
 Yapay Zeka (XGboost), giren muma %85 güveniyorsa, bot riski büyütür ve 10x kaldıraç basar. Güven %65 ise sadece 3x - 5x kaldıraç ile işleme girer. Risk, zekaya (Confidence Score) göre dinamik esner.
 
 ## 4. Geliştirme Hedefleri
-- **Trailing Stop (İzleyen Stop):** Bot şu an sabit Nokta Atışı Stop-Loss seviyeleri ile kapatmaktadır. Sıradaki geliştirme hedefimizde stop-loss'un kâr artışına paralel olarak yukarıya taşınması ve maksimum kârda (Trend dönüşünde) stop ettirilmesi mantığı vardır.
+- **Trailing Stop (İzleyen Stop): TAMAMLANDI** - Bot artık sabit değil, dinamik olarak çalışan trailing stop-loss mekanizmasına sahiptir.
