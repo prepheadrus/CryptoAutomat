@@ -345,13 +345,15 @@ class StrategyIndicators:
 
         # MACD (Trend dönüş noktaları için)
         if USING_TALIB:
-            macd = ta.MACD(df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
-            if macd is not None:
-                df = pd.concat([df, macd], axis=1)
+            macd, signal, hist = ta.MACD(df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
+            df['MACD_12_26_9'] = macd
+            df['MACDs_12_26_9'] = signal
+            df['MACDh_12_26_9'] = hist
         elif USING_PANDAS_TA:
-            macd = ta.macd(df['close'], fast=12, slow=26, signal=9)
-            if macd is not None:
-                df = pd.concat([df, macd], axis=1)
+            macd, signal, hist = ta.macd(df['close'], fast=12, slow=26, signal=9)
+            df['MACD_12_26_9'] = macd
+            df['MACDs_12_26_9'] = signal
+            df['MACDh_12_26_9'] = hist
         else:
             macd_line, signal_line, hist = StrategyIndicators.macd(df['close'])
             df['MACD_12_26_9'] = macd_line
@@ -369,9 +371,10 @@ class StrategyIndicators:
         # Bollinger Bantları
         if 'close' in df.columns:
             if USING_TALIB:
-                bb = ta.BBANDS(df['close'], timeperiod=20, nbdevup=2, nbdevdn=2)
-                if bb is not None:
-                    df = pd.concat([df, bb], axis=1)
+                upper, middle, lower = ta.BBANDS(df['close'], timeperiod=20, nbdevup=2, nbdevdn=2)
+                df['BBU_20_2.0_2.0'] = upper
+                df['BBM_20_2.0_2.0'] = middle
+                df['BBL_20_2.0_2.0'] = lower
             elif USING_PANDAS_TA:
                 bb = ta.bbands(df['close'], length=20, std=2)
                 if bb is not None:
@@ -482,9 +485,12 @@ class StrategyIndicators:
         # --- YENİ EKLENEN ŞABLON İNDİKATÖRLERİ (ADX, Stoch) ---
         # 1. ADX (Trend Gücü)
         if USING_TALIB:
-            adx_res = ta.ADX(df['high'], df['low'], df['close'], timeperiod=14)
-            if adx_res is not None:
-                df = pd.concat([df, adx_res], axis=1)
+            adx = ta.ADX(df['high'], df['low'], df['close'], timeperiod=14)
+            plus_di = ta.PLUS_DI(df['high'], df['low'], df['close'], timeperiod=14)
+            minus_di = ta.MINUS_DI(df['high'], df['low'], df['close'], timeperiod=14)
+            df['ADX_14'] = adx
+            df['DMP_14'] = plus_di
+            df['DMN_14'] = minus_di
         elif USING_PANDAS_TA:
             adx_res = ta.adx(df['high'], df['low'], df['close'], length=14)
             if adx_res is not None:
@@ -511,9 +517,9 @@ class StrategyIndicators:
 
         # 2. Stochastic Osilatör
         if USING_TALIB:
-            stoch_res = ta.STOCH(df['high'], df['low'], df['close'], fastk_period=14, slowk_period=3, slowk_matype=0, slowd_period=3, slowd_matype=0)
-            if stoch_res is not None:
-                df = pd.concat([df, stoch_res], axis=1)
+            slowk, slowd = ta.STOCH(df['high'], df['low'], df['close'], fastk_period=14, slowk_period=3, slowk_matype=0, slowd_period=3, slowd_matype=0)
+            df['STOCH_K_14_3_3'] = slowk
+            df['STOCH_D_14_3_3'] = slowd
         elif USING_PANDAS_TA:
             stoch_res = ta.stoch(df['high'], df['low'], df['close'], k=14, d=3, smooth_k=3)
             if stoch_res is not None:
