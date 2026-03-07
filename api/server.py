@@ -653,7 +653,10 @@ def save_training_metadata(symbol: str, timeframe: str, limit: int, metrics: dic
             "accuracy": metrics.get('accuracy', 0),
             "precision": metrics.get('precision', 0),
             "recall": metrics.get('recall', 0),
-            "f1": metrics.get('f1', 0)
+            "f1": metrics.get('f1', 0),
+            "xgb_accuracy": metrics.get('xgb_accuracy', 0),
+            "rf_accuracy": metrics.get('rf_accuracy', 0),
+            "ensemble_accuracy": metrics.get('ensemble_accuracy', 0)
         }
     }
 
