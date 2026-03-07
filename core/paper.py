@@ -118,13 +118,19 @@ class PaperTrader:
         if ML_AVAILABLE:
             try:
                 model_path = CONFIG.get('ml', {}).get('model_path', 'artifacts/models/xgb_model.json')
+                logger.info(f"🤖 ML modeli yükleniyor: {model_path}...")
                 self.ml_model = ModelTrainer()
                 self.ml_model.load_model(model_path)
                 self.ml_enabled = True
-                logger.info(f"✅ ML modeli yüklendi: {model_path}")
+                logger.info(f"✅ ML modeli BAŞARIYLA yüklendi! (enabled={self.ml_enabled})")
             except Exception as e:
-                logger.warning(f"⚠️ ML modeli yüklenemedi: {str(e)}. Sadece strateji ile devam ediliyor.")
+                logger.error(f"❌ ML modeli yüklenemedi: {str(e)}")
+                logger.warning("⚠️ ML olmadan devam ediliyor (sadece strateji sinyalleri).")
+                import traceback
+                logger.error(traceback.format_exc())
                 self.ml_enabled = False
+        else:
+            logger.warning("⚠️ ML kütüphanesi bulunamadı (ml/model_training.py import edilemedi).")
         # Dinamik Strateji (Bot) Yönetimi - ARTIK SEMBOL BAZLI
         from strategy.manager import StrategyManager
         self.active_strategies = {} # symbol -> strategy_id
@@ -209,10 +215,30 @@ class PaperTrader:
         if self.ml_enabled and self.ml_model is not None:
             try:
                 # ML modelinden tahmin al
-                ml_result = self.ml_model.predict_single(latest_candle.to_frame().T)
-                ml_signal = ml_result['prediction']
-                ml_confidence_pct = ml_result['confidence_pct']
-                ml_recommendation = ml_result['recommendation']
+                latest_row = latest_candle.to_frame().T
+
+                # Feature names kontrolü
+                if self.ml_model.feature_names is None:
+                    logger.warning(f"[ML] {symbol}: Model feature_names None! Model düzgün yüklenmemiş olabilir.")
+                    ml_signal = 1
+                    ml_confidence_pct = 0.0
+                    ml_recommendation = "HOLD"
+                else:
+                    # Sadece modelin beklediği feature'ları al
+                    missing_cols = [col for col in self.ml_model.feature_names if col not in latest_row.columns]
+                    if missing_cols:
+                        logger.debug(f"[ML] {symbol}: Eksik kolonlar: {missing_cols[:5]}... (toplam {len(missing_cols)})")
+                        # Eksik kolonları 0 ile doldur
+                        for col in missing_cols:
+                            latest_row[col] = 0
+
+                    # Sadece feature_names'deki kolonları kullan
+                    X_input = latest_row[self.ml_model.feature_names]
+
+                    ml_result = self.ml_model.predict_single(X_input)
+                    ml_signal = ml_result['prediction']
+                    ml_confidence_pct = ml_result['confidence_pct']
+                    ml_recommendation = ml_result['recommendation']
 
                 # ML Confidence'ı güncelle
                 ml_confidence = ml_confidence_pct / 100.0
@@ -220,7 +246,8 @@ class PaperTrader:
                 logger.debug(f"[ML] {symbol}: {ml_recommendation} (Güven: {ml_confidence_pct:.1f}%)")
 
             except Exception as e:
-                logger.warning(f"[ML] Tahmin hatası ({symbol}): {str(e)}")
+                logger.warning(f"[ML] {symbol} tahmin hatası: {str(e)}")
+                logger.debug(f"[ML] Hata detayı: {type(e).__name__}")
                 ml_signal = 1
                 ml_confidence_pct = 0.0
                 ml_recommendation = "HOLD"
