@@ -33,6 +33,11 @@ class PaperTrader:
         # ML Engine Skoru (Arayüz için önbellek)
         self.global_confidence = 0.0
         self.volatility_shield = "SAFE"
+
+        # Acil Durdurma (Kill Switch)
+        self.kill_switch_activated = False
+        self.consecutive_losses = 0
+        self.max_consecutive_losses = CONFIG['risk_management'].get('max_consecutive_losses', 5)
         
         # İstatistikler
         self.total_trades = 0
@@ -203,6 +208,11 @@ class PaperTrader:
 
     async def _open_new_position(self, symbol, direction, price, latest_candle, ml_confidence):
         """Gerçekçi bir biçimde komisyonu (fee) ve kaymayı (slippage) hesaplayarak işleme girer."""
+        # --- KILL SWITCH KONTROLÜ ---
+        if self.kill_switch_activated:
+            logger.critical(f"🚨 KILL SWITCH AKTİF! Yeni işlem açma engellendi: {symbol}")
+            return
+            
         # Risk hesaplama parametreleri (Config'den oku)
         risk_percent = CONFIG['risk_management'].get('max_risk_per_trade_percent', 0.2)
         
@@ -291,7 +301,10 @@ class PaperTrader:
 
             # Raporlama için ek meta veriler
             'strategy': strategy.name(),
-            'timeframe': self.active_timeframes.get(symbol, '1m')
+            'timeframe': self.active_timeframes.get(symbol, '1m'),
+            
+            # Çift Kapanış (Double Close) sorununu önlemek için kilit
+            'is_closing': False
         }
         
         self.total_commission += fee
@@ -498,15 +511,12 @@ class PaperTrader:
                                         net_pnl: float, exit_fee: float, reason: str):
         """
         Yardımcı metod: Pozisyonu hesaplanmış PnL ile kapatır.
-
-        Args:
-            index: Pozisyon indeksi (open_positions listesinde)
-            pos: Pozisyon dictionary
-            exit_price: Gerçek çıkış fiyatı (slipaj uygulanmış)
-            net_pnl: Hesaplanmış net PnL (giriş + çıkış komisyonları dahil)
-            exit_fee: Çıkış komisyonu
-            reason: Kapanış nedeni
         """
+        # --- DOUBLE CLOSE (ÇİFT KAPANIŞ) KİLİDİ ---
+        if pos.get('is_closing', False):
+            return
+        pos['is_closing'] = True
+        
         from data.database import db_manager
 
         # Serbest marjini serbest bırak (Girişteki bloke kalkar)
@@ -534,6 +544,9 @@ class PaperTrader:
 
         # --- VERİTABANI KAYIT ---
         await db_manager.save_trade(trade_record)
+
+        # Otomatik Kill Switch için kayıp sayacını güncelle
+        self._update_consecutive_losses(net_pnl)
 
         # Geçmişe logla ve listeden sil
         self.trade_history.append(trade_record)
@@ -573,15 +586,56 @@ class PaperTrader:
         # Manuel arayüz kapatması için de kullanılabilir
         if should_close:
             await self._close_position(index, pos, current_price, reason)
+
+    def activate_kill_switch(self, reason: str = "Bilinmeyen Neden"):
+        """Tüm yeni işlemleri bloke eden acil durum kilidini etkinleştirir."""
+        if not self.kill_switch_activated:
+            self.kill_switch_activated = True
+            logger.critical(f"🚨🚨🚨 KILL SWITCH AKTİFLEŞTİRİLDİ! SEBEP: {reason}. YENİ İŞLEM AÇILMAYACAK! 🚨🚨🚨")
+
+    def reset_kill_switch(self):
+        """Acil durum kilidini sıfırlar ve sistemin yeniden işlem açmasına izin verir."""
+        if self.kill_switch_activated:
+            self.kill_switch_activated = False
+            self.consecutive_losses = 0 # Kayıp sayacını da sıfırla
+            logger.warning("✅ KILL SWITCH DEAKTİVE EDİLDİ. Sistem normal operasyona döndü.")
+
+    def _update_consecutive_losses(self, pnl: float):
+        """Ardışık kayıp sayacını günceller ve eşik aşılırsa kill switch'i tetikler."""
+        if self.kill_switch_activated: return # Zaten kilitliyse tekrar sayma
+
+        if pnl < 0:
+            self.consecutive_losses += 1
+            logger.warning(f" consecutive loss count: {self.consecutive_losses}/{self.max_consecutive_losses}")
+            if self.consecutive_losses >= self.max_consecutive_losses:
+                self.activate_kill_switch(f"{self.max_consecutive_losses} ardışık zararlı işlem limiti aşıldı")
+        elif pnl > 0:
+            # Reset on a winning trade
+            if self.consecutive_losses > 0:
+                logger.info("Consecutive loss streak broken.")
+            self.consecutive_losses = 0
             
     async def force_close_all(self):
-        """Acil durum senaryosunda 'ACİL KİLİTLEME YÖNTEMİ' tuşu tüm işlemleri kapatır."""
+        """Acil durum senaryosunda 'ACİL KİLİTLEME YÖNTEMİ' tuşu tüm işlemleri kapatır ve yeni işlem açmayı kilitler."""
+        self.activate_kill_switch("Kullanıcı manuel olarak tetikledi")
         logger.warning("[PAPER TRADE] KULLANICI ACİL KAPATMA (KILL SWITCH) AKTİFLEŞTİ!")
         for pos in list(self.open_positions): # Kopya üzerinde dönerek silme sırasını bozmadan kapat
-            await self._close_position(self.open_positions.index(pos), pos, pos['current_price'], "Kill Switch Kapatması")
+            # Pozisyonun index'ini yeniden bulalım çünkü liste değişmiş olabilir
+            try:
+                current_index = self.open_positions.index(pos)
+                await self._close_position(current_index, pos, pos['current_price'], "Kill Switch Kapatması")
+            except ValueError:
+                # Pozisyon zaten başka bir coroutine tarafından kapatılmış olabilir
+                pass
 
     async def _close_position(self, index: int, pos: dict, current_price: float, reason: str):
         """Açık pozisyonu sanal borsadan temizler ve ana bakiyeye kârları ekler/zararları çıkarır."""
+        # --- DOUBLE CLOSE (ÇİFT KAPANIŞ) KİLİDİ ---
+        # Eğer pozisyon zaten kapatılıyorsa, tekrar deneme
+        if pos.get('is_closing', False):
+            return
+        pos['is_closing'] = True
+        
         from data.database import db_manager # İçeride aktararak döngüsel bağımlılığı önle
 
         # Çıkış Komisyonu (Spot vs Futures)
@@ -618,6 +672,9 @@ class PaperTrader:
         
         # --- VERİTABANI KAYIT ---
         await db_manager.save_trade(trade_record)
+
+        # Otomatik Kill Switch için kayıp sayacını güncelle
+        self._update_consecutive_losses(final_pnl_usd)
         
         logger.info(f"[PAPER TRADE KAPAT] {pos['symbol']} | Sebep: {reason} | PnL: ${final_pnl_usd:.2f}")
         

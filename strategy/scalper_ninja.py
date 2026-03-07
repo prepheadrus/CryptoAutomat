@@ -12,29 +12,29 @@ class ScalperNinja(BaseStrategy):
         return "Scalper Ninja"
 
     def description(self) -> str:
-        return "5 ve 13 EMA kesişimi ile hızlı Scalp işlemlere odaklanır. Kar hedefleri küçüktür."
+        return "Aşırı satım (Oversold) koşullarında (RSI < 30, Stoch < 20) hızlı dip avcılığına odaklanır."
 
     def generate_signal(self, current_row: pd.Series) -> int:
-        close_p = current_row['close']
+        """
+        Sinyal Üretimi
+        2: LONG (AL)
+        0: SHORT (SAT) -> Bu stratejide kullanılmıyor
+        1: HOLD (BEKLE)
+        """
+        # Gerekli sütunların varlığını ve geçerli bir değere sahip olduğunu kontrol et
+        required_cols = ['RSI_14', 'STOCH_K_14_3_3']
+        if not all(col in current_row and pd.notna(current_row[col]) for col in required_cols):
+            return 1 # Veri eksikse bekle
+
+        # --- LONG (Dipten Al) Şartı ---
+        is_rsi_oversold = current_row['RSI_14'] < 30
+        is_stoch_oversold = current_row['STOCH_K_14_3_3'] < 20
         
-        # --- LONG ---
-        # 5 EMA'nın 13 EMA'yı yukarı kesmiş olması
-        cross_up = current_row.get('EMA_5', 0) > current_row.get('EMA_13', 0)
-        # RSI dipte değil ama boğa bölgesinde (45-80)
-        momentum = 45 < current_row['RSI_14'] < 80
-        
-        if cross_up and momentum:
+        # Her iki koşul da sağlandığında LONG sinyali üret
+        if is_rsi_oversold and is_stoch_oversold:
             return 2
             
-        # --- SHORT ---
-        # 5 EMA'nın 13 EMA'yı aşağı kesmiş olması
-        cross_down = current_row.get('EMA_5', 0) < current_row.get('EMA_13', 0)
-        # RSI zayıf bölge (20-55)
-        momentum = 20 < current_row['RSI_14'] < 55
-        
-        if cross_down and momentum:
-            return 0
-            
+        # Bu strateji sadece LONG yönlü çalışır, SHORT sinyali üretmez.
         return 1
 
     def get_stop_params(self):
