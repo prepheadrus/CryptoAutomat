@@ -512,7 +512,7 @@ async def start_wfo_background_task(
 ):
     """
     Arka planda sürekli WFO optimizasyonu yapan asenkron görev.
-    
+
     Args:
         symbol: Sembol adı
         timeframe: Zaman dilimi
@@ -522,18 +522,18 @@ async def start_wfo_background_task(
         optimization_metric: Optimizasyon metriği
     """
     wfo = get_wfo_engine(symbol)
-    
+
     logger.info(f"🔄 [WFO] Arka plan görevi başlatıldı: {symbol} ({timeframe})")
-    
+
     while True:
         try:
             # Yeniden optimizasyon zamanı geldi mi?
             if wfo.should_reoptimize() and not wfo.is_optimizing:
                 logger.info(f"🔍 [WFO] {symbol} için optimizasyon tetiklendi...")
-                
+
                 # Veri çek
                 df = await data_fetcher(symbol, timeframe)
-                
+
                 if df is not None and len(df) > 0:
                     # WFO çalıştır
                     result = await wfo.run_wfo(
@@ -544,17 +544,40 @@ async def start_wfo_background_task(
                         symbol=symbol,
                         optimization_metric=optimization_metric
                     )
-                    
+
                     if result.get('status') == 'optimized':
                         logger.info(f"✅ [WFO] {symbol} parametreleri güncellendi!")
+
+                        # FAZ 4: Canlı parametre güncellemesi
+                        # PaperTrader'daki aktif stratejiyi bul ve güncelle
+                        try:
+                            from core.paper import paper_engine
+
+                            if symbol in paper_engine.strategies and paper_engine.strategies[symbol] is not None:
+                                # Strateji parametrelerini canlı olarak güncelle
+                                success = paper_engine.update_strategy_params(
+                                    symbol=symbol,
+                                    new_params=result['new_params'],
+                                    sharpe=result.get('out_of_sample_score', 0)
+                                )
+
+                                if success:
+                                    logger.info(f"🎯 [WFO] {symbol} canlı parametre güncellemesi başarılı!")
+                                else:
+                                    logger.warning(f"⚠️ [WFO] {symbol} parametre güncellemesi başarısız.")
+                            else:
+                                logger.warning(f"⚠️ [WFO] {symbol} için aktif strateji bulunamadı.")
+                        except Exception as e:
+                            logger.error(f"❌ [WFO] Canlı güncelleme hatası: {str(e)}")
+
                     elif result.get('status') == 'no_improvement':
                         logger.info(f"⚠️ [WFO] {symbol} için iyileştirme bulunamadı.")
                 else:
                     logger.warning(f"⚠️ [WFO] {symbol} için veri çekilemedi.")
-            
+
             # 1 saat bekle
             await asyncio.sleep(3600)
-            
+
         except asyncio.CancelledError:
             logger.info(f"🛑 [WFO] {symbol} arka plan görevi durduruldu.")
             break

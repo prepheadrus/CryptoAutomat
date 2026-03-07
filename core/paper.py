@@ -115,6 +115,7 @@ class PaperTrader:
         self.ml_model = None
         self.ml_enabled = False
         self.ml_timeframe_mismatch = False  # Timeframe uyumsuzluğu flag
+        self.wfo_enabled = CONFIG.get('wfo', {}).get('enabled', True)  # WFO aktif mi?
 
         if ML_AVAILABLE:
             try:
@@ -180,7 +181,56 @@ class PaperTrader:
             self.active_timeframes[symbol] = "1m"
         
         # Arayüze botun ne düşündüğünü yansıtmak için son kararları parite bazlı sakla
-        self.latest_decisions = {} 
+        self.latest_decisions = {}
+
+    def update_strategy_params(self, symbol: str, new_params: dict, sharpe: float = None):
+        """
+        WFO tarafından bulunan yeni parametreleri aktif stratejiye uygular.
+        Botu durdurmadan canlı parametre güncellemesi yapar.
+
+        Args:
+            symbol: Sembol adı
+            new_params: Yeni parametre sözlüğü
+            sharpe: Beklenen Sharpe oranı (opsiyonel)
+        """
+        if symbol not in self.strategies or self.strategies[symbol] is None:
+            logger.warning(f"⚠️ [WFO] {symbol} için strateji bulunamadı, parametre güncellenemedi.")
+            return False
+
+        strategy = self.strategies[symbol]
+        timeframe = self.active_timeframes.get(symbol, '1m')
+
+        # Stratejinin update_params metodunu çağır
+        if hasattr(strategy, 'update_params'):
+            old_params = strategy.params.copy()
+            strategy.update_params(new_params)
+
+            # Log çıktısı
+            changes = []
+            for key in new_params:
+                if key in old_params and old_params[key] != new_params[key]:
+                    changes.append(f"{key}: {old_params[key]} -> {new_params[key]}")
+
+            if changes:
+                changes_str = ", ".join(changes)
+                sharpe_str = f" (Beklenen Sharpe: {sharpe:.2f})" if sharpe else ""
+                logger.info(
+                    f"🎯 [WFO-AUTO-TUNE] {symbol} ({timeframe}) piyasa rejimine adapte oldu! "
+                    f"Yeni Parametreler: {changes_str}{sharpe_str}"
+                )
+
+                # Arayüz için son kararı güncelle
+                if symbol in self.latest_decisions:
+                    self.latest_decisions[symbol]['wfo_updated'] = True
+                    self.latest_decisions[symbol]['wfo_params'] = new_params
+
+                return True
+            else:
+                logger.debug(f"⚠️ [WFO] {symbol} parametre değişikliği yok.")
+                return False
+        else:
+            logger.warning(f"⚠️ [WFO] {strategy.name()} update_params metoduna sahip değil.")
+            return False 
 
     @property
     def timeframe(self):

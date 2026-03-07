@@ -5,6 +5,14 @@ import numpy as np
 from core.logger import logger
 from core.config import CONFIG, BINANCE_API_KEY, BINANCE_API_SECRET
 
+# WFO Engine import (opsiyonel - WFO aktifse)
+try:
+    from core.wfo_engine import get_wfo_engine, start_wfo_background_task
+    WFO_AVAILABLE = True
+except ImportError:
+    WFO_AVAILABLE = False
+    logger.warning("⚠️ WFO Engine bulunamadı, optimizasyon özellikleri devre dışı.")
+
 class ExchangeManager:
     def __init__(self):
         self.exchange_id = CONFIG['trading']['exchange']
@@ -359,6 +367,7 @@ class ExchangeManager:
         2. Pariteye atanmış hedef vadeye (Örn: 15m) göre verileri yeniden paketler (Resampling).
         3. Sadece 'Vade Kapanışında' stratejiyi çalıştırır (Yanıltıcı sinyalleri önler).
         4. GMT+3 uyumlu zamanlama kontrolü yapar.
+        5. WFO (Walk-Forward Optimization) ile otonom parametre optimizasyonu yapar.
         """
         from core.paper import paper_engine
         from data.indicators import StrategyIndicators
@@ -375,6 +384,46 @@ class ExchangeManager:
             with open(model_path, 'rb') as f:
                 xgb_model = pickle.load(f)
                 logger.info(f"🧠 {symbol} için Karar Zekası (XGBoost) hazır.")
+
+        # WFO Arka Plan Görevini Başlat (Eğer aktifse)
+        wfo_task = None
+        if WFO_AVAILABLE and CONFIG.get('wfo', {}).get('enabled', True):
+            try:
+                # Strateji sınıfını al
+                active_strategy_id = paper_engine.active_strategies.get(symbol, 'trend_master')
+                from strategy.manager import StrategyManager
+                strategy_class = StrategyManager.get_strategy(active_strategy_id)
+
+                # WFO parametre ızgarasını al
+                param_grid = getattr(strategy_class, 'PARAM_GRID', None)
+
+                if param_grid:
+                    logger.info(f"🔄 [WFO] {symbol} için arka plan optimizasyonu başlatılıyor...")
+
+                    # Veri çekme fonksiyonu
+                    async def fetch_data(sym, tf):
+                        ohlcv = await self.fetch_ohlcv(sym, timeframe=tf, limit=2000)
+                        if ohlcv:
+                            df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+                            df.set_index('timestamp', inplace=True)
+                            return StrategyIndicators.add_all_indicators(df)
+                        return None
+
+                    # WFO arka plan görevini başlat
+                    wfo_task = asyncio.create_task(start_wfo_background_task(
+                        symbol=symbol,
+                        timeframe=timeframe,
+                        strategy_class=strategy_class,
+                        param_grid=param_grid,
+                        data_fetcher=fetch_data,
+                        optimization_metric="sharpe"
+                    ))
+                    logger.info(f"✅ [WFO] {symbol} arka plan görevi başlatıldı.")
+                else:
+                    logger.debug(f"⚠️ [WFO] {symbol} için param_grid tanımlı değil, optimizasyon atlanıyor.")
+            except Exception as e:
+                logger.warning(f"⚠️ [WFO] {symbol} başlatma hatası: {str(e)}")
 
         # Zaman dilimi kontrolü için yardımcı
         def get_tf_minutes(tf_str):

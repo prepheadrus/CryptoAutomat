@@ -40,3 +40,15 @@ ml:
     weak_threshold: 0.50    # <65% -> 1x kaldıraç (veya işlem yok)
 
 
+# ============================================
+# WFO (Walk-Forward Optimization) AYARLARI
+# ============================================
+wfo:
+  enabled: true  # WFO motorunu aktif et
+  train_days: 30  # In-Sample eğitim penceresi (gün)
+  test_days: 7  # Out-of-Sample test penceresi (gün)
+  reoptimize_interval: 168  # Yeniden optimizasyon sıklığı (saat) - 168 = 1 hafta
+  min_improvement: 0.05  # Minimum iyileştirme (%) - %5
+  optimization_metric: "sharpe"  # sharpe, net_pnl, veya sortino
+
+
