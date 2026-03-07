@@ -20,7 +20,8 @@ function setupTabs() {
             if (targetId === 'tab-ml') {
                 fetchAnalysableSymbols();
                 loadMLTrainingSymbols(); // ML Training için sembolleri yükle
-                loadTrainingHistory(); // Eğitim geçmişini yükle
+                // Eğitim geçmişini yükle (sekme açıldıktan sonra)
+                setTimeout(() => loadTrainingHistory(), 100);
             }
             if (targetId === 'tab-settings' || targetId === 'tab-strategies') {
                 fetchStrategies();
