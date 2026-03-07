@@ -616,6 +616,23 @@ class StrategySelectSchema(BaseModel):
     market_type: str = "swap"   # spot, swap, future
     margin_type: str = "isolated" # isolated, cross
 
+class MLTrainRequest(BaseModel):
+    symbol: str = "BTCUSDT"
+    timeframe: str = "1h"
+    limit: int = 5000
+    tp_multiplier: float = 2.0
+    sl_multiplier: float = 2.0
+    time_horizon: int = 10
+    train_ratio: float = 0.8
+
+# Training state
+training_state = {
+    "is_training": False,
+    "progress": 0,
+    "message": "",
+    "model_path": None
+}
+
 @app.post("/api/v1/strategy/select")
 async def change_strategy(req: StrategySelectSchema):
     """Arayüzden gelen komutla botun beynini anında değiştirir."""
@@ -647,6 +664,116 @@ async def change_strategy(req: StrategySelectSchema):
         "active_timeframe": req.timeframe,
         "market_type": req.market_type,
         "margin_type": req.margin_type
+    }
+
+
+@app.post("/api/v1/ml/train")
+async def train_ml_model(req: MLTrainRequest):
+    """
+    Arayüzden ML modelini eğitir.
+    Arka planda çalışır, ilerleme durumu /api/v1/ml/status endpoint'inden takip edilebilir.
+    """
+    global training_state
+
+    if training_state["is_training"]:
+        return {
+            "status": "error",
+            "message": "Eğitim zaten devam ediyor, lütfen bekleyin."
+        }
+
+    # Arka plan görevi olarak başlat
+    asyncio.create_task(_run_ml_training(req))
+
+    return {
+        "status": "success",
+        "message": f"ML modeli eğitimi başlatıldı ({req.symbol})...",
+        "model_path": f"artifacts/models/xgb_model_{req.symbol.lower()}.json"
+    }
+
+
+async def _run_ml_training(req: MLTrainRequest):
+    """Arka planda ML modelini eğitir."""
+    global training_state
+
+    try:
+        training_state["is_training"] = True
+        training_state["progress"] = 0
+        training_state["message"] = "Veri çekiliyor..."
+
+        logger.info("🧠 [ML] Eğitim başlatılıyor...")
+
+        # 1. Veri çek
+        from core.database import db_manager
+        from data.indicators import StrategyIndicators
+        from ml.model_training import run_training_pipeline
+
+        training_state["message"] = f"Veri çekiliyor: {req.symbol}, {req.timeframe}, {req.limit} mum..."
+        training_state["progress"] = 10
+
+        df = await db_manager.get_klines(req.symbol, req.timeframe, req.limit)
+
+        if df is None or len(df) == 0:
+            training_state["is_training"] = False
+            training_state["message"] = "❌ Veri çekilemedi!"
+            logger.error("❌ [ML] Veri çekilemedi!")
+            return
+
+        training_state["message"] = f"İndikatörler hesaplanıyor ({len(df)} mum)..."
+        training_state["progress"] = 30
+
+        # 2. İndikatörleri ekle
+        df = StrategyIndicators.add_all_indicators(df)
+
+        training_state["message"] = "Model eğitiliyor..."
+        training_state["progress"] = 50
+
+        # 3. Model eğit
+        model_path = f"artifacts/models/xgb_model_{req.symbol.lower()}.json"
+        trainer = run_training_pipeline(
+            df,
+            model_save_path=model_path,
+            tp_multiplier=req.tp_multiplier,
+            sl_multiplier=req.sl_multiplier,
+            time_horizon=req.time_horizon,
+            train_ratio=req.train_ratio
+        )
+
+        training_state["progress"] = 90
+        training_state["message"] = "Model kaydediliyor..."
+
+        # 4. Modeli kaydet ve PaperTrader'a yükle
+        from core.paper import paper_engine
+
+        trainer.save_model(model_path)
+
+        # PaperTrader'daki modeli güncelle
+        if paper_engine.ml_model is not None:
+            paper_engine.ml_model.load_model(model_path)
+            logger.info("✅ [ML] PaperTrader modeli güncellendi!")
+        else:
+            logger.warning("⚠️ [ML] PaperTrader'da model yok, yeni model yüklendi.")
+
+        training_state["is_training"] = False
+        training_state["progress"] = 100
+        training_state["message"] = f"✅ Eğitim tamamlandı! ({model_path})"
+        training_state["model_path"] = model_path
+
+        logger.info(f"✅ [ML] Eğitim başarıyla tamamlandı: {model_path}")
+
+    except Exception as e:
+        training_state["is_training"] = False
+        training_state["message"] = f"❌ Eğitim hatası: {str(e)}"
+        logger.error(f"❌ [ML] Eğitim hatası: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+
+
+@app.get("/api/v1/ml/status")
+async def get_ml_training_status():
+    """ML eğitim durumunu döner."""
+    return {
+        "status": "success",
+        "training": training_state
     }
 
 # ----------------------------------------------------------------------------------

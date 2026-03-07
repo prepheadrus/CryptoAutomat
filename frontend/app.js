@@ -1778,6 +1778,109 @@ async function loadStrategyReport() {
 
 window.loadStrategyReport = loadStrategyReport;
 
+
+// ============================================
+// ML MODEL EĞİTİM FONKSİYONLARI
+// ============================================
+
+async function startMLTraining() {
+    const symbol = document.getElementById('ml-train-symbol').value;
+    const timeframe = document.getElementById('ml-train-timeframe').value;
+    const limit = document.getElementById('ml-train-limit').value;
+    const tp = document.getElementById('ml-train-tp').value;
+    const sl = document.getElementById('ml-train-sl').value;
+
+    // UI güncelle
+    const progressDiv = document.getElementById('ml-training-progress');
+    const progressBar = document.getElementById('ml-progress-bar');
+    const progressMsg = document.getElementById('ml-training-message');
+    const resultDiv = document.getElementById('ml-training-result');
+
+    progressDiv.style.display = 'block';
+    resultDiv.style.display = 'none';
+    progressBar.style.width = '0%';
+    progressMsg.textContent = 'Eğitim başlatılıyor...';
+
+    try {
+        const response = await fetch('/api/v1/ml/train', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                symbol: symbol,
+                timeframe: timeframe,
+                limit: parseInt(limit),
+                tp_multiplier: parseFloat(tp),
+                sl_multiplier: parseFloat(sl),
+                time_horizon: 10,
+                train_ratio: 0.8
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'error') {
+            showError(data.message);
+            return;
+        }
+
+        progressMsg.textContent = data.message;
+
+        // İlerlemeyi poll et (her 2 saniyede bir kontrol et)
+        const pollInterval = setInterval(async () => {
+            const statusRes = await fetch('/api/v1/ml/status');
+            const statusData = await statusRes.json();
+
+            if (statusData.training) {
+                const training = statusData.training;
+                progressBar.style.width = training.progress + '%';
+                progressMsg.textContent = training.message;
+
+                if (!training.is_training) {
+                    // Eğitim tamamlandı
+                    clearInterval(pollInterval);
+
+                    if (training.progress === 100) {
+                        // Başarılı
+                        resultDiv.style.display = 'block';
+                        resultDiv.style.background = 'rgba(0, 255, 136, 0.1)';
+                        resultDiv.style.border = '1px solid var(--neon-green)';
+                        resultDiv.innerHTML = `
+                            <h4 style="color: var(--neon-green); margin-bottom: 10px;">✅ Eğitim Başarılı!</h4>
+                            <p style="color: #fff;">Model kaydedildi: <strong>${training.model_path}</strong></p>
+                            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 10px;">
+                                Model artık PaperTrader tarafından kullanılıyor.
+                            </p>
+                        `;
+                        progressDiv.style.display = 'none';
+                    } else {
+                        // Hata
+                        showError(training.message);
+                        progressDiv.style.display = 'none';
+                    }
+                }
+            }
+        }, 2000);
+
+    } catch (error) {
+        showError('Eğitim başlatılamadı: ' + error.message);
+        progressDiv.style.display = 'none';
+    }
+}
+
+function showError(message) {
+    const resultDiv = document.getElementById('ml-training-result');
+    resultDiv.style.display = 'block';
+    resultDiv.style.background = 'rgba(255, 69, 0, 0.1)';
+    resultDiv.style.border = '1px solid var(--neon-red)';
+    resultDiv.innerHTML = `
+        <h4 style="color: var(--neon-red); margin-bottom: 10px;">❌ Eğitim Hatası</h4>
+        <p style="color: #fff;">${message}</p>
+    `;
+}
+
+// Global scope'a ekle
+window.startMLTraining = startMLTraining;
+
 // Sekme dinleyicisini ezmeden global bağlama yap
 document.addEventListener('click', (e) => {
     if (e.target.matches('.menu-item') && e.target.dataset.target === 'tab-reports') {

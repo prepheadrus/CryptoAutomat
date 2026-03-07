@@ -113,6 +113,77 @@
 
             <!-- SEKME 2: ML KARAR MOTORU -->
             <div id="tab-ml" class="tab-content" style="display: none;">
+                <!-- ML MODEL EĞİTİM PANELİ -->
+                <div class="card glass-panel" style="margin-bottom: 20px; border: 2px solid var(--neon-blue);">
+                    <h3 style="margin-bottom:15px; color: var(--neon-blue);">🧠 ML Model Eğitimi</h3>
+                    <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:15px;">
+                        XGBoost modelinizi Triple Barrier Method ile eğitin. Model, strateji sinyallerini onaylamak ve dinamik kaldıraç için güven skoru üretmek için kullanılacaktır.
+                    </p>
+
+                    <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 15px;">
+                        <div style="display: flex; flex-direction: column; gap: 5px;">
+                            <label style="font-size:0.75rem; color:var(--text-muted);">Sembol</label>
+                            <select id="ml-train-symbol" class="strategy-select" style="min-width:140px;">
+                                <option value="BTCUSDT">BTC/USDT</option>
+                                <option value="ETHUSDT">ETH/USDT</option>
+                                <option value="BNBUSDT">BNB/USDT</option>
+                                <option value="XRPUSDT">XRP/USDT</option>
+                                <option value="SOLUSDT">SOL/USDT</option>
+                            </select>
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 5px;">
+                            <label style="font-size:0.75rem; color:var(--text-muted);">Zaman Dilimi</label>
+                            <select id="ml-train-timeframe" class="strategy-select" style="width:80px;">
+                                <option value="15m">15m</option>
+                                <option value="1h" selected>1h</option>
+                                <option value="4h">4h</option>
+                                <option value="1d">1d</option>
+                            </select>
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 5px;">
+                            <label style="font-size:0.75rem; color:var(--text-muted);">Mum Sayısı</label>
+                            <select id="ml-train-limit" class="strategy-select" style="width:90px;">
+                                <option value="3000">3000</option>
+                                <option value="5000" selected>5000</option>
+                                <option value="10000">10000</option>
+                            </select>
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 5px;">
+                            <label style="font-size:0.75rem; color:var(--text-muted);">TP Çarpan</label>
+                            <input type="number" id="ml-train-tp" value="2.0" step="0.5" min="1.0" max="5.0"
+                                   style="width:70px; padding:8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff;">
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 5px;">
+                            <label style="font-size:0.75rem; color:var(--text-muted);">SL Çarpan</label>
+                            <input type="number" id="ml-train-sl" value="2.0" step="0.5" min="1.0" max="5.0"
+                                   style="width:70px; padding:8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff;">
+                        </div>
+
+                        <button class="btn btn-primary" onclick="startMLTraining()"
+                                style="padding: 10px 25px; font-weight:bold; background: linear-gradient(135deg, var(--neon-blue), #6366f1);">
+                            🚀 Modeli Eğit
+                        </button>
+                    </div>
+
+                    <!-- İlerleme Çubuğu -->
+                    <div id="ml-training-progress" style="display: none; margin-top: 15px;">
+                        <div style="background: rgba(255,255,255,0.1); border-radius: 10px; height: 20px; overflow: hidden; margin-bottom: 10px;">
+                            <div id="ml-progress-bar" style="background: linear-gradient(90deg, var(--neon-blue), #6366f1); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+                        </div>
+                        <p id="ml-training-message" style="text-align: center; color: var(--neon-blue); font-size: 0.85rem;">
+                            Eğitim başlatılıyor...
+                        </p>
+                    </div>
+
+                    <!-- Sonuç Mesajı -->
+                    <div id="ml-training-result" style="display: none; margin-top: 15px; padding: 15px; border-radius: 8px; text-align: center;">
+                    </div>
+                </div>
+
                 <div class="header-row" style="margin-bottom: 20px;">
                     <div
                         style="display:flex; justify-content:space-between; align-items:center; width:100%; flex-wrap:wrap; gap:15px;">
