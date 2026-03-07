@@ -226,7 +226,7 @@ class ModelTrainer:
         return {
             'metrics': metrics,
             'feature_importance': feature_importance,
-            'best_iteration': getattr(self.model, 'best_iteration', None)
+            'best_iteration': getattr(self.xgb_model, 'best_iteration', None)
         }
 
     def _calculate_metrics(
