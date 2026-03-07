@@ -12,6 +12,63 @@ except ImportError:
     ML_AVAILABLE = False
     logger.warning("⚠️ ML modeli bulunamadı, sadece strateji sinyalleri kullanılacak.")
 
+
+# ============================================
+# RENKLİ LOG FORMATTER (Canlı Test için)
+# ============================================
+def log_ai_decision(symbol: str, strategy_name: str, strategy_signal: int,
+                   ml_recommendation: str, ml_confidence_pct: float,
+                   action: str, leverage: float = 1.0):
+    """
+    Yapay zeka kararını renkli ve dikkat çekici şekilde loglar.
+
+    Args:
+        symbol: Sembol adı (BTC/USDT)
+        strategy_name: Strateji adı
+        strategy_signal: Strateji sinyali (0=SAT, 1=HOLD, 2=AL)
+        ml_recommendation: ML önerisi
+        ml_confidence_pct: ML güven yüzdesi
+        action: Aksiyon (OPEN, REJECT, FILTER)
+        leverage: Kaldıraç
+    """
+    signal_emoji = "🟢" if strategy_signal == 2 else "🔴" if strategy_signal == 0 else "🟡"
+    signal_text = "AL" if strategy_signal == 2 else "SAT" if strategy_signal == 0 else "HOLD"
+
+    if action == "OPEN":
+        logger.info(
+            f"\n{'='*60}\n"
+            f"🤖 [AI KARARI] İŞLEM AÇILIYOR!\n"
+            f"{'='*60}\n"
+            f"  📊 Sembol: {symbol}\n"
+            f"  🧠 Strateji: {strategy_name} -> {signal_emoji} {signal_text}\n"
+            f"  🤖 ML Önerisi: {ml_recommendation} ({ml_confidence_pct:.1f}% Güven)\n"
+            f"  💰 Kaldıraç: {leverage}x\n"
+            f"  ✅ AKSİYON: İşleme giriliyor...\n"
+            f"{'='*60}"
+        )
+    elif action == "REJECT_CONFLUENCE":
+        logger.warning(
+            f"\n{'='*60}\n"
+            f"⚠️ [AI FİLTRESİ] İŞLEM REDDEDİLDİ (Çakışma!)\n"
+            f"{'='*60}\n"
+            f"  📊 Sembol: {symbol}\n"
+            f"  🧠 Strateji: {strategy_name} -> {signal_text}\n"
+            f"  🤖 ML Önerisi: {ml_recommendation} ({ml_confidence_pct:.1f}% Güven)\n"
+            f"  ❌ AKSİYON: Strateji ve ML çakışıyor!\n"
+            f"{'='*60}"
+        )
+    elif action == "REJECT_LOW_CONFIDENCE":
+        logger.warning(
+            f"\n{'='*60}\n"
+            f"⚠️ [AI FİLTRESİ] İŞLEM REDDEDİLDİ (Düşük Güven)\n"
+            f"{'='*60}\n"
+            f"  📊 Sembol: {symbol}\n"
+            f"  🧠 Strateji: {strategy_name} -> {signal_text}\n"
+            f"  🤖 ML Önerisi: {ml_recommendation} ({ml_confidence_pct:.1f}% Güven)\n"
+            f"  ❌ AKSİYON: Güven skoru yetersiz (<65%)\n"
+            f"{'='*60}"
+        )
+
 class PaperTrader:
     """
     Sanal (Kağıt Üzerinde) kripto para al-sat borsa mekanizması.
@@ -215,11 +272,11 @@ class PaperTrader:
                 logger.debug(f"[CONFLUENCE] {symbol} LONG onaylandı: Strateji=AL, ML={ml_recommendation} ({ml_confidence_pct:.1f}%)")
             elif ml_signal == 0 or ml_recommendation in ["SHORT", "STRONG_SHORT"]:
                 # ML SHORT diyor → ÇAKIŞMA, iptal
-                logger.warning(f"[CONFLUENCE] {symbol} LONG sinyali REDDEDİLDİ: Strateji=AL, ML={ml_recommendation} (Çakışma!)")
+                log_ai_decision(symbol, strategy.name(), strategy_signal, ml_recommendation, ml_confidence_pct, "REJECT_CONFLUENCE")
                 return
             elif ml_confidence_pct < 65:
                 # ML güveni düşük → İptal
-                logger.debug(f"[CONFLUENCE] {symbol} LONG sinyali REDDEDİLDİ: ML güveni düşük ({ml_confidence_pct:.1f}%)")
+                log_ai_decision(symbol, strategy.name(), strategy_signal, ml_recommendation, ml_confidence_pct, "REJECT_LOW_CONFIDENCE")
                 return
 
         elif strategy_signal == 0:  # Strateji SHORT diyor
@@ -229,7 +286,7 @@ class PaperTrader:
                 logger.debug(f"[CONFLUENCE] {symbol} SHORT onaylandı: Strateji=SAT, ML={ml_recommendation} ({ml_confidence_pct:.1f}%)")
             elif ml_signal == 2 or ml_recommendation in ["LONG", "STRONG_LONG"]:
                 # ML LONG diyor → ÇAKIŞMA, iptal
-                logger.warning(f"[CONFLUENCE] {symbol} SHORT sinyali REDDEDİLDİ: Strateji=SAT, ML={ml_recommendation} (Çakışma!)")
+                log_ai_decision(symbol, strategy.name(), strategy_signal, ml_recommendation, ml_confidence_pct, "REJECT_CONFLUENCE")
                 return
             elif ml_confidence_pct < 65:
                 # ML güveni düşük → İptal
@@ -353,15 +410,12 @@ class PaperTrader:
             if ml_recommendation in ["STRONG_LONG", "STRONG_SHORT"]:
                 # Yüksek güven (%80+): Maksimum kaldıraç
                 leverage = min(max_lev, 10)  # 5x-10x arası
-                logger.info(f"💰 [DYNAMIC LEVERAGE] {symbol}: STRONG sinyal → {leverage}x kaldıraç (Güven: {ml_confidence_pct:.1f}%)")
             elif ml_recommendation in ["LONG", "SHORT"]:
                 # Orta güven (%65-79%): Orta kaldıraç
                 leverage = min(max_lev, 3)  # 2x-3x arası
-                logger.info(f"💰 [DYNAMIC LEVERAGE] {symbol}: Normal sinyal → {leverage}x kaldıraç (Güven: {ml_confidence_pct:.1f}%)")
             else:
                 # Düşük güven (<65%): Minimum kaldıraç
                 leverage = 1.0
-                logger.info(f"💰 [DYNAMIC LEVERAGE] {symbol}: WEAK sinyal → {leverage}x kaldıraç (Güven: {ml_confidence_pct:.1f}%)")
 
         pos_size_crypto = RiskManagement.calculate_position_size(
             account_balance=self.balance,
@@ -378,6 +432,20 @@ class PaperTrader:
         if required_margin > self.free_margin:
             logger.warning(f"Limit yetersiz! ({symbol}) Marjin İhtiyacı: ${required_margin:.2f}")
             return
+
+        # ============================================
+        # RENKLİ AI KARARI LOGU (İşlem açılıyor)
+        # ============================================
+        strategy = self.strategies.get(symbol)
+        log_ai_decision(
+            symbol=symbol,
+            strategy_name=strategy.name() if strategy else "Unknown",
+            strategy_signal=2 if direction == "LONG" else 0,
+            ml_recommendation=ml_recommendation,
+            ml_confidence_pct=ml_confidence_pct,
+            action="OPEN",
+            leverage=leverage
+        )
 
         # Slipaj Simülasyonu
         execution_price = price * 1.0001 if direction == "LONG" else price * 0.9999

@@ -10,17 +10,33 @@ trading:
     - "1m"
     - "5m"
     - "1h"
-  
+
 risk_management:
-  max_risk_per_trade_percent: 0.2 
+  max_risk_per_trade_percent: 0.2
   max_open_positions: 5
   default_leverage: 1
   max_leverage: 50
+  max_consecutive_losses: 5
 
 
 strategy:
   active_modules:
     - "trend_following"
     - "mean_reversion"
-  ml_confidence_threshold: 0.51 
+  ml_confidence_threshold: 0.60
+
+
+# ============================================
+# ML MODEL AYARLARI (XGBoost)
+# ============================================
+ml:
+  enabled: true
+  model_path: "artifacts/models/xgb_model.json"
+  confidence_threshold: 0.65
+  # Dinamik kaldıraç eşikleri
+  leverage:
+    strong_threshold: 0.80  # ≥80% -> 10x kaldıraç
+    normal_threshold: 0.65  # 65-79% -> 3x kaldıraç
+    weak_threshold: 0.50    # <65% -> 1x kaldıraç (veya işlem yok)
+
 
