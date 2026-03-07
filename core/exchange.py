@@ -394,34 +394,31 @@ class ExchangeManager:
                 from strategy.manager import StrategyManager
                 strategy_class = StrategyManager.get_strategy(active_strategy_id)
 
-                # WFO parametre ızgarasını al
+                # WFO parametre ızgarasını al (None ise otomatik oluşturulur)
                 param_grid = getattr(strategy_class, 'PARAM_GRID', None)
 
-                if param_grid:
-                    logger.info(f"🔄 [WFO] {symbol} için arka plan optimizasyonu başlatılıyor...")
+                logger.info(f"🔄 [WFO] {symbol} için arka plan optimizasyonu başlatılıyor...")
 
-                    # Veri çekme fonksiyonu
-                    async def fetch_data(sym, tf):
-                        ohlcv = await self.fetch_ohlcv(sym, timeframe=tf, limit=2000)
-                        if ohlcv:
-                            df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-                            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-                            df.set_index('timestamp', inplace=True)
-                            return StrategyIndicators.add_all_indicators(df)
-                        return None
+                # Veri çekme fonksiyonu
+                async def fetch_data(sym, tf):
+                    ohlcv = await self.fetch_ohlcv(sym, timeframe=tf, limit=2000)
+                    if ohlcv:
+                        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+                        df.set_index('timestamp', inplace=True)
+                        return StrategyIndicators.add_all_indicators(df)
+                    return None
 
-                    # WFO arka plan görevini başlat
-                    wfo_task = asyncio.create_task(start_wfo_background_task(
-                        symbol=symbol,
-                        timeframe=timeframe,
-                        strategy_class=strategy_class,
-                        param_grid=param_grid,
-                        data_fetcher=fetch_data,
-                        optimization_metric="sharpe"
-                    ))
-                    logger.info(f"✅ [WFO] {symbol} arka plan görevi başlatıldı.")
-                else:
-                    logger.debug(f"⚠️ [WFO] {symbol} için param_grid tanımlı değil, optimizasyon atlanıyor.")
+                # WFO arka plan görevini başlat (param_grid=None ise otomatik oluşturur)
+                wfo_task = asyncio.create_task(start_wfo_background_task(
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    strategy_class=strategy_class,
+                    param_grid=param_grid,  # None ise auto-grid kullanılır
+                    data_fetcher=fetch_data,
+                    optimization_metric="sharpe"
+                ))
+                logger.info(f"✅ [WFO] {symbol} arka plan görevi başlatıldı.")
             except Exception as e:
                 logger.warning(f"⚠️ [WFO] {symbol} başlatma hatası: {str(e)}")
 

@@ -20,6 +20,14 @@ from datetime import datetime, timedelta
 from core.logger import logger
 from core.config import CONFIG
 
+# Auto-Grid Generator (opsiyonel - otomatik ızgara için)
+try:
+    from core.auto_grid import generate_param_grid
+    AUTO_GRID_AVAILABLE = True
+except ImportError:
+    AUTO_GRID_AVAILABLE = False
+    logger.warning("⚠️ Auto-Grid Generator bulunamadı, manuel PARAM_GRID kullanılıyor.")
+
 
 class WalkForwardOptimizer:
     """
@@ -506,8 +514,8 @@ async def start_wfo_background_task(
     symbol: str,
     timeframe: str,
     strategy_class: Any,
-    param_grid: Dict[str, List[Any]],
-    data_fetcher: Callable,
+    param_grid: Dict[str, List[Any]] = None,
+    data_fetcher: Callable = None,
     optimization_metric: str = "sharpe"
 ):
     """
@@ -517,11 +525,24 @@ async def start_wfo_background_task(
         symbol: Sembol adı
         timeframe: Zaman dilimi
         strategy_class: Strateji sınıfı
-        param_grid: Parametre aralıkları
+        param_grid: Parametre aralıkları (None ise otomatik oluşturulur)
         data_fetcher: Veri çekme fonksiyonu (async)
         optimization_metric: Optimizasyon metriği
     """
     wfo = get_wfo_engine(symbol)
+
+    # Param_grid yoksa otomatik oluştur
+    if param_grid is None:
+        if AUTO_GRID_AVAILABLE:
+            logger.info(f"🤖 [WFO] {symbol} için otomatik parametre ızgarası oluşturuluyor...")
+            param_grid = generate_param_grid(strategy_class=strategy_class)
+
+            if not param_grid:
+                logger.error(f"❌ [WFO] {symbol} için otomatik ızgara oluşturulamadı!")
+                return
+        else:
+            logger.error(f"❌ [WFO] {symbol} için param_grid tanımlı değil ve Auto-Grid mevcut değil!")
+            return
 
     logger.info(f"🔄 [WFO] Arka plan görevi başlatıldı: {symbol} ({timeframe})")
 
