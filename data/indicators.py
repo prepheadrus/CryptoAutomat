@@ -300,11 +300,8 @@ class StrategyIndicators:
         df['KALMAN'] = apply_kalman(df['close'])
 
         # Supertrend (Piyasa yönü ve dinamik destek/direnç için)
-        if USING_TALIB:
-            st = ta.SUPERTREND(df['high'], df['low'], df['close'], period=10, multiplier=3.0)
-            if st is not None:
-                df = pd.concat([df, st], axis=1)
-        elif USING_PANDAS_TA:
+        # Not: TA-Lib'de SUPERTREND fonksiyonu yok, manuel hesaplama veya pandas_ta kullan
+        if USING_PANDAS_TA:
             st = ta.supertrend(df['high'], df['low'], df['close'], length=10, multiplier=3.0)
             if st is not None:
                 df = pd.concat([df, st], axis=1)
