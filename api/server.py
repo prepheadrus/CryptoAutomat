@@ -633,6 +633,54 @@ training_state = {
     "model_path": None
 }
 
+# Training history (geçmiş eğitimler)
+training_history = []
+
+# Model metadata kaydetme
+def save_training_metadata(symbol: str, timeframe: str, limit: int, metrics: dict, model_path: str):
+    """Eğitim geçmişini JSON dosyasına kaydeder."""
+    import json
+    from datetime import datetime
+
+    metadata = {
+        "symbol": symbol,
+        "timeframe": timeframe,
+        "limit": limit,
+        "trained_at": datetime.now().isoformat(),
+        "model_path": model_path,
+        "metrics": {
+            "accuracy": metrics.get('accuracy', 0),
+            "precision": metrics.get('precision', 0),
+            "recall": metrics.get('recall', 0),
+            "f1": metrics.get('f1', 0)
+        }
+    }
+
+    training_history.append(metadata)
+
+    # Dosyaya kaydet
+    try:
+        history_file = "artifacts/ml_training_history.json"
+        os.makedirs(os.path.dirname(history_file), exist_ok=True)
+
+        # Mevcut geçmişi yükle
+        if os.path.exists(history_file):
+            with open(history_file, 'r') as f:
+                existing_history = json.load(f)
+        else:
+            existing_history = []
+
+        # Yeni eğitimi ekle
+        existing_history.append(metadata)
+
+        # Sadece son 50 eğitimi sakla
+        existing_history = existing_history[-50:]
+
+        with open(history_file, 'w') as f:
+            json.dump(existing_history, f, indent=2)
+    except Exception as e:
+        logger.error(f"Training metadata kaydedilemedi: {e}")
+
 @app.post("/api/v1/strategy/select")
 async def change_strategy(req: StrategySelectSchema):
     """Arayüzden gelen komutla botun beynini anında değiştirir."""
@@ -759,6 +807,15 @@ async def _run_ml_training(req: MLTrainRequest):
 
         trainer.save_model(model_path)
 
+        # Training metadata kaydet
+        save_training_metadata(
+            symbol=req.symbol,
+            timeframe=req.timeframe,
+            limit=req.limit,
+            metrics=trainer.training_metrics,
+            model_path=model_path
+        )
+
         # PaperTrader'daki modeli güncelle
         if paper_engine.ml_model is not None:
             paper_engine.ml_model.load_model(model_path)
@@ -787,6 +844,32 @@ async def get_ml_training_status():
     return {
         "status": "success",
         "training": training_state
+    }
+
+
+@app.get("/api/v1/ml/training-history")
+async def get_ml_training_history():
+    """Eğitilmiş ML modellerinin geçmişini döner."""
+    import json
+    import os
+
+    # Dosyadan oku
+    history_file = "artifacts/ml_training_history.json"
+    if os.path.exists(history_file):
+        try:
+            with open(history_file, 'r') as f:
+                history = json.load(f)
+            return {
+                "status": "success",
+                "history": history
+            }
+        except Exception as e:
+            logger.error(f"Training history okunamadı: {e}")
+
+    # Dosya yoksa bellekten döner
+    return {
+        "status": "success",
+        "history": training_history
     }
 
 # ----------------------------------------------------------------------------------

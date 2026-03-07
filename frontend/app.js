@@ -20,6 +20,7 @@ function setupTabs() {
             if (targetId === 'tab-ml') {
                 fetchAnalysableSymbols();
                 loadMLTrainingSymbols(); // ML Training için sembolleri yükle
+                loadTrainingHistory(); // Eğitim geçmişini yükle
             }
             if (targetId === 'tab-settings' || targetId === 'tab-strategies') {
                 fetchStrategies();
@@ -1915,6 +1916,91 @@ function showError(message) {
 
 // Global scope'a ekle
 window.startMLTraining = startMLTraining;
+
+
+// ============================================
+// EĞİTİM GEÇMİŞİ TABLOSU
+// ============================================
+
+async function loadTrainingHistory() {
+    const container = document.getElementById('training-history-table');
+    if (!container) return;
+
+    container.innerHTML = '<p style="text-align: center; padding: 40px; color: var(--text-muted);">Yükleniyor...</p>';
+
+    try {
+        const response = await fetch('/api/v1/ml/training-history');
+        const data = await response.json();
+
+        if (!data.history || data.history.length === 0) {
+            container.innerHTML = '<p style="text-align: center; padding: 40px; color: var(--text-muted);">Henüz eğitilmiş model yok. İlk modelinizi eğitin! 🚀</p>';
+            return;
+        }
+
+        // Tarihe göre sırala (en yeni önce)
+        const sortedHistory = data.history.sort((a, b) =>
+            new Date(b.trained_at) - new Date(a.trained_at)
+        );
+
+        let html = `
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                <thead>
+                    <tr style="border-bottom: 2px solid var(--neon-blue);">
+                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Sembol</th>
+                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Zaman Dilimi</th>
+                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Mum Sayısı</th>
+                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Accuracy</th>
+                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Precision</th>
+                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);">F1 Score</th>
+                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Eğitim Zamanı</th>
+                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Durum</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        sortedHistory.forEach((model, index) => {
+            const date = new Date(model.trained_at);
+            const dateStr = date.toLocaleString('tr-TR', {
+                day: '2-digit', month: '2-digit',
+                hour: '2-digit', minute: '2-digit'
+            });
+
+            const accuracy = (model.metrics.accuracy * 100).toFixed(1);
+            const precision = (model.metrics.precision * 100).toFixed(1);
+            const f1 = (model.metrics.f1 * 100).toFixed(1);
+
+            const rowColor = index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)';
+
+            html += `
+                <tr style="background: ${rowColor}; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <td style="padding: 12px; font-weight: bold; color: var(--neon-blue);">${model.symbol.replace('USDT', '/USDT')}</td>
+                    <td style="padding: 12px;">${model.timeframe}</td>
+                    <td style="padding: 12px;">${model.limit.toLocaleString()}</td>
+                    <td style="padding: 12px; color: ${accuracy >= 60 ? 'var(--neon-green)' : 'var(--neon-red)'};">%${accuracy}</td>
+                    <td style="padding: 12px;">%${precision}</td>
+                    <td style="padding: 12px;">%${f1}</td>
+                    <td style="padding: 12px; color: var(--text-muted);">${dateStr}</td>
+                    <td style="padding: 12px;">
+                        <span style="display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; background: rgba(0, 255, 136, 0.1); border-radius: 4px; color: var(--neon-green); font-size: 0.75rem;">
+                            ✅ Hazır
+                        </span>
+                    </td>
+                </tr>
+            `;
+        });
+
+        html += '</tbody></table>';
+        container.innerHTML = html;
+
+    } catch (error) {
+        console.error('Eğitim geçmişi yüklenemedi:', error);
+        container.innerHTML = '<p style="text-align: center; padding: 40px; color: var(--neon-red);">Geçmiş yüklenemedi.</p>';
+    }
+}
+
+// Global scope'a ekle
+window.loadTrainingHistory = loadTrainingHistory;
 
 // Sekme dinleyicisini ezmeden global bağlama yap
 document.addEventListener('click', (e) => {
