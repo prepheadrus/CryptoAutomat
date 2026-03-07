@@ -25,6 +25,7 @@ error_trace.txt
 # Migration/Temp Folders
 linux_migration/
 .vscode/
+home/
 
 # Jupyter Notebooks
 *.ipynb
