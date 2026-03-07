@@ -1,4 +1,4 @@
-        # EMA using talib or fallback to pandas_ta
+# EMA using talib or fallback to pandas_ta
         try:
             # Try using talib first
             df['EMA_5'] = ta.EMA(df['close'], timeperiod=5)
