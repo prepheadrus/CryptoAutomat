@@ -640,6 +640,7 @@ training_history = []
 def save_training_metadata(symbol: str, timeframe: str, limit: int, metrics: dict, model_path: str):
     """Eğitim geçmişini JSON dosyasına kaydeder."""
     import json
+    import os
     from datetime import datetime
 
     metadata = {
