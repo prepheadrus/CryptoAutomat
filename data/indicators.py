@@ -463,24 +463,17 @@ class StrategyIndicators:
                 df['OBV'] = ta.OBV(df['close'], df['volume'])
                 if 'OBV' in df.columns:
                     df['OBV_EMA'] = ta.EMA(df['OBV'], timeperiod=10)
-                try:
-                    df['VWAP'] = ta.VWAP(df['high'], df['low'], df['close'], df['volume'])
-                except Exception:
-                    pass
             elif USING_PANDAS_TA:
                 df['OBV'] = ta.obv(df['close'], df['volume'])
                 if 'OBV' in df.columns:
                     df['OBV_EMA'] = ta.ema(df['OBV'], length=10)
-                try:
-                    df['VWAP'] = ta.vwap(df['high'], df['low'], df['close'], df['volume'], anchor="D")
-                except Exception:
-                    pass
             else:
                 # Manuel OBV hesaplama
                 df['OBV'] = (np.sign(df['close'].diff()) * df['volume']).fillna(0).cumsum()
                 df['OBV_EMA'] = StrategyIndicators.ema(df['OBV'], 10)
-                # Manuel VWAP
-                df['VWAP'] = StrategyIndicators.vwap(df['high'], df['low'], df['close'], df['volume'])
+
+            # VWAP her durumda manuel hesaplama (TA-Lib'de VWAP yok/güvenilir değil)
+            df['VWAP'] = StrategyIndicators.vwap(df['high'], df['low'], df['close'], df['volume'])
 
         # --- YENİ EKLENEN ŞABLON İNDİKATÖRLERİ (ADX, Stoch) ---
         # 1. ADX (Trend Gücü)
