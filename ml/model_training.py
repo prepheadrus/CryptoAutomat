@@ -143,14 +143,33 @@ class ModelTrainer:
         # Early stopping için eval seti
         eval_set = [(X_train, y_train), (X_test, y_test)]
 
-        # Modeli eğit
-        self.model.fit(
-            X_train,
-            y_train,
-            eval_set=eval_set,
-            verbose=verbose,
-            early_stopping_rounds=self.early_stopping_rounds
-        )
+        # Modeli eğit (XGBoost versiyonuna göre early_stopping_rounds)
+        # XGBoost 1.3+ için callbacks kullan
+        try:
+            import xgboost as xgb
+            # Callback ile early stopping (yeni versiyonlar için)
+            early_stopping_cb = xgb.callback.EarlyStopping(
+                rounds=self.early_stopping_rounds,
+                metric_name='mlogloss',
+                data_name='eval'
+            )
+
+            self.model.fit(
+                X_train,
+                y_train,
+                eval_set=eval_set,
+                verbose=verbose,
+                callbacks=[early_stopping_cb]
+            )
+        except (AttributeError, TypeError):
+            # Eski versiyonlar için klasik parametre
+            self.model.fit(
+                X_train,
+                y_train,
+                eval_set=eval_set,
+                verbose=verbose,
+                early_stopping_rounds=self.early_stopping_rounds
+            )
 
         self.is_trained = True
 
