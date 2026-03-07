@@ -702,15 +702,28 @@ async def _run_ml_training(req: MLTrainRequest):
 
         logger.info("🧠 [ML] Eğitim başlatılıyor...")
 
-        # 1. Veri çek
-        from data.database import db_manager
+        # 1. Veri çek (exchange'den)
         from data.indicators import StrategyIndicators
         from ml.model_training import run_training_pipeline
+        from core.exchange import exchange_manager
 
         training_state["message"] = f"Veri çekiliyor: {req.symbol}, {req.timeframe}, {req.limit} mum..."
         training_state["progress"] = 10
 
-        df = await db_manager.get_klines(req.symbol, req.timeframe, req.limit)
+        # Exchange'den OHLCV çek
+        ohlcv_data = await exchange_manager.fetch_ohlcv(req.symbol, req.timeframe, req.limit)
+
+        if not ohlcv_data or len(ohlcv_data) == 0:
+            training_state["is_training"] = False
+            training_state["message"] = "❌ Veri çekilemedi!"
+            logger.error("❌ [ML] Veri çekilemedi!")
+            return
+
+        # DataFrame'e dönüştür
+        import pandas as pd
+        df = pd.DataFrame(ohlcv_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        df.set_index('timestamp', inplace=True)
 
         if df is None or len(df) == 0:
             training_state["is_training"] = False
