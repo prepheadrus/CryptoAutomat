@@ -17,6 +17,7 @@ from pandas import Series
 from typing import Tuple, Dict, Any, Optional, List
 from datetime import datetime
 import xgboost as xgb
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
     accuracy_score,
     precision_score,
@@ -30,10 +31,11 @@ from core.logger import logger
 
 class ModelTrainer:
     """
-    XGBoost Model Eğitici Sınıfı
+    XGBoost + Random Forest Ensemble Model Eğitici Sınıfı
 
     Triple Barrier etiketli veriler üzerinde çok sınıflı sınıflandırma
     (LONG/SHORT/NEUTRAL) yapar ve güven skoru üretir.
+    Ensemble (füzyon) yaklaşımı ile daha güvenilir tahminler yapar.
     """
 
     def __init__(
@@ -49,8 +51,11 @@ class ModelTrainer:
         reg_lambda: float = 1.0,
         random_state: int = 42,
         n_jobs: int = -1,
-        early_stopping_rounds: int = 50,
-        num_class: int = 3
+        num_class: int = 3,
+        # Random Forest parametreleri
+        rf_n_estimators: int = 200,
+        rf_max_depth: int = 10,
+        rf_min_samples_split: int = 5
     ):
         """
         XGBoost modelini başlatır.
@@ -81,11 +86,15 @@ class ModelTrainer:
         self.reg_lambda = reg_lambda
         self.random_state = random_state
         self.n_jobs = n_jobs
-        self.early_stopping_rounds = early_stopping_rounds
         self.num_class = num_class
 
-        # Modeli başlat
-        self.model = xgb.XGBClassifier(
+        # Random Forest parametreleri
+        self.rf_n_estimators = rf_n_estimators
+        self.rf_max_depth = rf_max_depth
+        self.rf_min_samples_split = rf_min_samples_split
+
+        # XGBoost modelini başlat
+        self.xgb_model = xgb.XGBClassifier(
             n_estimators=n_estimators,
             max_depth=max_depth,
             learning_rate=learning_rate,
@@ -103,6 +112,16 @@ class ModelTrainer:
             use_label_encoder=False
         )
 
+        # Random Forest modelini başlat
+        self.rf_model = RandomForestClassifier(
+            n_estimators=rf_n_estimators,
+            max_depth=rf_max_depth,
+            min_samples_split=rf_min_samples_split,
+            random_state=random_state,
+            n_jobs=n_jobs,
+            class_weight='balanced'
+        )
+
         self.is_trained = False
         self.feature_names = None
         self.training_metrics = {}
@@ -117,7 +136,7 @@ class ModelTrainer:
         verbose: bool = True
     ) -> Dict[str, Any]:
         """
-        XGBoost modelini eğitir ve değerlendirir.
+        XGBoost + Random Forest Ensemble modellerini eğitir ve değerlendirir.
 
         Args:
             X_train: Eğitim özellikleri
@@ -129,7 +148,7 @@ class ModelTrainer:
         Returns:
             Dict[str, Any]: Eğitim metrikleri
         """
-        logger.info(f"Model eğitimi başlatılıyor...")
+        logger.info(f"🧠 Ensemble (XGBoost + RF) eğitimi başlatılıyor...")
         logger.info(f"  Eğitim seti: {X_train.shape}")
         logger.info(f"  Test seti: {X_test.shape}")
         logger.info(f"  Sınıf dağılımı (train): {y_train.value_counts().to_dict()}")
@@ -140,27 +159,45 @@ class ModelTrainer:
         else:
             self.feature_names = [f"feature_{i}" for i in range(X_train.shape[1])]
 
-        # Early stopping için eval seti
+        # 1. XGBoost modelini eğit
+        logger.info("📊 XGBoost eğitiliyor...")
         eval_set = [(X_train, y_train), (X_test, y_test)]
-
-        # Modeli eğit (early_stopping olmadan - versiyon uyumluluğu için)
-        self.model.fit(
+        self.xgb_model.fit(
             X_train,
             y_train,
             eval_set=eval_set,
             verbose=verbose
         )
+        logger.info("✅ XGBoost eğitimi tamamlandı.")
+
+        # 2. Random Forest modelini eğit
+        logger.info("🌲 Random Forest eğitiliyor...")
+        self.rf_model.fit(X_train, y_train)
+        logger.info("✅ Random Forest eğitimi tamamlandı.")
 
         self.is_trained = True
 
-        # Test üzerinde değerlendirme
-        y_pred = self.model.predict(X_test)
+        # 3. Ensemble tahmini (Soft Voting)
+        logger.info("🔗 Ensemble tahminleri hesaplanıyor...")
+        xgb_proba = self.xgb_model.predict_proba(X_test)
+        rf_proba = self.rf_model.predict_proba(X_test)
+
+        # Soft Voting: Olasılıkların ortalamasını al
+        ensemble_proba = (xgb_proba + rf_proba) / 2
+        y_pred = np.argmax(ensemble_proba, axis=1)
 
         # Metrikleri hesapla
         metrics = self._calculate_metrics(y_test, y_pred)
         self.training_metrics = metrics
 
-        # Feature importance hesapla
+        # Her modelin ayrı metriklerini de hesapla
+        y_pred_xgb = self.xgb_model.predict(X_test)
+        y_pred_rf = self.rf_model.predict(X_test)
+        metrics['xgb_accuracy'] = accuracy_score(y_test, y_pred_xgb)
+        metrics['rf_accuracy'] = accuracy_score(y_test, y_pred_rf)
+        metrics['ensemble_accuracy'] = metrics['accuracy']
+
+        # Feature importance hesapla (XGBoost'tan)
         feature_importance = self._calculate_feature_importance()
 
         # Sonuçları logla
@@ -249,7 +286,7 @@ class ModelTrainer:
 
     def _calculate_feature_importance(self) -> List[Tuple[str, float]]:
         """
-        Özellik önemlerini hesaplar.
+        Özellik önemlerini hesaplar (XGBoost'tan).
 
         Returns:
             List[Tuple[str, float]]: (feature_name, importance) listesi
@@ -257,7 +294,7 @@ class ModelTrainer:
         if not self.is_trained:
             return []
 
-        importance = self.model.feature_importances_
+        importance = self.xgb_model.feature_importances_
         if self.feature_names:
             return sorted(
                 zip(self.feature_names, importance),
@@ -272,7 +309,8 @@ class ModelTrainer:
         X: pd.DataFrame
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
-        Tahmin yapar ve güven skoru döner.
+        Ensemble (XGBoost + RF) tahmini yapar ve güven skoru döner.
+        Soft Voting kullanır: Her iki modelin olasılıklarının ortalaması alınır.
 
         PaperTrader için kritik: Dinamik kaldıraç confidence score'a göre
         hesaplanır.
@@ -289,8 +327,12 @@ class ModelTrainer:
         if not self.is_trained:
             raise RuntimeError("Model henüz eğitilmedi!")
 
-        # Olasılıkları al (multi:softprob)
-        probabilities = self.model.predict_proba(X)
+        # Her iki modelin olasılıklarını al
+        xgb_proba = self.xgb_model.predict_proba(X)
+        rf_proba = self.rf_model.predict_proba(X)
+
+        # Soft Voting: Olasılıkların ortalamasını al
+        probabilities = (xgb_proba + rf_proba) / 2
 
         # En yüksek olasılıklı sınıfı al
         predictions = np.argmax(probabilities, axis=1)
@@ -367,10 +409,12 @@ class ModelTrainer:
 
     def save_model(self, model_path: str = "artifacts/models/xgb_model.json") -> str:
         """
-        Modeli diske kaydeder.
+        Ensemble modelleri diske kaydeder.
+        XGBoost: JSON formatında
+        Random Forest: Joblib (pickle) formatında
 
         Args:
-            model_path: Kayıt yolu
+            model_path: Kayıt yolu (XGBoost için)
 
         Returns:
             str: Kaydedilen dosya yolu
@@ -381,8 +425,13 @@ class ModelTrainer:
         # Dizin oluştur
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
 
-        # Modeli kaydet (JSON formatı)
-        self.model.save_model(model_path)
+        # 1. XGBoost modelini kaydet (JSON formatı)
+        self.xgb_model.save_model(model_path)
+
+        # 2. Random Forest modelini kaydet (Joblib/Pickle)
+        import joblib
+        rf_model_path = model_path.replace('.json', '_rf.joblib')
+        joblib.dump(self.rf_model, rf_model_path)
 
         # Metadata'yi kaydet
         metadata_path = model_path.replace('.json', '_metadata.json')
@@ -404,7 +453,14 @@ class ModelTrainer:
                 'gamma': self.gamma,
                 'reg_alpha': self.reg_alpha,
                 'reg_lambda': self.reg_lambda,
-                'num_class': self.num_class
+                'num_class': self.num_class,
+                'rf_n_estimators': self.rf_n_estimators,
+                'rf_max_depth': self.rf_max_depth,
+                'rf_min_samples_split': self.rf_min_samples_split
+            },
+            'model_paths': {
+                'xgb': model_path,
+                'rf': rf_model_path
             },
             'trained_at': datetime.now().isoformat()
         }
@@ -412,26 +468,37 @@ class ModelTrainer:
         with open(metadata_path, 'w') as f:
             json.dump(metadata, f, indent=2, default=str)
 
-        logger.info(f"Model kaydedildi: {model_path}")
-        logger.info(f"Metadata kaydedildi: {metadata_path}")
+        logger.info(f"✅ XGBoost model kaydedildi: {model_path}")
+        logger.info(f"✅ Random Forest model kaydedildi: {rf_model_path}")
+        logger.info(f"✅ Metadata kaydedildi: {metadata_path}")
 
         return model_path
 
     def load_model(self, model_path: str = "artifacts/models/xgb_model.json") -> 'ModelTrainer':
         """
-        Diskten model yükler.
+        Diskten ensemble modelleri yükler.
 
         Args:
-            model_path: Model dosya yolu
+            model_path: XGBoost model dosya yolu
 
         Returns:
             ModelTrainer: Yüklenmiş model ile self
         """
         if not os.path.exists(model_path):
-            raise FileNotFoundError(f"Model dosyası bulunamadı: {model_path}")
+            raise FileNotFoundError(f"XGBoost model dosyası bulunamadı: {model_path}")
 
-        # Modeli yükle
-        self.model.load_model(model_path)
+        # 1. XGBoost modelini yükle
+        self.xgb_model.load_model(model_path)
+
+        # 2. Random Forest modelini yükle
+        import joblib
+        rf_model_path = model_path.replace('.json', '_rf.joblib')
+        if os.path.exists(rf_model_path):
+            self.rf_model = joblib.load(rf_model_path)
+            logger.info(f"✅ Random Forest model yüklendi: {rf_model_path}")
+        else:
+            logger.warning(f"⚠️ Random Forest model bulunamadı: {rf_model_path}")
+
         self.is_trained = True
 
         # Metadata'yi yükle
@@ -444,18 +511,12 @@ class ModelTrainer:
             self.class_mapping = {
                 int(k): v for k, v in metadata.get('class_mapping', {}).items()
             }
+            self.training_metrics = metadata.get('training_metrics', {})
 
-            # Hyperparameters
-            hp = metadata.get('hyperparameters', {})
-            self.n_estimators = hp.get('n_estimators', self.n_estimators)
-            self.max_depth = hp.get('max_depth', self.max_depth)
-            self.learning_rate = hp.get('learning_rate', self.learning_rate)
-            # ... diğer parametreler
-
-            logger.info(f"Model yüklendi: {model_path}")
-            logger.info(f"Özellik sayısı: {len(self.feature_names)}")
+            logger.info(f"✅ XGBoost model yüklendi: {model_path}")
+            logger.info(f"📊 Özellik sayısı: {len(self.feature_names)}")
         else:
-            logger.warning(f"Metadata dosyası bulunamadı: {metadata_path}")
+            logger.warning(f"⚠️ Metadata dosyası bulunamadı: {metadata_path}")
 
         return self
 

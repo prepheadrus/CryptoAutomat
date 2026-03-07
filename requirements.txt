@@ -13,6 +13,7 @@ statsmodels
 torch
 xgboost
 scikit-learn
+joblib  # Random Forest model kaydetme/yükleme için
 
 # Database
 redis
