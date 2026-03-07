@@ -143,12 +143,12 @@
                                 <option value="4h">4h</option>
                                 <option value="1d">1d</option>
                             </select>
-                            
+
                             <select id="ml-analysis-market-type" class="strategy-select" style="min-width:100px;">
                                 <option value="swap" selected>Vadeli (Swap)</option>
                                 <option value="spot">Spot Piyasa</option>
                             </select>
-                            
+
                             <select id="ml-analysis-margin-type" class="strategy-select" style="min-width:100px;">
                                 <option value="isolated" selected>İzole Marjin</option>
                                 <option value="cross">Çapraz Marjin</option>
@@ -221,9 +221,11 @@
                 <!-- SİSTEM DURUM ÖZETİ (KOMPAKT) -->
                 <div class="card glass-panel" style="margin-bottom: 20px;">
                     <h3 style="margin:0 0 15px 0;">🖥️ Aktif Stratejiler</h3>
-                    <div id="system-status-summary" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px;">
+                    <div id="system-status-summary"
+                        style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px;">
                         <!-- Dinamik olarak doldurulacak -->
-                        <div style="text-align: center; padding: 40px; color: var(--text-muted); grid-column: span 100%;">
+                        <div
+                            style="text-align: center; padding: 40px; color: var(--text-muted); grid-column: span 100%;">
                             ⏳ Sistem yükleniyor...
                         </div>
                     </div>
@@ -387,436 +389,213 @@
 
             <!-- SEKME: STRATEJİ OLUŞTURUCU -->
             <div id="tab-strategy-builder" class="tab-content" style="display: none;">
-                <div class="builder-container" style="display: grid; grid-template-columns: 300px 1fr 300px; gap: 20px; height: calc(100vh - 150px);">
+                <div class="builder-container"
+                    style="display: grid; grid-template-columns: 310px 1fr 310px; gap: 20px; height: calc(100vh - 160px); padding: 15px;">
 
                     <!-- SOL PANEL: İndikatör Kütüphanesi -->
-                    <div class="panel">
-                        <div class="panel-header">📚 İndikatör Kütüphanesi</div>
+                    <div class="panel glass-panel" style="overflow-y: auto;">
+                        <div class="panel-header">📚 Gösterge Kütüphanesi</div>
 
-                        <input type="text" id="indicator-search" class="form-input" placeholder="🔍 İndikatör ara..." style="width: 100%; margin-bottom: 15px;">
+                        <input type="text" id="indicator-search" class="condition-input"
+                            placeholder="🔍 İndikatör ara..."
+                            style="width: 100%; margin-bottom: 20px; background: rgba(255,255,255,0.05);">
 
-                        <div id="indicator-library">
-                            <!-- Trend -->
+                        <div id="indicator-list">
                             <div class="indicator-category">
                                 <div class="category-title">📈 TREND</div>
-                                <div class="indicator-item" data-type="EMA" data-params='{"period": 20}'>
-                                    <span class="indicator-name">EMA</span>
+                                <div class="indicator-item indicator-btn" data-type="EMA" data-params='{"period": 20}'>
+                                    <span class="indicator-name">EMA (20)</span>
                                     <button class="btn-add">+</button>
                                 </div>
-                                <div class="indicator-item" data-type="SMA" data-params='{"period": 20}'>
-                                    <span class="indicator-name">SMA</span>
+                                <div class="indicator-item indicator-btn" data-type="SMA" data-params='{"period": 20}'>
+                                    <span class="indicator-name">SMA (20)</span>
                                     <button class="btn-add">+</button>
                                 </div>
-                                <div class="indicator-item" data-type="ATR" data-params='{"period": 14}'>
-                                    <span class="indicator-name">ATR</span>
+                                <div class="indicator-item indicator-btn" data-type="Supertrend"
+                                    data-params='{"period": 10, "multiplier": 3}'>
+                                    <span class="indicator-name">Supertrend</span>
                                     <button class="btn-add">+</button>
                                 </div>
                             </div>
-
-                            <!-- Momentum -->
                             <div class="indicator-category">
                                 <div class="category-title">🚀 MOMENTUM</div>
-                                <div class="indicator-item" data-type="RSI" data-params='{"period": 14}'>
-                                    <span class="indicator-name">RSI</span>
+                                <div class="indicator-item indicator-btn" data-type="RSI" data-params='{"period": 14}'>
+                                    <span class="indicator-name">RSI (14)</span>
                                     <button class="btn-add">+</button>
                                 </div>
-                                <div class="indicator-item" data-type="MACD" data-params='{"fast": 12, "slow": 26, "signal": 9}'>
+                                <div class="indicator-item indicator-btn" data-type="MACD"
+                                    data-params='{"fast": 12, "slow": 26, "signal": 9}'>
                                     <span class="indicator-name">MACD</span>
                                     <button class="btn-add">+</button>
                                 </div>
-                                <div class="indicator-item" data-type="Stochastic" data-params='{"k": 14, "d": 3}'>
-                                    <span class="indicator-name">Stochastic</span>
-                                    <button class="btn-add">+</button>
-                                </div>
                             </div>
-
-                            <!-- Volatilite -->
                             <div class="indicator-category">
                                 <div class="category-title">📊 VOLATİLİTE</div>
-                                <div class="indicator-item" data-type="Bollinger" data-params='{"period": 20, "std": 2.0}'>
+                                <div class="indicator-item indicator-btn" data-type="ATR" data-params='{"period": 14}'>
+                                    <span class="indicator-name">ATR (14)</span>
+                                    <button class="btn-add">+</button>
+                                </div>
+                                <div class="indicator-item indicator-btn" data-type="Bollinger"
+                                    data-params='{"period": 20, "std": 2}'>
                                     <span class="indicator-name">Bollinger</span>
                                     <button class="btn-add">+</button>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Kaydedilmiş Stratejiler -->
-                        <div style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
-                            <div class="panel-header" style="font-size: 0.9rem;">💾 Kaydedilmiş Stratejiler</div>
-                            <div id="saved-strategies-list" style="max-height: 200px; overflow-y: auto;">
-                                <div style="text-align: center; padding: 20px; color: var(--text-muted);">
-                                    ⏳ Yükleniyor...
-                                </div>
+                        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.05);">
+                            <div class="category-title">💾 KAYDEDİLMİŞ STRATEJİLER</div>
+                            <div id="saved-strategies-list" style="max-height: 250px; overflow-y: auto;">
+                                <div
+                                    style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.8rem;">
+                                    Yükleniyor...</div>
                             </div>
                         </div>
                     </div>
 
                     <!-- ORTA PANEL: Koşul Oluşturucu -->
-                    <div class="panel">
+                    <div class="panel glass-panel" style="overflow-y: auto;">
                         <div class="panel-header">⚙️ Koşul Oluşturucu</div>
-
-                        <!-- Strateji Adı -->
-                        <div style="margin-bottom: 15px;">
-                            <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px;">
-                                Strateji Adı
-                            </label>
-                            <input type="text" id="strategy-name" class="form-input" value="Yeni Strateji" style="width: 100%;">
-                        </div>
-
-                        <!-- Strateji Açıklaması -->
                         <div style="margin-bottom: 20px;">
-                            <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px;">
-                                Açıklama
-                            </label>
-                            <textarea id="strategy-description" class="form-input" rows="2" placeholder="Strateji açıklaması..." style="width: 100%;"></textarea>
+                            <label
+                                style="display: block; font-size: 0.7rem; color: var(--text-muted); margin-bottom: 5px;">Strateji
+                                Adı</label>
+                            <input type="text" id="strategy-name" class="condition-input" value="Yeni Strateji"
+                                style="width: 100%; margin-bottom: 10px;">
+                            <label
+                                style="display: block; font-size: 0.7rem; color: var(--text-muted); margin-bottom: 5px;">Açıklama</label>
+                            <textarea id="strategy-description" class="condition-input"
+                                placeholder="Opsiyonel açıklama..."
+                                style="width: 100%; height: 50px; resize: none;"></textarea>
                         </div>
 
-                        <!-- LONG Koşulları -->
-                        <div class="condition-builder">
+                        <div class="condition-builder" style="border-left: 3px solid var(--neon-green);">
                             <div class="condition-side long">🟢 LONG Koşulları</div>
-
-                            <div class="logic-selector" id="long-logic-selector" style="display: flex; gap: 10px; margin-bottom: 15px;">
-                                <div class="logic-btn active" data-logic="AND" style="flex: 1; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; cursor: pointer; text-align: center;">VE (AND)</div>
-                                <div class="logic-btn" data-logic="OR" style="flex: 1; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; cursor: pointer; text-align: center;">VEYA (OR)</div>
+                            <div class="logic-selector" id="long-logic-selector">
+                                <div class="logic-btn active" data-logic="AND">VE (AND)</div>
+                                <div class="logic-btn" data-logic="OR">VEYA (OR)</div>
                             </div>
-
-                            <div id="long-conditions-container">
-                                <!-- Koşullar buraya eklenecek -->
-                            </div>
-
+                            <div id="long-conditions-container"></div>
                             <button class="btn-add-rule" onclick="addCondition('long')">➕ LONG Koşulu Ekle</button>
                         </div>
 
-                        <!-- SHORT Koşulları -->
-                        <div class="condition-builder" style="margin-top: 20px;">
+                        <div class="condition-builder"
+                            style="border-left: 3px solid var(--neon-red); margin-top: 25px;">
                             <div class="condition-side short">🔴 SHORT Koşulları</div>
-
-                            <div class="logic-selector" id="short-logic-selector" style="display: flex; gap: 10px; margin-bottom: 15px;">
-                                <div class="logic-btn active" data-logic="AND" style="flex: 1; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; cursor: pointer; text-align: center;">VE (AND)</div>
-                                <div class="logic-btn" data-logic="OR" style="flex: 1; padding: 8px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; cursor: pointer; text-align: center;">VEYA (OR)</div>
+                            <div class="logic-selector" id="short-logic-selector">
+                                <div class="logic-btn active" data-logic="AND">VE (AND)</div>
+                                <div class="logic-btn" data-logic="OR">VEYA (OR)</div>
                             </div>
-
-                            <div id="short-conditions-container">
-                                <!-- Koşullar buraya eklenecek -->
-                            </div>
-
+                            <div id="short-conditions-container"></div>
                             <button class="btn-add-rule" onclick="addCondition('short')">➕ SHORT Koşulu Ekle</button>
                         </div>
                     </div>
 
-                    <!-- SAĞ PANEL: Risk ve Aksiyon -->
-                    <div class="panel">
-                        <div class="panel-header">🎯 Risk Parametreleri</div>
-
-                        <div class="risk-input-group" style="margin-bottom: 15px;">
-                            <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px;">Stop Loss (ATR Çarpanı)</label>
-                            <input type="number" id="stop-loss-atr" class="form-input" value="2.0" step="0.1" min="0.5" max="10" style="width: 100%;">
-                        </div>
-
-                        <div class="risk-input-group" style="margin-bottom: 15px;">
-                            <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px;">Take Profit (ATR Çarpanı)</label>
-                            <input type="number" id="take-profit-atr" class="form-input" value="4.0" step="0.1" min="1" max="20" style="width: 100%;">
-                        </div>
-
-                        <div class="risk-input-group" style="margin-bottom: 15px;">
-                            <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px;">Max Risk (%)</label>
-                            <input type="number" id="max-risk-percent" class="form-input" value="2.0" step="0.1" min="0.1" max="10" style="width: 100%;">
-                        </div>
-
-                        <!-- Backtest Parametreleri -->
-                        <div class="risk-input-group" style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
-                            <label style="color: var(--neon-blue); display: block; margin-bottom: 10px;">📊 Backtest Ayarları</label>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                                <div>
-                                    <label style="font-size: 0.7rem; color: var(--text-muted);">Sembol</label>
-                                    <input type="text" id="backtest-symbol" class="form-input" value="BTC/USDT" style="font-size: 0.85rem;">
-                                </div>
-                                <div>
-                                    <label style="font-size: 0.7rem; color: var(--text-muted);">Timeframe</label>
-                                    <select id="backtest-timeframe" class="form-select" style="font-size: 0.85rem;">
+                    <!-- SAĞ PANEL: Test ve Analiz -->
+                    <div class="panel glass-panel" style="overflow-y: auto;">
+                        <div class="panel-header">🎯 Backtest & Risk</div>
+                        <div
+                            style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                                <div><label style="font-size:0.65rem; color:var(--text-muted);">Sembol</label><input
+                                        type="text" id="backtest-symbol" class="condition-input" value="BTC/USDT"
+                                        style="width: 100%;"></div>
+                                <div><label style="font-size:0.65rem; color:var(--text-muted);">TF</label><select
+                                        id="backtest-timeframe" class="condition-select" style="width: 100%;">
                                         <option value="15m">15m</option>
                                         <option value="1h" selected>1h</option>
                                         <option value="4h">4h</option>
-                                        <option value="1d">1d</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label style="font-size: 0.7rem; color: var(--text-muted);">Gün Sayısı</label>
-                                    <input type="number" id="backtest-days" class="form-input" value="30" min="1" max="365" style="font-size: 0.85rem;">
-                                </div>
-                                <div>
-                                    <label style="font-size: 0.7rem; color: var(--text-muted);">Başlangıç Bakiye ($)</label>
-                                    <input type="number" id="backtest-balance" class="form-input" value="10000" style="font-size: 0.85rem;">
-                                </div>
+                                    </select></div>
+                                <div><label style="font-size:0.65rem; color:var(--text-muted);">Gün</label><input
+                                        type="number" id="backtest-days" class="condition-input" value="30"
+                                        style="width: 100%;"></div>
+                                <div><label style="font-size:0.65rem; color:var(--text-muted);">Bakiye</label><input
+                                        type="number" id="backtest-balance" class="condition-input" value="10000"
+                                        style="width: 100%;"></div>
                             </div>
                         </div>
 
-                        <div class="action-buttons" style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px;">
-                            <button class="btn btn-primary" onclick="testStrategy()" style="padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.9rem; background: var(--neon-blue); color: #fff;">🧪 Test Et</button>
-                            <button class="btn btn-success" onclick="saveStrategy()" style="padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.9rem; background: var(--neon-green); color: #fff;">💾 Kaydet</button>
-                            <button class="btn btn-danger" onclick="clearForm()" style="padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.9rem; background: var(--neon-red); color: #fff;">🗑️ Temizle</button>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                            <div><label style="font-size:0.7rem; color:var(--text-muted);">SL (ATR)</label><input
+                                    type="number" id="stop-loss-atr" class="condition-input" value="2.0" step="0.1"
+                                    style="width: 100%;"></div>
+                            <div><label style="font-size:0.7rem; color:var(--text-muted);">TP (ATR)</label><input
+                                    type="number" id="take-profit-atr" class="condition-input" value="4.0" step="0.1"
+                                    style="width: 100%;"></div>
+                            <div style="grid-column: span 2;"><label
+                                    style="font-size:0.7rem; color:var(--text-muted);">Max Risk (%)</label><input
+                                    type="number" id="max-risk-percent" class="condition-input" value="2.0" step="0.1"
+                                    style="width: 100%;"></div>
                         </div>
 
-                        <!-- Test Sonuçları -->
-                        <div id="test-results" style="margin-top: 20px; display: none;">
-                            <div class="panel-header" style="color: var(--neon-green); font-size: 0.9rem;">📊 Backtest Sonuçları</div>
-
-                            <!-- Metrik Kartları -->
-                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 15px 0;">
-                                <div style="background: rgba(46,160,67,0.1); border: 1px solid rgba(46,160,67,0.3); padding: 12px; border-radius: 6px;">
-                                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px;">Win Rate</div>
-                                    <div id="metric-winrate" style="font-size: 1.5rem; color: var(--neon-green); font-weight: 700;">-</div>
-                                </div>
-                                <div style="background: rgba(88,166,255,0.1); border: 1px solid rgba(88,166,255,0.3); padding: 12px; border-radius: 6px;">
-                                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px;">Net PnL</div>
-                                    <div id="metric-pnl" style="font-size: 1.5rem; color: var(--neon-blue); font-weight: 700;">-</div>
-                                </div>
-                                <div style="background: rgba(188,140,255,0.1); border: 1px solid rgba(188,140,255,0.3); padding: 12px; border-radius: 6px;">
-                                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px;">Profit Factor</div>
-                                    <div id="metric-profit-factor" style="font-size: 1.5rem; color: var(--neon-purple); font-weight: 700;">-</div>
-                                </div>
-                                <div style="background: rgba(248,81,73,0.1); border: 1px solid rgba(248,81,73,0.3); padding: 12px; border-radius: 6px;">
-                                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px;">Max Drawdown</div>
-                                    <div id="metric-drawdown" style="font-size: 1.5rem; color: var(--neon-red); font-weight: 700;">-</div>
-                                </div>
-                            </div>
-
-                            <!-- Equity Curve -->
-                            <div style="margin: 15px 0;">
-                                <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px;">📈 Equity Eğrisi</div>
-                                <div id="equity-curve-chart" style="height: 200px; background: rgba(0,0,0,0.2); border-radius: 6px; position: relative;">
-                                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--text-muted); font-size: 0.85rem;">
-                                        Grafik yükleniyor...
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- İşlem Geçmişi -->
-                            <div style="margin: 15px 0;">
-                                <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px;">📋 İşlem Geçmişi (Son 10)</div>
-                                <div style="max-height: 300px; overflow-y: auto;">
-                                    <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
-                                        <thead style="position: sticky; top: 0; background: rgba(30,35,45,0.95);">
-                                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
-                                                <th style="padding: 8px; text-align: left; color: var(--text-muted);">Entry</th>
-                                                <th style="padding: 8px; text-align: left; color: var(--text-muted);">Exit</th>
-                                                <th style="padding: 8px; text-align: right; color: var(--text-muted);">PnL</th>
-                                                <th style="padding: 8px; text-align: center; color: var(--text-muted);">Reason</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="trades-table-body">
-                                            <tr>
-                                                <td colspan="4" style="padding: 20px; text-align: center; color: var(--text-muted);">
-                                                    Henüz işlem yok
-                                                </td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-                    
-                </style>
-                <!-- Strateji Builder Container -->
-                <div class="builder-container">
-                    <!-- SOL PANEL: İndikatör Kütüphanesi -->
-                    <div class="panel">
-                        <div class="panel-header">📚 Gösterge Kütüphanesi</div>
-
-                        <input type="text" id="indicator-search" class="condition-input"
-                               placeholder="🔍 Ara..." style="width: 100%; margin-bottom: 15px;">
-
-                        <div id="indicator-list">
-                            <!-- Trend -->
-                            <div class="indicator-category">
-                                <div class="category-title">📈 TREND</div>
-                                <div class="indicator-item" data-type="EMA">
-                                    <span class="indicator-name">EMA</span>
-                                    <button class="btn-add" onclick="addIndicator('EMA')">+</button>
-                                </div>
-                                <div class="indicator-item" data-type="SMA">
-                                    <span class="indicator-name">SMA</span>
-                                    <button class="btn-add" onclick="addIndicator('SMA')">+</button>
-                                </div>
-                                <div class="indicator-item" data-type="Supertrend">
-                                    <span class="indicator-name">Supertrend</span>
-                                    <button class="btn-add" onclick="addIndicator('Supertrend')">+</button>
-                                </div>
-                            </div>
-
-                            <!-- Momentum -->
-                            <div class="indicator-category">
-                                <div class="category-title">🚀 MOMENTUM</div>
-                                <div class="indicator-item" data-type="RSI">
-                                    <span class="indicator-name">RSI</span>
-                                    <button class="btn-add" onclick="addIndicator('RSI')">+</button>
-                                </div>
-                                <div class="indicator-item" data-type="MACD">
-                                    <span class="indicator-name">MACD</span>
-                                    <button class="btn-add" onclick="addIndicator('MACD')">+</button>
-                                </div>
-                                <div class="indicator-item" data-type="Stochastic">
-                                    <span class="indicator-name">Stochastic</span>
-                                    <button class="btn-add" onclick="addIndicator('Stochastic')">+</button>
-                                </div>
-                            </div>
-
-                            <!-- Volatilite -->
-                            <div class="indicator-category">
-                                <div class="category-title">📊 VOLATİLİTE</div>
-                                <div class="indicator-item" data-type="ATR">
-                                    <span class="indicator-name">ATR</span>
-                                    <button class="btn-add" onclick="addIndicator('ATR')">+</button>
-                                </div>
-                                <div class="indicator-item" data-type="Bollinger">
-                                    <span class="indicator-name">Bollinger</span>
-                                    <button class="btn-add" onclick="addIndicator('Bollinger')">+</button>
-                                </div>
-                            </div>
-
-                            <!-- Hacim -->
-                            <div class="indicator-category">
-                                <div class="category-title">💰 HACİM</div>
-                                <div class="indicator-item" data-type="OBV">
-                                    <span class="indicator-name">OBV</span>
-                                    <button class="btn-add" onclick="addIndicator('OBV')">+</button>
-                                </div>
-                                <div class="indicator-item" data-type="VWAP">
-                                    <span class="indicator-name">VWAP</span>
-                                    <button class="btn-add" onclick="addIndicator('VWAP')">+</button>
-                                </div>
-                                <div class="indicator-item" data-type="MFI">
-                                    <span class="indicator-name">MFI</span>
-                                    <button class="btn-add" onclick="addIndicator('MFI')">+</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- ORTA PANEL: Koşul Oluşturucu -->
-                    <div class="panel">
-                        <div class="panel-header">⚙️ Koşul Oluşturucu</div>
-
-                        <!-- Strateji Bilgileri -->
-                        <div class="strategy-info">
-                            <div class="info-row">
-                                <span class="info-label">Strateji Adı:</span>
-                                <input type="text" id="strategy-name" class="condition-input"
-                                       value="Yeni Strateji" style="flex: 1; text-align: right;">
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">Zaman Dilimi:</span>
-                                <select id="timeframe" class="condition-select" style="flex: 1; text-align: right;">
-                                    <option value="1m">1m</option>
-                                    <option value="5m">5m</option>
-                                    <option value="15m" selected>15m</option>
-                                    <option value="1h">1h</option>
-                                    <option value="4h">4h</option>
-                                </select>
-                            </div>
+                        <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
+                            <button class="btn btn-primary" onclick="testStrategy()"
+                                style="padding: 12px; font-weight: bold;">🧪 Backtest Başlat</button>
+                            <button class="btn btn-success" onclick="saveStrategy()" style="padding: 10px;">💾
+                                Stratejiyi Kaydet</button>
+                            <button class="btn" onclick="clearForm()"
+                                style="padding: 10px; background: rgba(255,255,255,0.05); color: var(--text-muted);">🗑️
+                                Temizle</button>
                         </div>
 
-                        <!-- LONG Koşulları -->
-                        <div class="condition-builder">
-                            <div class="condition-side long">🟢 LONG Koşulları</div>
-
-                            <div class="logic-selector">
-                                <div class="logic-btn active" onclick="setLogic('long', 'AND')">VE (AND)</div>
-                                <div class="logic-btn" onclick="setLogic('long', 'OR')">VEYA (OR)</div>
+                        <div id="test-results" style="margin-top: 25px; display: none;">
+                            <div class="category-title">📊 SONUÇLAR</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                                <div class="metric-box"
+                                    style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; text-align: center;">
+                                    <div style="font-size: 0.65rem; color: var(--text-muted);">Win Rate</div>
+                                    <div id="metric-winrate"
+                                        style="font-size: 1.1rem; font-weight: bold; color: var(--neon-green);">0%</div>
+                                </div>
+                                <div class="metric-box"
+                                    style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; text-align: center;">
+                                    <div style="font-size: 0.65rem; color: var(--text-muted);">Net PnL</div>
+                                    <div id="metric-pnl"
+                                        style="font-size: 1.1rem; font-weight: bold; color: var(--neon-blue);">$0</div>
+                                </div>
+                                <div class="metric-box"
+                                    style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; text-align: center;">
+                                    <div style="font-size: 0.65rem; color: var(--text-muted);">Profit Factor</div>
+                                    <div id="metric-profit-factor"
+                                        style="font-size: 1.1rem; font-weight: bold; color: var(--neon-purple);">0</div>
+                                </div>
+                                <div class="metric-box"
+                                    style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; text-align: center;">
+                                    <div style="font-size: 0.65rem; color: var(--text-muted);">Max DD</div>
+                                    <div id="metric-drawdown"
+                                        style="font-size: 1.1rem; font-weight: bold; color: var(--neon-red);">0%</div>
+                                </div>
                             </div>
-
-                            <div id="long-conditions">
-                                <!-- Dinamik koşullar buraya eklenecek -->
+                            <div id="equity-curve-chart"
+                                style="height: 150px; background: rgba(0,0,0,0.3); border-radius: 8px; position: relative; margin-bottom: 20px;">
                             </div>
-
-                            <button class="btn-add-rule" onclick="addConditionRule('long')">
-                                ➕ Koşul Ekle
-                            </button>
-                        </div>
-
-                        <!-- SHORT Koşulları -->
-                        <div class="condition-builder">
-                            <div class="condition-side short">🔴 SHORT Koşulları</div>
-
-                            <div class="logic-selector">
-                                <div class="logic-btn active" onclick="setLogic('short', 'AND')">VE (AND)</div>
-                                <div class="logic-btn" onclick="setLogic('short', 'OR')">VEYA (OR)</div>
+                            <div class="category-title">📋 SON İŞLEMLER</div>
+                            <div
+                                style="max-height: 250px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 0.7rem;">
+                                    <tbody id="trades-table-body"></tbody>
+                                </table>
                             </div>
-
-                            <div id="short-conditions">
-                                <!-- Dinamik koşullar buraya eklenecek -->
-                            </div>
-
-                            <button class="btn-add-rule" onclick="addConditionRule('short')">
-                                ➕ Koşul Ekle
-                            </button>
-                        </div>
-
-                        <!-- Risk Ayarları -->
-                        <div class="condition-builder">
-                            <div class="condition-side">🎯 Risk Ayarları</div>
-                            <div class="condition-rule">
-                                <span class="info-label">Stop Loss (ATR çarpanı):</span>
-                                <input type="number" id="stop-loss" class="condition-input" value="2.0" step="0.1">
-                                <span class="info-label">Take Profit:</span>
-                                <input type="number" id="take-profit" class="condition-input" value="3.0" step="0.1">
-                            </div>
-                            <div class="condition-rule">
-                                <span class="info-label">Max Risk (%):</span>
-                                <input type="number" id="max-risk" class="condition-input" value="2.0" step="0.1">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- SAĞ PANEL: Preview ve Aksiyonlar -->
-                    <div class="panel">
-                        <div class="panel-header">👁️ Önizleme</div>
-
-                        <div class="strategy-info">
-                            <div class="info-row">
-                                <span class="info-label">İndikatörler:</span>
-                                <span class="info-value" id="preview-indicators">0</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">LONG Koşulları:</span>
-                                <span class="info-value" id="preview-long">0</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">SHORT Koşulları:</span>
-                                <span class="info-value" id="preview-short">0</span>
-                            </div>
-                        </div>
-
-                        <div class="panel-header">📄 JSON Önizleme</div>
-                        <div class="preview-code" id="json-preview">
-// Strateji JSON'u burada görünecek...
-                        </div>
-
-                        <div class="modal-actions" style="margin-top: 20px;">
-                            <button class="btn btn-secondary" onclick="testStrategy()">🧪 Test Et</button>
-                            <button class="btn btn-primary" onclick="saveStrategy()">💾 Kaydet</button>
                         </div>
                     </div>
                 </div>
 
                 <!-- Parametre Modal -->
                 <div id="param-modal" class="modal">
-                    <div class="modal-content">
-                        <div class="modal-header" id="modal-title">İndikatör Parametreleri</div>
-                        <div id="modal-params">
-                            <!-- Dinamik parametreler -->
-                        </div>
-                        <div class="modal-actions">
-                            <button class="btn btn-secondary" onclick="closeModal()">İptal</button>
-                            <button class="btn btn-primary" onclick="confirmIndicator()">Ekle</button>
+                    <div class="modal-content glass-panel" style="max-width: 400px; padding: 25px;">
+                        <div class="modal-header" id="modal-title"
+                            style="font-size: 1.1rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 15px;">
+                            İndikatör Detayı</div>
+                        <div id="modal-params"></div>
+                        <div class="modal-actions" style="justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                            <button class="btn btn-close-pos" onclick="closeModal()"
+                                style="background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid rgba(255,255,255,0.1);">Vazgeç</button>
+                            <button class="btn btn-primary" onclick="confirmIndicator()"
+                                style="padding: 8px 20px;">Ekle</button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Strategy Builder Script -->
                 <script src="strategy-builder.js"></script>
             </div>
 
