@@ -4,6 +4,14 @@ from core.logger import logger
 from strategy.confluence import StrategyConfluence
 from strategy.risk import RiskManagement
 
+# ML Model Integration
+try:
+    from ml.model_training import ModelTrainer
+    ML_AVAILABLE = True
+except ImportError:
+    ML_AVAILABLE = False
+    logger.warning("⚠️ ML modeli bulunamadı, sadece strateji sinyalleri kullanılacak.")
+
 class PaperTrader:
     """
     Sanal (Kağıt Üzerinde) kripto para al-sat borsa mekanizması.
@@ -45,6 +53,21 @@ class PaperTrader:
         self.total_pnl = 0.0
         self.total_commission = 0.0
         self.market_regime = "UNKNOWN"
+
+        # ML Model Yükleme (Eğitilmiş model varsa)
+        self.ml_model = None
+        self.ml_enabled = False
+
+        if ML_AVAILABLE:
+            try:
+                model_path = CONFIG.get('ml', {}).get('model_path', 'artifacts/models/xgb_model.json')
+                self.ml_model = ModelTrainer()
+                self.ml_model.load_model(model_path)
+                self.ml_enabled = True
+                logger.info(f"✅ ML modeli yüklendi: {model_path}")
+            except Exception as e:
+                logger.warning(f"⚠️ ML modeli yüklenemedi: {str(e)}. Sadece strateji ile devam ediliyor.")
+                self.ml_enabled = False
         # Dinamik Strateji (Bot) Yönetimi - ARTIK SEMBOL BAZLI
         from strategy.manager import StrategyManager
         self.active_strategies = {} # symbol -> strategy_id
@@ -105,20 +128,49 @@ class PaperTrader:
         """Her yeni mum kapandığında botun indikatör ve sinyallerini tarayıp, pozisyon al-kapat kararı verir."""
         if df.empty or len(df) < 50:
             return
-            
+
         latest_candle = df.iloc[-1]
-        
+
         # Sembole atanmış özel stratejiyi (botu) getir
         strategy = self.strategies.get(symbol, self.strategies[list(self.strategies.keys())[0]])
-        
+
         # 1. Volatilite denetimi
         is_safe = StrategyConfluence.is_volatility_safe(latest_candle)
         self.volatility_shield = "SAFE" if is_safe else "DANGER"
         self.global_confidence = ml_confidence
-        
+
         # 3. Aktif Stratejiden (Bot'tan) Sinyali Al
-        signal = strategy.generate_signal(latest_candle)
-        
+        strategy_signal = strategy.generate_signal(latest_candle)
+
+        # ============================================
+        # ML CONFLUENCE (YAPAY ZEKA ONAY MEKANİZMASI)
+        # ============================================
+        ml_signal = 1  # Varsayılan: HOLD
+        ml_confidence_pct = 0.0
+        ml_recommendation = "HOLD"
+
+        if self.ml_enabled and self.ml_model is not None:
+            try:
+                # ML modelinden tahmin al
+                ml_result = self.ml_model.predict_single(latest_candle.to_frame().T)
+                ml_signal = ml_result['prediction']
+                ml_confidence_pct = ml_result['confidence_pct']
+                ml_recommendation = ml_result['recommendation']
+
+                # ML Confidence'ı güncelle
+                ml_confidence = ml_confidence_pct / 100.0
+
+                logger.debug(f"[ML] {symbol}: {ml_recommendation} (Güven: {ml_confidence_pct:.1f}%)")
+
+            except Exception as e:
+                logger.warning(f"[ML] Tahmin hatası ({symbol}): {str(e)}")
+                ml_signal = 1
+                ml_confidence_pct = 0.0
+                ml_recommendation = "HOLD"
+        else:
+            # ML kapalıysa, strateji sinyalini kullan
+            ml_confidence = ml_confidence if ml_confidence > 0 else 0.50
+
         # Arayüz için Karar Günlüğünü Parite Bazlı Kaydet
         self.latest_decisions[symbol] = {
             "symbol": symbol,
@@ -135,32 +187,75 @@ class PaperTrader:
             "azul": round(latest_candle.get('KONKORDE_AZUL', 0), 1),
             "verde": round(latest_candle.get('KONKORDE_VERDE', 0), 1),
             "vix": round(latest_candle.get('BTC_VIX', 0), 1),
-            "signal_val": signal,
+            "signal_val": strategy_signal,
+            "ml_signal": ml_signal,
+            "ml_recommendation": ml_recommendation,
+            "ml_confidence": round(ml_confidence_pct, 1),
             "is_safe": is_safe,
-            "ml_conf": round(ml_confidence * 100, 1),
             "timeframe": self.active_timeframes.get(symbol, "1m")
         }
-        
+
         if not is_safe:
             logger.debug(f"[FILTER] {symbol} Volatilite kalkanı aktif (Riskli piyasa).")
             return
-            
+
+        # ============================================
+        # CONFLUENCE MEKANİZMASI (Strateji + ML Onayı)
+        # ============================================
+        # Kural 1: Strateji ve ML çakışıyorsa (LONG+LONG veya SHORT+SHORT) işleme devam et
+        # Kural 2: Çakışma varsa (LONG+SHORT) işlemi iptal et
+        # Kural 3: ML güven skoru <%65 ise işlemi iptal et
+
+        final_signal = 1  # Varsayılan: HOLD
+
+        if strategy_signal == 2:  # Strateji LONG diyor
+            if ml_signal == 2 or ml_recommendation in ["LONG", "STRONG_LONG"]:
+                # ML de LONG diyor → ONAYLANDI
+                final_signal = 2
+                logger.debug(f"[CONFLUENCE] {symbol} LONG onaylandı: Strateji=AL, ML={ml_recommendation} ({ml_confidence_pct:.1f}%)")
+            elif ml_signal == 0 or ml_recommendation in ["SHORT", "STRONG_SHORT"]:
+                # ML SHORT diyor → ÇAKIŞMA, iptal
+                logger.warning(f"[CONFLUENCE] {symbol} LONG sinyali REDDEDİLDİ: Strateji=AL, ML={ml_recommendation} (Çakışma!)")
+                return
+            elif ml_confidence_pct < 65:
+                # ML güveni düşük → İptal
+                logger.debug(f"[CONFLUENCE] {symbol} LONG sinyali REDDEDİLDİ: ML güveni düşük ({ml_confidence_pct:.1f}%)")
+                return
+
+        elif strategy_signal == 0:  # Strateji SHORT diyor
+            if ml_signal == 0 or ml_recommendation in ["SHORT", "STRONG_SHORT"]:
+                # ML de SHORT diyor → ONAYLANDI
+                final_signal = 0
+                logger.debug(f"[CONFLUENCE] {symbol} SHORT onaylandı: Strateji=SAT, ML={ml_recommendation} ({ml_confidence_pct:.1f}%)")
+            elif ml_signal == 2 or ml_recommendation in ["LONG", "STRONG_LONG"]:
+                # ML LONG diyor → ÇAKIŞMA, iptal
+                logger.warning(f"[CONFLUENCE] {symbol} SHORT sinyali REDDEDİLDİ: Strateji=SAT, ML={ml_recommendation} (Çakışma!)")
+                return
+            elif ml_confidence_pct < 65:
+                # ML güveni düşük → İptal
+                logger.debug(f"[CONFLUENCE] {symbol} SHORT sinyali REDDEDİLDİ: ML güveni düşük ({ml_confidence_pct:.1f}%)")
+                return
+
+        # Sinyal bilgisini her seferinde debug olarak bas (Neden hold olduğunu görelim)
+        if final_signal == 1:
+            logger.debug(f"[FILTER] {symbol} Sinyal: HOLD (Confluence sağlanmadı)")
+            return
+
+        # Market rejimini her seferinde Dashboard için hafızaya al
+        self.market_regime = regime
+
         # 2. Daha önce sistemde bu paritede açık bir pozisyonum var mı?
         if any(pos['symbol'] == symbol for pos in self.open_positions):
             return
-            
+
         # 3. ML Eşik Değerini Config'den Al
         threshold = float(CONFIG['strategy'].get('ml_confidence_threshold', 0.60))
-        
-        # Sinyal bilgisini her seferinde debug olarak bas (Neden hold olduğunu görelim)
-        if signal == 1:
-            logger.debug(f"[FILTER] {symbol} Sinyal: HOLD (Konfluans sağlanmadı)")
 
         # Market rejimini her seferinde Dashboard için hafızaya al
         self.market_regime = regime
 
         # ML skorumuzu da dahil edelim
-        if ml_confidence >= threshold:
+        if final_signal != 1 and ml_confidence >= threshold:
             # --- MARKET REGIME (PİYASA REJİMİ) FİLTRESİ ---
             # Eğer strateji trend takipçisiyse (Trend Master) ve market YATAY (RANGING) ise girme
             if "TrendMaster" in strategy.name() and regime == "RANGING":
@@ -168,21 +263,21 @@ class PaperTrader:
                 return
 
             # --- MULTI-TIMEFRAME (HTF) TREND TEYİDİ ---
-            if signal == 2:
+            if final_signal == 2:
                 # LONG açmak için HTF Ayı (BEAR) olmamalı
                 if htf_trend == "BEAR":
                     logger.warning(f"⚠️ [HTF FILTER] {symbol} 15m LONG sinyali var ama 1h-4h Trend AYI (BEAR). İşlem Engellendi.")
                     return
-                
-                logger.info(f"🚀 [LONG] {symbol} Sinyali Yakalandı! Güven: {ml_confidence:.2f} (HTF: {htf_trend})")
-                await self._open_new_position(symbol, "LONG", current_price, latest_candle, ml_confidence)
-                
-            elif signal == 0:
+
+                logger.info(f"🚀 [LONG] {symbol} Sinyali Yakalandı! ML: {ml_recommendation} ({ml_confidence_pct:.1f}%) (HTF: {htf_trend})")
+                await self._open_new_position(symbol, "LONG", current_price, latest_candle, ml_confidence_pct, ml_recommendation)
+
+            elif final_signal == 0:
                 # --- SPOT MARKET ÖZEL MANTIĞI ---
                 # Spot piyasada SHORT (açığa satış) yapılamaz.
                 # Bunun yerine, eğer açık bir LONG varsa onu kapatırız (Satış).
                 is_spot = self.market_types.get(symbol, 'swap') == 'spot'
-                
+
                 if is_spot:
                     # Açık LONG pozisyonu bul
                     for i, pos in enumerate(self.open_positions):
@@ -190,7 +285,7 @@ class PaperTrader:
                             logger.info(f"📉 [SPOT SELL] {symbol} için SHORT sinyali geldi. Mevcut LONG pozisyonu KAPATILIYOR (Satış).")
                             await self._close_position(i, pos, current_price, "Spot Sinyal (Dönüş)")
                             return
-                    
+
                     logger.debug(f"[SPOT] {symbol} için SHORT sinyali geldi ama açık LONG yok. İşlem pas geçildi.")
                     return
 
@@ -199,42 +294,74 @@ class PaperTrader:
                 if htf_trend == "BULL":
                     logger.warning(f"⚠️ [HTF FILTER] {symbol} 15m SHORT sinyali var ama 1h-4h Trend BOĞA (BULL). İşlem Engellendi.")
                     return
-                    
-                logger.info(f"🚀 [SHORT] {symbol} Sinyali Yakalandı! Güven: {ml_confidence:.2f} (HTF: {htf_trend})")
-                await self._open_new_position(symbol, "SHORT", current_price, latest_candle, ml_confidence)
+
+                logger.info(f"🚀 [SHORT] {symbol} Sinyali Yakalandı! ML: {ml_recommendation} ({ml_confidence_pct:.1f}%) (HTF: {htf_trend})")
+                await self._open_new_position(symbol, "SHORT", current_price, latest_candle, ml_confidence_pct, ml_recommendation)
         else:
             # İşlem açılmamasının ana sebebi genellikle budur
-            logger.debug(f"[FILTER] {symbol} ML Güven Skoru Yetersiz: {ml_confidence:.2f} (Eşik: {threshold})")
+            if final_signal != 1:
+                logger.debug(f"[FILTER] {symbol} ML Güven Skoru Yetersiz: {ml_confidence:.2f} (Eşik: {threshold})")
 
-    async def _open_new_position(self, symbol, direction, price, latest_candle, ml_confidence):
-        """Gerçekçi bir biçimde komisyonu (fee) ve kaymayı (slippage) hesaplayarak işleme girer."""
+    async def _open_new_position(
+        self,
+        symbol,
+        direction,
+        price,
+        latest_candle,
+        ml_confidence_pct: float = 0.0,
+        ml_recommendation: str = "HOLD"
+    ):
+        """
+        Gerçekçi bir biçimde komisyonu (fee) ve kaymayı (slippage) hesaplayarak işleme girer.
+
+        DİNAMİK KALDIRAÇ SİSTEMİ:
+        - STRONG_LONG / STRONG_SHORT (≥80%): 5x-10x kaldıraç
+        - LONG / SHORT (65-79%): 2x-3x kaldıraç
+        - WEAK (<65%): 1x (minimum risk)
+        """
         # --- KILL SWITCH KONTROLÜ ---
         if self.kill_switch_activated:
             logger.critical(f"🚨 KILL SWITCH AKTİF! Yeni işlem açma engellendi: {symbol}")
             return
-            
+
         # Risk hesaplama parametreleri (Config'den oku)
         risk_percent = CONFIG['risk_management'].get('max_risk_per_trade_percent', 0.2)
-        
+
         atr = latest_candle.get('ATR_14', price * 0.01) # Eğer ATR yoksa %1 varsay
-        
-        # --- DİNAMİKRİSK HESAPLAMA (Seçili Botun Parametrelerine Göre) ---
+
+        # --- DİNAMİK RİSK HESAPLAMA (Seçili Botun Parametrelerine Göre) ---
         strategy = self.strategies.get(symbol)
         stop_params = strategy.get_stop_params()
         multiplier = stop_params.get("atr_multiplier", 3.0)
-        
+
         stop_loss, take_profit = RiskManagement.calculate_dynamic_stops(
             price, direction, atr, multiplier=multiplier
         )
-        
+
         # --- SPOT MARKET KALDIRAÇ KONTROLÜ ---
         is_spot = self.market_types.get(symbol, 'swap') == 'spot'
-        
+
         if is_spot:
-            leverage = 1.0 # Spotta kaldıraç 1x'dir.
+            leverage = 1.0  # Spotta kaldıraç 1x'dir.
         else:
+            # ============================================
+            # DİNAMİK KALDIRAÇ HESAPLAMA (ML Güven Skoru Bazlı)
+            # ============================================
             max_lev = CONFIG['risk_management'].get('max_leverage', 10)
-            leverage = RiskManagement.calculate_dynamic_leverage(ml_confidence, max_leverage=max_lev)
+
+            # ML önerisine göre kaldıraç belirle
+            if ml_recommendation in ["STRONG_LONG", "STRONG_SHORT"]:
+                # Yüksek güven (%80+): Maksimum kaldıraç
+                leverage = min(max_lev, 10)  # 5x-10x arası
+                logger.info(f"💰 [DYNAMIC LEVERAGE] {symbol}: STRONG sinyal → {leverage}x kaldıraç (Güven: {ml_confidence_pct:.1f}%)")
+            elif ml_recommendation in ["LONG", "SHORT"]:
+                # Orta güven (%65-79%): Orta kaldıraç
+                leverage = min(max_lev, 3)  # 2x-3x arası
+                logger.info(f"💰 [DYNAMIC LEVERAGE] {symbol}: Normal sinyal → {leverage}x kaldıraç (Güven: {ml_confidence_pct:.1f}%)")
+            else:
+                # Düşük güven (<65%): Minimum kaldıraç
+                leverage = 1.0
+                logger.info(f"💰 [DYNAMIC LEVERAGE] {symbol}: WEAK sinyal → {leverage}x kaldıraç (Güven: {ml_confidence_pct:.1f}%)")
 
         pos_size_crypto = RiskManagement.calculate_position_size(
             account_balance=self.balance,
@@ -242,16 +369,16 @@ class PaperTrader:
             entry_price=price,
             stop_loss_price=stop_loss
         )
-        
+
         # Parasal Büyüklük = (Kripto Adedi * Fiyat)
         position_value_usd = pos_size_crypto * price
         required_margin = position_value_usd / leverage
-        
+
         # Bakiye yetersizse girme
         if required_margin > self.free_margin:
             logger.warning(f"Limit yetersiz! ({symbol}) Marjin İhtiyacı: ${required_margin:.2f}")
             return
-            
+
         # Slipaj Simülasyonu
         execution_price = price * 1.0001 if direction == "LONG" else price * 0.9999
 
