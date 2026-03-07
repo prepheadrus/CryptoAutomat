@@ -183,11 +183,14 @@ class StrategyManager:
         """
         signals = {}
 
+        # DataFrame'in son satırını al (Series olarak)
+        current_row = df.iloc[-1] if not df.empty else None
+
         # Sabit stratejiler
         for strategy_id, strategy in cls.FIXED_STRATEGIES.items():
             try:
                 if hasattr(strategy, 'generate_signal'):
-                    signal = strategy.generate_signal(df)
+                    signal = strategy.generate_signal(current_row)
                     signals[strategy_id] = signal
             except Exception as e:
                 logger.error(f"❌ {strategy_id} sinyal hatası: {e}")
