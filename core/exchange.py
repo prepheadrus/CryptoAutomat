@@ -567,15 +567,33 @@ class ExchangeManager:
         # ============================================
         logger.info(f"📡 [WSS] {symbol} için WebSocket döngüsü başlatılıyor...")
 
+        # YENİ MUM KİLİDİ: Aynı mumu tekrar işlemeyi önler
+        last_processed_ts = None
+
         while True:
             try:
                 # WebSocket üzerinden OHLCV dinle (PUSH - POLLING YOK!)
-                live_ohlcv = await self.exchange.watch_ohlcv(symbol, timeframe='1m', limit=1500)
+                live_ohlcv = await self.exchange.watch_ohlcv(symbol, timeframe='1m', limit=100)
 
                 if not live_ohlcv or len(live_ohlcv) == 0:
                     logger.warning(f"WARNING [WSS] {symbol} boş OHLCV, devam ediliyor...")
                     await asyncio.sleep(5)
                     continue
+
+                # ============================================
+                # YENİ MUM FİLTRESİ: Aynı mumu tekrar işleme!
+                # ============================================
+                current_candle_ts = live_ohlcv[-1][0]  # Son mumun timestamp'i
+
+                if last_processed_ts is not None and current_candle_ts == last_processed_ts:
+                    # Bu mum zaten işlendi, sadece fiyat güncellemesi yap (trailing stop için)
+                    # İndikatör hesaplama ve broadcast YOK (CPU tasarrufu!)
+                    await paper_engine.update_live_prices(symbol, float(live_ohlcv[-1][4]))
+                    continue  # ⚠️ DEVAM ET - yeni mum gelene kadar bekle
+
+                # YENİ MUM GELDİ! Kilidi güncelle
+                last_processed_ts = current_candle_ts
+                logger.info(f"🕐 [NEW CANDLE] Yeni mum: {pd.to_datetime(current_candle_ts, unit='ms')}")
 
                 # Canlı veriyi DataFrame'e dönüştür
                 # live_ohlcv is a list of lists: [[timestamp, open, high, low, close, volume], ...]
