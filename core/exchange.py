@@ -390,124 +390,212 @@ class ExchangeManager:
 
     async def run_strategy_poller(self, symbol, timeframe='1m'):
         """
-        HYBRID (Local DB + REST Gap + WebSocket Push) Strateji Motoru:
-        1. Yerel DB'den 1500 mum çek (Warm-up)
-        2. Eksik varsa REST API ile doldur (Gap Fill)
-        3. watch_ohlcv ile WSS üzerinden canlı mumları dinle
-        4. Resample + İndikatörler hesapla
-        5. 1-to-N botlara broadcast et
+        FINAL HYBRID (Local DB + REST Pagination + WebSocket Push) Strateji Motoru:
+        1. Yerel DB'den 1500 mum çek (Warm-up) - KURAL 1: db_manager import
+        2. Eksik varsa PAGINATION ile doldur - KURAL 2: Sınırsız Yama
+        3. RAM koruması (tail 1500) - KURAL 3: RAM Koruması
+        4. watch_ohlcv ile WSS üzerinden canlı mumları dinle
+        5. Resample + İndikatörler hesapla
+        6. 1-to-N botlara broadcast et (asyncio.gather) - KURAL 4: Mevcut Motor Korunur
         """
         from core.paper import paper_engine
         from data.indicators import StrategyIndicators
         from data.features import AdvancedFeatures
         from core.detector import MarketRegimeDetector
-        from data.database import db_manager
+        from data.database import db_manager  # KURAL 1: db_manager import
         import ccxt
 
-        # Eğitilmiş modeli yükle
-        xgb_model = None
-        model_path = "artifacts/trained_models/xgb_model.pkl"
-        if os.path.exists(model_path):
-            with open(model_path, 'rb') as f:
-                xgb_model = pickle.load(f)
-                logger.info(f"🧠 {symbol} için Karar Zekası (XGBoost) hazır.")
+        logger.info(f"🚀 [FINAL HYBRID] {symbol} için strateji poller başlatılıyor ({timeframe})...")
 
-        # WFO Arka Plan Görevini Başlat (Eğer aktifse)
-        wfo_task = None
-        if WFO_AVAILABLE and CONFIG.get('wfo', {}).get('enabled', True):
-            try:
-                # Strateji sınıfını al
-                active_strategy_id = paper_engine.active_strategies.get(symbol, 'trend_master')
-                from strategy.manager import StrategyManager
-                strategy_class = StrategyManager.get_strategy(active_strategy_id)
+        # ============================================
+        # 1. LOCAL DB FIRST: SQLite'dan geçmiş veriyi çek
+        # ============================================
+        logger.info(f"📚 [LOCAL DB] {symbol} için yerel veritabanı kontrol ediliyor...")
+        ohlcv_df = pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
+        ohlcv_df.index.name = 'timestamp'
 
-                # ZERO-TOUCH: param_grid=None → Auto-Grid otomatik oluşturur
-                logger.info(f"🔄 [WFO] {symbol} için arka plan optimizasyonu başlatılıyor...")
+        try:
+            # Yerel veritabanından son 1500 mumu çek
+            db_ohlcv = await db_manager.get_klines(symbol, timeframe='1m', limit=1500)
 
-                # Veri çekme fonksiyonu
-                async def fetch_data(sym, tf):
-                    ohlcv = await self.fetch_ohlcv(sym, timeframe=tf, limit=2000)
-                    if ohlcv:
-                        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-                        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-                        df.set_index('timestamp', inplace=True)
-                        return StrategyIndicators.add_all_indicators(df)
-                    return None
+            if db_ohlcv and len(db_ohlcv) > 0:
+                logger.info(f"OK [LOCAL DB] {symbol} için {len(db_ohlcv)} mum bulundu.")
 
-                # WFO arka plan görevini başlat (param_grid=None = ZERO-TOUCH)
-                wfo_task = asyncio.create_task(start_wfo_background_task(
-                    symbol=symbol,
-                    timeframe=timeframe,
-                    strategy_class=strategy_class,
-                    param_grid=None,  # None → Auto-Grid + Bayesian Optimization (ZERO-TOUCH)
-                    data_fetcher=fetch_data,
-                    optimization_metric="sharpe",
-                    n_trials=50
-                ))
-                logger.info(f"✅ [ZERO-TOUCH] {symbol} otonom optimizasyon görevi başlatıldı.")
-            except Exception as e:
-                logger.warning(f"⚠️ [WFO] {symbol} başlatma hatası: {str(e)}")
+                # DataFrame'e dönüştür
+                ohlcv_df = pd.DataFrame(db_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                ohlcv_df['timestamp'] = pd.to_datetime(ohlcv_df['timestamp'], unit='ms')
+                ohlcv_df.set_index('timestamp', inplace=True)
 
-        # Zaman dilimi kontrolü için yardımcı
-        def get_tf_minutes(tf_str):
-            if 'm' in tf_str: return int(tf_str.replace('m', ''))
-            if 'h' in tf_str: return int(tf_str.replace('h', '')) * 60
-            if 'd' in tf_str: return 1440
-            return 1
+                last_db_time = ohlcv_df.index[-1]
+                current_time = pd.Timestamp.now(tz='UTC')
+                time_diff = current_time - last_db_time
 
-        def get_higher_tf(tf_str):
-            tf_map = {
-                '1m': '15m',
-                '3m': '15m',
-                '5m': '30m',
-                '15m': '1h',
-                '30m': '4h',
-                '1h': '4h',
-                '4h': '1d'
-            }
-            return tf_map.get(tf_str, '4h')
+                logger.info(f"OK [LOCAL DB] Son mum: {last_db_time}, Şu an: {current_time}, Fark: {time_diff}")
 
-        last_processed_ts = 0
-        is_first_run = True # İlk açılışta veya strateji değişiminde anında bir kere çalıştır
+                # ============================================
+                # 2. GAP DETECTION + PAGINATION (Sınırsız Gap Fill) - KURAL 2
+                # ============================================
+                if time_diff.total_seconds() > 120:  # 2 dakikadan fazla boşluk
+                    gap_minutes = time_diff.total_seconds() / 60
+                    logger.info(f"🔍 [GAP DETECT] {gap_minutes:.1f} dakika boşluk tespit edildi, REST API ile dolduruluyor...")
+
+                    # PAGINATION: Binance limit (1000 mum) aşılırsa sayfalandır
+                    gap_start_ms = int(last_db_time.timestamp() * 1000)
+                    total_fetched = 0
+                    page = 0
+                    limit = 1000  # Binance API limit
+
+                    all_gap_ohlcv = []
+
+                    logger.info(f"📄 [PAGINATION] Gap fill başlatılıyor (limit={limit} mum/sayfa)...")
+
+                    while True:  # Sınırsız döngü - tüm gap dolana kadar
+                        page += 1
+                        logger.debug(f"📄 [PAGINATION] Sayfa {page} çekiliyor (since={gap_start_ms})...")
+
+                        # Bu sayfanın mumlarını çek
+                        page_ohlcv = await self.fetch_ohlcv(symbol, timeframe='1m', since=gap_start_ms, limit=limit)
+
+                        if not page_ohlcv or len(page_ohlcv) == 0:
+                            logger.warning(f"WARNING [PAGINATION] Sayfa {page} boş geldi, döngü sonlandırılıyor.")
+                            break
+
+                        all_gap_ohlcv.extend(page_ohlcv)
+                        total_fetched += len(page_ohlcv)
+
+                        logger.info(f"OK [PAGINATION] Sayfa {page}: {len(page_ohlcv)} mum çekildi (Toplam: {total_fetched})")
+
+                        # Eğer çekilen mum sayısı limit'ten azsa, daha fazla mum yok demektir
+                        if len(page_ohlcv) < limit:
+                            logger.info(f"OK [PAGINATION] Tüm gap mumları çekildi (Toplam: {total_fetched} mum)")
+                            break
+
+                        # Son mumun timestamp'ini al, bir sonraki sayfa için
+                        last_fetched_ms = page_ohlcv[-1][0]
+
+                        # Eğer son timestamp güncel zamana yakınsa, döngüyü sonlandır
+                        current_ms = int(pd.Timestamp.now(tz='UTC').timestamp() * 1000)
+                        if abs(current_ms - last_fetched_ms) < 60000:  # 1 dakika tolerans
+                            logger.info(f"OK [PAGINATION] Güncel zamana ulaşıldı (Toplam: {total_fetched} mum)")
+                            break
+
+                        # Bir sonraki sayfa için since parametresini güncelle
+                        gap_start_ms = last_fetched_ms
+
+                        # Rate limit koruması (Binance: 1200 istek/dakika)
+                        await asyncio.sleep(0.1)
+
+                    # TÜM gap mumlarını SQLite'a kaydet
+                    if all_gap_ohlcv and len(all_gap_ohlcv) > 0:
+                        logger.info(f"💾 [SAVE] {len(all_gap_ohlcv)} gap mumu SQLite'a kaydediliyor...")
+
+                        try:
+                            for candle in all_gap_ohlcv:
+                                await db_manager.save_kline(symbol, candle, '1m')
+                            logger.info(f"OK [SAVE] Tüm gap mumları SQLite'a kaydedildi.")
+                        except Exception as save_err:
+                            logger.error(f"ERROR [SAVE] SQLite kayıt hatası: {save_err}")
+
+                        # DataFrame'e dönüştür
+                        gap_df = pd.DataFrame(all_gap_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                        gap_df['timestamp'] = pd.to_datetime(gap_df['timestamp'], unit='ms')
+                        gap_df.set_index('timestamp', inplace=True)
+
+                        # DB verisi ile REST verisini birleştir (concat)
+                        ohlcv_df = pd.concat([ohlcv_df, gap_df])
+
+                        # Duplicate kayıtları temizle (index bazlı)
+                        ohlcv_df = ohlcv_df[~ohlcv_df.index.duplicated(keep='last')]
+                        ohlcv_df = ohlcv_df.sort_index()
+
+                        logger.info(f"OK [STITCH] DB + REST birleştirildi: Toplam {len(ohlcv_df)} mum")
+                    else:
+                        logger.warning(f"WARNING [REST GAP] Eksik mum çekilemedi, sadece DB verisi kullanılıyor.")
+                else:
+                    logger.info(f"OK [NO GAP] Veritabanı güncel, REST API çağrısına gerek yok.")
+            else:
+                logger.warning(f"WARNING [LOCAL DB] {symbol} için veritabanında veri bulunamadı, REST API'den çekiliyor...")
+
+                # Veritabanı boşsa, REST API'den çek
+                historical_ohlcv = await self.fetch_ohlcv(symbol, timeframe='1m', limit=1500)
+
+                if historical_ohlcv and len(historical_ohlcv) > 0:
+                    ohlcv_df = pd.DataFrame(historical_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                    ohlcv_df['timestamp'] = pd.to_datetime(ohlcv_df['timestamp'], unit='ms')
+                    ohlcv_df.set_index('timestamp', inplace=True)
+                    logger.info(f"OK [REST] {len(ohlcv_df)} mum REST API'den çekildi.")
+                else:
+                    logger.warning(f"WARNING [REST] {symbol} için REST API'den veri çekilemedi.")
+        except Exception as e:
+            import traceback
+            logger.error(f"ERROR [HYBRID] {symbol} veri yükleme hatası: {e}")
+            logger.error(traceback.format_exc())
+            logger.info(f"INFO [HYBRID] Boş DataFrame ile başlanıyor.")
+
+        # ============================================
+        # 3. RAM KORUMASI: Sadece son 1500 mum - KURAL 3
+        # ============================================
+        if len(ohlcv_df) > 1500:
+            ohlcv_df = ohlcv_df.tail(1500)
+            logger.info(f"OK [RAM] RAM koruması: Son 1500 mum yüklendi.")
+
+        # ============================================
+        # 4. WEBSOCKET DÖNGÜSÜ (Canlı Güncelleme)
+        # ============================================
+        logger.info(f"📡 [WSS] {symbol} için WebSocket döngüsü başlatılıyor...")
 
         while True:
             try:
-                # 1. Hedef Vadeyi Öğren
-                target_tf = paper_engine.active_timeframes.get(symbol, '1m')
-                tf_minutes = get_tf_minutes(target_tf)
-                
-                # 2. Mum Kapanış Kontrolü (Hassas Zamanlama)
-                current_timestamp_min = int(time.time() / 60)
-                
-                # İlk çalışma değilse ve vade henüz dolmadıysa bekle
-                if not is_first_run and current_timestamp_min % tf_minutes != 0:
-                    await asyncio.sleep(10)
-                    continue
-                
-                # Aynı mumda mükerrer işlem yapma (Ancak ilk çalışmada buna izin ver)
-                if not is_first_run and current_timestamp_min == last_processed_ts:
-                    await asyncio.sleep(20)
-                    continue
-                
-                # İlk çalışma bariyeri aşıldı
-                if is_first_run:
-                    logger.info(f"🚀 {symbol} için ilk strateji taraması başlatılıyor ({target_tf})...")
-                    is_first_run = False
+                # WebSocket üzerinden OHLCV dinle (PUSH - POLLING YOK!)
+                live_ohlcv = await self.exchange.watch_ohlcv(symbol, timeframe='1m', limit=1500)
 
-                # 3. Veri Çek ve Yeniden Örnekle (Resample)
-                # İndikatörler için yeterli veri çekelim (Binance MAX limit 1500 mum)
-                ohlcv_1m = await self.exchange.watch_ohlcv(symbol, timeframe='1m', limit=1500)
-                
-                if not ohlcv_1m:
-                    await asyncio.sleep(10)
+                if not live_ohlcv or len(live_ohlcv) == 0:
+                    logger.warning(f"WARNING [WSS] {symbol} boş OHLCV, devam ediliyor...")
+                    await asyncio.sleep(5)
                     continue
 
-                df_1m = pd.DataFrame(ohlcv_1m, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-                
+                # Canlı veriyi DataFrame'e dönüştür
+                live_df = pd.DataFrame(live_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                live_df['timestamp'] = pd.to_datetime(live_ohlcv['timestamp'], unit='ms')
+                live_df.set_index('timestamp', inplace=True)
+
+                # ============================================
+                # 5. CANLI VERİ BİRLEŞTİRME + RAM KORUMASI
+                # ============================================
+                if ohlcv_df.empty:
+                    # İlk veri, direkt kullan
+                    ohlcv_df = live_df.copy()
+                    logger.info(f"OK [WSS] İlk veri: {len(ohlcv_df)} mum")
+                else:
+                    # Canlı veriyi geçmiş veriye ekle/güncelle
+                    last_live_time = live_df.index[-1]
+                    last_hist_time = ohlcv_df.index[-1]
+
+                    if last_live_time > last_hist_time:
+                        # Yeni mum geldi, ekle
+                        ohlcv_df = pd.concat([ohlcv_df, live_df.loc[last_hist_time:]])
+                        logger.debug(f"OK [WSS] Yeni mum eklendi: {last_live_time}")
+                    elif last_live_time == last_hist_time:
+                        # Son mum güncellendi, replace et
+                        ohlcv_df.loc[last_live_time] = live_df.loc[last_live_time]
+                        logger.debug(f"OK [WSS] Son mum güncellendi: {last_live_time}")
+
+                    # RAM koruması: Sadece son 1500 mum
+                    if len(ohlcv_df) > 1500:
+                        ohlcv_df = ohlcv_df.tail(1500)
+
+                last_candle_time = ohlcv_df.index[-1]
+                df_1m = ohlcv_df
+
                 # 4. HEDEF VADEYE DÖNÜŞTÜR (Resampling Engine)
+                target_tf = paper_engine.active_timeframes.get(symbol, '1m')
                 df_target = StrategyIndicators.resample_data(df_1m, target_tf)
-                
+
                 # 5. ÜST ZAMAN DİLİMİ (HTF) TEYİDİ
+                def get_higher_tf(tf_str):
+                    tf_map = {'1m': '15m', '3m': '15m', '5m': '30m', '15m': '1h', '30m': '4h', '1h': '4h', '4h': '1d'}
+                    return tf_map.get(tf_str, '4h')
+
                 htf_tf = get_higher_tf(target_tf)
                 df_htf = StrategyIndicators.resample_data(df_1m, htf_tf)
                 df_htf = StrategyIndicators.add_all_indicators(df_htf)
@@ -531,12 +619,10 @@ class ExchangeManager:
 
                 if not df_target.empty:
                     current_price = df_target.iloc[-1]['close']
-                    last_processed_ts = current_timestamp_min
 
                     # 7. MARKET REGİME (PİYASA REJİMİ) TESPİTİ
                     regime_info = MarketRegimeDetector.detect_regime(df_target)
-                    paper_engine.market_regime = regime_info['regime'] # Global durum güncellemesi
-                    logger.debug(f"Exchange Poller paper_engine ID: {id(paper_engine)}, updated regime to: {regime_info['regime']}")
+                    paper_engine.market_regime = regime_info['regime']
 
                     # 7.5 STRATEJİ KONTROLÜ - Eğer strateji yoksa işlem yapma
                     strategy = paper_engine.strategies.get(symbol)
@@ -552,7 +638,6 @@ class ExchangeManager:
                         # Strateji durdurulmuş VE aktif bot yok, sadece fiyat güncellemesi yap
                         await paper_engine.update_live_prices(symbol, current_price)
                         logger.debug(f"⏸️ {symbol} için strateji durduruldu ve aktif bot yok, sadece fiyat güncelleniyor.")
-                        await asyncio.sleep(30)
                         continue
 
                     logger.debug(f"▶️ {symbol} strateji aktif: {active_strat_id}, strategy={strategy}, aktif bot sayısı: {len(active_bot_ids)}")
@@ -599,25 +684,28 @@ class ExchangeManager:
                     # ESKİ MİMARİ KALDIRILDI! Sadece 1-to-N kullanılıyor
 
                     # 8. YAPAY ZEKA TAHMİNİ (Hedef Vade Verileriyle)
-                    # Not: ML confidence artık process_bot_signal içinde kullanılıyor
                     logger.info(f"✅ {symbol} {target_tf} (HTF: {htf_trend} | REJİM: {regime_info['regime']}) analiz tamamlandı. Botlar işlendi.")
 
-                # Bir sonraki kontrol için bekle
-                await asyncio.sleep(30)
-
+            # BAĞLANTI KOPMA VE RECONNECT KALKANI
+            except ccxt.NetworkError as e:
+                logger.error(f"❌ [WSS] {symbol} NetworkError: {e}. 5 saniye sonra yeniden bağlanıyor...")
+                await asyncio.sleep(5)
+                continue
+            except ccxt.ExchangeError as e:
+                logger.error(f"❌ [WSS] {symbol} ExchangeError: {e}. 5 saniye sonra yeniden bağlanıyor...")
+                await asyncio.sleep(5)
+                continue
             except asyncio.CancelledError:
+                logger.info(f"🛑 [WSS] {symbol} WebSocket döngüsü iptal edildi.")
                 break
             except Exception as e:
                 import traceback
-                logger.error(f"Strateji Döngü Hatası ({symbol}): {e}")
+                logger.error(f"❌ [WSS] {symbol} Strateji Döngü Hatası: {e}")
                 logger.error(traceback.format_exc())
-                await asyncio.sleep(10)
+                await asyncio.sleep(5)
+                continue
 
     async def close(self):
-        """Borsa bağlantılarını ve WebSocket akışlarını temiz bir şekilde kapatır."""
-        if self.exchange:
-            await self.exchange.close()
-            logger.info(f"{self.exchange_id.upper()} borsa bağlantısı sonlandırıldı.")
 
 # Diğer modüllerden kolay erişim için Singleton mantığı
 exchange_manager = ExchangeManager()
