@@ -354,67 +354,64 @@
                 </div>
 
                 <div style="margin-bottom: 25px;">
-                    <h3 style="margin-bottom: 15px;">📊 Paper Trading - Canlı Performans</h3>
-                    <div class="kpi-dashboard">
+                    <h3 style="margin-bottom: 15px; font-size: 1.1rem;">📊 Paper Trading - Canlı Performans</h3>
+                    <div class="kpi-dashboard" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px;">
                         <!-- Bakiye -->
-                        <div class="kpi-card glass-panel">
-                            <div class="kpi-icon" style="background: rgba(0, 255, 136, 0.1); color: #00fa9a;">💰</div>
+                        <div class="kpi-card glass-panel" style="padding: 8px;">
+                            <div class="kpi-icon" style="width: 32px; height: 32px; font-size: 1.2rem; background: rgba(0, 255, 136, 0.1); color: #00fa9a;">💰</div>
                             <div class="kpi-details">
-                                <span class="kpi-label">Bakiye</span>
-                                <span class="kpi-value" id="perf-balance">$10,000.00</span>
+                                <span class="kpi-label" style="font-size: 0.65rem;">Bakiye</span>
+                                <span class="kpi-value" id="perf-balance" style="font-size: 0.95rem;">$10,000.00</span>
                             </div>
                         </div>
 
                         <!-- Equity -->
-                        <div class="kpi-card glass-panel">
-                            <div class="kpi-icon" style="background: rgba(188, 140, 255, 0.1); color: #bc8cff;">📈</div>
+                        <div class="kpi-card glass-panel" style="padding: 8px;">
+                            <div class="kpi-icon" style="width: 32px; height: 32px; font-size: 1.2rem; background: rgba(188, 140, 255, 0.1); color: #bc8cff;">📈</div>
                             <div class="kpi-details">
-                                <span class="kpi-label">Toplam Varlık (Equity)</span>
-                                <span class="kpi-value" id="perf-equity">$10,000.00</span>
+                                <span class="kpi-label" style="font-size: 0.65rem;">Equity</span>
+                                <span class="kpi-value" id="perf-equity" style="font-size: 0.95rem;">$10,000.00</span>
                             </div>
                         </div>
 
                         <!-- Win Rate -->
-                        <div class="kpi-card glass-panel">
-                            <div class="kpi-icon" style="background: rgba(255, 204, 0, 0.1); color: #ffcc00;">🎯</div>
+                        <div class="kpi-card glass-panel" style="padding: 8px;">
+                            <div class="kpi-icon" style="width: 32px; height: 32px; font-size: 1.2rem; background: rgba(255, 204, 0, 0.1); color: #ffcc00;">🎯</div>
                             <div class="kpi-details">
-                                <span class="kpi-label">Kazanma Oranı (Win Rate)</span>
-                                <span class="kpi-value" id="perf-winrate">0.0%</span>
+                                <span class="kpi-label" style="font-size: 0.65rem;">Win Rate</span>
+                                <span class="kpi-value" id="perf-winrate" style="font-size: 0.95rem;">0.0%</span>
                             </div>
                         </div>
 
                         <!-- İşlem Sayısı -->
-                        <div class="kpi-card glass-panel">
-                            <div class="kpi-icon" style="background: rgba(0, 204, 255, 0.1); color: #00ccff;">📊</div>
+                        <div class="kpi-card glass-panel" style="padding: 8px;">
+                            <div class="kpi-icon" style="width: 32px; height: 32px; font-size: 1.2rem; background: rgba(0, 204, 255, 0.1); color: #00ccff;">📊</div>
                             <div class="kpi-details">
-                                <span class="kpi-label">Açık / Toplam İşlem</span>
-                                <div class="kpi-value">
+                                <span class="kpi-label" style="font-size: 0.65rem;">İşlem</span>
+                                <div class="kpi-value" style="font-size: 0.85rem;">
                                     <span id="perf-count" style="color:#00ccff;">0</span>
-                                    <span style="font-size: 0.9rem; color: var(--text-muted); padding-left: 5px;">/
-                                        <span id="perf-total-trades">0</span></span>
+                                    <span style="font-size: 0.75rem; color: var(--text-muted);">/ <span id="perf-total-trades">0</span></span>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Toplam P&L -->
-                        <div class="kpi-card glass-panel">
-                            <div class="kpi-icon" style="background: rgba(255, 51, 102, 0.1); color: #ff3366;">💵</div>
+                        <div class="kpi-card glass-panel" style="padding: 8px;">
+                            <div class="kpi-icon" style="width: 32px; height: 32px; font-size: 1.2rem; background: rgba(255, 51, 102, 0.1); color: #ff3366;">💵</div>
                             <div class="kpi-details">
-                                <span class="kpi-label">Toplam P&L (Kâr/Zarar)</span>
-                                <span class="kpi-value" id="perf-total-pnl">$0.00</span>
+                                <span class="kpi-label" style="font-size: 0.65rem;">P&L</span>
+                                <span class="kpi-value" id="perf-total-pnl" style="font-size: 0.95rem;">$0.00</span>
                             </div>
                         </div>
 
                         <!-- Toplam Komisyon -->
-                        <div class="kpi-card glass-panel">
-                            <div class="kpi-icon" style="background: rgba(255, 255, 255, 0.1); color: #fff;">💸</div>
+                        <div class="kpi-card glass-panel" style="padding: 8px;">
+                            <div class="kpi-icon" style="width: 32px; height: 32px; font-size: 1.2rem; background: rgba(255, 255, 255, 0.1); color: #fff;">💸</div>
                             <div class="kpi-details">
-                                <span class="kpi-label">Ödenen Komisyon</span>
-                                <span class="kpi-value" id="perf-total-fees">$0.00</span>
+                                <span class="kpi-label" style="font-size: 0.65rem;">Komisyon</span>
+                                <span class="kpi-value" id="perf-total-fees" style="font-size: 0.95rem;">$0.00</span>
                             </div>
                         </div>
-
-                        <!-- PİYASA REJİMİ KALDIRILDI - Artık her bot kartında gösteriliyor -->
                     </div>
                 </div>
 
