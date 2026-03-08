@@ -1,5 +1,5 @@
 # FRONTEND BILGI BANKASI
-Son Guncelleme: 07/03/2026 10:28
+Son Guncelleme: 08/03/2026 22:57
 
 ---
 
