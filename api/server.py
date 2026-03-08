@@ -754,22 +754,40 @@ async def _run_ml_training(req: MLTrainRequest):
 
         logger.info("🧠 [ML] Eğitim başlatılıyor...")
 
-        # 1. Veri çek (exchange'den)
+        # 1. Veri çek (VERİTABANINDAN - internete ÇIKMA!)
+        from data.database import db_manager
         from data.indicators import StrategyIndicators
         from ml.model_training import run_training_pipeline
-        from core.exchange import exchange_manager
 
-        training_state["message"] = f"Veri çekiliyor: {req.symbol}, {req.timeframe}, {req.limit} mum..."
+        training_state["message"] = f"Veritabanı kontrol ediliyor: {req.symbol}, {req.timeframe}..."
+        training_state["progress"] = 5
+
+        # DB'de yeterli veri var mı kontrol et
+        db_count = await db_manager.get_klines_count(req.symbol, req.timeframe)
+
+        if db_count == 0:
+            training_state["is_training"] = False
+            training_state["message"] = f"❌ Veritabanında {req.symbol} {req.timeframe} için veri bulunamadı! Lütfen önce Veri Laboratuvarından veri indirin."
+            logger.error(f"❌ [ML] DB'de veri yok: {req.symbol} {req.timeframe}")
+            return
+
+        if db_count < req.limit:
+            training_state["message"] = f"⚠️ DB'de sadece {db_count} mum var, {req.limit} mum istenmişti. Mevcut veri ile devam ediliyor..."
+            logger.warning(f"⚠️ [ML] DB'de yetersiz veri: {db_count} < {req.limit}")
+
+        # DB'den veri çek (en son N mum)
+        training_state["message"] = f"Veritabanından {min(db_count, req.limit)} mum çekiliyor..."
         training_state["progress"] = 10
 
-        # Exchange'den OHLCV çek
-        ohlcv_data = await exchange_manager.fetch_ohlcv(req.symbol, req.timeframe, req.limit)
+        ohlcv_data = await db_manager.get_klines(req.symbol, req.timeframe, limit=req.limit)
 
         if not ohlcv_data or len(ohlcv_data) == 0:
             training_state["is_training"] = False
-            training_state["message"] = "❌ Veri çekilemedi!"
-            logger.error("❌ [ML] Veri çekilemedi!")
+            training_state["message"] = "❌ Veritabanından veri çekilemedi!"
+            logger.error("❌ [ML] DB'den veri çekilemedi!")
             return
+
+        logger.info(f"✅ [ML] DB'den {len(ohlcv_data)} mum çekildi (internet kullanılmadı)")
 
         # DataFrame'e dönüştür
         import pandas as pd
@@ -779,8 +797,8 @@ async def _run_ml_training(req: MLTrainRequest):
 
         if df is None or len(df) == 0:
             training_state["is_training"] = False
-            training_state["message"] = "❌ Veri çekilemedi!"
-            logger.error("❌ [ML] Veri çekilemedi!")
+            training_state["message"] = "❌ DataFrame oluşturulamadı!"
+            logger.error("❌ [ML] DataFrame oluşturulamadı!")
             return
 
         training_state["message"] = f"İndikatörler hesaplanıyor ({len(df)} mum)..."

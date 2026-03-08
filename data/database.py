@@ -260,12 +260,12 @@ class DatabaseManager:
         else:
             async with self.sqlite_conn.execute(sql, (symbol, pattern, timeframe)) as cursor:
                 row = await cursor.fetchone()
-        
+
         if row and row['start_ts']:
             # SQLite'da string/datetime dönebilir, asanp/postgres'de datetime. Unix timestamp (ms) çevirelim.
             import datetime
             def to_ms(val):
-                if isinstance(val, str): 
+                if isinstance(val, str):
                     # SQLite'dan gelen string'i UTC olarak oku
                     dt = pd.to_datetime(val)
                     if dt.tzinfo is None: dt = dt.tz_localize('UTC')
@@ -274,11 +274,77 @@ class DatabaseManager:
                 # Datetime ise
                 if val.tzinfo is None: val = val.replace(tzinfo=datetime.timezone.utc)
                 return int(val.timestamp() * 1000)
-            
+
             return {
                 "start": to_ms(row['start_ts']),
                 "end": to_ms(row['end_ts'])
             }
+
+    async def get_klines(self, symbol: str, timeframe: str = '1m', limit: int = 1000) -> list:
+        """
+        Veritabanından belirli bir sembol ve timeframe için mum verilerini çeker.
+        ML eğitimi için kullanılır - internete ÇIKMAZ!
+
+        Args:
+            symbol: Sembol adı (örn: BTCUSDT, BTC/USDT)
+            timeframe: Zaman dilimi (örn: 1m, 15m, 1h)
+            limit: Kaç mum çekilecek (varsayılan: 1000)
+
+        Returns:
+            list: OHLCV verileri [(timestamp, open, high, low, close, volume), ...]
+        """
+        # Sembol formatını temizle (BTC/USDT → BTCUSDT)
+        symbol_clean = symbol.replace('/', '').replace(':', '').upper()
+
+        # SQL sorgusu - en son N mumu getir
+        sql = """
+            SELECT timestamp, open, high, low, close, volume
+            FROM klines
+            WHERE (symbol = ? OR symbol LIKE ?)
+              AND timeframe = ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """
+        pattern = f"{symbol_clean}:%"
+        params = (symbol_clean, pattern, timeframe, limit)
+
+        if self.engine_type == "postgres":
+            sql = sql.replace('?', '%s')
+            async with self.db_pool.acquire() as conn:
+                rows = await conn.fetch(sql, symbol_clean, pattern, timeframe, limit)
+                return [(row['timestamp'], row['open'], row['high'], row['low'], row['close'], row['volume']) for row in rows]
+        else:
+            async with self.sqlite_conn.execute(sql, params) as cursor:
+                rows = await cursor.fetchall()
+                return [(row[0], row[1], row[2], row[3], row[4], row[5]) for row in rows]
+
+    async def get_klines_count(self, symbol: str, timeframe: str = '1m') -> int:
+        """
+        Veritabanında belirli bir sembol ve timeframe için kaç mum olduğunu döner.
+        Validation için kullanılır.
+
+        Args:
+            symbol: Sembol adı
+            timeframe: Zaman dilimi
+
+        Returns:
+            int: Toplam mum sayısı
+        """
+        symbol_clean = symbol.replace('/', '').replace(':', '').upper()
+        pattern = f"{symbol_clean}:%"
+
+        sql = "SELECT COUNT(*) as cnt FROM klines WHERE (symbol = ? OR symbol LIKE ?) AND timeframe = ?"
+        params = (symbol_clean, pattern, timeframe)
+
+        if self.engine_type == "postgres":
+            sql = sql.replace('?', '%s')
+            async with self.db_pool.acquire() as conn:
+                row = await conn.fetchrow(sql, symbol_clean, pattern, timeframe)
+                return row['cnt']
+        else:
+            async with self.sqlite_conn.execute(sql, params) as cursor:
+                row = await cursor.fetchone()
+                return row[0] if row else 0
     async def get_symbols_with_data(self):
         """Veritabanında (klines tablosunda) en az 1 kaydı bulunan tüm pariteleri getirir."""
         sql = "SELECT DISTINCT symbol FROM klines"
