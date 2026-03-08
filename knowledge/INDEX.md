@@ -70,8 +70,13 @@ knowledge/
 
 ### 🆕 Features (Özellikler)
 - **Kimler İçin:** Geliştiriciler, kullanıcılar
-- **İçerik:** No-Code Strateji Oluşturucu, Backtest Engine, UI iyileştirmeleri
-- **Başlangıç:** `features/no_code_strategy_builder.md`
+- **İçerik:** WFO, Auto-Grid, Bayesian Optimization, No-Code Strateji Oluşturucu, Backtest Engine, UI iyileştirmeleri
+- **Başlangıç:** `features/walk_forward_optimization.md`
+
+**Yeni Özellikler (Mart 2026):**
+- ✅ [Walk-Forward Optimization](features/walk_forward_optimization.md) - Otonom parametre optimizasyonu
+- ✅ [Auto-Grid Generator](features/auto_grid_generator.md) - Otomatik parametre ızgarası
+- ✅ [Bayesian Optimization](features/bayesian_optimization.md) - Optuna ile 100x hızlanma
 
 ### 📝 Documentation (Genel Dokümantasyon)
 - **Kimler İçin:** Tüm ekip üyeleri, AI asistanlar
@@ -92,6 +97,9 @@ knowledge/
 | Yol Haritası | `planning/roadmap.md` |
 | Teknolojiler | `planning/tech_stack.md` |
 | Görevler | `planning/tasks.md` |
+| **WFO Sistemi** | `features/walk_forward_optimization.md` |
+| **Auto-Grid** | `features/auto_grid_generator.md` |
+| **Bayesian Opt.** | `features/bayesian_optimization.md` |
 | **No-Code Strateji** | `features/no_code_strategy_builder.md` |
 | **Strateji Oluşturucu** | `features/strategy_builder_guide.md` |
 | **Backtest Engine** | `features/backtest_engine.md` |
@@ -111,5 +119,5 @@ knowledge/
 
 ---
 
-*Son Güncelleme: 7 Mart 2026*
+*Son Güncelleme: 8 Mart 2026 - WFO, Auto-Grid, Bayesian Optimization (Zero-Touch)*
 *CryptoAlgoBot Documentation Team*
