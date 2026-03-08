@@ -871,6 +871,27 @@ async def get_ml_training_status():
     }
 
 
+@app.get("/api/v1/data/klines-count")
+async def get_klines_count(symbol: str, timeframe: str):
+    """
+    Veritabanında belirli bir sembol ve timeframe için kaç mum olduğunu döner.
+    ML eğitiminde dinamik mum sayısı seçimi için kullanılır.
+
+    Args:
+        symbol: Sembol adı (örn: BTCUSDT)
+        timeframe: Zaman dilimi (örn: 1m, 15m, 1h)
+
+    Returns:
+        Dict: {count: int} - Toplam mum sayısı
+    """
+    try:
+        count = await db_manager.get_klines_count(symbol, timeframe)
+        return {"count": count, "symbol": symbol, "timeframe": timeframe}
+    except Exception as e:
+        logger.error(f"Klines count hatası: {e}")
+        return {"count": 0, "error": str(e)}
+
+
 @app.get("/api/v1/ml/training-history")
 async def get_ml_training_history():
     """Eğitilmiş ML modellerinin geçmişini döner."""

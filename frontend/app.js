@@ -2056,6 +2056,109 @@ window.loadTrainingHistory = loadTrainingHistory;
 
 
 // ============================================
+// ML EĞİTİM - DİNAMİK MUM SAYISI
+// ============================================
+
+let currentDbMumCount = 0;  // DB'deki mevcut mum sayısı
+
+async function checkDbMumCount() {
+    /**
+     * Seçili sembol ve timeframe için DB'deki mum sayısını kontrol eder
+     */
+    const symbol = document.getElementById('ml-train-symbol')?.value;
+    const timeframe = document.getElementById('ml-train-timeframe')?.value;
+    const countDisplay = document.getElementById('ml-db-count');
+
+    if (!symbol || !timeframe || !countDisplay) return;
+
+    try {
+        const response = await fetch(`/api/v1/data/klines-count?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}`);
+        const data = await response.json();
+
+        currentDbMumCount = data.count || 0;
+
+        if (currentDbMumCount > 0) {
+            countDisplay.textContent = `(DB'de: ${currentDbMumCount.toLocaleString()} mum)`;
+            countDisplay.style.color = 'var(--neon-green)';
+
+            // Input max değerini güncelle
+            const limitInput = document.getElementById('ml-train-limit');
+            if (limitInput) {
+                limitInput.max = currentDbMumCount;
+                if (parseInt(limitInput.value) > currentDbMumCount) {
+                    limitInput.value = currentDbMumCount;
+                }
+            }
+        } else {
+            countDisplay.textContent = '(DB\'de veri yok!)';
+            countDisplay.style.color = 'var(--neon-red)';
+        }
+
+        validateMumCount();
+    } catch (error) {
+        console.error('DB mum count hatası:', error);
+        countDisplay.textContent = '(Kontrol edilemedi)';
+        countDisplay.style.color = 'var(--text-muted)';
+    }
+}
+
+function validateMumCount() {
+    /**
+     * Kullanıcının girdiği mum sayısını DB'deki mevcut mum sayısı ile karşılaştırır
+     */
+    const limitInput = document.getElementById('ml-train-limit');
+    const warningSpan = document.getElementById('ml-limit-warning');
+    const countDisplay = document.getElementById('ml-db-count');
+
+    if (!limitInput || !warningSpan) return;
+
+    const userLimit = parseInt(limitInput.value) || 0;
+
+    if (currentDbMumCount > 0 && userLimit > currentDbMumCount) {
+        // Kullanıcı DB'den fazla mum istiyor
+        warningSpan.style.display = 'block';
+        warningSpan.textContent = `⚠️ DB'de sadece ${currentDbMumCount.toLocaleString()} mum var!`;
+        limitInput.style.borderColor = 'var(--neon-red)';
+    } else if (userLimit < 100) {
+        // Çok az mum
+        warningSpan.style.display = 'block';
+        warningSpan.textContent = '⚠️ Minimum 100 mum önerilir!';
+        limitInput.style.borderColor = 'var(--neon-red)';
+    } else {
+        // Her şey yolunda
+        warningSpan.style.display = 'none';
+        limitInput.style.borderColor = 'rgba(255,255,255,0.1)';
+
+        if (currentDbMumCount > 0) {
+            const percentage = Math.round((userLimit / currentDbMumCount) * 100);
+            countDisplay.textContent = `(DB'de: ${currentDbMumCount.toLocaleString()} mum - ${percentage}%)`;
+            countDisplay.style.color = percentage <= 100 ? 'var(--neon-green)' : 'var(--neon-blue)';
+        }
+    }
+}
+
+// Sembol veya timeframe değiştiğinde DB kontrolü yap
+function setupMLTrainListeners() {
+    const symbolSelect = document.getElementById('ml-train-symbol');
+    const timeframeSelect = document.getElementById('ml-train-timeframe');
+
+    if (symbolSelect) {
+        symbolSelect.addEventListener('change', checkDbMumCount);
+    }
+    if (timeframeSelect) {
+        timeframeSelect.addEventListener('change', checkDbMumCount);
+    }
+}
+
+// Sayfa yüklendiğinde listener'ları ayarla
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupMLTrainListeners);
+} else {
+    setupMLTrainListeners();
+}
+
+
+// ============================================
 // EĞİTİM GEÇMİŞİNİ TEMİZLE
 // ============================================
 
