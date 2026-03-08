@@ -706,6 +706,11 @@ class ExchangeManager:
                 continue
 
     async def close(self):
+        """Borsa bağlantılarını ve WebSocket akışlarını temiz bir şekilde kapatır."""
+        if self.exchange:
+            await self.exchange.close()
+            logger.info(f"{self.exchange_id.upper()} borsa bağlantısı sonlandırıldı.")
+
 
 # Diğer modüllerden kolay erişim için Singleton mantığı
 exchange_manager = ExchangeManager()
