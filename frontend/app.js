@@ -543,72 +543,10 @@ async function fetchTradeHistory() {
 
 async function fetchStrategies() {
     try {
-        const [stratRes, dbRes] = await Promise.all([
-            fetch('/api/v1/strategies'),
-            fetch('/api/v1/data/symbols-with-data')
-        ]);
+        const stratRes = await fetch('/api/v1/strategies');
         const data = await stratRes.json();
-        const dbData = await dbRes.json();
 
-        // 1. Strateji Atama Tablosu
-        const tbody = document.getElementById('strategy-allocation-body');
-        if (tbody) {
-            tbody.innerHTML = '';
-            if (!dbData.symbols || dbData.symbols.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:var(--text-muted);">⚠️ DB\'de henüz veri bulunamadı. Önce "Veri Laboratuvarı"ndan veri indirin.</td></tr>';
-            } else {
-                tbody.innerHTML = '';
-                const uniqueSymbols = [...new Set(dbData.symbols)];
-                uniqueSymbols.forEach(symbol => {
-                    const symActiveId = data.active_strategies[symbol] || "";
-                    const symActiveTf = data.active_timeframes ? (data.active_timeframes[symbol] || "1m") : "1m";
-                    const activeStrategy = data.strategies.find(s => s.id === symActiveId);
-                    const activeStrategyName = activeStrategy ? activeStrategy.name : "Atanalı Değil";
-                    const isActuallyRunning = !!symActiveId;
-
-                    const timeframes = ["1m", "3m", "5m", "10m", "15m", "20m", "30m", "45m", "1h", "2h", "3h", "4h", "6h", "8h", "12h", "1d"];
-
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td style="font-weight:bold; color:var(--neon-blue)">${symbol}</td>
-                        <td style="font-size:0.8rem">${activeStrategyName} <br><small class="text-muted">${symActiveTf}</small></td>
-                        <td>
-                            <div style="display:flex; gap:5px;">
-                                <select class="strategy-select" id="strat-sel-${symbol.replace('/', '-')}" style="min-width:120px;">
-                                    <option value="">Bot Seç...</option>
-                                    ${data.strategies.map(s => `<option value="${s.id}" ${s.id === symActiveId ? 'selected' : ''}>${s.name}</option>`).join('')}
-                                </select>
-                                <select class="strategy-select" id="tf-sel-${symbol.replace('/', '-')}" style="width:70px;">
-                                    ${timeframes.map(tf => `<option value="${tf}" ${tf === symActiveTf ? 'selected' : ''}>${tf}</option>`).join('')}
-                                </select>
-                                <select class="strategy-select" id="market-sel-${symbol.replace('/', '-')}" style="width:80px;">
-                                    <option value="swap" ${(data.market_types && data.market_types[symbol] === 'swap') ? 'selected' : ''}>Vadeli</option>
-                                    <option value="spot" ${(data.market_types && data.market_types[symbol] === 'spot') ? 'selected' : ''}>Spot</option>
-                                </select>
-                                <select class="strategy-select" id="margin-sel-${symbol.replace('/', '-')}" style="width:80px;">
-                                    <option value="isolated" ${(data.margin_types && data.margin_types[symbol] === 'isolated') ? 'selected' : ''}>İzole</option>
-                                    <option value="cross" ${(data.margin_types && data.margin_types[symbol] === 'cross') ? 'selected' : ''}>Çapraz</option>
-                                </select>
-                            </div>
-                        </td>
-                        <td>
-                            <div style="display:flex; gap:5px; flex-wrap:wrap;">
-                                <button class="btn btn-primary" style="padding:4px 8px; font-size:0.7rem;"
-                                    onclick="window.selectStrategy('${symbol}')" title="Stratejiyi Uygula ve Başlat">▶ Uygula</button>
-                                <button class="btn btn-danger" style="padding:4px 8px; font-size:0.7rem;"
-                                    onclick="window.stopStrategy('${symbol}')" title="Botu Durdur">⏹ Durdur</button>
-                                <button class="btn btn-success" style="padding:4px 8px; font-size:0.7rem;"
-                                    onclick="window.restartStrategy('${symbol}')" title="Botu Yeniden Başlat">🔄 Yeniden Başlat</button>
-                            </div>
-                        </td>
-                        <td><span class="${isActuallyRunning ? 'success-text' : 'text-muted'}" id="status-${symbol.replace('/', '-')}">${isActuallyRunning ? '● Aktif' : '○ Bekliyor'}</span></td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-            }
-        }
-
-        // 2. Strateji Kütüphanesi (Dokümantasyon)
+        // Strateji Kütüphanesi (Dokümantasyon) - Sadece bunu render et
         const libContainer = document.getElementById('strategy-library-container');
         if (libContainer) {
             libContainer.innerHTML = '';
