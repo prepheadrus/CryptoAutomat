@@ -148,11 +148,15 @@ class PaperTrader:
         XGBoost + Random Forest Ensemble desteği.
 
         Args:
-            symbol: Sembol adı (örn: BTCUSDT)
+            symbol: Sembol adı (örn: BTCUSDT, BTC/USDT)
             timeframe: Zaman dilimi (örn: 1m)
         """
-        # Sembol ve timeframe'den dinamik model yolu oluştur
-        symbol_clean = symbol.replace('/', '').replace(':', '').replace('USDT', 'usdt').lower()
+        # Sembol temizleme - doğru format: BTCUSDT → btcusdt
+        symbol_clean = symbol.replace('/', '').replace(':', '').lower()
+
+        # Eğer sembol USDT içeriyorsa, sonundaki USDT'yi koru (çift yazmayı önle)
+        if symbol_clean.endswith('usdtusdt'):
+            symbol_clean = symbol_clean[:-4]  # Son 4 karakteri sil (usdt)
 
         # XGBoost model yolu
         xgb_path = f"artifacts/models/xgb_model_{symbol_clean}_{timeframe}.json"
@@ -170,11 +174,19 @@ class PaperTrader:
         rf_exists = os.path.exists(rf_path)
 
         if not xgb_exists and not rf_exists:
-            # Hiçbir model yok
-            logger.warning(
-                f"⚠️ [UYARI] {symbol} {timeframe} için eğitilmiş XGBoost veya Random Forest modeli bulunamadı! "
-                f"Lütfen önce ML motorundan bu parite için model eğitin."
-            )
+            # Hiçbir model yok - kullanılabilir modelleri listele
+            import glob
+            available_models = glob.glob(f"artifacts/models/xgb_model_{symbol_clean}_*.json")
+            if available_models:
+                logger.warning(
+                    f"⚠️ [UYARI] {symbol} {timeframe} için model bulunamadı, ancak şu modeller mevcut: "
+                    f"{', '.join([os.path.basename(m) for m in available_models])}"
+                )
+            else:
+                logger.warning(
+                    f"⚠️ [UYARI] {symbol} {timeframe} için eğitilmiş XGBoost veya Random Forest modeli bulunamadı! "
+                    f"Lütfen önce ML motorundan bu parite için model eğitin."
+                )
             return
 
         # Modelleri yükle
