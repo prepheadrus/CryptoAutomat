@@ -596,9 +596,19 @@ class ExchangeManager:
                     last_hist_time = ohlcv_df.index[-1]
 
                     if last_live_time > last_hist_time:
-                        # Yeni mum geldi, ekle
-                        ohlcv_df = pd.concat([ohlcv_df, live_df.loc[last_hist_time:]])
-                        logger.debug(f"OK [WSS] Yeni mum eklendi: {last_live_time}")
+                        # Yeni mum geldi, ekle (DUPLICATE kontrolü)
+                        new_candles = live_df.loc[last_hist_time:]
+
+                        # Duplicate timestamp'leri temizle
+                        if len(new_candles) > 0:
+                            # Index'i resetle ve duplicate'leri kaldır
+                            new_candles = new_candles[~new_candles.index.duplicated(keep='last')]
+                            ohlcv_df = pd.concat([ohlcv_df, new_candles])
+
+                            # Ana DataFrame'de de duplicate kontrolü
+                            ohlcv_df = ohlcv_df[~ohlcv_df.index.duplicated(keep='last')]
+
+                            logger.debug(f"OK [WSS] Yeni mum eklendi: {last_live_time}")
                     elif last_live_time == last_hist_time:
                         # Son mum güncellendi, replace et
                         ohlcv_df.loc[last_live_time] = live_df.loc[last_live_time]
