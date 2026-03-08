@@ -1681,6 +1681,8 @@ async function loadBotFormOptions() {
      * Bot başlatma formu için dinamik seçenekleri yükler.
      */
     try {
+        console.log('🔄 Stratejiler yükleniyor...');
+
         // 1. Sembolleri yükle (DB'de verisi olanlar)
         const symbolsRes = await fetch('/api/v1/data/symbols-with-data');
         const symbolsData = await symbolsRes.json();
@@ -1697,11 +1699,15 @@ async function loadBotFormOptions() {
             if (symbolsData.symbols.length === 0) {
                 symbolSelect.innerHTML = '<option value="">DB\'de veri yok</option>';
             }
+            console.log(`✅ ${symbolsData.symbols.length} sembol yüklendi`);
         }
 
-        // 2. Stratejileri yükle
-        const strategiesRes = await fetch('/api/v1/strategy/list');
+        // 2. Stratejileri yükle (Cache bypass!)
+        console.log('🔄 Stratejiler API\'den çekiliyor...');
+        const strategiesRes = await fetch('/api/v1/strategy/list?t=' + Date.now()); // Cache bypass
         const strategiesData = await strategiesRes.json();
+
+        console.log(`📊 API Response: ${JSON.stringify(strategiesData)}`);
 
         const strategySelect = document.getElementById('bot-strategy');
         if (strategySelect && strategiesData.strategies) {
@@ -1709,16 +1715,21 @@ async function loadBotFormOptions() {
             strategiesData.strategies.forEach(strat => {
                 const opt = document.createElement('option');
                 opt.value = strat.id;
-                opt.textContent = strat.name;
+                opt.textContent = strat.name + (strat.type === 'dynamic' ? ' ⚡' : '');
                 strategySelect.appendChild(opt);
             });
+            console.log(`✅ ${strategiesData.strategies.length} strateji yüklendi`);
+
             if (strategiesData.strategies.length === 0) {
                 strategySelect.innerHTML = '<option value="">Strateji yok</option>';
             }
+        } else {
+            console.error('❌ Strateji verisi yok:', strategiesData);
         }
 
     } catch (error) {
-        console.error('Bot form seçenekleri yüklenemedi:', error);
+        console.error('❌ Bot form seçenekleri yüklenemedi:', error);
+        showErrorToast('⚠️ Stratejiler yüklenemedi: ' + error.message, 5000);
     }
 }
 
