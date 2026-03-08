@@ -81,10 +81,25 @@ class ExchangeManager:
                 count += 1
         logger.info(f"📁 {count} yarım kalan indirme görevi veritabanından geri yüklendi ve BAŞLATILDI.")
 
-    async def fetch_ohlcv(self, symbol, timeframe='1m', limit=100, params={}):
-        """Asenkron olarak geçmiş mum verilerini (REST API ile) çeker"""
+    async def fetch_ohlcv(self, symbol, timeframe='1m', limit=100, params={}, since=None):
+        """Asenkron olarak geçmiş mum verilerini (REST API ile) çeker
+
+        Args:
+            symbol: Sembol adı
+            timeframe: Zaman dilimi
+            limit: Kaç mum çekilecek
+            params: Ek parametreler
+            since: Başlangıç timestamp (ms) - Pagination için
+
+        Returns:
+            list: OHLCV verisi
+        """
         try:
-            data = await self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit, params=params)
+            # since parametresi varsa kullan (pagination için)
+            if since is not None:
+                data = await self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit, params=params, since=since)
+            else:
+                data = await self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit, params=params)
             return data
         except Exception as e:
             # API key hatası varsa, anonim moda geç ve tekrar dene
@@ -93,7 +108,10 @@ class ExchangeManager:
                 self.exchange.apiKey = None
                 self.exchange.secret = None
                 try:
-                    data = await self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit, params=params)
+                    if since is not None:
+                        data = await self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit, params=params, since=since)
+                    else:
+                        data = await self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit, params=params)
                     return data
                 except Exception as retry_err:
                     logger.error(f"OHLCV Çekme Hatası ({symbol}): {retry_err}")
