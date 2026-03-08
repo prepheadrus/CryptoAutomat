@@ -211,70 +211,54 @@ async function fetchBotData() {
         const statusSummary = document.getElementById('system-status-summary');
 
         if (statusSummary) {
-            // YENİ 1-to-N: active_bots üzerinden aktif botları bul
+            // YENİ 1-to-N: Her bot için AYRI kart göster (sembol bazında gruplama YOK)
             const botsRes = await fetch('/api/v1/bots/list');
             const botsData = await botsRes.json();
 
             const allBots = botsData.bots || [];
 
-            // Sembol bazında grupla (her sembol için 1 kart)
-            const symbolBots = {};
-            allBots.forEach(bot => {
-                const sym = bot.symbol;
-                if (!symbolBots[sym]) {
-                    symbolBots[sym] = [];
-                }
-                symbolBots[sym].push(bot);
-            });
+            // Strateji bilgilerini al (strateji adlarını bulmak için)
+            const stratRes = await fetch('/api/v1/strategies');
+            const stratData = await stratRes.json();
 
-            const activeSymbols = Object.keys(symbolBots);
+            // Dashboard metriklerini al (latest_decisions için gerekli)
+            const metricsRes = await fetch('/api/v1/dashboard-metrics');
+            const metricsData = await metricsRes.json();
+            const metrics = metricsData;
 
-            if (activeSymbols.length === 0) {
+            if (allBots.length === 0) {
                 statusSummary.innerHTML = `
                     <div style="text-align: center; padding: 40px; color: var(--text-muted); grid-column: span 100;">
                         📭 Henüz aktif strateji yok
                     </div>
                 `;
             } else {
-                // Strateji bilgilerini al (strateji adlarını bulmak için)
-                const stratRes = await fetch('/api/v1/strategies');
-                const stratData = await stratRes.json();
-
-                // Dashboard metriklerini al (latest_decisions için gerekli)
-                const metricsRes = await fetch('/api/v1/dashboard-metrics');
-                const metricsData = await metricsRes.json();
-                const metrics = metricsData;
-
                 // MEVCUT KARTLARI GÜNCELLE (Yeniden oluşturma yerine)
                 const existingCards = statusSummary.querySelectorAll('.system-status-card');
                 const cardMap = new Map();
 
-                // Mevcut kartları sembole göre map'le
+                // Mevcut kartları bot_id'ye göre map'le
                 existingCards.forEach(card => {
-                    const symbolEl = card.querySelector('.status-symbol');
-                    if (symbolEl) {
-                        cardMap.set(symbolEl.textContent, card);
+                    const botIdEl = card.querySelector('.status-bot-id');
+                    if (botIdEl && botIdEl.textContent) {
+                        cardMap.set(botIdEl.textContent, card);
                     }
                 });
 
-                // Yeni semboller için kartları güncelle veya oluştur
-                activeSymbols.forEach((sym, index) => {
-                    // Bu sembolün tüm botlarını al
-                    const bots = symbolBots[sym];
-                    const botCount = bots.length;
-
-                    // İlk bot'un bilgilerini kullan (kart başlığı için)
-                    const firstBot = bots[0];
-                    const strategyId = firstBot.strategy_id || 'unknown';
-                    const timeframe = firstBot.timeframe || '1m';
-                    const marketType = firstBot.market_type || 'future';
+                // Her bot için AYRI kart oluştur/güncelle
+                allBots.forEach((bot, index) => {
+                    const botId = bot.bot_id || `${bot.symbol}_${bot.strategy_id}_${bot.timeframe}`;
+                    const sym = bot.symbol;
+                    const strategyId = bot.strategy_id || 'unknown';
+                    const timeframe = bot.timeframe || '1m';
+                    const marketType = bot.market_type || 'future';
 
                     // Strateji adını bul (API'den gelen strategies listesinde ara)
                     const strategyName = stratData && stratData.strategies ?
                         (stratData.strategies.find(s => s.id === strategyId)?.name || strategyId) :
                         strategyId;
 
-                    // Son kararı bul
+                    // Son kararı bul (latest_decisions'dan)
                     const decision = metrics.latest_decisions ? metrics.latest_decisions[sym] : null;
                     const signalText = decision ?
                         (decision.signal_val === 2 ? '🟢 AL' : decision.signal_val === 0 ? '🔴 SAT' : '⚪ BEKLE') :
@@ -284,7 +268,7 @@ async function fetchBotData() {
                         '#8b949e';
 
                     // Mevcut kartı bul veya yeni oluştur
-                    let card = cardMap.get(sym);
+                    let card = cardMap.get(botId);
 
                     if (!card) {
                         // Yeni kart oluştur
@@ -293,16 +277,16 @@ async function fetchBotData() {
                         statusSummary.appendChild(card);
                     }
 
-                    // İçeriği güncelle (kompakt - bot sayısı göster)
+                    // İçeriği güncelle (her bot için AYRI kart - detaylı bilgi)
                     card.innerHTML = `
                         <div class="status-card-header-compact">
-                            <span class="status-symbol">${sym.replace('/USDT', '')}</span>
+                            <span class="status-symbol">${sym.replace('/USDT', '')} (${timeframe})</span>
                             <span class="status-signal" style="color: ${signalColor}; font-weight: 700; font-size: 0.75rem;">${signalText}</span>
                         </div>
                         <div class="status-card-body-compact">
                             <div class="status-row-compact">
                                 <span class="status-label">🤖</span>
-                                <span class="status-value" title="${strategyName}">${strategyName.split(' ')[0]} ${botCount > 1 ? `(${botCount} bot)` : ''}</span>
+                                <span class="status-value" title="${strategyName}">${strategyName.split(' ')[0]}</span>
                             </div>
                             <div class="status-row-compact">
                                 <span class="status-label">⏱️</span>
@@ -313,14 +297,15 @@ async function fetchBotData() {
                                 <span class="status-value" title="${marketType === 'spot' ? 'Spot' : 'Futures'}">${marketType.toUpperCase()}</span>
                             </div>
                         </div>
+                        <div class="status-bot-id" style="display:none;">${botId}</div>
                     `;
 
                     // Map'ten kaldır
-                    cardMap.delete(sym);
+                    cardMap.delete(botId);
                 });
 
-                // Kullanılmayan kartları sil
-                cardMap.forEach((card, sym) => {
+                // Kullanılmayan kartları sil (artık aktif olmayan botlar)
+                cardMap.forEach((card, botId) => {
                     card.remove();
                 });
             }
