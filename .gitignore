@@ -14,6 +14,8 @@ __pycache__/
 # Database
 *.db
 *.sqlite3
+*.db-shm
+*.db-wal
 cryptobot.db
 
 # Logs and Debug
