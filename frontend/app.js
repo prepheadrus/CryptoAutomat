@@ -1676,6 +1676,52 @@ window.startBot = startBot;
 window.stopBot = stopBot;
 window.loadActiveBots = loadActiveBots;
 
+async function loadBotFormOptions() {
+    /**
+     * Bot başlatma formu için dinamik seçenekleri yükler.
+     */
+    try {
+        // 1. Sembolleri yükle (DB'de verisi olanlar)
+        const symbolsRes = await fetch('/api/v1/data/symbols-with-data');
+        const symbolsData = await symbolsRes.json();
+
+        const symbolSelect = document.getElementById('bot-symbol');
+        if (symbolSelect && symbolsData.symbols) {
+            symbolSelect.innerHTML = '';
+            symbolsData.symbols.forEach(symbol => {
+                const opt = document.createElement('option');
+                opt.value = symbol;
+                opt.textContent = symbol;
+                symbolSelect.appendChild(opt);
+            });
+            if (symbolsData.symbols.length === 0) {
+                symbolSelect.innerHTML = '<option value="">DB\'de veri yok</option>';
+            }
+        }
+
+        // 2. Stratejileri yükle
+        const strategiesRes = await fetch('/api/v1/strategy/list');
+        const strategiesData = await strategiesRes.json();
+
+        const strategySelect = document.getElementById('bot-strategy');
+        if (strategySelect && strategiesData.strategies) {
+            strategySelect.innerHTML = '';
+            strategiesData.strategies.forEach(strat => {
+                const opt = document.createElement('option');
+                opt.value = strat.id;
+                opt.textContent = strat.name;
+                strategySelect.appendChild(opt);
+            });
+            if (strategiesData.strategies.length === 0) {
+                strategySelect.innerHTML = '<option value="">Strateji yok</option>';
+            }
+        }
+
+    } catch (error) {
+        console.error('Bot form seçenekleri yüklenemedi:', error);
+    }
+}
+
 function handleStartBot() {
     /**
      * Bot başlatma formunu işler.
@@ -2440,19 +2486,28 @@ document.addEventListener('click', (e) => {
     if (e.target.matches('.menu-item') && e.target.dataset.target === 'tab-reports') {
         loadStrategyReport();
     }
-    // ML sekmesi açıldığında aktif botları yükle
+    // ML sekmesi açıldığında aktif botları ve form seçeneklerini yükle
     if (e.target.matches('.menu-item') && e.target.dataset.target === 'tab-ml') {
-        setTimeout(() => loadActiveBots(), 500);
+        setTimeout(() => {
+            loadActiveBots();
+            loadBotFormOptions();
+        }, 500);
     }
 });
 
-// Sayfa yüklendiğinde aktif botları yükle
+// Sayfa yüklendiğinde aktif botları ve form seçeneklerini yükle
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
-        setTimeout(() => loadActiveBots(), 1000);
+        setTimeout(() => {
+            loadActiveBots();
+            loadBotFormOptions();
+        }, 1000);
     });
 } else {
-    setTimeout(() => loadActiveBots(), 1000);
+    setTimeout(() => {
+        loadActiveBots();
+        loadBotFormOptions();
+    }, 1000);
 }
 
 
