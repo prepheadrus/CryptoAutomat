@@ -27,6 +27,9 @@ linux_migration/
 .vscode/
 home/
 
+# Artifacts (trained models, history)
+artifacts/
+
 # Jupyter Notebooks
 *.ipynb
 .ipynb_checkpoints/
