@@ -293,12 +293,11 @@ def prepare_ml_data(
     sl_multiplier: float = 2.0,
     time_horizon: int = 10,
     scaler_type: str = 'standard',
-    normalize: bool = True
+    normalize: bool = True,
+    skip_barrier: bool = False  # Yeni parametre - apply_triple_barrier atla
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, object]:
     """
     End-to-end ML veri hazırlama pipeline'ı.
-
-    Triple Barrier etiketleme + Özellik mühendisliği + Train/Test split
 
     Args:
         df: Ham OHLCV verisi (indikatörlerle birlikte)
@@ -310,20 +309,25 @@ def prepare_ml_data(
         time_horizon: Dikey bariyer mum sayısı
         scaler_type: Ölçeklendirici tipi
         normalize: Ölçeklendirme yapılacak mı?
+        skip_barrier: apply_triple_barrier atla (zaten yapıldıysa)
 
     Returns:
         Tuple: (X_train, X_test, y_train, y_test, scaler)
     """
     logger.info("ML veri hazırlama pipeline'ı başlatılıyor...")
-    
-    # 1. Triple Barrier etiketleme
-    df_labeled = apply_triple_barrier(
-        df,
-        target_col='close',
-        tp_multiplier=tp_multiplier,
-        sl_multiplier=sl_multiplier,
-        time_horizon=time_horizon
-    )
+
+    # 1. Triple Barrier etiketleme (skip_barrier=False ise)
+    if not skip_barrier:
+        df_labeled = apply_triple_barrier(
+            df,
+            target_col='close',
+            tp_multiplier=tp_multiplier,
+            sl_multiplier=sl_multiplier,
+            time_horizon=time_horizon
+        )
+    else:
+        df_labeled = df
+        logger.info("⏭️ [ML] Triple Barrier atlandı (zaten yapılmış)")
     
     # 2. Özellik mühendisliği ve ölçeklendirme
     df_processed, scaler = engineer_features(

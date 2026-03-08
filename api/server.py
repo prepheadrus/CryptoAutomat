@@ -1077,21 +1077,33 @@ async def _run_ml_training(req: MLTrainRequest):
         training_state["message"] = f"İndikatörler hesaplanıyor ({len(df)} mum {req.timeframe})..."
         training_state["progress"] = 30
 
-        # 2. İndikatörleri ekle
+        # 2. Triple Barrier ile target oluştur (future_ret EKLENİR - henüz drop etme!)
+        from ml.data_prep import apply_triple_barrier
+        df = apply_triple_barrier(
+            df,
+            target_col='close',
+            tp_multiplier=req.tp_multiplier,
+            sl_multiplier=req.sl_multiplier,
+            time_horizon=req.time_horizon
+        )
+
+        logger.info(f"✅ [ML] Triple Barrier etiketleme tamamlandı")
+
+        # 3. İndikatörleri ekle
         df = StrategyIndicators.add_all_indicators(df)
 
         # ============================================
-        # DATA LEAKAGE ÖNLEME (Ek Güvenlik)
+        # DATA LEAKAGE ÖNLEME (KRİTİK!)
         # ============================================
-        # Model eğitilmadan önce gelecek bilgisi içeren kolonları sil
+        # future_ret, target, signal vb. GELECEK bilgisi içeren TÜM kolonları sil
         leakage_columns = [
-            'future_ret',      # Gelecek getiri (en kritik!)
-            'target',          # Hedef değişken
-            'signal',          # Sinyal
-            'prediction',      # Tahmin
-            'barrier_reason',  # Barrier bilgisi
-            'upper_barrier',   # Üst bariyer
-            'lower_barrier',   # Alt bariyer
+            'future_ret',      # Gelecek getiri (EN KRİTİK!)
+            'target',          # Hedef değişken (y olacak, X'te olamaz!)
+            'signal',          # Sinyal (gelecek)
+            'prediction',      # Tahmin (gelecek)
+            'barrier_reason',  # Barrier bilgisi (gelecek)
+            'upper_barrier',   # Üst bariyer (gelecek)
+            'lower_barrier',   # Alt bariyer (gelecek)
         ]
 
         # Sütunları kontrol et ve varsa sil
@@ -1099,8 +1111,9 @@ async def _run_ml_training(req: MLTrainRequest):
         if cols_to_drop:
             df = df.drop(columns=cols_to_drop)
             logger.info(f"🛡️ [ML] {len(cols_to_drop)} leakage kolonu silindi: {cols_to_drop}")
+            logger.info(f"🛡️ [ML] Silinen kolonlar: {cols_to_drop}")
         else:
-            logger.debug("🛡️ [ML] Leakage kolonu bulunamadı (zaten temiz)")
+            logger.warning("⚠️ [ML] Hiçbir leakage kolonu bulunamadı - future_ret var mı kontrol et!")
 
         training_state["message"] = "Model eğitiliyor..."
         training_state["progress"] = 50
@@ -1108,6 +1121,12 @@ async def _run_ml_training(req: MLTrainRequest):
         # 3. Model eğit - Timeframe'i dosya adına ekle
         symbol_clean = req.symbol.replace('/', '').replace(':', '').lower()
         model_path = f"artifacts/models/xgb_model_{symbol_clean}_{req.timeframe}.json"
+
+        # prepare_ml_data() yerine doğrudan X/y ayırma (çünkü leakage drop ettik)
+        from ml.model_training import run_training_pipeline
+
+        # run_training_pipeline kendi içinde prepare_ml_data kullanır
+        # Ama artık leakage kolonları drop ettiğimiz için sorun yok
         trainer = run_training_pipeline(
             df,
             model_save_path=model_path,

@@ -573,7 +573,8 @@ def run_training_pipeline(
         tp_multiplier=tp_multiplier,
         sl_multiplier=sl_multiplier,
         time_horizon=time_horizon,
-        train_ratio=train_ratio
+        train_ratio=train_ratio,
+        skip_barrier=True  # API'de zaten yapıldı, tekrar yapma!
     )
 
     # 2. Model eğitimi
