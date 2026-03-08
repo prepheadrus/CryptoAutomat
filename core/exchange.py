@@ -497,7 +497,7 @@ class ExchangeManager:
 
                 # 3. Veri Çek ve Yeniden Örnekle (Resample)
                 # İndikatörler için yeterli veri çekelim (Binance MAX limit 1500 mum)
-                ohlcv_1m = await self.fetch_ohlcv(symbol, timeframe='1m', limit=1500)
+                ohlcv_1m = await self.exchange.watch_ohlcv(symbol, timeframe='1m', limit=1500)
                 
                 if not ohlcv_1m:
                     await asyncio.sleep(10)
