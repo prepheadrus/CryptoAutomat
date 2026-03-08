@@ -209,6 +209,7 @@ async function fetchBotData() {
 
         // --- SİSTEM DURUM ÖZETİ (AKTİF EMİRLER SAYFASI İÇİN) ---
         const statusSummary = document.getElementById('system-status-summary');
+        const loadingMsg = document.getElementById('system-loading-msg');
 
         if (statusSummary) {
             // YENİ 1-to-N: Her bot için AYRI kart göster (sembol bazında gruplama YOK)
@@ -226,12 +227,17 @@ async function fetchBotData() {
             const metricsData = await metricsRes.json();
             const metrics = metricsData;
 
+            // Loading mesajını gizle (botlar çekildi)
+            if (loadingMsg) {
+                loadingMsg.style.display = 'none';
+            }
+
             if (allBots.length === 0) {
-                statusSummary.innerHTML = `
-                    <div style="text-align: center; padding: 40px; color: var(--text-muted); grid-column: span 100;">
-                        📭 Henüz aktif strateji yok
-                    </div>
-                `;
+                // Bot yoksa loading mesajını tekrar göster
+                if (loadingMsg) {
+                    loadingMsg.style.display = 'block';
+                    loadingMsg.innerHTML = '📭 Henüz aktif strateji yok';
+                }
             } else {
                 // MEVCUT KARTLARI GÜNCELLE (Yeniden oluşturma yerine)
                 const existingCards = statusSummary.querySelectorAll('.system-status-card');
@@ -260,10 +266,10 @@ async function fetchBotData() {
 
                     // Son kararı bul (latest_decisions'dan)
                     const decision = metrics.latest_decisions ? metrics.latest_decisions[sym] : null;
-                    const signalText = decision ?
+                    const signalText = decision && decision.signal_val !== undefined ?
                         (decision.signal_val === 2 ? '🟢 AL' : decision.signal_val === 0 ? '🔴 SAT' : '⚪ BEKLE') :
-                        '⚪ Başlatılıyor...';
-                    const signalColor = decision ?
+                        '⚪ BEKLE';  // Varsayılan BEKLE (Başlatılıyor değil!)
+                    const signalColor = decision && decision.signal_val !== undefined ?
                         (decision.signal_val === 2 ? '#2ea043' : decision.signal_val === 0 ? '#f85149' : '#8b949e') :
                         '#8b949e';
 
