@@ -802,6 +802,24 @@ async def get_all_bots():
         return {"status": "error", "message": str(e)}
 
 
+@app.get("/api/v1/strategy/list")
+async def get_strategy_list():
+    """
+    Sistemdeki tüm stratejileri döner.
+
+    Returns:
+        Dict: {strategies: list}
+    """
+    from strategy.manager import StrategyManager
+
+    try:
+        strategies = StrategyManager.list_all_strategies()
+        return {"status": "success", "strategies": strategies}
+    except Exception as e:
+        logger.error(f"Strateji listesi hatası: {e}")
+        return {"status": "error", "message": str(e)}
+
+
 @app.post("/api/v1/strategy/select")
 async def change_strategy(req: StrategySelectSchema):
     """Arayüzden gelen komutla botun beynini anında değiştirir."""
