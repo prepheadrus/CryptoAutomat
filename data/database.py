@@ -286,15 +286,18 @@ class DatabaseManager:
         ML eğitimi için kullanılır - internete ÇIKMAZ!
 
         Args:
-            symbol: Sembol adı (örn: BTCUSDT, BTC/USDT)
+            symbol: Sembol adı (örn: BTCUSDT, BTC/USDT, BTC/USDT:USDT)
             timeframe: Zaman dilimi (örn: 1m, 15m, 1h)
             limit: Kaç mum çekilecek (varsayılan: 1000)
 
         Returns:
             list: OHLCV verileri [(timestamp, open, high, low, close, volume), ...]
         """
-        # Sembol formatını temizle (BTC/USDT → BTCUSDT)
-        symbol_clean = symbol.replace('/', '').replace(':', '').upper()
+        # Sembol temizleme - tüm formatları kabul et
+        symbol_clean = symbol.replace('/', '').replace(':', '').replace('-', '').upper()
+
+        # Esnek pattern - hem spot hem futures formatlarını yakala
+        pattern = f"%{symbol_clean}%"
 
         # SQL sorgusu - en son N mumu getir
         sql = """
@@ -305,7 +308,6 @@ class DatabaseManager:
             ORDER BY timestamp DESC
             LIMIT ?
         """
-        pattern = f"{symbol_clean}:%"
         params = (symbol_clean, pattern, timeframe, limit)
 
         if self.engine_type == "postgres":
@@ -324,14 +326,18 @@ class DatabaseManager:
         Validation için kullanılır.
 
         Args:
-            symbol: Sembol adı
+            symbol: Sembol adı (örn: BTCUSDT, BTC/USDT, BTC/USDT:USDT)
             timeframe: Zaman dilimi
 
         Returns:
             int: Toplam mum sayısı
         """
-        symbol_clean = symbol.replace('/', '').replace(':', '').upper()
-        pattern = f"{symbol_clean}:%"
+        # Sembol temizleme - tüm formatları kabul et
+        symbol_clean = symbol.replace('/', '').replace(':', '').replace('-', '').upper()
+
+        # Esnek pattern - hem spot hem futures formatlarını yakala
+        # BNBUSDTUSDT → %BNBUSDTUSDT% (herhangi bir yerde geçerse yakala)
+        pattern = f"%{symbol_clean}%"
 
         sql = "SELECT COUNT(*) as cnt FROM klines WHERE (symbol = ? OR symbol LIKE ?) AND timeframe = ?"
         params = (symbol_clean, pattern, timeframe)
@@ -340,7 +346,7 @@ class DatabaseManager:
             sql = sql.replace('?', '%s')
             async with self.db_pool.acquire() as conn:
                 row = await conn.fetchrow(sql, symbol_clean, pattern, timeframe)
-                return row['cnt']
+                return row['cnt'] if row else 0
         else:
             async with self.sqlite_conn.execute(sql, params) as cursor:
                 row = await cursor.fetchone()
