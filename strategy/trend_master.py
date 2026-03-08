@@ -8,22 +8,12 @@ class TrendMasterPro(BaseStrategy):
     ile giriş arar. Geniş stop (3.5x ATR) kullanır.
 
     WFO (Walk-Forward Optimization) Destekli:
-    - Hiperparametre ızgarası tanımlı
-    - Otonom optimizasyon yapılabilir
+    - Auto-Grid ile otomatik parametre ızgarası
+    - Bayesian Optimization ile hızlı optimizasyon
+    - Otonom parametre adaptasyonu
     """
 
-    # WFO için optimize edilebilir parametre ızgarası
-    PARAM_GRID = {
-        'rsi_period': [10, 14, 20],
-        'rsi_upper': [60, 70, 80],
-        'rsi_lower': [20, 30, 40],
-        'atr_multiplier': [2.5, 3.0, 3.5, 4.0],
-        'tp_multiplier': [1.5, 2.0, 2.5],
-        'ema_fast': [13, 21, 34],
-        'ema_slow': [100, 150, 200]
-    }
-
-    # Varsayılan parametreler
+    # Varsayılan parametreler (Auto-Grid bu değerlerden %30 esnetme yapar)
     DEFAULT_PARAMS = {
         'rsi_period': 14,
         'rsi_upper': 70,

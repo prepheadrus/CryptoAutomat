@@ -178,11 +178,10 @@ class WalkForwardOptimizer:
             if improvement >= self.min_improvement:
                 logger.info(f"✅ [WFO] İyileştirme tespit edildi: +{improvement*100:.1f}%")
 
-                # Performans karşılaştırması log
+                # ZERO-TOUCH log mesajı
                 logger.info(
-                    f"🎯 [BAYES-OPT] {strategy_class.__name__} analiz edildi. "
-                    f"Geleneksel Grid Search ile {total_combinations} ihtimal vardı. "
-                    f"Bayes motoru 50 iterasyonda en iyi ayarı buldu ({optimization_metric.title()}: {best_score:.2f}). "
+                    f"🎯 [ZERO-TOUCH WFO] {strategy_class.__name__} otonom olarak analiz edildi. "
+                    f"Auto-Grid sınırları çizdi, Bayes motoru {n_trials} iterasyonda en iyi ayarı buldu. "
                     f"Yeni Parametreler: {best_params}"
                 )
 
@@ -665,32 +664,38 @@ async def start_wfo_background_task(
     strategy_class: Any,
     param_grid: Dict[str, List[Any]] = None,
     data_fetcher: Callable = None,
-    optimization_metric: str = "sharpe"
+    optimization_metric: str = "sharpe",
+    n_trials: int = 50
 ):
     """
     Arka planda sürekli WFO optimizasyonu yapan asenkron görev.
+    TAM OTONOM - param_grid=None ise Auto-Grid + Bayesian Optimization kullanır.
 
     Args:
         symbol: Sembol adı
         timeframe: Zaman dilimi
         strategy_class: Strateji sınıfı
-        param_grid: Parametre aralıkları (None ise otomatik oluşturulur)
+        param_grid: Parametre aralıkları (None ise otomatik oluşturulur - ZERO-TOUCH)
         data_fetcher: Veri çekme fonksiyonu (async)
         optimization_metric: Optimizasyon metriği
+        n_trials: Maksimum deneme sayısı (Bayesian için)
     """
     wfo = get_wfo_engine(symbol)
 
-    # Param_grid yoksa otomatik oluştur
+    # FAZ 3: TAM OTONOM AKIŞ
+    # param_grid=None ise Auto-Grid otomatik oluşturur
     if param_grid is None:
         if AUTO_GRID_AVAILABLE:
-            logger.info(f"🤖 [WFO] {symbol} için otomatik parametre ızgarası oluşturuluyor...")
+            logger.info(f"🤖 [ZERO-TOUCH] {symbol} için otomatik parametre ızgarası oluşturuluyor...")
             param_grid = generate_param_grid(strategy_class=strategy_class)
 
             if not param_grid:
-                logger.error(f"❌ [WFO] {symbol} için otomatik ızgara oluşturulamadı!")
+                logger.error(f"❌ [ZERO-TOUCH] {symbol} için otomatik ızgara oluşturulamadı!")
                 return
+
+            logger.info(f"✅ [ZERO-TOUCH] Auto-Grid {len(param_grid)} parametre oluşturdu")
         else:
-            logger.error(f"❌ [WFO] {symbol} için param_grid tanımlı değil ve Auto-Grid mevcut değil!")
+            logger.error(f"❌ [ZERO-TOUCH] {symbol} için param_grid tanımlı değil ve Auto-Grid mevcut değil!")
             return
 
     logger.info(f"🔄 [WFO] Arka plan görevi başlatıldı: {symbol} ({timeframe})")

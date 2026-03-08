@@ -8,22 +8,12 @@ class ScalperNinja(BaseStrategy):
     ATR çarpanı daha düşüktür (1.5x) bu yüzden daha sık durur.
 
     WFO (Walk-Forward Optimization) Destekli:
-    - Hiperparametre ızgarası tanımlı
-    - Otonom optimizasyon yapılabilir
+    - Auto-Grid ile otomatik parametre ızgarası
+    - Bayesian Optimization ile hızlı optimizasyon
+    - Otonom parametre adaptasyonu
     """
 
-    # WFO için optimize edilebilir parametre ızgarası
-    PARAM_GRID = {
-        'rsi_period': [10, 14, 20],
-        'rsi_oversold': [20, 25, 30],
-        'stoch_oversold': [15, 20, 25],
-        'atr_multiplier': [1.0, 1.5, 2.0],
-        'tp_multiplier': [1.0, 1.5, 2.0],
-        'ema_fast': [5, 8, 13],
-        'ema_slow': [13, 21, 34]
-    }
-
-    # Varsayılan parametreler
+    # Varsayılan parametreler (Auto-Grid bu değerlerden %30 esnetme yapar)
     DEFAULT_PARAMS = {
         'rsi_period': 14,
         'rsi_oversold': 30,

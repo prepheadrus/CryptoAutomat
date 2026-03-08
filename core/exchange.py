@@ -394,9 +394,7 @@ class ExchangeManager:
                 from strategy.manager import StrategyManager
                 strategy_class = StrategyManager.get_strategy(active_strategy_id)
 
-                # WFO parametre ızgarasını al (None ise otomatik oluşturulur)
-                param_grid = getattr(strategy_class, 'PARAM_GRID', None)
-
+                # ZERO-TOUCH: param_grid=None → Auto-Grid otomatik oluşturur
                 logger.info(f"🔄 [WFO] {symbol} için arka plan optimizasyonu başlatılıyor...")
 
                 # Veri çekme fonksiyonu
@@ -409,16 +407,17 @@ class ExchangeManager:
                         return StrategyIndicators.add_all_indicators(df)
                     return None
 
-                # WFO arka plan görevini başlat (param_grid=None ise otomatik oluşturur)
+                # WFO arka plan görevini başlat (param_grid=None = ZERO-TOUCH)
                 wfo_task = asyncio.create_task(start_wfo_background_task(
                     symbol=symbol,
                     timeframe=timeframe,
                     strategy_class=strategy_class,
-                    param_grid=param_grid,  # None ise auto-grid kullanılır
+                    param_grid=None,  # None → Auto-Grid + Bayesian Optimization (ZERO-TOUCH)
                     data_fetcher=fetch_data,
-                    optimization_metric="sharpe"
+                    optimization_metric="sharpe",
+                    n_trials=50
                 ))
-                logger.info(f"✅ [WFO] {symbol} arka plan görevi başlatıldı.")
+                logger.info(f"✅ [ZERO-TOUCH] {symbol} otonom optimizasyon görevi başlatıldı.")
             except Exception as e:
                 logger.warning(f"⚠️ [WFO] {symbol} başlatma hatası: {str(e)}")
 
