@@ -428,6 +428,11 @@ class ExchangeManager:
 
                 last_db_time = ohlcv_df.index[-1]
                 current_time = pd.Timestamp.now(tz='UTC')
+
+                # Timezone düzeltmesi (last_db_time tz-naive olabilir)
+                if last_db_time.tzinfo is None:
+                    last_db_time = last_db_time.tz_localize('UTC')
+
                 time_diff = current_time - last_db_time
 
                 logger.info(f"OK [LOCAL DB] Son mum: {last_db_time}, Şu an: {current_time}, Fark: {time_diff}")
@@ -555,8 +560,9 @@ class ExchangeManager:
                     continue
 
                 # Canlı veriyi DataFrame'e dönüştür
+                # live_ohlcv is a list of lists: [[timestamp, open, high, low, close, volume], ...]
                 live_df = pd.DataFrame(live_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-                live_df['timestamp'] = pd.to_datetime(live_ohlcv['timestamp'], unit='ms')
+                live_df['timestamp'] = pd.to_datetime(live_df['timestamp'], unit='ms')
                 live_df.set_index('timestamp', inplace=True)
 
                 # ============================================
