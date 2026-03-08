@@ -138,26 +138,40 @@ class StrategyManager:
     def list_all_strategies(cls):
         """
         Arayüzde gösterilecek tüm bot isim ve açıklamalarını döner.
-        Sabit + Dinamik stratejiler.
+        Sabit (builtin) + Dinamik (custom) stratejiler.
+
+        Returns:
+            list: [
+                {
+                    "id": "trend_master",
+                    "name": "TrendMaster Pro",
+                    "description": "...",
+                    "type": "builtin",  # builtin veya custom
+                    "source": "python"   # python veya json
+                },
+                ...
+            ]
         """
         strategies = []
 
-        # Sabit stratejiler
+        # Sabit stratejiler (BUILTIN)
         for key, val in cls.FIXED_STRATEGIES.items():
             strategies.append({
                 "id": key,
                 "name": val.name(),
-                "description": val.description(),  # API ile uyumlu
-                "type": "fixed"
+                "description": val.description(),
+                "type": "builtin",
+                "source": "python"
             })
 
-        # Dinamik stratejiler
+        # Dinamik stratejiler (CUSTOM)
         for key, val in cls.DYNAMIC_STRATEGIES.items():
             strategies.append({
                 "id": key,
                 "name": val['name'],
                 "description": val.get('description') or "Kullanıcı stratejisi",
-                "type": "dynamic",
+                "type": "custom",
+                "source": "json",
                 "filename": val['filename']
             })
 

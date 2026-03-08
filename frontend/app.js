@@ -1679,9 +1679,10 @@ window.loadActiveBots = loadActiveBots;
 async function loadBotFormOptions() {
     /**
      * Bot başlatma formu için dinamik seçenekleri yükler.
+     * OPTGROUP ile builtin ve custom stratejileri grupla.
      */
     try {
-        console.log('🔄 Stratejiler yükleniyor...');
+        console.log('🔄 Bot form seçenekleri yükleniyor...');
 
         // 1. Sembolleri yükle (DB'de verisi olanlar)
         const symbolsRes = await fetch('/api/v1/data/symbols-with-data');
@@ -1702,7 +1703,7 @@ async function loadBotFormOptions() {
             console.log(`✅ ${symbolsData.symbols.length} sembol yüklendi`);
         }
 
-        // 2. Stratejileri yükle (Cache bypass!)
+        // 2. Stratejileri yükle (OPTGROUP ile grupla)
         console.log('🔄 Stratejiler API\'den çekiliyor...');
         const strategiesRes = await fetch('/api/v1/strategy/list?t=' + Date.now()); // Cache bypass
         const strategiesData = await strategiesRes.json();
@@ -1712,15 +1713,48 @@ async function loadBotFormOptions() {
         const strategySelect = document.getElementById('bot-strategy');
         if (strategySelect && strategiesData.strategies) {
             strategySelect.innerHTML = '';
-            strategiesData.strategies.forEach(strat => {
-                const opt = document.createElement('option');
-                opt.value = strat.id;
-                opt.textContent = strat.name + (strat.type === 'dynamic' ? ' ⚡' : '');
-                strategySelect.appendChild(opt);
-            });
-            console.log(`✅ ${strategiesData.strategies.length} strateji yüklendi`);
 
-            if (strategiesData.strategies.length === 0) {
+            // OPTGROUP: Yerleşik Stratejiler (Builtin)
+            const builtinGroup = document.createElement('optgroup');
+            builtinGroup.label = '🤖 Yerleşik Stratejiler';
+
+            strategiesData.strategies
+                .filter(s => s.type === 'builtin')
+                .forEach(strat => {
+                    const opt = document.createElement('option');
+                    opt.value = strat.id;
+                    opt.textContent = strat.name;
+                    builtinGroup.appendChild(opt);
+                });
+
+            // OPTGROUP: Özel Stratejiler (Custom)
+            const customGroup = document.createElement('optgroup');
+            customGroup.label = '🎨 Özel Stratejiler';
+
+            strategiesData.strategies
+                .filter(s => s.type === 'custom')
+                .forEach(strat => {
+                    const opt = document.createElement('option');
+                    opt.value = strat.id;
+                    opt.textContent = strat.name + ' ⚡';
+                    customGroup.appendChild(opt);
+                });
+
+            // Grupları ekle
+            if (builtinGroup.children.length > 0) {
+                strategySelect.appendChild(builtinGroup);
+            }
+            if (customGroup.children.length > 0) {
+                strategySelect.appendChild(customGroup);
+            }
+
+            const totalStrategies = strategiesData.strategies.length;
+            const builtinCount = strategiesData.strategies.filter(s => s.type === 'builtin').length;
+            const customCount = strategiesData.strategies.filter(s => s.type === 'custom').length;
+
+            console.log(`✅ ${totalStrategies} strateji yüklendi (${builtinCount} builtin + ${customCount} custom)`);
+
+            if (totalStrategies === 0) {
                 strategySelect.innerHTML = '<option value="">Strateji yok</option>';
             }
         } else {
@@ -2497,8 +2531,8 @@ document.addEventListener('click', (e) => {
     if (e.target.matches('.menu-item') && e.target.dataset.target === 'tab-reports') {
         loadStrategyReport();
     }
-    // ML sekmesi açıldığında aktif botları ve form seçeneklerini yükle
-    if (e.target.matches('.menu-item') && e.target.dataset.target === 'tab-ml') {
+    // Ayarlar sekmesi açıldığında aktif botları ve form seçeneklerini yükle
+    if (e.target.matches('.menu-item') && e.target.dataset.target === 'tab-settings') {
         setTimeout(() => {
             loadActiveBots();
             loadBotFormOptions();
