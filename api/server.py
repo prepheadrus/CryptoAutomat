@@ -1043,7 +1043,16 @@ async def _run_ml_training(req: MLTrainRequest):
         # DataFrame'e dönüştür
         import pandas as pd
         df = pd.DataFrame(raw_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+
+        # Timestamp parse - DB formatına göre esnek parse
+        # DB'den gelen format: datetime string ('2026-03-08 06:56:00') veya int (ms)
+        try:
+            # Önce ms olarak dene
+            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        except (ValueError, TypeError):
+            # Başarısız olursa datetime string olarak parse et
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+
         df.set_index('timestamp', inplace=True)
 
         if df is None or len(df) == 0:
