@@ -211,21 +211,27 @@ async function fetchBotData() {
         const statusSummary = document.getElementById('system-status-summary');
 
         if (statusSummary) {
-            // Strateji bilgilerini al
-            const stratRes = await fetch('/api/v1/strategies');
-            const stratData = await stratRes.json();
+            // YENİ 1-to-N: active_bots üzerinden aktif botları bul
+            const botsRes = await fetch('/api/v1/bots/list');
+            const botsData = await botsRes.json();
 
-            const symbols = statusData.tracking_symbols || [];
+            const allBots = botsData.bots || [];
 
-            // SADECE AKTİF STRATEJİLERİ GÖSTER (strategy_id boş olmayanlar)
-            const activeSymbols = symbols.filter(sym => {
-                const activeStrategy = stratData.active_strategies[sym] || '';
-                return activeStrategy && activeStrategy !== '';
+            // Sembol bazında grupla (her sembol için 1 kart)
+            const symbolBots = {};
+            allBots.forEach(bot => {
+                const sym = bot.symbol;
+                if (!symbolBots[sym]) {
+                    symbolBots[sym] = [];
+                }
+                symbolBots[sym].push(bot);
             });
+
+            const activeSymbols = Object.keys(symbolBots);
 
             if (activeSymbols.length === 0) {
                 statusSummary.innerHTML = `
-                    <div style="text-align: center; padding: 40px; color: var(--text-muted); grid-column: span 100%;">
+                    <div style="text-align: center; padding: 40px; color: var(--text-muted); grid-column: span 100;">
                         📭 Henüz aktif strateji yok
                     </div>
                 `;
@@ -249,14 +255,15 @@ async function fetchBotData() {
 
                 // Yeni semboller için kartları güncelle veya oluştur
                 activeSymbols.forEach((sym, index) => {
-                    const activeStrategy = stratData.active_strategies[sym] || 'trend_master';
-                    const activeTimeframe = stratData.active_timeframes[sym] || '1m';
-                    const marketType = stratData.market_types[sym] || 'swap';
-                    const marginType = stratData.margin_types[sym] || 'isolated';
+                    // Bu sembolün tüm botlarını al
+                    const bots = symbolBots[sym];
+                    const botCount = bots.length;
 
-                    // Strateji adını bul
-                    const strategyInfo = stratData.strategies.find(s => s.id === activeStrategy);
-                    const strategyName = strategyInfo ? strategyInfo.name : 'Unknown';
+                    // İlk bot'un bilgilerini kullan (kart başlığı için)
+                    const firstBot = bots[0];
+                    const strategyName = firstBot.strategy || 'Unknown';
+                    const timeframe = firstBot.timeframe || '1m';
+                    const marketType = firstBot.market_type || 'future';
 
                     // Son kararı bul
                     const decision = metrics.latest_decisions ? metrics.latest_decisions[sym] : null;
@@ -277,7 +284,7 @@ async function fetchBotData() {
                         statusSummary.appendChild(card);
                     }
 
-                    // İçeriği güncelle (kompakt - tüm bilgiler)
+                    // İçeriği güncelle (kompakt - bot sayısı göster)
                     card.innerHTML = `
                         <div class="status-card-header-compact">
                             <span class="status-symbol">${sym.replace('/USDT', '')}</span>
@@ -286,19 +293,15 @@ async function fetchBotData() {
                         <div class="status-card-body-compact">
                             <div class="status-row-compact">
                                 <span class="status-label">🤖</span>
-                                <span class="status-value" title="${strategyName}">${strategyName.split(' ')[0]}</span>
+                                <span class="status-value" title="${strategyName}">${strategyName.split(' ')[0]} ${botCount > 1 ? `(${botCount} bot)` : ''}</span>
                             </div>
                             <div class="status-row-compact">
                                 <span class="status-label">⏱️</span>
-                                <span class="status-value">${activeTimeframe}</span>
+                                <span class="status-value">${timeframe}</span>
                             </div>
                             <div class="status-row-compact">
                                 <span class="status-label">💰</span>
                                 <span class="status-value" title="${marketType === 'spot' ? 'Spot' : 'Futures'}">${marketType.toUpperCase()}</span>
-                            </div>
-                            <div class="status-row-compact">
-                                <span class="status-label">🔒</span>
-                                <span class="status-value" title="${marginType === 'isolated' ? 'İzole Marjin' : 'Çapraz Marjin'}">${marginType.toUpperCase()}</span>
                             </div>
                         </div>
                     `;
