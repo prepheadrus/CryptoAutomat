@@ -23,7 +23,14 @@ function setupTabs() {
                 // Eğitim geçmişini yükle (sekme açıldıktan sonra)
                 setTimeout(() => loadTrainingHistory(), 100);
             }
-            if (targetId === 'tab-settings' || targetId === 'tab-strategies') {
+            if (targetId === 'tab-settings') {
+                // Çoklu Bot Yönetimi - aktif botları yükle
+                setTimeout(() => {
+                    loadActiveBots();
+                    loadBotFormOptions();
+                }, 500);
+            }
+            if (targetId === 'tab-strategies') {
                 fetchStrategies();
             }
             if (targetId === 'tab-data') {
