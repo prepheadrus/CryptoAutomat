@@ -1831,25 +1831,21 @@ async function loadMLTrainingSymbols() {
         const select = document.getElementById('ml-train-symbol');
         if (!select || !data.symbols || data.symbols.length === 0) return;
 
-        // Mevcut option'ları temizle (sabit coinleri koru)
-        const existingOptions = Array.from(select.options);
-        existingOptions.forEach(opt => {
-            if (['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'SOLUSDT'].includes(opt.value)) {
-                return; // Sabit coinleri koru
-            }
-            opt.remove();
-        });
+        // Dropdown'u tamamen temizle
+        select.innerHTML = '';
 
         // Veri laboratuvarından gelen coinleri ekle
         data.symbols.forEach(symbol => {
-            // Eğer zaten yoksa ekle
-            if (!Array.from(select.options).some(opt => opt.value === symbol)) {
-                const option = document.createElement('option');
-                option.value = symbol;
-                option.textContent = symbol.replace('USDT', '/USDT');
-                select.appendChild(option);
-            }
+            const option = document.createElement('option');
+            option.value = symbol;  // DB'deki formatı kullan (örn: BTC/USDT:USDT)
+            option.textContent = symbol;  // Aynı formatı göster
+            select.appendChild(option);
         });
+
+        // İlk sembol seçildiğinde DB kontrolü yap
+        if (select.value) {
+            checkDbMumCount();
+        }
 
     } catch (error) {
         console.error('ML Training sembolleri yüklenemedi:', error);
