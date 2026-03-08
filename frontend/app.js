@@ -1,17 +1,39 @@
 // Menü / Sekme (Tab) Değiştirme Mantığı
 function setupTabs() {
+    console.log('🔧 [DEBUG] setupTabs() başlatıldı...');
+
     const buttons = document.querySelectorAll('.menu-item');
     const tabs = document.querySelectorAll('.tab-content');
 
+    console.log(`🔍 [DEBUG] ${buttons.length} menü butonu, ${tabs.length} tab bulundu`);
+
     buttons.forEach(btn => {
         btn.addEventListener('click', () => {
-            if (!btn.hasAttribute('data-target')) return;
+            console.log('🖱️ [DEBUG] Menü tıklandı:', btn);
+
+            if (!btn.hasAttribute('data-target')) {
+                console.log('⚠️ [DEBUG] data-target yok, atlanıyor');
+                return;
+            }
 
             buttons.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             const targetId = btn.getAttribute('data-target');
-            tabs.forEach(tab => { tab.style.display = 'none'; });
-            document.getElementById(targetId).style.display = 'block';
+
+            console.log('📂 [DEBUG] Hedef tab:', targetId);
+
+            tabs.forEach(tab => {
+                tab.style.display = 'none';
+                console.log('❌ [DEBUG] Tab gizlendi:', tab.id);
+            });
+
+            const targetTab = document.getElementById(targetId);
+            if (targetTab) {
+                targetTab.style.display = 'block';
+                console.log('✅ [DEBUG] Tab açıldı:', targetId);
+            } else {
+                console.error('❌ [DEBUG] Tab bulunamadı:', targetId);
+            }
 
             // Sekmelere özel işlemler
             if (targetId === 'tab-history') {
