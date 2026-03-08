@@ -725,6 +725,20 @@ async def start_bot(data: Dict[str, Any]):
         )
 
         # ============================================
+        # KRİTİK: Strateji instance'ını oluştur ve kaydet
+        # ============================================
+        from strategy.manager import StrategyManager
+
+        # Strateji instance'ını oluştur
+        strategy_instance = StrategyManager.get_strategy(strategy_id)
+
+        # Paper engine'e kaydet (bot_id ile)
+        paper_engine.strategies[symbol] = strategy_instance
+        paper_engine.active_strategies[symbol] = strategy_id
+
+        logger.info(f"📚 [STRATEGY] {symbol} için {strategy_id} instance'ı kaydedildi")
+
+        # ============================================
         # KRİTİK: Poller'ı başlat (eğer henüz çalışmıyorsa)
         # ============================================
         # Bu sembol için poller zaten çalışıyor mu kontrol et
