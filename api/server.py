@@ -739,7 +739,7 @@ async def stop_bot(data: Dict[str, Any]):
     Belirli bir botu durdurur.
 
     Args:
-        data: {"bot_id": "BTC_USDT_USDT_future_TrendMaster_5m"}
+        data: {"bot_id": "BTC_USDT_USDT_future_TrendMaster_5m", "action": "stop"}
 
     Returns:
         Dict: {status: str}
@@ -760,6 +760,78 @@ async def stop_bot(data: Dict[str, Any]):
             return {"status": "error", "message": "Bot bulunamadı"}
     except Exception as e:
         logger.error(f"Bot durdurma hatası: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/api/v1/bot/resume")
+async def resume_bot(data: Dict[str, Any]):
+    """
+    Durdurulmuş botu devam ettirir.
+
+    Args:
+        data: {"bot_id": "...", "action": "resume"}
+
+    Returns:
+        Dict: {status: str}
+    """
+    from core.paper import paper_engine
+
+    bot_id = data.get('bot_id')
+
+    if not bot_id:
+        return {"status": "error", "message": "bot_id gerekli"}
+
+    try:
+        if bot_id not in paper_engine.active_bots:
+            return {"status": "error", "message": "Bot bulunamadı"}
+
+        # Bot durumunu 'running' yap
+        paper_engine.active_bots[bot_id]['status'] = 'running'
+
+        logger.info(f"▶️ Bot devam ettirildi: {bot_id}")
+        return {"status": "success", "message": f"Bot devam ettirildi: {bot_id}"}
+    except Exception as e:
+        logger.error(f"Bot devam ettirme hatası: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/api/v1/bot/remove")
+async def remove_bot(data: Dict[str, Any]):
+    """
+    Botu listeden kaldırır (sadece durdurulmuş botlar).
+
+    Args:
+        data: {"bot_id": "..."}
+
+    Returns:
+        Dict: {status: str}
+    """
+    from core.paper import paper_engine
+
+    bot_id = data.get('bot_id')
+
+    if not bot_id:
+        return {"status": "error", "message": "bot_id gerekli"}
+
+    try:
+        if bot_id not in paper_engine.active_bots:
+            return {"status": "error", "message": "Bot bulunamadı"}
+
+        # Bot çalışıyorsa önce durdur
+        if paper_engine.active_bots[bot_id].get('status') == 'running':
+            paper_engine.stop_bot(bot_id)
+
+        # Bot'u listeden kaldır
+        del paper_engine.active_bots[bot_id]
+        if bot_id in paper_engine.bot_positions:
+            del paper_engine.bot_positions[bot_id]
+        if bot_id in paper_engine.bot_state:
+            del paper_engine.bot_state[bot_id]
+
+        logger.info(f"🗑️ Bot kaldırıldı: {bot_id}")
+        return {"status": "success", "message": f"Bot kaldırıldı: {bot_id}"}
+    except Exception as e:
+        logger.error(f"Bot kaldırma hatası: {e}")
         return {"status": "error", "message": str(e)}
 
 

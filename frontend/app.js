@@ -1590,7 +1590,7 @@ async function stopBot(bot_id) {
     /**
      * Belirli bir botu durdurur.
      */
-    if (!confirm(`Botu durdurmak istediğinize emin misiniz?\n\nBot ID: ${bot_id}`)) {
+    if (!confirm(`Botu DURDURMAK istediğinize emin misiniz?\n\nBot ID: ${bot_id}\n\nBot durdurulduğunda pozisyonlar kapanmaz, sadece yeni işlem açmaz.`)) {
         return;
     }
 
@@ -1598,7 +1598,7 @@ async function stopBot(bot_id) {
         const response = await fetch('/api/v1/bot/stop', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bot_id: bot_id })
+            body: JSON.stringify({ bot_id: bot_id, action: 'stop' })
         });
 
         const result = await response.json();
@@ -1614,6 +1614,33 @@ async function stopBot(bot_id) {
     } catch (error) {
         console.error('Bot durdurma hatası:', error);
         showErrorToast(`❌ Bot durdurulamadı: ${error.message}`, 5000);
+    }
+}
+
+async function resumeBot(bot_id) {
+    /**
+     * Durdurulmuş botu devam ettirir.
+     */
+    try {
+        const response = await fetch('/api/v1/bot/resume', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bot_id: bot_id, action: 'resume' })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            console.log(`▶️ Bot devam ettirildi: ${bot_id}`);
+            showErrorToast(`▶️ Bot devam ettirildi: ${bot_id}`, 3000);
+            loadActiveBots(); // Bot listesini güncelle
+        } else {
+            console.error(`❌ Bot devam ettirme hatası: ${result.message}`);
+            showErrorToast(`❌ ${result.message}`, 5000);
+        }
+    } catch (error) {
+        console.error('Bot devam ettirme hatası:', error);
+        showErrorToast(`❌ Bot devam ettirilemedi: ${error.message}`, 5000);
     }
 }
 
@@ -1637,14 +1664,20 @@ async function loadActiveBots() {
         container.innerHTML = data.bots.map(bot => {
             // Backend ile aynı bot_id formatını kullan
             const botId = bot.bot_id || `${bot.symbol.replace('/', '_').replace(':', '_')}_${bot.market_type || 'future'}_${bot.strategy_id}_${bot.timeframe}`;
+            const isRunning = bot.status === 'running';
 
             return `
             <div class="card glass-panel" style="margin-bottom:15px;">
                 <div style="display:flex; justify-content:space-between; align-items:start;">
                     <div style="flex:1;">
-                        <h3 style="color:var(--neon-blue); margin:0 0 10px 0;">
-                            🤖 ${bot.strategy_id}
-                        </h3>
+                        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                            <h3 style="color:var(--neon-blue); margin:0;">
+                                🤖 ${bot.strategy_id}
+                            </h3>
+                            <span style="padding:4px 10px; border-radius:12px; font-size:0.7rem; font-weight:bold; background: ${isRunning ? 'rgba(46, 220, 135, 0.2)' : 'rgba(255, 69, 0, 0.2)'}; color: ${isRunning ? 'var(--neon-green)' : 'var(--neon-red)'};">
+                                ${isRunning ? '● ÇALIŞIYOR' : '● DURDURULDU'}
+                            </span>
+                        </div>
                         <div style="font-size:0.85rem; color:var(--text-muted);">
                             <div><strong>Sembol:</strong> ${bot.symbol}</div>
                             <div><strong>Timeframe:</strong> ${bot.timeframe}</div>
@@ -1654,17 +1687,32 @@ async function loadActiveBots() {
                         </div>
                     </div>
                     <div style="text-align:right;">
-                        <div style="font-size:1.5rem; font-weight:bold; color:${bot.state?.realized_pnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'};">
+                        <div style="font-size:1.5rem; font-weight:bold; color:${(bot.state?.realized_pnl || 0) >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'};">
                             $${(bot.state?.realized_pnl || 0).toFixed(2)}
                         </div>
                         <div style="font-size:0.75rem; color:var(--text-muted);">
                             PnL (${bot.positions_count || 0} pozisyon)
                         </div>
-                        <button class="btn btn-danger"
-                                onclick="stopBot('${botId}')"
-                                style="margin-top:10px; padding:8px 15px; font-size:0.75rem;">
-                            🛑 Durdur
-                        </button>
+                        <div style="display:flex; gap:8px; margin-top:10px;">
+                            ${isRunning ? `
+                            <button class="btn btn-danger"
+                                    onclick="stopBot('${botId}')"
+                                    style="padding:8px 15px; font-size:0.75rem;">
+                                🛑 Durdur
+                            </button>
+                            ` : `
+                            <button class="btn btn-success"
+                                    onclick="resumeBot('${botId}')"
+                                    style="padding:8px 15px; font-size:0.75rem;">
+                                ▶️ Devam Et
+                            </button>
+                            `}
+                            <button class="btn"
+                                    onclick="removeBot('${botId}')"
+                                    style="padding:8px 15px; font-size:0.75rem; background:rgba(255,255,255,0.05);">
+                                🗑️ Kaldır
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1679,7 +1727,40 @@ async function loadActiveBots() {
 // Global'e ekle
 window.startBot = startBot;
 window.stopBot = stopBot;
+window.resumeBot = resumeBot;
+window.removeBot = removeBot;
 window.loadActiveBots = loadActiveBots;
+
+async function removeBot(bot_id) {
+    /**
+     * Botu listeden kaldırır (durdurulmuş botlar için).
+     */
+    if (!confirm(`Botu LİSTEDEN KALDIRMAK istediğinize emin misiniz?\n\nBot ID: ${bot_id}\n\nBu işlem botu tamamen kaldıracak.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/v1/bot/remove', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bot_id: bot_id })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            console.log(`🗑️ Bot kaldırıldı: ${bot_id}`);
+            showErrorToast(`🗑️ Bot kaldırıldı: ${bot_id}`, 3000);
+            loadActiveBots(); // Bot listesini güncelle
+        } else {
+            console.error(`❌ Bot kaldırma hatası: ${result.message}`);
+            showErrorToast(`❌ ${result.message}`, 5000);
+        }
+    } catch (error) {
+        console.error('Bot kaldırma hatası:', error);
+        showErrorToast(`❌ Bot kaldırılamadı: ${error.message}`, 5000);
+    }
+}
 
 async function loadBotFormOptions() {
     /**
