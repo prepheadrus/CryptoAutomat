@@ -543,10 +543,10 @@ class PaperTrader:
             if final_signal != 1:
                 logger.debug(f"[FILTER] {symbol} ML Güven Skoru Yetersiz: {ml_confidence:.2f} (Eşik: {threshold})")
 
-    def process_bot_signal(self, bot_id: str, df: pd.DataFrame, current_price: float, htf_trend: str = "NEUTRAL", regime: str = "UNKNOWN"):
+    async def process_bot_signal(self, bot_id: str, df: pd.DataFrame, current_price: float, htf_trend: str = "NEUTRAL", regime: str = "UNKNOWN"):
         """
         Belirli bir bot için sinyal işleme ve pozisyon yönetimi.
-        Her bot izole olarak işlenir.
+        Her bot izole olarak işlenir (ASYNC).
 
         Args:
             bot_id: Bot ID
@@ -608,18 +608,18 @@ class PaperTrader:
             # Açık pozisyon var mı kontrol et (bu bot için)
             if not any(pos['symbol'] == symbol and pos.get('bot_id') == bot_id for pos in self.open_positions):
                 # LONG pozisyon aç
-                asyncio.create_task(self._open_new_position(symbol, "LONG", current_price, latest_candle, ml_confidence * 100, ml_recommendation, bot_id=bot_id))
+                await self._open_new_position(symbol, "LONG", current_price, latest_candle, ml_confidence * 100, ml_recommendation, bot_id=bot_id)
         elif final_signal == 0:  # SHORT
             # Spot ise LONG kapat
             if bot_info.get('market_type') == 'spot':
                 for i, pos in enumerate(self.open_positions):
                     if pos['symbol'] == symbol and pos.get('bot_id') == bot_id and pos['direction'] == "LONG":
-                        asyncio.create_task(self._close_position(i, pos, current_price, "Spot SHORT sinyali"))
+                        await self._close_position(i, pos, current_price, "Spot SHORT sinyali")
                         return
             else:
                 # Futures ise SHORT aç
                 if not any(pos['symbol'] == symbol and pos.get('bot_id') == bot_id for pos in self.open_positions):
-                    asyncio.create_task(self._open_new_position(symbol, "SHORT", current_price, latest_candle, ml_confidence * 100, ml_recommendation, bot_id=bot_id))
+                    await self._open_new_position(symbol, "SHORT", current_price, latest_candle, ml_confidence * 100, ml_recommendation, bot_id=bot_id)
 
         logger.debug(f"🤖 [BOT] {bot_id} işlendi: Signal={final_signal}, Price={current_price:.2f}")
 

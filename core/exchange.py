@@ -359,7 +359,32 @@ class ExchangeManager:
                 del self.active_downloads[key]
                 
         return all_downloaded
-                
+
+    async def _process_bot_task(self, paper_engine, bot_id: str, df: pd.DataFrame, current_price: float, htf_trend: str, regime: str):
+        """
+        Tek bir bot için sinyal işleme task'ı (async, izole, hata korumalı).
+
+        Args:
+            paper_engine: PaperTrader instance
+            bot_id: İşlenecek bot ID
+            df: İndikatörlerle DataFrame
+            current_price: Güncel fiyat
+            htf_trend: Yüksek timeframe trend
+            regime: Piyasa rejimi
+        """
+        try:
+            # Bot sinyal işleme (ASYNC - await ile bekle)
+            await paper_engine.process_bot_signal(
+                bot_id=bot_id,
+                df=df,
+                current_price=current_price,
+                htf_trend=htf_trend,
+                regime=regime
+            )
+        except Exception as e:
+            logger.error(f"❌ [BOT TASK] {bot_id} işlem hatası: {e}")
+            raise  # Gather'da yakalanması için tekrar fırlat
+
     async def run_strategy_poller(self, symbol, timeframe='1m'):
         """
         Gelişmiş Strateji Motoru:
@@ -526,7 +551,7 @@ class ExchangeManager:
                     logger.debug(f"▶️ {symbol} strateji aktif: {active_strat_id}, strategy={strategy}")
 
                     # ============================================
-                    # YENİ 1-to-N MİMARİSİ: active_bots üzerinden tüm botları işle
+                    # YENİ 1-to-N MİMARİSİ: Merkezi Poller, Dağıtık İşleme
                     # ============================================
                     # Bu sembol için aktif tüm botları bul
                     active_bot_ids = [
@@ -537,24 +562,35 @@ class ExchangeManager:
                     if active_bot_ids:
                         logger.info(f"🤖 [1-to-N] {symbol} için {len(active_bot_ids)} aktif bot işleniyor...")
 
-                        # Her bot için sinyal işleme (asenkron, izole)
+                        # PARALEL İŞLEME: Her bot için asenkron task oluştur
+                        # Kritik: 1h botunun ML hesaplaması 1m botunu bekletmez!
+                        bot_tasks = []
                         for bot_id in active_bot_ids:
+                            # Her bot task'ı ayrı oluştur (non-blocking)
+                            task = asyncio.create_task(
+                                self._process_bot_task(paper_engine, bot_id, df_target, current_price, htf_trend, regime_info['regime'])
+                            )
+                            bot_tasks.append(task)
+
+                        # Tüm botları PARALEL çalıştır (gather)
+                        # Hata yönetimi: Bir bot çökerse diğerleri etkilenmez
+                        if bot_tasks:
                             try:
-                                paper_engine.process_bot_signal(
-                                    bot_id=bot_id,
-                                    df=df_target,
-                                    current_price=current_price,
-                                    htf_trend=htf_trend,
-                                    regime=regime_info['regime']
-                                )
-                                logger.debug(f"✅ [BOT] {bot_id} işlendi")
-                            except Exception as bot_err:
-                                logger.error(f"❌ [BOT] {bot_id} işleme hatası: {bot_err}")
+                                results = await asyncio.gather(*bot_tasks, return_exceptions=True)
+
+                                # Sonuçları logla
+                                for bot_id, result in zip(active_bot_ids, results):
+                                    if isinstance(result, Exception):
+                                        logger.error(f"❌ [BOT] {bot_id} işleme hatası: {result}")
+                                    else:
+                                        logger.debug(f"✅ [BOT] {bot_id} başarıyla işlendi")
+                            except Exception as gather_err:
+                                logger.error(f"❌ [1-to-N] Gather hatası: {gather_err}")
                     else:
                         logger.debug(f"⚠️ [1-to-N] {symbol} için aktif bot yok")
 
                     # ============================================
-                    # ESKİ MİMARİ (Geriyə dönük uyumluluk)
+                    # ESKİ MİMARİ (Geriye dönük uyumluluk - kaldırılacak)
                     # ============================================
                     from strategy.manager import StrategyManager
 
