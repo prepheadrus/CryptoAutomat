@@ -1546,10 +1546,135 @@ async function fetchAnalysableSymbols() {
 window.runMLVisualAnalysis = runMLVisualAnalysis;
 window.fetchAnalysableSymbols = fetchAnalysableSymbols;
 
-// Strateji Yönetimi Fonksiyonları
-window.selectStrategy = selectStrategy;
-window.stopStrategy = stopStrategy;
-window.restartStrategy = restartStrategy;
+// ============================================
+// 1-to-N (ÇOKLU BOT) MİMARİSİ FONKSİYONLARI
+// ============================================
+
+async function startBot(symbol, strategy_id, timeframe, market_type = 'future', margin_type = 'isolated') {
+    /**
+     * Yeni bir bot başlatır. Aynı sembolde birden fazla bot çalışabilir.
+     */
+    try {
+        const response = await fetch('/api/v1/bot/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                symbol: symbol,
+                strategy_id: strategy_id,
+                timeframe: timeframe,
+                market_type: market_type,
+                margin_type: margin_type
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            console.log(`✅ Bot başlatıldı: ${result.bot_id}`);
+            showErrorToast(`🤖 Bot başlatıldı: ${result.bot_id}`, 3000);
+            loadActiveBots(); // Bot listesini güncelle
+            return result.bot_id;
+        } else {
+            console.error(`❌ Bot başlatma hatası: ${result.message}`);
+            showErrorToast(`❌ ${result.message}`, 5000);
+            return null;
+        }
+    } catch (error) {
+        console.error('Bot başlatma hatası:', error);
+        showErrorToast(`❌ Bot başlatılamadı: ${error.message}`, 5000);
+        return null;
+    }
+}
+
+async function stopBot(bot_id) {
+    /**
+     * Belirli bir botu durdurur.
+     */
+    if (!confirm(`Botu durdurmak istediğinize emin misiniz?\n\nBot ID: ${bot_id}`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/v1/bot/stop', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bot_id: bot_id })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            console.log(`🛑 Bot durduruldu: ${bot_id}`);
+            showErrorToast(`🛑 Bot durduruldu: ${bot_id}`, 3000);
+            loadActiveBots(); // Bot listesini güncelle
+        } else {
+            console.error(`❌ Bot durdurma hatası: ${result.message}`);
+            showErrorToast(`❌ ${result.message}`, 5000);
+        }
+    } catch (error) {
+        console.error('Bot durdurma hatası:', error);
+        showErrorToast(`❌ Bot durdurulamadı: ${error.message}`, 5000);
+    }
+}
+
+async function loadActiveBots() {
+    /**
+     * Tüm aktif botları yükler ve tabloda gösterir.
+     */
+    try {
+        const response = await fetch('/api/v1/bots/list');
+        const data = await response.json();
+
+        const container = document.getElementById('active-bots-container');
+        if (!container) return;
+
+        if (!data.bots || data.bots.length === 0) {
+            container.innerHTML = '<p style="text-align:center; padding:40px; color:var(--text-muted);">Aktif bot yok</p>';
+            return;
+        }
+
+        // Bot kartlarını oluştur
+        container.innerHTML = data.bots.map(bot => `
+            <div class="card glass-panel" style="margin-bottom:15px;">
+                <div style="display:flex; justify-content:space-between; align-items:start;">
+                    <div style="flex:1;">
+                        <h3 style="color:var(--neon-blue); margin:0 0 10px 0;">
+                            🤖 ${bot.strategy_id}
+                        </h3>
+                        <div style="font-size:0.85rem; color:var(--text-muted);">
+                            <div><strong>Sembol:</strong> ${bot.symbol}</div>
+                            <div><strong>Timeframe:</strong> ${bot.timeframe}</div>
+                            <div><strong>Market:</strong> ${bot.market_type}</div>
+                            <div><strong>Bot ID:</strong> <code style="font-size:0.75rem;">${bot.bot_id || bot.symbol}_${bot.strategy_id}_${bot.timeframe}</code></div>
+                            <div><strong>Başlangıç:</strong> ${new Date(bot.started_at).toLocaleString()}</div>
+                        </div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:1.5rem; font-weight:bold; color:${bot.state?.realized_pnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'};">
+                            $${(bot.state?.realized_pnl || 0).toFixed(2)}
+                        </div>
+                        <div style="font-size:0.75rem; color:var(--text-muted);">
+                            PnL (${bot.positions_count || 0} pozisyon)
+                        </div>
+                        <button class="btn btn-danger"
+                                onclick="stopBot('${bot.bot_id || bot.symbol}_${bot.strategy_id}_${bot.timeframe}')"
+                                style="margin-top:10px; padding:8px 15px; font-size:0.75rem;">
+                            🛑 Durdur
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+    } catch (error) {
+        console.error('Aktif botlar yüklenemedi:', error);
+    }
+}
+
+// Global'e ekle
+window.startBot = startBot;
+window.stopBot = stopBot;
+window.loadActiveBots = loadActiveBots;
 
 /**
  * Strateji uygula ve başlat

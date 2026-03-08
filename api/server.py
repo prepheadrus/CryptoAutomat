@@ -685,6 +685,123 @@ def save_training_metadata(symbol: str, timeframe: str, limit: int, metrics: dic
     except Exception as e:
         logger.error(f"Training metadata kaydedilemedi: {e}")
 
+@app.post("/api/v1/bot/start")
+async def start_bot(data: Dict[str, Any]):
+    """
+    Yeni bir bot başlatır. Aynı sembolde birden fazla bot çalışabilir (1-to-N).
+
+    Args:
+        data: {
+            "symbol": "BTC/USDT:USDT",
+            "strategy_id": "TrendMaster",
+            "timeframe": "5m",
+            "market_type": "future",
+            "margin_type": "isolated"
+        }
+
+    Returns:
+        Dict: {bot_id: str, status: str}
+    """
+    from core.paper import paper_engine
+
+    symbol = data.get('symbol')
+    strategy_id = data.get('strategy_id')
+    timeframe = data.get('timeframe', '1m')
+    market_type = data.get('market_type', 'future')
+    margin_type = data.get('margin_type', 'isolated')
+
+    if not symbol or not strategy_id:
+        return {"status": "error", "message": "symbol ve strategy_id gerekli"}
+
+    try:
+        # Bot başlat (1-to-N mimarisi)
+        bot_id = paper_engine.start_bot(
+            symbol=symbol,
+            strategy_id=strategy_id,
+            timeframe=timeframe,
+            market_type=market_type,
+            margin_type=margin_type
+        )
+
+        return {
+            "status": "success",
+            "bot_id": bot_id,
+            "message": f"Bot başlatıldı: {bot_id}"
+        }
+    except Exception as e:
+        logger.error(f"Bot başlatma hatası: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/api/v1/bot/stop")
+async def stop_bot(data: Dict[str, Any]):
+    """
+    Belirli bir botu durdurur.
+
+    Args:
+        data: {"bot_id": "BTC_USDT_USDT_future_TrendMaster_5m"}
+
+    Returns:
+        Dict: {status: str}
+    """
+    from core.paper import paper_engine
+
+    bot_id = data.get('bot_id')
+
+    if not bot_id:
+        return {"status": "error", "message": "bot_id gerekli"}
+
+    try:
+        success = paper_engine.stop_bot(bot_id)
+
+        if success:
+            return {"status": "success", "message": f"Bot durduruldu: {bot_id}"}
+        else:
+            return {"status": "error", "message": "Bot bulunamadı"}
+    except Exception as e:
+        logger.error(f"Bot durdurma hatası: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.get("/api/v1/bot/status")
+async def get_bot_status(bot_id: str):
+    """
+    Belirli bir botun durumunu döner.
+
+    Args:
+        bot_id: Bot ID
+
+    Returns:
+        Dict: Bot durumu
+    """
+    from core.paper import paper_engine
+
+    try:
+        status = paper_engine.get_bot_status(bot_id)
+        return {"status": "success", "bot": status}
+    except Exception as e:
+        logger.error(f"Bot durum hatası: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.get("/api/v1/bots/list")
+async def get_all_bots():
+    """
+    Tüm aktif botların listesini döner.
+
+    Returns:
+        Dict: {bots: list}
+    """
+    from core.paper import paper_engine
+
+    try:
+        bots = paper_engine.get_all_bots()
+        return {"status": "success", "bots": bots}
+    except Exception as e:
+        logger.error(f"Bot listesi hatası: {e}")
+        return {"status": "error", "message": str(e)}
+
+
 @app.post("/api/v1/strategy/select")
 async def change_strategy(req: StrategySelectSchema):
     """Arayüzden gelen komutla botun beynini anında değiştirir."""

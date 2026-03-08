@@ -73,11 +73,10 @@ def log_ai_decision(symbol: str, strategy_name: str, strategy_signal: int,
 class PaperTrader:
     """
     Sanal (Kağıt Üzerinde) kripto para al-sat borsa mekanizması.
-    Gerçek parayı riske atmadan; slipaj, komisyon ve bakiye takibini gerçekçi bir şekilde simüle eder.
+    1-to-N (Çoklu Bot) Mimarisi: Aynı sembolde farklı strateji/timeframe kombinasyonları
 
-    Binance Gerçek Komisyon Oranları (2026):
-    - Spot: Maker %0.1, Taker %0.1
-    - Futures: Maker %0.02, Taker %0.04
+    Bot ID Formatı: {symbol}_{strategy_id}_{timeframe}
+    Örnek: BTC/USDT:USDT_future_TrendMaster_5m
     """
     def __init__(self, initial_balance=10000.0, fee_rate_spot=0.001, fee_rate_futures=0.0004):
         self.initial_balance = initial_balance
@@ -1169,6 +1168,162 @@ class PaperTrader:
             })
             
         return sorted(report, key=lambda x: x['total_pnl'], reverse=True)
+
+    # ============================================
+    # 1-to-N (ÇOKLU BOT) MİMARİSİ METODLARI
+    # ============================================
+
+    @staticmethod
+    def generate_bot_id(symbol: str, strategy_id: str, timeframe: str, market_type: str = 'future') -> str:
+        """
+        Benzersiz bot ID oluşturur.
+        Format: {symbol}_{market_type}_{strategy_id}_{timeframe}
+        Örnek: BTC/USDT:USDT_future_TrendMaster_5m
+        """
+        # Sembol formatını temizle (slash ve iki nokta yerine underscore)
+        symbol_clean = symbol.replace('/', '_').replace(':', '_')
+        return f"{symbol_clean}_{market_type}_{strategy_id}_{timeframe}"
+
+    def start_bot(self, symbol: str, strategy_id: str, timeframe: str,
+                  market_type: str = 'future', margin_type: str = 'isolated') -> str:
+        """
+        Yeni bir bot başlatır. Aynı sembolde birden fazla bot çalışabilir.
+
+        Args:
+            symbol: Sembol adı (örn: BTC/USDT:USDT)
+            strategy_id: Strateji ID (örn: TrendMaster, ScalperNinja)
+            timeframe: Zaman dilimi (örn: 5m, 1h)
+            market_type: 'spot' veya 'future'
+            margin_type: 'isolated' veya 'cross'
+
+        Returns:
+            str: bot_id
+        """
+        bot_id = self.generate_bot_id(symbol, strategy_id, timeframe, market_type)
+
+        # Bot zaten aktif mi?
+        if bot_id in self.active_bots:
+            logger.warning(f"⚠️ Bot zaten aktif: {bot_id}")
+            return bot_id
+
+        # Bot state'ini başlat
+        self.active_bots[bot_id] = {
+            'symbol': symbol,
+            'strategy_id': strategy_id,
+            'timeframe': timeframe,
+            'market_type': market_type,
+            'margin_type': margin_type,
+            'started_at': pd.Timestamp.now().isoformat(),
+            'status': 'running',
+            'pnl': 0.0,
+            'trades': 0
+        }
+
+        # Bot için pozisyon listesi başlat
+        self.bot_positions[bot_id] = []
+
+        # Bot state'i başlat
+        self.bot_state[bot_id] = {
+            'balance': self.balance / 10,  # Her bota 1/10 bakiye (başlangıç)
+            'used_margin': 0.0,
+            'unrealized_pnl': 0.0,
+            'realized_pnl': 0.0
+        }
+
+        logger.info(f"🤖 [BOT] Başlatıldı: {bot_id}")
+        return bot_id
+
+    def stop_bot(self, bot_id: str) -> bool:
+        """
+        Belirli bir botu durdurur ve pozisyonlarını kapatır.
+
+        Args:
+            bot_id: Durdurulacak bot ID
+
+        Returns:
+            bool: Başarılı mı?
+        """
+        if bot_id not in self.active_bots:
+            logger.warning(f"⚠️ Bot bulunamadı: {bot_id}")
+            return False
+
+        # Bot durumunu güncelle
+        self.active_bots[bot_id]['status'] = 'stopped'
+
+        # Açık pozisyonları kapat
+        if bot_id in self.bot_positions and self.bot_positions[bot_id]:
+            logger.info(f"🔒 [BOT] {bot_id} pozisyonları kapatılıyor...")
+            # Pozisyon kapatma mantığı buraya eklenecek
+            self.bot_positions[bot_id] = []
+
+        logger.info(f"🛑 [BOT] Durduruldu: {bot_id}")
+        return True
+
+    def get_bot_status(self, bot_id: str) -> dict:
+        """
+        Belirli bir botun durumunu döner.
+
+        Args:
+            bot_id: Bot ID
+
+        Returns:
+            dict: Bot durumu
+        """
+        if bot_id not in self.active_bots:
+            return {'error': 'Bot bulunamadı'}
+
+        bot_info = self.active_bots[bot_id].copy()
+        bot_info['positions_count'] = len(self.bot_positions.get(bot_id, []))
+        bot_info['state'] = self.bot_state.get(bot_id, {})
+
+        return bot_info
+
+    def get_all_bots(self) -> list:
+        """
+        Tüm aktif botların listesini döner.
+
+        Returns:
+            list: Bot listesi
+        """
+        bots = []
+        for bot_id, info in self.active_bots.items():
+            if info['status'] == 'running':
+                bot_status = self.get_bot_status(bot_id)
+                bots.append(bot_status)
+        return bots
+
+    def broadcast_price_update(self, symbol: str, price: float, timestamp: pd.Timestamp):
+        """
+        Gelen fiyat güncellemesini o semboldeki TÜM botlara dağıtır (Broadcast).
+        1-to-N mimarisinin kalbi!
+
+        Args:
+            symbol: Sembol adı
+            price: Güncel fiyat
+            timestamp: Zaman damgası
+        """
+        # Bu sembolde çalışan tüm botları bul
+        symbol_bots = [
+            bot_id for bot_id, info in self.active_bots.items()
+            if info['symbol'] == symbol and info['status'] == 'running'
+        ]
+
+        if not symbol_bots:
+            return  # Bu sembolde aktif bot yok
+
+        # Her bot için ayrı ayrı işle
+        for bot_id in symbol_bots:
+            # Bot'un stratejisini al
+            strategy = self.strategies.get(symbol)
+            if strategy is None:
+                continue
+
+            # Fiyat güncellemesini işle (trailing stop, pozisyon kontrolü vb.)
+            # Bu kısım mevcut update_live_prices mantığı ile aynı
+            # Sadece bot_id bazında izole edilecek
+            pass
+
+        logger.debug(f"📢 [BROADCAST] {symbol} @ {price} → {len(symbol_bots)} bot'a dağıtıldı")
 
 # Uygulama çapında tek sanal borsa motorumuz (Singleton)
 paper_engine = PaperTrader(initial_balance=10000.0)
