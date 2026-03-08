@@ -1093,25 +1093,27 @@ async def _run_ml_training(req: MLTrainRequest):
         df = StrategyIndicators.add_all_indicators(df)
 
         # ============================================
-        # DATA LEAKAGE ÖNLEME (KRİTİK!)
+        # DATA LEAKAGE ÖNLEME - DOĞRU SIRALAMA!
         # ============================================
-        # future_ret, target, signal vb. GELECEK bilgisi içeren TÜM kolonları sil
-        leakage_columns = [
-            'future_ret',      # Gelecek getiri (EN KRİTİK!)
-            'target',          # Hedef değişken (y olacak, X'te olamaz!)
+        # target kolonunu SAKLA (y olacak), sadece X'ten çıkarılacak kolonları belirle
+        # future_ret, signal, prediction vb. X'te OLMAMALI
+
+        leakage_columns_for_X = [
+            'future_ret',      # Gelecek getiri (X'te olamaz!)
             'signal',          # Sinyal (gelecek)
             'prediction',      # Tahmin (gelecek)
             'barrier_reason',  # Barrier bilgisi (gelecek)
             'upper_barrier',   # Üst bariyer (gelecek)
             'lower_barrier',   # Alt bariyer (gelecek)
+            # 'target' SAKLANIR! (y olacak, prepare_ml_data'da ayrıştırılacak)
         ]
 
-        # Sütunları kontrol et ve varsa sil
-        cols_to_drop = [col for col in leakage_columns if col in df.columns]
+        # Sütunları kontrol et ve X'ten çıkar (target hariç!)
+        cols_to_drop = [col for col in leakage_columns_for_X if col in df.columns]
         if cols_to_drop:
             df = df.drop(columns=cols_to_drop)
-            logger.info(f"🛡️ [ML] {len(cols_to_drop)} leakage kolonu silindi: {cols_to_drop}")
-            logger.info(f"🛡️ [ML] Silinen kolonlar: {cols_to_drop}")
+            logger.info(f"🛡️ [ML] {len(cols_to_drop)} leakage kolonu X'ten silindi: {cols_to_drop}")
+            logger.info(f"🛡️ [ML] target kolonu korundu (y olarak ayrıştırılacak)")
         else:
             logger.warning("⚠️ [ML] Hiçbir leakage kolonu bulunamadı - future_ret var mı kontrol et!")
 
