@@ -390,20 +390,19 @@ class ExchangeManager:
 
     async def run_strategy_poller(self, symbol, timeframe='1m'):
         """
-        Gelişmiş Strateji Motoru:
-        1. Daima 1m (en hassas) mumları indirir.
-        2. Pariteye atanmış hedef vadeye (Örn: 15m) göre verileri yeniden paketler (Resampling).
-        3. Sadece 'Vade Kapanışında' stratejiyi çalıştırır (Yanıltıcı sinyalleri önler).
-        4. GMT+3 uyumlu zamanlama kontrolü yapar.
-        5. WFO (Walk-Forward Optimization) ile otonom parametre optimizasyonu yapar.
+        HYBRID (Local DB + REST Gap + WebSocket Push) Strateji Motoru:
+        1. Yerel DB'den 1500 mum çek (Warm-up)
+        2. Eksik varsa REST API ile doldur (Gap Fill)
+        3. watch_ohlcv ile WSS üzerinden canlı mumları dinle
+        4. Resample + İndikatörler hesapla
+        5. 1-to-N botlara broadcast et
         """
         from core.paper import paper_engine
         from data.indicators import StrategyIndicators
         from data.features import AdvancedFeatures
         from core.detector import MarketRegimeDetector
-        import pickle
-        import os
-        import time
+        from data.database import db_manager
+        import ccxt
 
         # Eğitilmiş modeli yükle
         xgb_model = None
