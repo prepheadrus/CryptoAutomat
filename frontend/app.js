@@ -1675,6 +1675,44 @@ window.stopBot = stopBot;
 window.resumeBot = resumeBot;
 window.removeBot = removeBot;
 window.loadActiveBots = loadActiveBots;
+window.handleStartBot = handleStartBot;
+
+// ============================================
+// EVENT DELEGATION - Bot Başlatma Formu
+// ============================================
+document.addEventListener('submit', async function(e) {
+    // Bot başlatma formu submit event'i yakala
+    if (e.target && e.target.id === 'bot-start-form') {
+        e.preventDefault();
+        console.log('🖱️ [DEBUG] Bot başlatma formu submit edildi');
+
+        try {
+            // Form verilerini topla
+            const formData = new FormData(e.target);
+            const symbol = formData.get('symbol') || document.getElementById('bot-symbol')?.value;
+            const strategy = formData.get('strategy') || document.getElementById('bot-strategy')?.value;
+            const timeframe = formData.get('timeframe') || document.getElementById('bot-timeframe')?.value;
+            const market = formData.get('market') || document.getElementById('bot-market')?.value;
+
+            console.log('📊 [DEBUG] Form verileri:', { symbol, strategy, timeframe, market });
+
+            if (!symbol || !strategy || !timeframe) {
+                showErrorToast('❌ Lütfen tüm alanları doldurun!', 3000);
+                return;
+            }
+
+            // Bot başlat
+            await startBot(symbol, strategy, timeframe, market);
+
+            // Formu sıfırla
+            e.target.reset();
+
+        } catch (error) {
+            console.error('❌ [DEBUG] Form submit hatası:', error);
+            showErrorToast('❌ Bot başlatılamadı: ' + error.message, 5000);
+        }
+    }
+});
 
 async function removeBot(bot_id) {
     /**

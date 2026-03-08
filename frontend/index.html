@@ -747,7 +747,7 @@
                     </div>
 
                     <!-- YENİ BOT BAŞLATMA FORMU -->
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end; margin-bottom: 20px;">
+                    <form id="bot-start-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end; margin-bottom: 20px;">
                         <div>
                             <label style="font-size:0.75rem; color:var(--text-muted);">Sembol</label>
                             <select id="bot-symbol" class="strategy-select" style="width: 100%;">
@@ -792,11 +792,11 @@
                             </select>
                         </div>
 
-                        <button class="btn btn-success" onclick="handleStartBot()"
+                        <button type="submit" class="btn btn-success"
                                 style="padding: 10px 20px; font-weight: bold; width: 100%;">
                             ▶ Bot Başlat
                         </button>
-                    </div>
+                    </form>
 
                     <!-- AKTİF BOTLAR LİSTESİ -->
                     <div id="active-bots-container">
