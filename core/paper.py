@@ -112,17 +112,13 @@ class PaperTrader:
         self.total_commission = 0.0
         self.market_regime = "UNKNOWN"
 
-        # ML Model Yükleme (Eğitilmiş model varsa) - DİNAMİK MODEL YÜKLEME
+        # ML Model değişkenleri (sonra yüklenecek)
         self.ml_model = None
         self.rf_model = None  # Random Forest (Ensemble için)
         self.ml_enabled = False
         self.ml_timeframe_mismatch = False  # Timeframe uyumsuzluğu flag
         self.wfo_enabled = CONFIG.get('wfo', {}).get('enabled', True)  # WFO aktif mi?
 
-        if ML_AVAILABLE:
-            # Her sembol için dinamik model yükleme
-            for symbol, timeframe in self.active_timeframes.items():
-                self._load_ml_model_for_symbol(symbol, timeframe)
         # Dinamik Strateji (Bot) Yönetimi - ARTIK SEMBOL BAZLI
         from strategy.manager import StrategyManager
         self.active_strategies = {} # symbol -> strategy_id
@@ -130,15 +126,21 @@ class PaperTrader:
         self.active_timeframes = {} # symbol -> timeframe (1m, 5m, 15m vb.)
         self.market_types = {}      # symbol -> 'spot' | 'swap' | 'future'
         self.margin_types = {}      # symbol -> 'isolated' | 'cross'
-        
+
         # Tüm pariteleri varsayılan 'trend_master' ve '1m' ile başlat
         for symbol in CONFIG['trading']['symbols']:
             self.active_strategies[symbol] = "trend_master"
             self.strategies[symbol] = StrategyManager.get_strategy("trend_master")
             self.active_timeframes[symbol] = "1m"
-        
+
         # Arayüze botun ne düşündüğünü yansıtmak için son kararları parite bazlı sakla
         self.latest_decisions = {}
+
+        # ML Modellerini yükle (active_timeframes tanımlandıktan sonra)
+        if ML_AVAILABLE:
+            # Her sembol için dinamik model yükleme
+            for symbol, timeframe in self.active_timeframes.items():
+                self._load_ml_model_for_symbol(symbol, timeframe)
 
     def _load_ml_model_for_symbol(self, symbol: str, timeframe: str):
         """
