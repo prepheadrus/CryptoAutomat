@@ -802,10 +802,10 @@ async def get_all_bots():
         return {"status": "error", "message": str(e)}
 
 
-@app.get("/api/v1/strategy/list")
+@app.get("/api/v1/strategies")
 async def get_strategy_list():
     """
-    Sistemdeki tüm stratejileri döner.
+    Sistemdeki tüm stratejileri döner (builtin + custom).
     HER İSTEKTE dinamik stratejiler yeniden yüklenir (güncel liste için).
 
     Returns:

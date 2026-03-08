@@ -1718,18 +1718,20 @@ async function loadBotFormOptions() {
         }
 
         // 2. Stratejileri yükle (OPTGROUP ile grupla)
-        console.log('📡 [DEBUG] Stratejiler API çağrısı: /api/v1/strategy/list');
+        console.log('📡 [DEBUG] Stratejiler API çağrısı: /api/v1/strategies');
 
-        // Önce API'yi test et
+        // Önce API'yi test et - DOĞRU ENDPOINT
         try {
-            const testRes = await fetch('/api/v1/strategy/list');
+            const testRes = await fetch('/api/v1/strategies');
             const testData = await testRes.json();
             console.log('🧪 [DEBUG] Test API Response:', testData);
+            console.log('🔍 [DEBUG] İlk strateji:', testData.strategies ? testData.strategies[0] : 'YOK');
         } catch (testErr) {
             console.error('❌ [DEBUG] Test API hatası:', testErr);
         }
 
-        const strategiesRes = await fetch('/api/v1/strategy/list?t=' + Date.now()); // Cache bypass
+        // DOĞRU ENDPOINT: /api/v1/strategies (strategy_builder.py/list DEĞİL!)
+        const strategiesRes = await fetch('/api/v1/strategies?t=' + Date.now()); // Cache bypass
         const strategiesData = await strategiesRes.json();
 
         console.log('📊 [DEBUG] API Response TAM:', JSON.stringify(strategiesData, null, 2));
