@@ -441,7 +441,15 @@ class ExchangeManager:
 
                 # DataFrame'e dönüştür
                 ohlcv_df = pd.DataFrame(db_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-                ohlcv_df['timestamp'] = pd.to_datetime(ohlcv_df['timestamp'], unit='ms')
+
+                # SQLite'dan gelen timestamp string veya int olabilir, her ikisini de parse et
+                if ohlcv_df['timestamp'].dtype == 'object':
+                    # String formatında (SQLite datetime)
+                    ohlcv_df['timestamp'] = pd.to_datetime(ohlcv_df['timestamp'])
+                else:
+                    # Integer formatında (ms timestamp)
+                    ohlcv_df['timestamp'] = pd.to_datetime(ohlcv_df['timestamp'], unit='ms')
+
                 ohlcv_df.set_index('timestamp', inplace=True)
 
                 last_db_time = ohlcv_df.index[-1]
@@ -583,22 +591,34 @@ class ExchangeManager:
                 # ============================================
                 # YENİ MUM FİLTRESİ: Aynı mumu tekrar işleme!
                 # ============================================
-                current_candle_ts = live_ohlcv[-1][0]  # Son mumun timestamp'i
+                current_candle_ts = live_ohlcv[-1][0]  # Son mumun timestamp'i (int veya string)
 
-                if last_processed_ts is not None and current_candle_ts == last_processed_ts:
+                # Timestamp'i parse et (int veya string olabilir)
+                if isinstance(current_candle_ts, (int, float)):
+                    current_candle_dt = pd.Timestamp(current_candle_ts, unit='ms')
+                else:
+                    current_candle_dt = pd.Timestamp(current_candle_ts)
+
+                if last_processed_ts is not None and current_candle_dt == last_processed_ts:
                     # Bu mum zaten işlendi, sadece fiyat güncellemesi yap (trailing stop için)
                     # İndikatör hesaplama ve broadcast YOK (CPU tasarrufu!)
                     await paper_engine.update_live_prices(symbol, float(live_ohlcv[-1][4]))
                     continue  # ⚠️ DEVAM ET - yeni mum gelene kadar bekle
 
                 # YENİ MUM GELDİ! Kilidi güncelle
-                last_processed_ts = current_candle_ts
-                logger.info(f"🕐 [NEW CANDLE] Yeni mum: {pd.to_datetime(current_candle_ts, unit='ms')}")
+                last_processed_ts = current_candle_dt
+                logger.info(f"🕐 [NEW CANDLE] Yeni mum: {current_candle_dt}")
 
                 # Canlı veriyi DataFrame'e dönüştür
                 # live_ohlcv is a list of lists: [[timestamp, open, high, low, close, volume], ...]
                 live_df = pd.DataFrame(live_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-                live_df['timestamp'] = pd.to_datetime(live_df['timestamp'], unit='ms')
+
+                # WebSocket timestamp parse (int veya string olabilir)
+                if live_df['timestamp'].dtype == 'object':
+                    live_df['timestamp'] = pd.to_datetime(live_df['timestamp'])
+                else:
+                    live_df['timestamp'] = pd.to_datetime(live_df['timestamp'], unit='ms')
+
                 live_df.set_index('timestamp', inplace=True)
 
                 # ============================================
