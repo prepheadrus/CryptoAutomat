@@ -1593,26 +1593,44 @@ async function loadActiveBots() {
     /**
      * Tüm aktif botları yükler ve tabloda gösterir.
      */
+    console.log('🔄 [DEBUG] loadActiveBots() çağrıldı...');
+
     try {
+        console.log('📡 [DEBUG] /api/v1/bots/list API çağrısı...');
         const response = await fetch('/api/v1/bots/list');
         const data = await response.json();
 
-        const container = document.getElementById('active-bots-container');
-        if (!container) return;
+        console.log('📊 [DEBUG] API Response:', data);
 
-        if (!data.bots || data.bots.length === 0) {
-            container.innerHTML = '<p style="text-align:center; padding:40px; color:var(--text-muted);">Aktif bot yok</p>';
+        const container = document.getElementById('active-bots-container');
+        if (!container) {
+            console.error('❌ [DEBUG] active-bots-container bulunamadı!');
             return;
         }
 
+        if (!data.bots || data.bots.length === 0) {
+            console.log('⚠️ [DEBUG] Aktif bot yok');
+            container.innerHTML = '<p style="text-align: center; padding: 40px; color: var(--text-muted);">Aktif bot yok. Yukarıdan yeni bot başlatabilirsiniz.</p>';
+            return;
+        }
+
+        console.log(`✅ [DEBUG] ${data.bots.length} bot yüklendi`);
+
+        // İlk bot'u logla
+        if (data.bots.length > 0) {
+            console.log('🤖 [DEBUG] İlk bot:', data.bots[0]);
+        }
+
         // Bot kartlarını oluştur
-        container.innerHTML = data.bots.map(bot => {
+        const botCards = data.bots.map(bot => {
+            console.log('🎨 [DEBUG] Bot kartı oluşturuluyor:', bot.bot_id || bot.symbol);
+
             // Backend ile aynı bot_id formatını kullan
             const botId = bot.bot_id || `${bot.symbol.replace('/', '_').replace(':', '_')}_${bot.market_type || 'future'}_${bot.strategy_id}_${bot.timeframe}`;
             const isRunning = bot.status === 'running';
 
             return `
-            <div class="card glass-panel" style="margin-bottom:15px;">
+            <div class="card glass-panel" style="margin-bottom:15px; background: rgba(88, 166, 255, 0.05); border: 2px solid var(--neon-blue);">
                 <div style="display:flex; justify-content:space-between; align-items:start;">
                     <div style="flex:1;">
                         <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
@@ -1662,7 +1680,15 @@ async function loadActiveBots() {
                 </div>
             </div>
             `;
-        }).join('');
+        });
+
+        console.log('📦 [DEBUG] Bot kartları oluşturuldu, HTML uzunluğu:', botCards.join('').length);
+        container.innerHTML = botCards.join('');
+        console.log('✅ [DEBUG] Bot kartları render edildi');
+
+        // Container'ın görünür olduğunu kontrol et
+        console.log('👁️ [DEBUG] Container display:', window.getComputedStyle(container).display);
+        console.log('👁️ [DEBUG] Container visibility:', window.getComputedStyle(container).visibility);
 
     } catch (error) {
         console.error('Aktif botlar yüklenemedi:', error);
@@ -1682,17 +1708,18 @@ window.handleStartBot = handleStartBot;
 // ============================================
 document.addEventListener('submit', async function(e) {
     // Bot başlatma formu submit event'i yakala
+    console.log('🔍 [DEBUG] Submit event:', e.target.id, e.target.tagName);
+
     if (e.target && e.target.id === 'bot-start-form') {
         e.preventDefault();
-        console.log('🖱️ [DEBUG] Bot başlatma formu submit edildi');
+        console.log('✅ [DEBUG] Bot başlatma formu submit edildi');
 
         try {
             // Form verilerini topla
-            const formData = new FormData(e.target);
-            const symbol = formData.get('symbol') || document.getElementById('bot-symbol')?.value;
-            const strategy = formData.get('strategy') || document.getElementById('bot-strategy')?.value;
-            const timeframe = formData.get('timeframe') || document.getElementById('bot-timeframe')?.value;
-            const market = formData.get('market') || document.getElementById('bot-market')?.value;
+            const symbol = document.getElementById('bot-symbol')?.value;
+            const strategy = document.getElementById('bot-strategy')?.value;
+            const timeframe = document.getElementById('bot-timeframe')?.value;
+            const market = document.getElementById('bot-market')?.value;
 
             console.log('📊 [DEBUG] Form verileri:', { symbol, strategy, timeframe, market });
 
@@ -1701,8 +1728,18 @@ document.addEventListener('submit', async function(e) {
                 return;
             }
 
+            console.log('🚀 [DEBUG] startBot() çağrılıyor...');
+
             // Bot başlat
-            await startBot(symbol, strategy, timeframe, market);
+            const result = await startBot(symbol, strategy, timeframe, market);
+
+            console.log('✅ [DEBUG] Bot başlatıldı:', result);
+
+            // Bot listesini güncelle
+            if (result) {
+                console.log('🔄 [DEBUG] loadActiveBots() çağrılıyor...');
+                await loadActiveBots();
+            }
 
             // Formu sıfırla
             e.target.reset();
