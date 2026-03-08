@@ -1718,7 +1718,17 @@ async function loadBotFormOptions() {
         }
 
         // 2. Stratejileri yükle (OPTGROUP ile grupla)
-        console.log('📡 [DEBUG] Stratejiler API çağrısı...');
+        console.log('📡 [DEBUG] Stratejiler API çağrısı: /api/v1/strategy/list');
+
+        // Önce API'yi test et
+        try {
+            const testRes = await fetch('/api/v1/strategy/list');
+            const testData = await testRes.json();
+            console.log('🧪 [DEBUG] Test API Response:', testData);
+        } catch (testErr) {
+            console.error('❌ [DEBUG] Test API hatası:', testErr);
+        }
+
         const strategiesRes = await fetch('/api/v1/strategy/list?t=' + Date.now()); // Cache bypass
         const strategiesData = await strategiesRes.json();
 
