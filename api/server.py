@@ -806,6 +806,7 @@ async def get_all_bots():
 async def get_strategy_list():
     """
     Sistemdeki tüm stratejileri döner.
+    HER İSTEKTE dinamik stratejiler yeniden yüklenir (güncel liste için).
 
     Returns:
         Dict: {strategies: list}
@@ -813,6 +814,9 @@ async def get_strategy_list():
     from strategy.manager import StrategyManager
 
     try:
+        # Her istekte dinamik stratejileri yükle (güncel liste için)
+        StrategyManager.load_dynamic_strategies()
+
         strategies = StrategyManager.list_all_strategies()
         return {"status": "success", "strategies": strategies}
     except Exception as e:
