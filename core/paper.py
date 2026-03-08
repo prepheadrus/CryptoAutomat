@@ -148,15 +148,26 @@ class PaperTrader:
         XGBoost + Random Forest Ensemble desteği.
 
         Args:
-            symbol: Sembol adı (örn: BTCUSDT, BTC/USDT)
+            symbol: Sembol adı (örn: BTCUSDT, BTC/USDT, BTC/USDT:USDT)
             timeframe: Zaman dilimi (örn: 1m)
         """
-        # Sembol temizleme - doğru format: BTCUSDT → btcusdt
-        symbol_clean = symbol.replace('/', '').replace(':', '').lower()
+        # Sembol temizleme - Binance format farklılıklarını düzelt
+        # Spot: BTC/USDT → btcusdt
+        # Futures: BTC/USDT:USDT → btcusdt
 
-        # Eğer sembol USDT içeriyorsa, sonundaki USDT'yi koru (çift yazmayı önle)
+        # 1. Tüm özel karakterleri kaldır
+        symbol_clean = symbol.replace('/', '').replace(':', '').replace('-', '').lower()
+
+        # 2. Eğer sembol usdt ile bitiyorsa ve tekrar usdt varsa (futures), sonuncuyu sil
+        # Örnek: btcusdtusdt → btcusdt
         if symbol_clean.endswith('usdtusdt'):
             symbol_clean = symbol_clean[:-4]  # Son 4 karakteri sil (usdt)
+
+        # 3. Eğer semiol btcusdt gibi değil de btcusdtusdt gibi bitiyorsa düzelt
+        # Bu Futures için kritik: BTC/USDT:USDT → btcusdt
+        if symbol_clean.endswith('usdt') and len(symbol_clean) > 6:
+            # Zaten usdt ile bitiyor, başka usdt ekleme
+            pass
 
         # XGBoost model yolu
         xgb_path = f"artifacts/models/xgb_model_{symbol_clean}_{timeframe}.json"
@@ -168,6 +179,7 @@ class PaperTrader:
         metadata_path = f"artifacts/models/xgb_model_{symbol_clean}_{timeframe}_metadata.json"
 
         logger.info(f"🤖 [{symbol}] ML modelleri yükleniyor ({timeframe})...")
+        logger.debug(f"📝 [{symbol}] Temizlenmiş sembol: {symbol_clean}")
 
         # XGBoost kontrolü
         xgb_exists = os.path.exists(xgb_path)
