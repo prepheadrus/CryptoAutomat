@@ -342,19 +342,39 @@ def prepare_ml_data(
     )
     
     # 4. Özellik ve hedef ayrıştırma
+    # DATA LEAKAGE ÖNLEME: Target ve gelecek bilgisi içeren kolonları X'ten çıkar
+    leakage_cols = [
+        target_col,              # 'target' - Hedef değişken
+        'barrier_reason',        # Barrier bilgisi (gelecek)
+        'upper_barrier',         # Üst bariyer (gelecek)
+        'lower_barrier',         # Alt bariyer (gelecek)
+        'future_ret',            # Gelecek getiri (LEAKAGE!)
+        'signal',                # Sinyal (gelecek)
+        'prediction',            # Tahmin (gelecek)
+    ]
+
     if feature_cols is None:
-        feature_cols = [col for col in df_processed.select_dtypes(include=[np.number]).columns 
-                       if col not in [target_col, 'barrier_reason', 'upper_barrier', 'lower_barrier']]
-    
+        # Sadece sayısal kolonları al, leakage kolonlarını çıkar
+        feature_cols = [
+            col for col in df_processed.select_dtypes(include=[np.number]).columns
+            if col not in leakage_cols
+        ]
+
+        logger.info(f"🛡️ DATA LEAKAGE ÖNLEME: {len(leakage_cols)} leakage kolonu X'ten çıkarıldı")
+        logger.debug(f"   Çıkarılan kolonlar: {leakage_cols}")
+
+    # X ve y'i ayır (sadece temiz feature'lar)
     X_train = train_df[feature_cols].copy()
     y_train = train_df[target_col].copy()
     X_test = test_df[feature_cols].copy()
     y_test = test_df[target_col].copy()
-    
+
     logger.info(f"ML veri hazırlığı tamamlandı:")
     logger.info(f"  X_train: {X_train.shape}, y_train: {y_train.shape}")
     logger.info(f"  X_test: {X_test.shape}, y_test: {y_test.shape}")
-    
+    logger.info(f"  Feature sayısı: {len(feature_cols)}")
+    logger.info(f"  X kolonları: {feature_cols[:10]}... (ilk 10)")
+
     return X_train, X_test, y_train, y_test, scaler
 
 

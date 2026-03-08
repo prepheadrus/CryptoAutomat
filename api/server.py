@@ -860,6 +860,28 @@ async def _run_ml_training(req: MLTrainRequest):
         # 2. İndikatörleri ekle
         df = StrategyIndicators.add_all_indicators(df)
 
+        # ============================================
+        # DATA LEAKAGE ÖNLEME (Ek Güvenlik)
+        # ============================================
+        # Model eğitilmadan önce gelecek bilgisi içeren kolonları sil
+        leakage_columns = [
+            'future_ret',      # Gelecek getiri (en kritik!)
+            'target',          # Hedef değişken
+            'signal',          # Sinyal
+            'prediction',      # Tahmin
+            'barrier_reason',  # Barrier bilgisi
+            'upper_barrier',   # Üst bariyer
+            'lower_barrier',   # Alt bariyer
+        ]
+
+        # Sütunları kontrol et ve varsa sil
+        cols_to_drop = [col for col in leakage_columns if col in df.columns]
+        if cols_to_drop:
+            df = df.drop(columns=cols_to_drop)
+            logger.info(f"🛡️ [ML] {len(cols_to_drop)} leakage kolonu silindi: {cols_to_drop}")
+        else:
+            logger.debug("🛡️ [ML] Leakage kolonu bulunamadı (zaten temiz)")
+
         training_state["message"] = "Model eğitiliyor..."
         training_state["progress"] = 50
 
