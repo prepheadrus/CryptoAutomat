@@ -31,7 +31,7 @@ strategy:
 # ============================================
 ml:
   enabled: true
-  model_path: "artifacts/models/xgb_model.json"
+  # model_path: Dinamik olarak oluşturulur (symbol + timeframe)
   confidence_threshold: 0.65
   # Dinamik kaldıraç eşikleri
   leverage:

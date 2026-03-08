@@ -3,6 +3,7 @@ from core.config import CONFIG
 from core.logger import logger
 from strategy.confluence import StrategyConfluence
 from strategy.risk import RiskManagement
+import os
 
 # ML Model Integration
 try:
@@ -111,61 +112,17 @@ class PaperTrader:
         self.total_commission = 0.0
         self.market_regime = "UNKNOWN"
 
-        # ML Model Yükleme (Eğitilmiş model varsa)
+        # ML Model Yükleme (Eğitilmiş model varsa) - DİNAMİK MODEL YÜKLEME
         self.ml_model = None
+        self.rf_model = None  # Random Forest (Ensemble için)
         self.ml_enabled = False
         self.ml_timeframe_mismatch = False  # Timeframe uyumsuzluğu flag
         self.wfo_enabled = CONFIG.get('wfo', {}).get('enabled', True)  # WFO aktif mi?
 
         if ML_AVAILABLE:
-            try:
-                model_path = CONFIG.get('ml', {}).get('model_path', 'artifacts/models/xgb_model.json')
-                logger.info(f"🤖 ML modeli yükleniyor: {model_path}...")
-
-                # Model dosyası var mı kontrol et
-                import os
-                if not os.path.exists(model_path):
-                    logger.error(f"❌ ML model dosyası bulunamadı: {model_path}")
-                    logger.warning("⚠️ ML olmadan devam ediliyor (sadece strateji sinyalleri).")
-                    self.ml_enabled = False
-                else:
-                    # Metadata kontrolü - timeframe uyumlu mu?
-                    metadata_path = model_path.replace('.json', '_metadata.json')
-                    if os.path.exists(metadata_path):
-                        import json
-                        with open(metadata_path, 'r') as f:
-                            metadata = json.load(f)
-
-                        trained_timeframe = metadata.get('trained_timeframe', 'unknown')
-                        current_timeframe = self.active_timeframes.get(list(self.active_timeframes.keys())[0], '1m')
-
-                        if trained_timeframe != current_timeframe:
-                            logger.error(f"⚠️ TIMEFRAME UYUMSUZLUĞU! Model {trained_timeframe} için eğitilmiş, ama bot {current_timeframe} çalışıyor!")
-                            logger.error(f"❌ ML modeli yüklenmedi - yanlış timeframe!")
-                            self.ml_timeframe_mismatch = True
-                            self.ml_enabled = False
-                        else:
-                            # Timeframe uyumlu, modeli yükle
-                            self.ml_model = ModelTrainer()
-                            self.ml_model.load_model(model_path)
-                            self.ml_enabled = True
-                            logger.info(f"✅ ML modeli BAŞARIYLA yüklendi! (enabled={self.ml_enabled}, timeframe={trained_timeframe})")
-                    else:
-                        logger.warning(f"⚠️ Metadata dosyası bulunamadı: {metadata_path}")
-                        # Metadata yoksa yine de model yükle (eski modeller için)
-                        self.ml_model = ModelTrainer()
-                        self.ml_model.load_model(model_path)
-                        self.ml_enabled = True
-                        logger.info(f"✅ ML modeli yüklendi (metadata yok)!")
-
-            except Exception as e:
-                logger.error(f"❌ ML modeli yüklenemedi: {str(e)}")
-                logger.warning("⚠️ ML olmadan devam ediliyor (sadece strateji sinyalleri).")
-                import traceback
-                logger.error(traceback.format_exc())
-                self.ml_enabled = False
-        else:
-            logger.warning("⚠️ ML kütüphanesi bulunamadı (ml/model_training.py import edilemedi).")
+            # Her sembol için dinamik model yükleme
+            for symbol, timeframe in self.active_timeframes.items():
+                self._load_ml_model_for_symbol(symbol, timeframe)
         # Dinamik Strateji (Bot) Yönetimi - ARTIK SEMBOL BAZLI
         from strategy.manager import StrategyManager
         self.active_strategies = {} # symbol -> strategy_id
@@ -182,6 +139,93 @@ class PaperTrader:
         
         # Arayüze botun ne düşündüğünü yansıtmak için son kararları parite bazlı sakla
         self.latest_decisions = {}
+
+    def _load_ml_model_for_symbol(self, symbol: str, timeframe: str):
+        """
+        Belirli bir sembol ve timeframe için ML modellerini dinamik olarak yükler.
+        XGBoost + Random Forest Ensemble desteği.
+
+        Args:
+            symbol: Sembol adı (örn: BTCUSDT)
+            timeframe: Zaman dilimi (örn: 1m)
+        """
+        # Sembol ve timeframe'den dinamik model yolu oluştur
+        symbol_clean = symbol.replace('/', '').replace(':', '').replace('USDT', 'usdt').lower()
+
+        # XGBoost model yolu
+        xgb_path = f"artifacts/models/xgb_model_{symbol_clean}_{timeframe}.json"
+
+        # Random Forest model yolu (Ensemble için)
+        rf_path = f"artifacts/models/xgb_model_{symbol_clean}_{timeframe}_rf.joblib"
+
+        # Metadata yolu
+        metadata_path = f"artifacts/models/xgb_model_{symbol_clean}_{timeframe}_metadata.json"
+
+        logger.info(f"🤖 [{symbol}] ML modelleri yükleniyor ({timeframe})...")
+
+        # XGBoost kontrolü
+        xgb_exists = os.path.exists(xgb_path)
+        rf_exists = os.path.exists(rf_path)
+
+        if not xgb_exists and not rf_exists:
+            # Hiçbir model yok
+            logger.warning(
+                f"⚠️ [UYARI] {symbol} {timeframe} için eğitilmiş XGBoost veya Random Forest modeli bulunamadı! "
+                f"Lütfen önce ML motorundan bu parite için model eğitin."
+            )
+            return
+
+        # Modelleri yükle
+        models_loaded = []
+
+        if xgb_exists:
+            try:
+                self.ml_model = ModelTrainer()
+                self.ml_model.load_model(xgb_path)
+                models_loaded.append("XGBoost")
+                logger.info(f"✅ [{symbol}] XGBoost modeli yüklendi: {xgb_path}")
+            except Exception as e:
+                logger.error(f"❌ [{symbol}] XGBoost yükleme hatası: {str(e)}")
+
+        if rf_exists:
+            try:
+                import joblib
+                self.rf_model = joblib.load(rf_path)
+                models_loaded.append("Random Forest")
+                logger.info(f"✅ [{symbol}] Random Forest modeli yüklendi: {rf_path}")
+            except Exception as e:
+                logger.error(f"❌ [{symbol}] Random Forest yükleme hatası: {str(e)}")
+
+        # Ensemble durumu
+        if len(models_loaded) == 2:
+            logger.info(f"🎯 [{symbol}] CFA (Ensemble) aktif: XGBoost + Random Forest")
+            self.ml_enabled = True
+        elif len(models_loaded) == 1:
+            logger.info(f"⚠️ [{symbol}] Tek model aktif: {models_loaded[0]} (Ensemble için RF de eğitin)")
+            self.ml_enabled = True
+        else:
+            logger.warning(f"⚠️ [{symbol}] Model yüklenemedi")
+            self.ml_enabled = False
+
+        # Metadata kontrolü (timeframe doğrulama)
+        if os.path.exists(metadata_path):
+            try:
+                import json
+                with open(metadata_path, 'r') as f:
+                    metadata = json.load(f)
+
+                trained_timeframe = metadata.get('trained_timeframe', 'unknown')
+                if trained_timeframe != timeframe:
+                    logger.error(
+                        f"⚠️ TIMEFRAME UYUMSUZLUĞU! Model {trained_timeframe} için eğitilmiş, "
+                        f"ama bot {timeframe} çalışıyor!"
+                    )
+                    self.ml_timeframe_mismatch = True
+                    self.ml_enabled = False
+                else:
+                    logger.debug(f"✅ [{symbol}] Timeframe doğrulandı: {timeframe}")
+            except Exception as e:
+                logger.debug(f"⚠️ [{symbol}] Metadata okuma hatası: {str(e)}")
 
     def update_strategy_params(self, symbol: str, new_params: dict, sharpe: float = None):
         """
