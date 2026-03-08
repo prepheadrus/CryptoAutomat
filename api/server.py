@@ -759,39 +759,75 @@ async def _run_ml_training(req: MLTrainRequest):
         from data.indicators import StrategyIndicators
         from ml.model_training import run_training_pipeline
 
-        training_state["message"] = f"Veritabanı kontrol ediliyor: {req.symbol}, {req.timeframe}..."
+        # ============================================
+        # TIMEFRAME MULTIPLIER (ÇARPAN) MANTIĞI
+        # ============================================
+        # DB'de her zaman 1m var, diğer timeframe'ler resample ile oluşturulur
+        timeframe_multipliers = {
+            '1m': 1,
+            '3m': 3,
+            '5m': 5,
+            '10m': 10,
+            '15m': 15,
+            '20m': 20,
+            '30m': 30,
+            '45m': 45,
+            '1h': 60,
+            '2h': 120,
+            '3h': 180,
+            '4h': 240,
+            '6h': 360,
+            '8h': 480,
+            '12h': 720,
+            '1d': 1440
+        }
+
+        # Kullanıcının istediği timeframe'in 1m bazında çarpanı
+        multiplier = timeframe_multipliers.get(req.timeframe, 1)
+
+        # Gerekli 1m mum sayısı = limit × multiplier
+        required_1m_candles = req.limit * multiplier
+
+        training_state["message"] = f"Veritabanı kontrol ediliyor: {req.symbol} (1m bazında {required_1m_candles:,} mum gerekli)..."
         training_state["progress"] = 5
 
-        # DB'de yeterli veri var mı kontrol et
-        db_count = await db_manager.get_klines_count(req.symbol, req.timeframe)
+        # DB'de 1m timeframe'inde kaç mum var?
+        db_count = await db_manager.get_klines_count(req.symbol, '1m')
 
         if db_count == 0:
             training_state["is_training"] = False
-            training_state["message"] = f"❌ Veritabanında {req.symbol} {req.timeframe} için veri bulunamadı! Lütfen önce Veri Laboratuvarından veri indirin."
-            logger.error(f"❌ [ML] DB'de veri yok: {req.symbol} {req.timeframe}")
+            training_state["message"] = f"❌ Veritabanında {req.symbol} için 1m verisi bulunamadı! Lütfen önce Veri Laboratuvarından veri indirin."
+            logger.error(f"❌ [ML] DB'de 1m veri yok: {req.symbol}")
             return
 
-        if db_count < req.limit:
-            training_state["message"] = f"⚠️ DB'de sadece {db_count} mum var, {req.limit} mum istenmişti. Mevcut veri ile devam ediliyor..."
-            logger.warning(f"⚠️ [ML] DB'de yetersiz veri: {db_count} < {req.limit}")
+        # Yeterli veri var mı kontrol et
+        if db_count < required_1m_candles:
+            # Kullanıcıya uyarı göster ama devam et (mevcut veri ile)
+            available_target_candles = db_count // multiplier
+            training_state["message"] = f"⚠️ DB'de {db_count:,} mum (1m) var, {required_1m_candles:,} mum (1m) istenmişti. {available_target_candles:,} mum ({req.timeframe}) ile devam ediliyor..."
+            logger.warning(f"⚠️ [ML] DB'de yetersiz veri: {db_count} < {required_1m_candles} (1m)")
+            # Mevcut veri ile devam et
+            actual_limit = db_count
+        else:
+            actual_limit = required_1m_candles
 
-        # DB'den veri çek (en son N mum)
-        training_state["message"] = f"Veritabanından {min(db_count, req.limit)} mum çekiliyor..."
+        # DB'den 1m veri çek (en son N mum)
+        training_state["message"] = f"Veritabanından {actual_limit:,} mum (1m) çekiliyor..."
         training_state["progress"] = 10
 
-        ohlcv_data = await db_manager.get_klines(req.symbol, req.timeframe, limit=req.limit)
+        raw_ohlcv = await db_manager.get_klines(req.symbol, '1m', limit=actual_limit)
 
-        if not ohlcv_data or len(ohlcv_data) == 0:
+        if not raw_ohlcv or len(raw_ohlcv) == 0:
             training_state["is_training"] = False
             training_state["message"] = "❌ Veritabanından veri çekilemedi!"
             logger.error("❌ [ML] DB'den veri çekilemedi!")
             return
 
-        logger.info(f"✅ [ML] DB'den {len(ohlcv_data)} mum çekildi (internet kullanılmadı)")
+        logger.info(f"✅ [ML] DB'den {len(raw_ohlcv)} mum (1m) çekildi (internet kullanılmadı)")
 
         # DataFrame'e dönüştür
         import pandas as pd
-        df = pd.DataFrame(ohlcv_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        df = pd.DataFrame(raw_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
         df.set_index('timestamp', inplace=True)
 
@@ -801,7 +837,20 @@ async def _run_ml_training(req: MLTrainRequest):
             logger.error("❌ [ML] DataFrame oluşturulamadı!")
             return
 
-        training_state["message"] = f"İndikatörler hesaplanıyor ({len(df)} mum)..."
+        # ============================================
+        # RESAMPLING (YENİDEN ÖRNEKLEME)
+        # ============================================
+        # Eğer hedef timeframe 1m değilse, resample yap
+        if req.timeframe != '1m':
+            training_state["message"] = f"Resampling: {actual_limit:,} mum (1m) → {req.timeframe}..."
+            training_state["progress"] = 20
+
+            logger.info(f"🔄 [ML] Resampling: {len(df)} mum (1m) → {req.timeframe}...")
+            df = StrategyIndicators.resample_data(df, req.timeframe)
+
+            logger.info(f"✅ [ML] Resampling tamamlandı: {len(df)} mum ({req.timeframe})")
+
+        training_state["message"] = f"İndikatörler hesaplanıyor ({len(df)} mum {req.timeframe})..."
         training_state["progress"] = 30
 
         # 2. İndikatörleri ekle

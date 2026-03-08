@@ -2060,6 +2060,7 @@ let currentDbMumCount = 0;  // DB'deki mevcut mum sayısı
 async function checkDbMumCount() {
     /**
      * Seçili sembol ve timeframe için DB'deki mum sayısını kontrol eder
+     * RESAMPLING MANTIĞI: DB'de her zaman 1m var, diğer TF'ler resample ile oluşur
      */
     const symbol = document.getElementById('ml-train-symbol')?.value;
     const timeframe = document.getElementById('ml-train-timeframe')?.value;
@@ -2067,22 +2068,38 @@ async function checkDbMumCount() {
 
     if (!symbol || !timeframe || !countDisplay) return;
 
+    // Timeframe multipliers (çarpanlar)
+    const timeframeMultipliers = {
+        '1m': 1, '3m': 3, '5m': 5, '10m': 10, '15m': 15, '20m': 20, '30m': 30, '45m': 45,
+        '1h': 60, '2h': 120, '3h': 180, '4h': 240, '6h': 360, '8h': 480, '12h': 720, '1d': 1440
+    };
+
+    const multiplier = timeframeMultipliers[timeframe] || 1;
+
     try {
-        const response = await fetch(`/api/v1/data/klines-count?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}`);
+        // DB'den 1m mum sayısını al
+        const response = await fetch(`/api/v1/data/klines-count?symbol=${encodeURIComponent(symbol)}&timeframe=1m`);
         const data = await response.json();
 
         currentDbMumCount = data.count || 0;
 
+        // Hedef timeframe'de kaç mum olur?
+        const availableTargetCandles = Math.floor(currentDbMumCount / multiplier);
+
         if (currentDbMumCount > 0) {
-            countDisplay.textContent = `(DB'de: ${currentDbMumCount.toLocaleString()} mum)`;
+            if (timeframe === '1m') {
+                countDisplay.textContent = `(DB'de: ${currentDbMumCount.toLocaleString()} mum)`;
+            } else {
+                countDisplay.textContent = `(DB'de: ${currentDbMumCount.toLocaleString()} mum 1m ≈ ${availableTargetCandles.toLocaleString()} mum ${timeframe})`;
+            }
             countDisplay.style.color = 'var(--neon-green)';
 
-            // Input max değerini güncelle
+            // Input max değerini güncelle (hedef timeframe bazında)
             const limitInput = document.getElementById('ml-train-limit');
             if (limitInput) {
-                limitInput.max = currentDbMumCount;
-                if (parseInt(limitInput.value) > currentDbMumCount) {
-                    limitInput.value = currentDbMumCount;
+                limitInput.max = availableTargetCandles;
+                if (parseInt(limitInput.value) > availableTargetCandles) {
+                    limitInput.value = availableTargetCandles;
                 }
             }
         } else {
