@@ -16,16 +16,19 @@ except ImportError:
 class ExchangeManager:
     def __init__(self):
         self.exchange_id = CONFIG['trading']['exchange']
-        
+
         # İlgili borsa sınıfını ccxt.pro'dan bul
         if not hasattr(ccxtpro, self.exchange_id):
             logger.error(f"Desteklenmeyen borsa: {self.exchange_id}")
             raise ValueError(f"Desteklenmeyen borsa: {self.exchange_id}")
-            
+
         self.exchange_class = getattr(ccxtpro, self.exchange_id)
         self.download_stops = {} # {symbol: bool} - İndirmeyi durdurmak için
         self.download_pauses = {} # {symbol: bool} - Duraklatmak için
         self.active_downloads = {} # {symbol: metadata} - Aktif görevleri takip etmek için
+
+        # YENİ: Aktif poller'ları takip et (1-to-N mimarisi)
+        self.active_pollers = {} # {symbol: asyncio.Task} - Her sembol için 1 poller
         
         # Borsa parametrelerini hazırla
         exchange_args = {

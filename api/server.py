@@ -703,6 +703,7 @@ async def start_bot(data: Dict[str, Any]):
         Dict: {bot_id: str, status: str}
     """
     from core.paper import paper_engine
+    from core.exchange import exchange_manager
 
     symbol = data.get('symbol')
     strategy_id = data.get('strategy_id')
@@ -722,6 +723,25 @@ async def start_bot(data: Dict[str, Any]):
             market_type=market_type,
             margin_type=margin_type
         )
+
+        # ============================================
+        # KRİTİK: Poller'ı başlat (eğer henüz çalışmıyorsa)
+        # ============================================
+        # Bu sembol için poller zaten çalışıyor mu kontrol et
+        if symbol not in exchange_manager.active_pollers:
+            logger.info(f"🚀 [POLLER] {symbol} için run_strategy_poller başlatılıyor...")
+
+            # Poller'ı arka planda başlat (async task)
+            poller_task = asyncio.create_task(
+                exchange_manager.run_strategy_poller(symbol, timeframe)
+            )
+
+            # Task'ı kaydet (tekrar başlatmayı önle)
+            exchange_manager.active_pollers[symbol] = poller_task
+
+            logger.info(f"✅ [POLLER] {symbol} poller başlatıldı, task ID: {id(poller_task)}")
+        else:
+            logger.debug(f"ℹ️ [POLLER] {symbol} için poller zaten çalışıyor")
 
         return {
             "status": "success",
