@@ -1676,6 +1676,24 @@ window.startBot = startBot;
 window.stopBot = stopBot;
 window.loadActiveBots = loadActiveBots;
 
+function handleStartBot() {
+    /**
+     * Bot başlatma formunu işler.
+     */
+    const symbol = document.getElementById('bot-symbol')?.value;
+    const strategy = document.getElementById('bot-strategy')?.value;
+    const timeframe = document.getElementById('bot-timeframe')?.value;
+    const market = document.getElementById('bot-market')?.value;
+
+    if (!symbol || !strategy || !timeframe) {
+        showErrorToast('❌ Lütfen tüm alanları doldurun!', 3000);
+        return;
+    }
+
+    // Bot başlat
+    startBot(symbol, strategy, timeframe, market);
+}
+
 /**
  * Strateji uygula ve başlat
  */
@@ -2422,6 +2440,19 @@ document.addEventListener('click', (e) => {
     if (e.target.matches('.menu-item') && e.target.dataset.target === 'tab-reports') {
         loadStrategyReport();
     }
+    // ML sekmesi açıldığında aktif botları yükle
+    if (e.target.matches('.menu-item') && e.target.dataset.target === 'tab-ml') {
+        setTimeout(() => loadActiveBots(), 500);
+    }
 });
+
+// Sayfa yüklendiğinde aktif botları yükle
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => loadActiveBots(), 1000);
+    });
+} else {
+    setTimeout(() => loadActiveBots(), 1000);
+}
 
 

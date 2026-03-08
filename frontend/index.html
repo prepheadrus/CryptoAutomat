@@ -113,12 +113,63 @@
 
             <!-- SEKME 2: ML KARAR MOTORU -->
             <div id="tab-ml" class="tab-content" style="display: none;">
+                <!-- YENİ BOT BAŞLATMA FORMU (1-to-N) -->
+                <div class="card glass-panel" style="margin-bottom: 20px; border: 2px solid var(--neon-green);">
+                    <h3 style="color: var(--neon-green); margin-bottom: 15px;">🚀 Yeni Bot Başlat</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end;">
+                        <div>
+                            <label style="font-size:0.75rem; color:var(--text-muted);">Sembol</label>
+                            <select id="bot-symbol" class="strategy-select" style="width: 100%;">
+                                <option value="BTC/USDT:USDT">BTC/USDT</option>
+                                <option value="ETH/USDT:USDT">ETH/USDT</option>
+                                <option value="BNB/USDT:USDT">BNB/USDT</option>
+                                <option value="SOL/USDT:USDT">SOL/USDT</option>
+                                <option value="XRP/USDT:USDT">XRP/USDT</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label style="font-size:0.75rem; color:var(--text-muted);">Strateji</label>
+                            <select id="bot-strategy" class="strategy-select" style="width: 100%;">
+                                <option value="TrendMaster">Trend Master</option>
+                                <option value="ScalperNinja">Scalper Ninja</option>
+                                <option value="GoldenCombo">Golden Combo</option>
+                                <option value="AdaptiveKoncorde">Adaptive Koncorde</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label style="font-size:0.75rem; color:var(--text-muted);">Timeframe</label>
+                            <select id="bot-timeframe" class="strategy-select" style="width: 100%;">
+                                <option value="1m">1 dakika</option>
+                                <option value="5m">5 dakika</option>
+                                <option value="15m">15 dakika</option>
+                                <option value="1h">1 saat</option>
+                                <option value="4h">4 saat</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label style="font-size:0.75rem; color:var(--text-muted);">Market</label>
+                            <select id="bot-market" class="strategy-select" style="width: 100%;">
+                                <option value="future">Futures</option>
+                                <option value="spot">Spot</option>
+                            </select>
+                        </div>
+
+                        <button class="btn btn-success" onclick="handleStartBot()"
+                                style="padding: 10px 20px; font-weight: bold; width: 100%;">
+                            ▶ Bot Başlat
+                        </button>
+                    </div>
+                </div>
+
                 <!-- AKTİF BOTLAR (1-to-N) -->
                 <div class="card glass-panel" style="margin-bottom: 20px;">
                     <h3 style="color: var(--neon-blue); margin-bottom: 15px;">🤖 Aktif Botlar (Çoklu Bot)</h3>
                     <div id="active-bots-container">
                         <p style="text-align: center; padding: 40px; color: var(--text-muted);">
-                            Aktif bot yok. Aşağıdan yeni bot başlatabilirsiniz.
+                            Aktif bot yok. Yukarıdan yeni bot başlatabilirsiniz.
                         </p>
                     </div>
                 </div>
