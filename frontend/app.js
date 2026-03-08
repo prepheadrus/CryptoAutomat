@@ -1634,7 +1634,11 @@ async function loadActiveBots() {
         }
 
         // Bot kartlarını oluştur
-        container.innerHTML = data.bots.map(bot => `
+        container.innerHTML = data.bots.map(bot => {
+            // Backend ile aynı bot_id formatını kullan
+            const botId = bot.bot_id || `${bot.symbol.replace('/', '_').replace(':', '_')}_${bot.market_type || 'future'}_${bot.strategy_id}_${bot.timeframe}`;
+
+            return `
             <div class="card glass-panel" style="margin-bottom:15px;">
                 <div style="display:flex; justify-content:space-between; align-items:start;">
                     <div style="flex:1;">
@@ -1644,8 +1648,8 @@ async function loadActiveBots() {
                         <div style="font-size:0.85rem; color:var(--text-muted);">
                             <div><strong>Sembol:</strong> ${bot.symbol}</div>
                             <div><strong>Timeframe:</strong> ${bot.timeframe}</div>
-                            <div><strong>Market:</strong> ${bot.market_type}</div>
-                            <div><strong>Bot ID:</strong> <code style="font-size:0.75rem;">${bot.bot_id || bot.symbol}_${bot.strategy_id}_${bot.timeframe}</code></div>
+                            <div><strong>Market:</strong> ${bot.market_type || 'future'}</div>
+                            <div><strong>Bot ID:</strong> <code style="font-size:0.75rem;">${botId}</code></div>
                             <div><strong>Başlangıç:</strong> ${new Date(bot.started_at).toLocaleString()}</div>
                         </div>
                     </div>
@@ -1657,14 +1661,15 @@ async function loadActiveBots() {
                             PnL (${bot.positions_count || 0} pozisyon)
                         </div>
                         <button class="btn btn-danger"
-                                onclick="stopBot('${bot.bot_id || bot.symbol}_${bot.strategy_id}_${bot.timeframe}')"
+                                onclick="stopBot('${botId}')"
                                 style="margin-top:10px; padding:8px 15px; font-size:0.75rem;">
                             🛑 Durdur
                         </button>
                     </div>
                 </div>
             </div>
-        `).join('');
+            `;
+        }).join('');
 
     } catch (error) {
         console.error('Aktif botlar yüklenemedi:', error);
