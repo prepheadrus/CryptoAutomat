@@ -135,6 +135,11 @@ class PaperTrader:
         # Arayüze botun ne düşündüğünü yansıtmak için son kararları parite bazlı sakla
         self.latest_decisions = {}
 
+        # 1-to-N MİMARİSİ: Bot ID tabanlı state yönetimi
+        self.active_bots = {}      # bot_id → metadata
+        self.bot_positions = {}    # bot_id → pozisyon listesi
+        self.bot_state = {}        # bot_id → PnL, margin, vb.
+
         # ML Modellerini yükle (active_timeframes tanımlandıktan sonra)
         if ML_AVAILABLE:
             # Her sembol için dinamik model yükleme
