@@ -597,74 +597,15 @@ class ExchangeManager:
                     else:
                         logger.debug(f"⚠️ [1-to-N] {symbol} için aktif bot yok")
 
-                    # ============================================
-                    # ESKİ MİMARİ (Geriye dönük uyumluluk - kaldırılacak)
-                    # ============================================
-                    from strategy.manager import StrategyManager
-
-                    try:
-                        # Tüm stratejiler için sinyal üret
-                        all_signals = StrategyManager.generate_signals(df_target)
-
-                        # Her strateji için sinyal işleme
-                        for strat_name, signal in all_signals.items():
-                            # Bu strateji bu sembol için aktif mi kontrol et
-                            if strat_name != active_strat_id and strat_name != 'trend_master':
-                                continue  # Sadece aktif stratejiyi işle
-
-                            # HER SİNYALDE process_signal ÇAĞIR (latest_decisions için kritik!)
-                            await paper_engine.process_signal(
-                                symbol, current_price, df_target,
-                                ml_confidence=0.70 if signal == 2 else 0.50,
-                                htf_trend=htf_trend, regime=regime_info['regime']
-                            )
-
-                            # Sinyal tipine göre aksiyon al
-                            if signal == 2:  # AL (LONG)
-                                # Açık LONG pozisyon yoksa işleme gir
-                                has_open_long = any(
-                                    pos['symbol'] == symbol and pos['direction'] == 'LONG'
-                                    for pos in paper_engine.open_positions
-                                )
-
-                                if not has_open_long:
-                                    logger.info(f"🟢 {strat_name} AL sinyali: {symbol} @ {current_price:.2f}")
-
-                            elif signal == 0:  # SAT (SHORT)
-                                # Açık LONG pozisyon varsa kapat
-                                for i, pos in enumerate(paper_engine.open_positions):
-                                    if pos['symbol'] == symbol and pos['direction'] == 'LONG':
-                                        logger.info(f"🔴 {strat_name} SAT sinyali: {symbol} @ {current_price:.2f} (LONG kapatılıyor)")
-                                        await paper_engine._close_position(
-                                            i, pos, current_price,
-                                            f"{strat_name} SAT sinyali"
-                                        )
-                                        break
-
-                            # signal == 1 (BEKLE) → process_signal zaten çağrıldı, kart güncellendi
-
-                    except Exception as e:
-                        logger.error(f"❌ Strateji sinyalleri işlenirken hata ({symbol}): {e}")
-                        # Hata durumunda process_signal çağır (latest_decisions için)
-                        await paper_engine.process_signal(
-                            symbol, current_price, df_target,
-                            ml_confidence=0.50,
-                            htf_trend=htf_trend, regime=regime_info['regime']
-                        )
+                    # ESKİ MİMARİ KALDIRILDI! Sadece 1-to-N kullanılıyor
 
                     # 8. YAPAY ZEKA TAHMİNİ (Hedef Vade Verileriyle)
-                    # Not: StrategyManager.generate_signals() zaten kullanıldı
-                    # ML confidence artık process_signal içinde kullanılmıyor (StrategyExecutor kendi içinde hesaplıyor)
-                    ml_confidence = 0.50
-
-                    # 9. SİNYAL İŞLEME VE KAĞIT TİCARETİ (HTF Trendi + Market Regime Dahil Edildi)
-                    # Not: Yukarıdaki StrategyManager.generate_signals() zaten process_signal'ı çağırdı
-                    # Bu kısım artık sadece loglama için
-                    logger.info(f"✅ {symbol} {target_tf} (HTF: {htf_trend} | REJİM: {regime_info['regime']}) analiz tamamlandı. Sinyaller işlendi.")
+                    # Not: ML confidence artık process_bot_signal içinde kullanılıyor
+                    logger.info(f"✅ {symbol} {target_tf} (HTF: {htf_trend} | REJİM: {regime_info['regime']}) analiz tamamlandı. Botlar işlendi.")
 
                 # Bir sonraki kontrol için bekle
                 await asyncio.sleep(30)
-                
+
             except asyncio.CancelledError:
                 break
             except Exception as e:
