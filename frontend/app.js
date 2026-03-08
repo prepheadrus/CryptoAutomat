@@ -1732,7 +1732,7 @@ async function loadBotFormOptions() {
         const strategiesRes = await fetch('/api/v1/strategy/list?t=' + Date.now()); // Cache bypass
         const strategiesData = await strategiesRes.json();
 
-        console.log('📊 [DEBUG] API Response:', strategiesData);
+        console.log('📊 [DEBUG] API Response TAM:', JSON.stringify(strategiesData, null, 2));
 
         if (strategySelect && strategiesData.strategies) {
             strategySelect.innerHTML = '';
