@@ -1682,13 +1682,27 @@ async function loadBotFormOptions() {
      * OPTGROUP ile builtin ve custom stratejileri grupla.
      */
     try {
-        console.log('🔄 Bot form seçenekleri yükleniyor...');
+        console.log('🔄 [DEBUG] loadBotFormOptions() çağrıldı...');
+
+        // DOM elemanlarını kontrol et
+        const symbolSelect = document.getElementById('bot-symbol');
+        const strategySelect = document.getElementById('bot-strategy');
+
+        console.log('🔍 [DEBUG] DOM Elemanları:', {
+            'bot-symbol': symbolSelect ? '✅ Var' : '❌ YOK',
+            'bot-strategy': strategySelect ? '✅ Var' : '❌ YOK'
+        });
+
+        if (!symbolSelect || !strategySelect) {
+            console.warn('⚠️ [DEBUG] Form elemanları bulunamadı, bekleniyor...');
+            return;
+        }
 
         // 1. Sembolleri yükle (DB'de verisi olanlar)
+        console.log('📡 [DEBUG] Semboller API çağrısı...');
         const symbolsRes = await fetch('/api/v1/data/symbols-with-data');
         const symbolsData = await symbolsRes.json();
 
-        const symbolSelect = document.getElementById('bot-symbol');
         if (symbolSelect && symbolsData.symbols) {
             symbolSelect.innerHTML = '';
             symbolsData.symbols.forEach(symbol => {
@@ -1700,69 +1714,70 @@ async function loadBotFormOptions() {
             if (symbolsData.symbols.length === 0) {
                 symbolSelect.innerHTML = '<option value="">DB\'de veri yok</option>';
             }
-            console.log(`✅ ${symbolsData.symbols.length} sembol yüklendi`);
+            console.log(`✅ [DEBUG] ${symbolsData.symbols.length} sembol yüklendi`);
         }
 
         // 2. Stratejileri yükle (OPTGROUP ile grupla)
-        console.log('🔄 Stratejiler API\'den çekiliyor...');
+        console.log('📡 [DEBUG] Stratejiler API çağrısı...');
         const strategiesRes = await fetch('/api/v1/strategy/list?t=' + Date.now()); // Cache bypass
         const strategiesData = await strategiesRes.json();
 
-        console.log(`📊 API Response: ${JSON.stringify(strategiesData)}`);
+        console.log('📊 [DEBUG] API Response:', strategiesData);
 
-        const strategySelect = document.getElementById('bot-strategy');
         if (strategySelect && strategiesData.strategies) {
             strategySelect.innerHTML = '';
 
-            // OPTGROUP: Yerleşik Stratejiler (Builtin)
-            const builtinGroup = document.createElement('optgroup');
-            builtinGroup.label = '🤖 Yerleşik Stratejiler';
+            // Filtrele
+            const builtinStrategies = strategiesData.strategies.filter(s => s.type === 'builtin');
+            const customStrategies = strategiesData.strategies.filter(s => s.type === 'custom');
 
-            strategiesData.strategies
-                .filter(s => s.type === 'builtin')
-                .forEach(strat => {
+            console.log(`📊 [DEBUG] Builtin: ${builtinStrategies.length}, Custom: ${customStrategies.length}`);
+
+            // OPTGROUP: Yerleşik Stratejiler (Builtin)
+            if (builtinStrategies.length > 0) {
+                const builtinGroup = document.createElement('optgroup');
+                builtinGroup.label = '🤖 Yerleşik Stratejiler';
+
+                builtinStrategies.forEach(strat => {
                     const opt = document.createElement('option');
                     opt.value = strat.id;
                     opt.textContent = strat.name;
                     builtinGroup.appendChild(opt);
                 });
 
-            // OPTGROUP: Özel Stratejiler (Custom)
-            const customGroup = document.createElement('optgroup');
-            customGroup.label = '🎨 Özel Stratejiler';
+                strategySelect.appendChild(builtinGroup);
+                console.log(`✅ [DEBUG] ${builtinStrategies.length} builtin strateji eklendi`);
+            }
 
-            strategiesData.strategies
-                .filter(s => s.type === 'custom')
-                .forEach(strat => {
+            // OPTGROUP: Özel Stratejiler (Custom)
+            if (customStrategies.length > 0) {
+                const customGroup = document.createElement('optgroup');
+                customGroup.label = '🎨 Özel Stratejiler';
+
+                customStrategies.forEach(strat => {
                     const opt = document.createElement('option');
                     opt.value = strat.id;
                     opt.textContent = strat.name + ' ⚡';
                     customGroup.appendChild(opt);
                 });
 
-            // Grupları ekle
-            if (builtinGroup.children.length > 0) {
-                strategySelect.appendChild(builtinGroup);
-            }
-            if (customGroup.children.length > 0) {
                 strategySelect.appendChild(customGroup);
+                console.log(`✅ [DEBUG] ${customStrategies.length} custom strateji eklendi`);
             }
 
-            const totalStrategies = strategiesData.strategies.length;
-            const builtinCount = strategiesData.strategies.filter(s => s.type === 'builtin').length;
-            const customCount = strategiesData.strategies.filter(s => s.type === 'custom').length;
-
-            console.log(`✅ ${totalStrategies} strateji yüklendi (${builtinCount} builtin + ${customCount} custom)`);
+            const totalStrategies = builtinStrategies.length + customStrategies.length;
+            console.log(`✅ [DEBUG] Toplam ${totalStrategies} strateji yüklendi`);
 
             if (totalStrategies === 0) {
                 strategySelect.innerHTML = '<option value="">Strateji yok</option>';
             }
         } else {
-            console.error('❌ Strateji verisi yok:', strategiesData);
+            console.error('❌ [DEBUG] Strateji verisi yok:', strategiesData);
         }
 
     } catch (error) {
-        console.error('❌ Bot form seçenekleri yüklenemedi:', error);
+        console.error('❌ [DEBUG] Bot form seçenekleri yüklenemedi:', error);
+        console.error('❌ [DEBUG] Stack:', error.stack);
         showErrorToast('⚠️ Stratejiler yüklenemedi: ' + error.message, 5000);
     }
 }
