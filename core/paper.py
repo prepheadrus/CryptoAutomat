@@ -543,6 +543,86 @@ class PaperTrader:
             if final_signal != 1:
                 logger.debug(f"[FILTER] {symbol} ML Güven Skoru Yetersiz: {ml_confidence:.2f} (Eşik: {threshold})")
 
+    def process_bot_signal(self, bot_id: str, df: pd.DataFrame, current_price: float, htf_trend: str = "NEUTRAL", regime: str = "UNKNOWN"):
+        """
+        Belirli bir bot için sinyal işleme ve pozisyon yönetimi.
+        Her bot izole olarak işlenir.
+
+        Args:
+            bot_id: Bot ID
+            df: İndikatörlerle DataFrame
+            current_price: Güncel fiyat
+            htf_trend: Yüksek timeframe trend
+            regime: Piyasa rejimi
+        """
+        if bot_id not in self.active_bots:
+            return
+
+        bot_info = self.active_bots[bot_id]
+        symbol = bot_info['symbol']
+        strategy_id = bot_info['strategy_id']
+
+        # Stratejiyi al
+        strategy = self.strategies.get(symbol)
+        if strategy is None:
+            logger.warning(f"⚠️ {bot_id} için strateji bulunamadı")
+            return
+
+        # Son mumu al
+        if df.empty or len(df) < 50:
+            return
+
+        latest_candle = df.iloc[-1]
+
+        # Strateji sinyali üret
+        strategy_signal = strategy.generate_signal(latest_candle)
+
+        # ML Confidence (eğer model varsa)
+        ml_confidence = 0.50
+        ml_recommendation = "HOLD"
+        if self.ml_enabled and self.ml_model is not None:
+            try:
+                ml_result = self.ml_model.predict_single(latest_candle.to_frame().T)
+                ml_confidence = ml_result['confidence_pct'] / 100.0
+                ml_recommendation = ml_result['recommendation']
+            except:
+                pass
+
+        # Volatilite kontrolü
+        is_safe = StrategyConfluence.is_volatility_safe(latest_candle)
+        if not is_safe:
+            return
+
+        # Confluence mekanizması (Strateji + ML)
+        final_signal = 1  # HOLD
+
+        if strategy_signal == 2:  # LONG
+            if ml_confidence >= 0.65 or ml_recommendation in ["LONG", "STRONG_LONG"]:
+                final_signal = 2
+        elif strategy_signal == 0:  # SHORT
+            if ml_confidence >= 0.65 or ml_recommendation in ["SHORT", "STRONG_SHORT"]:
+                final_signal = 0
+
+        # Sinyale göre işlem yap
+        if final_signal == 2:  # LONG
+            # Açık pozisyon var mı kontrol et (bu bot için)
+            if not any(pos['symbol'] == symbol and pos.get('bot_id') == bot_id for pos in self.open_positions):
+                # LONG pozisyon aç
+                asyncio.create_task(self._open_new_position(symbol, "LONG", current_price, latest_candle, ml_confidence * 100, ml_recommendation, bot_id=bot_id))
+        elif final_signal == 0:  # SHORT
+            # Spot ise LONG kapat
+            if bot_info.get('market_type') == 'spot':
+                for i, pos in enumerate(self.open_positions):
+                    if pos['symbol'] == symbol and pos.get('bot_id') == bot_id and pos['direction'] == "LONG":
+                        asyncio.create_task(self._close_position(i, pos, current_price, "Spot SHORT sinyali"))
+                        return
+            else:
+                # Futures ise SHORT aç
+                if not any(pos['symbol'] == symbol and pos.get('bot_id') == bot_id for pos in self.open_positions):
+                    asyncio.create_task(self._open_new_position(symbol, "SHORT", current_price, latest_candle, ml_confidence * 100, ml_recommendation, bot_id=bot_id))
+
+        logger.debug(f"🤖 [BOT] {bot_id} işlendi: Signal={final_signal}, Price={current_price:.2f}")
+
     async def _open_new_position(
         self,
         symbol,
@@ -550,7 +630,8 @@ class PaperTrader:
         price,
         latest_candle,
         ml_confidence_pct: float = 0.0,
-        ml_recommendation: str = "HOLD"
+        ml_recommendation: str = "HOLD",
+        bot_id: str = None
     ):
         """
         Gerçekçi bir biçimde komisyonu (fee) ve kaymayı (slippage) hesaplayarak işleme girer.
@@ -1236,6 +1317,7 @@ class PaperTrader:
         }
 
         logger.info(f"🤖 [BOT] Başlatıldı: {bot_id}")
+        logger.info(f"📢 [BOT] {bot_id} için run_bot_poller() başlatılmalı!")
         return bot_id
 
     def stop_bot(self, bot_id: str) -> bool:

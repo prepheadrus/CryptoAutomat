@@ -525,7 +525,37 @@ class ExchangeManager:
 
                     logger.debug(f"▶️ {symbol} strateji aktif: {active_strat_id}, strategy={strategy}")
 
-                    # 7.6 TÜM STRATEJİLERDEN SİNYAL TOPLA (Sabit + Dinamik JSON)
+                    # ============================================
+                    # YENİ 1-to-N MİMARİSİ: active_bots üzerinden tüm botları işle
+                    # ============================================
+                    # Bu sembol için aktif tüm botları bul
+                    active_bot_ids = [
+                        bot_id for bot_id, bot_info in paper_engine.active_bots.items()
+                        if bot_info['symbol'] == symbol and bot_info['status'] == 'running'
+                    ]
+
+                    if active_bot_ids:
+                        logger.info(f"🤖 [1-to-N] {symbol} için {len(active_bot_ids)} aktif bot işleniyor...")
+
+                        # Her bot için sinyal işleme (asenkron, izole)
+                        for bot_id in active_bot_ids:
+                            try:
+                                paper_engine.process_bot_signal(
+                                    bot_id=bot_id,
+                                    df=df_target,
+                                    current_price=current_price,
+                                    htf_trend=htf_trend,
+                                    regime=regime_info['regime']
+                                )
+                                logger.debug(f"✅ [BOT] {bot_id} işlendi")
+                            except Exception as bot_err:
+                                logger.error(f"❌ [BOT] {bot_id} işleme hatası: {bot_err}")
+                    else:
+                        logger.debug(f"⚠️ [1-to-N] {symbol} için aktif bot yok")
+
+                    # ============================================
+                    # ESKİ MİMARİ (Geriyə dönük uyumluluk)
+                    # ============================================
                     from strategy.manager import StrategyManager
 
                     try:
