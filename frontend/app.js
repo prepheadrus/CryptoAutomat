@@ -1834,17 +1834,18 @@ async function loadMLTrainingSymbols() {
         // Dropdown'u tamamen temizle
         select.innerHTML = '';
 
-        // Veri laboratuvarından gelen coinleri ekle
+        // Veri laboratuvarından gelen coinleri ekle (GERÇEK DB FORMATI)
+        // Örnek: BTC/USDT:USDT_future, BNB/USDT:USDT_future vb.
         data.symbols.forEach(symbol => {
             const option = document.createElement('option');
-            option.value = symbol;  // DB'deki formatı kullan (örn: BTC/USDT:USDT)
-            option.textContent = symbol;  // Aynı formatı göster
+            option.value = symbol;  // DB'deki TAM formatı kullan
+            option.textContent = symbol.replace('_future', '');  // Kullanıcıya _future'siz göster
             select.appendChild(option);
         });
 
         // İlk sembol seçildiğinde DB kontrolü yap
         if (select.value) {
-            checkDbMumCount();
+            setTimeout(() => checkDbMumCount(), 100);
         }
 
     } catch (error) {
