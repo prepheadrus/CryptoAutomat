@@ -285,6 +285,12 @@ class DatabaseManager:
         Veritabanından belirli bir sembol ve timeframe için mum verilerini çeker.
         ML eğitimi için kullanılır - internete ÇIKMAZ!
 
+        SEMBOL NORMALİZASYONU (FALLBACK MEKANİZMASI):
+        1. Önce gelen symbol ile dene
+        2. Bulamazsa _future ekle (BTC/USDT:USDT → BTC/USDT:USDT_future)
+        3. Bulamazsa / ve : temizle + _future ekle (BTCUSDT_future)
+        4. İlk bulunan pozitif sonucu döner
+
         Args:
             symbol: Sembol adı (örn: BTCUSDT, BTC/USDT, BTC/USDT:USDT)
             timeframe: Zaman dilimi (örn: 1m, 15m, 1h)
@@ -293,76 +299,100 @@ class DatabaseManager:
         Returns:
             list: OHLCV verileri [(timestamp, open, high, low, close, volume), ...]
         """
-        # Sembol temizleme - tüm formatları kabul et
-        symbol_clean = symbol.replace('/', '').replace(':', '').replace('-', '').upper()
+        # Sembol varyasyonları oluştur (Fallback sırası)
+        symbol_variants = [
+            symbol,  # 1. Orijinal sembol
+            f"{symbol}_future",  # 2. _future ekli
+        ]
 
-        # Esnek pattern - hem spot hem futures formatlarını yakala
-        pattern = f"%{symbol_clean}%"
+        # 3. Temizlenmiş + _future (örn: BTCUSDT_future)
+        symbol_clean = symbol.replace('/', '').replace(':', '').replace('-', '')
+        if symbol_clean != symbol:
+            symbol_variants.append(f"{symbol_clean}_future")
 
-        # SQL sorgusu - en son N mumu getir
-        sql = """
-            SELECT timestamp, open, high, low, close, volume
-            FROM klines
-            WHERE (symbol = ? OR symbol LIKE ?)
-              AND timeframe = ?
-            ORDER BY timestamp DESC
-            LIMIT ?
-        """
-        params = (symbol_clean, pattern, timeframe, limit)
+        # Her varyasyonu dene
+        for sym_variant in symbol_variants:
+            # SQL sorgusu - en son N mumu getir
+            sql = """
+                SELECT timestamp, open, high, low, close, volume
+                FROM klines
+                WHERE symbol = ? AND timeframe = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """
+            params = (sym_variant, timeframe, limit)
 
-        if self.engine_type == "postgres":
-            sql = sql.replace('?', '%s')
-            async with self.db_pool.acquire() as conn:
-                rows = await conn.fetch(sql, symbol_clean, pattern, timeframe, limit)
-                return [(row['timestamp'], row['open'], row['high'], row['low'], row['close'], row['volume']) for row in rows]
-        else:
-            async with self.sqlite_conn.execute(sql, params) as cursor:
-                rows = await cursor.fetchall()
-                return [(row[0], row[1], row[2], row[3], row[4], row[5]) for row in rows]
+            if self.engine_type == "postgres":
+                sql = sql.replace('?', '%s')
+                async with self.db_pool.acquire() as conn:
+                    rows = await conn.fetch(sql, sym_variant, timeframe, limit)
+                    result = [(row['timestamp'], row['open'], row['high'], row['low'], row['close'], row['volume']) for row in rows]
+                    if len(result) > 0:
+                        logger.debug(f"✅ DB Sembol eşleşti (get_klines): {symbol} → {sym_variant} ({len(result)} mum)")
+                        return result
+            else:
+                async with self.sqlite_conn.execute(sql, params) as cursor:
+                    rows = await cursor.fetchall()
+                    result = [(row[0], row[1], row[2], row[3], row[4], row[5]) for row in rows]
+                    if len(result) > 0:
+                        logger.debug(f"✅ DB Sembol eşleşti (get_klines): {symbol} → {sym_variant} ({len(result)} mum)")
+                        return result
+
+        # Hiçbir varyant bulunamadı
+        return []
 
     async def get_klines_count(self, symbol: str, timeframe: str = '1m') -> int:
         """
         Veritabanında belirli bir sembol ve timeframe için kaç mum olduğunu döner.
-        Validation için kullanılır.
+        VALIDATION için kullanılır.
+
+        SEMBOL NORMALİZASYONU (FALLBACK MEKANİZMASI):
+        1. Önce gelen symbol ile dene
+        2. Bulamazsa _future ekle (BTC/USDT:USDT → BTC/USDT:USDT_future)
+        3. Bulamazsa / ve : temizle + _future ekle (BTCUSDT_future)
+        4. İlk bulunan pozitif sonucu döner
 
         Args:
             symbol: Sembol adı (örn: BTCUSDT, BTC/USDT, BTC/USDT:USDT)
             timeframe: Zaman dilimi
 
         Returns:
-            int: Toplam mum sayısı
+            int: Toplam mum sayısı (0 = hiç veri yok)
         """
-        # Sembol temizleme - tüm formatları kabul et
-        symbol_clean = symbol.replace('/', '').replace(':', '').replace('-', '').upper()
-
-        # Çeşitli formatları dene - hem tam eşleşme hem LIKE
-        # BTC/USDT:USDT, BTCUSDT:USDT, BTCUSDT, BNB/USDT:USDT vb.
-        patterns = [
-            symbol_clean,  # Tam eşleşme
-            f"%{symbol_clean}%",  # LIKE %XXX%
-            f"{symbol_clean}:%",  # LIKE XXX:%
-            f"%{symbol_clean}:%",  # LIKE %XXX:%
+        # Sembol varyasyonları oluştur (Fallback sırası)
+        symbol_variants = [
+            symbol,  # 1. Orijinal sembol
+            f"{symbol}_future",  # 2. _future ekli
         ]
 
-        if self.engine_type == "postgres":
-            for pattern in patterns:
-                sql = "SELECT COUNT(*) as cnt FROM klines WHERE (symbol = $1 OR symbol LIKE $2) AND timeframe = $3"
+        # 3. Temizlenmiş + _future (örn: BTCUSDT_future)
+        symbol_clean = symbol.replace('/', '').replace(':', '').replace('-', '')
+        if symbol_clean != symbol:
+            symbol_variants.append(f"{symbol_clean}_future")
+
+        # Her varyasyonu dene
+        for sym_variant in symbol_variants:
+            sql = "SELECT COUNT(*) as cnt FROM klines WHERE symbol = ? AND timeframe = ?"
+            params = (sym_variant, timeframe)
+
+            if self.engine_type == "postgres":
+                sql = sql.replace('?', '%s')
                 async with self.db_pool.acquire() as conn:
-                    row = await conn.fetchrow(sql, pattern, f"%{pattern}%", timeframe)
+                    row = await conn.fetchrow(sql, sym_variant, timeframe)
                     cnt = row['cnt'] if row else 0
                     if cnt > 0:
+                        logger.debug(f"✅ DB Sembol eşleşti: {symbol} → {sym_variant} ({cnt} mum)")
                         return cnt
-            return 0
-        else:
-            # SQLite - tüm pattern'leri dene
-            for pattern in patterns:
-                sql = "SELECT COUNT(*) as cnt FROM klines WHERE (symbol = ? OR symbol LIKE ?) AND timeframe = ?"
-                async with self.sqlite_conn.execute(sql, (pattern, f"%{pattern}%", timeframe)) as cursor:
+            else:
+                async with self.sqlite_conn.execute(sql, params) as cursor:
                     row = await cursor.fetchone()
                     cnt = row[0] if row else 0
                     if cnt > 0:
+                        logger.debug(f"✅ DB Sembol eşleşti: {symbol} → {sym_variant} ({cnt} mum)")
                         return cnt
-            return 0
+
+        # Hiçbir varyant bulunamadı
+        return 0
     async def get_symbols_with_data(self):
         """Veritabanında (klines tablosunda) en az 1 kaydı bulunan tüm pariteleri getirir."""
         sql = "SELECT DISTINCT symbol FROM klines"

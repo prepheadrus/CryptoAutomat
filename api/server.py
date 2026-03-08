@@ -792,29 +792,8 @@ async def _run_ml_training(req: MLTrainRequest):
         training_state["progress"] = 5
 
         # DB'de 1m timeframe'inde kaç mum var?
-        # SEMBOL NORMALİZASYONU: Önce ana sembol, sonra _future fallback
+        # NOT: Database katmanı otomatik _future fallback yapar, ekstra kod gerekmez!
         db_count = await db_manager.get_klines_count(req.symbol, '1m')
-        matched_symbol = req.symbol
-
-        # Eğer 0 ise, _future fallback dene
-        if db_count == 0 and not req.symbol.endswith('_future'):
-            symbol_with_future = f"{req.symbol}_future"
-            db_count_future = await db_manager.get_klines_count(symbol_with_future, '1m')
-
-            if db_count_future > 0:
-                logger.info(f"✅ Sembol fallback: {req.symbol} → {symbol_with_future} ({db_count_future} mum 1m)")
-                db_count = db_count_future
-                matched_symbol = symbol_with_future
-
-        # Eğer hala 0 ise, temizlenmiş formatı dene
-        if db_count == 0:
-            symbol_clean = req.symbol.replace('/', '').replace(':', '')
-            if symbol_clean != req.symbol:
-                db_count_clean = await db_manager.get_klines_count(symbol_clean, '1m')
-                if db_count_clean > 0:
-                    logger.info(f"✅ Sembol fallback: {req.symbol} → {symbol_clean} ({db_count_clean} mum 1m)")
-                    db_count = db_count_clean
-                    matched_symbol = symbol_clean
 
         if db_count == 0:
             training_state["is_training"] = False
@@ -822,7 +801,7 @@ async def _run_ml_training(req: MLTrainRequest):
             logger.error(f"❌ [ML] DB'de 1m veri yok: {req.symbol}")
             return
 
-        logger.info(f"📊 [ML] {matched_symbol} için {db_count:,} mum (1m) bulundu")
+        logger.info(f"📊 [ML] {req.symbol} için {db_count:,} mum (1m) bulundu")
 
         # Yeterli veri var mı kontrol et
         if db_count < required_1m_candles:
@@ -839,8 +818,8 @@ async def _run_ml_training(req: MLTrainRequest):
         training_state["message"] = f"Veritabanından {actual_limit:,} mum (1m) çekiliyor..."
         training_state["progress"] = 10
 
-        # matched_symbol kullan (fallback ile bulunan sembol)
-        raw_ohlcv = await db_manager.get_klines(matched_symbol, '1m', limit=actual_limit)
+        # NOT: Database katmanı otomatik _future fallback yapar!
+        raw_ohlcv = await db_manager.get_klines(req.symbol, '1m', limit=actual_limit)
 
         if not raw_ohlcv or len(raw_ohlcv) == 0:
             training_state["is_training"] = False
@@ -951,45 +930,22 @@ async def get_klines_count(symbol: str, timeframe: str):
     Veritabanında belirli bir sembol ve timeframe için kaç mum olduğunu döner.
     ML eğitiminde dinamik mum sayısı seçimi için kullanılır.
 
-    SEMBOL NORMALİZASYONU: Gelen sembol eşleşmezse _future fallback dene.
+    NOT: Database katmanı otomatik _future fallback yapar!
 
     Args:
         symbol: Sembol adı (örn: BTCUSDT, BTC/USDT, BTC/USDT:USDT)
         timeframe: Zaman dilimi (örn: 1m, 15m, 1h)
 
     Returns:
-        Dict: {count: int, symbol: str, matched_symbol: str} - Toplam mum sayısı
+        Dict: {count: int, symbol: str, timeframe: str} - Toplam mum sayısı
     """
     try:
-        # Ana sembol ile dene
+        # Database katmanı otomatik fallback yapar
         count = await db_manager.get_klines_count(symbol, timeframe)
-        matched_symbol = symbol
-
-        # Eğer 0 ise, _future fallback dene (Veri Laboratuvarı formatı)
-        if count == 0 and not symbol.endswith('_future'):
-            symbol_with_future = f"{symbol}_future"
-            count_future = await db_manager.get_klines_count(symbol_with_future, timeframe)
-
-            if count_future > 0:
-                logger.debug(f"✅ Sembol fallback: {symbol} → {symbol_with_future} ({count_future} mum)")
-                count = count_future
-                matched_symbol = symbol_with_future
-
-        # Eğer hala 0 ise, farklı formatları dene
-        if count == 0:
-            # BTC/USDT:USDT → BTCUSDT formatını dene
-            symbol_clean = symbol.replace('/', '').replace(':', '')
-            if symbol_clean != symbol:
-                count_clean = await db_manager.get_klines_count(symbol_clean, timeframe)
-                if count_clean > 0:
-                    logger.debug(f"✅ Sembol fallback: {symbol} → {symbol_clean} ({count_clean} mum)")
-                    count = count_clean
-                    matched_symbol = symbol_clean
 
         return {
             "count": count,
             "symbol": symbol,
-            "matched_symbol": matched_symbol,
             "timeframe": timeframe
         }
     except Exception as e:
