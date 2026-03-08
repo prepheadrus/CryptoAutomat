@@ -236,6 +236,10 @@ async function fetchBotData() {
                     </div>
                 `;
             } else {
+                // Strateji bilgilerini al (strateji adlarını bulmak için)
+                const stratRes = await fetch('/api/v1/strategies');
+                const stratData = await stratRes.json();
+
                 // Dashboard metriklerini al (latest_decisions için gerekli)
                 const metricsRes = await fetch('/api/v1/dashboard-metrics');
                 const metricsData = await metricsRes.json();
@@ -261,9 +265,14 @@ async function fetchBotData() {
 
                     // İlk bot'un bilgilerini kullan (kart başlığı için)
                     const firstBot = bots[0];
-                    const strategyName = firstBot.strategy || 'Unknown';
+                    const strategyId = firstBot.strategy_id || 'unknown';
                     const timeframe = firstBot.timeframe || '1m';
                     const marketType = firstBot.market_type || 'future';
+
+                    // Strateji adını bul (API'den gelen strategies listesinde ara)
+                    const strategyName = stratData && stratData.strategies ?
+                        (stratData.strategies.find(s => s.id === strategyId)?.name || strategyId) :
+                        strategyId;
 
                     // Son kararı bul
                     const decision = metrics.latest_decisions ? metrics.latest_decisions[sym] : null;
