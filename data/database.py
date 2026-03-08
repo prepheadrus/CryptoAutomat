@@ -335,22 +335,34 @@ class DatabaseManager:
         # Sembol temizleme - tüm formatları kabul et
         symbol_clean = symbol.replace('/', '').replace(':', '').replace('-', '').upper()
 
-        # Esnek pattern - hem spot hem futures formatlarını yakala
-        # BNBUSDTUSDT → %BNBUSDTUSDT% (herhangi bir yerde geçerse yakala)
-        pattern = f"%{symbol_clean}%"
-
-        sql = "SELECT COUNT(*) as cnt FROM klines WHERE (symbol = ? OR symbol LIKE ?) AND timeframe = ?"
-        params = (symbol_clean, pattern, timeframe)
+        # Çeşitli formatları dene - hem tam eşleşme hem LIKE
+        # BTC/USDT:USDT, BTCUSDT:USDT, BTCUSDT, BNB/USDT:USDT vb.
+        patterns = [
+            symbol_clean,  # Tam eşleşme
+            f"%{symbol_clean}%",  # LIKE %XXX%
+            f"{symbol_clean}:%",  # LIKE XXX:%
+            f"%{symbol_clean}:%",  # LIKE %XXX:%
+        ]
 
         if self.engine_type == "postgres":
-            sql = sql.replace('?', '%s')
-            async with self.db_pool.acquire() as conn:
-                row = await conn.fetchrow(sql, symbol_clean, pattern, timeframe)
-                return row['cnt'] if row else 0
+            for pattern in patterns:
+                sql = "SELECT COUNT(*) as cnt FROM klines WHERE (symbol = $1 OR symbol LIKE $2) AND timeframe = $3"
+                async with self.db_pool.acquire() as conn:
+                    row = await conn.fetchrow(sql, pattern, f"%{pattern}%", timeframe)
+                    cnt = row['cnt'] if row else 0
+                    if cnt > 0:
+                        return cnt
+            return 0
         else:
-            async with self.sqlite_conn.execute(sql, params) as cursor:
-                row = await cursor.fetchone()
-                return row[0] if row else 0
+            # SQLite - tüm pattern'leri dene
+            for pattern in patterns:
+                sql = "SELECT COUNT(*) as cnt FROM klines WHERE (symbol = ? OR symbol LIKE ?) AND timeframe = ?"
+                async with self.sqlite_conn.execute(sql, (pattern, f"%{pattern}%", timeframe)) as cursor:
+                    row = await cursor.fetchone()
+                    cnt = row[0] if row else 0
+                    if cnt > 0:
+                        return cnt
+            return 0
     async def get_symbols_with_data(self):
         """Veritabanında (klines tablosunda) en az 1 kaydı bulunan tüm pariteleri getirir."""
         sql = "SELECT DISTINCT symbol FROM klines"
