@@ -147,7 +147,7 @@ class StrategyManager:
             strategies.append({
                 "id": key,
                 "name": val.name(),
-                "desc": val.description(),
+                "description": val.description(),  # API ile uyumlu
                 "type": "fixed"
             })
 
@@ -156,7 +156,7 @@ class StrategyManager:
             strategies.append({
                 "id": key,
                 "name": val['name'],
-                "desc": val['description'] or "Kullanıcı stratejisi",
+                "description": val.get('description') or "Kullanıcı stratejisi",
                 "type": "dynamic",
                 "filename": val['filename']
             })
