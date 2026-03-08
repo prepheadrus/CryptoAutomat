@@ -540,15 +540,20 @@ class ExchangeManager:
                     strategy = paper_engine.strategies.get(symbol)
                     active_strat_id = paper_engine.active_strategies.get(symbol, 'NOT_SET')
 
-                    if strategy is None or active_strat_id == "":
-                        # Strateji durdurulmuş, sadece fiyat güncellemesi yap
+                    # YENİ 1-to-N: active_bots kontrolü (eski active_strategies yerine)
+                    active_bot_ids = [
+                        bot_id for bot_id, bot_info in paper_engine.active_bots.items()
+                        if bot_info['symbol'] == symbol and bot_info['status'] == 'running'
+                    ]
+
+                    if (strategy is None or active_strat_id == "") and not active_bot_ids:
+                        # Strateji durdurulmuş VE aktif bot yok, sadece fiyat güncellemesi yap
                         await paper_engine.update_live_prices(symbol, current_price)
-                        logger.debug(f"⏸️ {symbol} için strateji durduruldu, sadece fiyat güncelleniyor.")
-                        logger.debug(f"   strategy={strategy}, active_strategies[{symbol}]='{active_strat_id}'")
+                        logger.debug(f"⏸️ {symbol} için strateji durduruldu ve aktif bot yok, sadece fiyat güncelleniyor.")
                         await asyncio.sleep(30)
                         continue
 
-                    logger.debug(f"▶️ {symbol} strateji aktif: {active_strat_id}, strategy={strategy}")
+                    logger.debug(f"▶️ {symbol} strateji aktif: {active_strat_id}, strategy={strategy}, aktif bot sayısı: {len(active_bot_ids)}")
 
                     # ============================================
                     # YENİ 1-to-N MİMARİSİ: Merkezi Poller, Dağıtık İşleme
