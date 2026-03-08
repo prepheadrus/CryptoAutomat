@@ -49,6 +49,16 @@ knowledge/
 
 ## 🆕 Yeni Eklenenler (Mart 2026)
 
+### **Smart Hybrid Architecture**
+- **Dosya:** `architecture/smart-hybrid-architecture.md`
+- **Açıklama:** Local DB + REST Pagination + WSS Push
+- **Özellikler:**
+  - Local DB First (0 REST çağrısı)
+  - Sınırsız Pagination (gap fill)
+  - RAM koruması (tail 1500)
+  - Yeni Mum Kilidi (%98 CPU tasarrufu)
+  - WebSocket Push (0 polling)
+
 ### **1-to-N Multi-Bot Architecture**
 - **Dosya:** `architecture/1-to-N-multi-bot-architecture.md`
 - **Açıklama:** Merkezi dinleyici, dağıtık işleyici mimarisi
@@ -90,6 +100,7 @@ knowledge/
 
 | Konu | Dosya |
 |------|-------|
+| **Smart Hybrid** | `architecture/smart-hybrid-architecture.md` |
 | **1-to-N Bot Mimarisi** | `architecture/1-to-N-multi-bot-architecture.md` |
 | Sistem Mimarisi | `architecture/overview.md` |
 | Veri Pipeline | `architecture/data_pipeline.md` |
