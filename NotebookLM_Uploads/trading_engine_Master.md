@@ -1,5 +1,5 @@
 # TRADING_ENGINE BILGI BANKASI
-Son Guncelleme: 08/03/2026 22:57
+Son Guncelleme: 08/03/2026 22:58
 
 ---
 
