@@ -528,6 +528,123 @@ function testStrategy() {
 
 ---
 
-**Son Güncelleme:** 7 Mart 2026  
-**Yazar:** CryptoAlgoBot Development Team  
-**Durum:** ✅ Tamamlandı ve GitHub'a push edildi
+**Son Güncelleme:** 9 Mart 2026
+**Yazar:** CryptoAlgoBot Development Team
+**Durum:** ✅ Tamamlandı ve GitHub'a push edildi (commit: 856e2da)
+
+---
+
+## 🆕 EN SON GELİŞTİRMELER (Mart 2026 - HTF Altın Oran)
+
+### **10. HTF Altın Oran (Multi-Timeframe Analysis)**
+
+**TARİH:** 9 Mart 2026
+**DURUM:** ✅ Production Ready
+**GITHUB COMMIT:** `856e2da`
+
+#### **10.1 Genel Bakış**
+
+**HTF (Higher Timeframe) Altın Oran Dinamik Haritalaması**, botun işlem yaptığı zaman diliminden daha büyük zaman dilimlerini analiz ederek trend onayı almasını sağlayan gelişmiş bir filtreleme sistemidir.
+
+**TEMEL FELSEFE:**
+> "Büyük resim her zaman daha önemlidir. Küçük timeframe'de AL sinyali olsa bile, büyük timeframe trendi ters yöndeyse işleme girme."
+
+**ALTIN ORAN PRENSİBİ (1:4 / 1:6):**
+Her timeframe için **iki üst timeframe** analizi yapılır:
+- **Minor HTF:** Bir üst timeframe (1:4 - 1:6 arası)
+- **Major HTF:** İki üst timeframe (1:12 - 1:24 arası)
+
+**Örnek (1m botu için):**
+```
+1m (Ana) → 5m (Minor, 1:5) → 15m (Major, 1:15)
+```
+
+---
+
+#### **10.2 Teknik Özellikler**
+
+**YENİ ÖZELLİKLER:**
+- ✅ Config tabanlı dinamik HTF haritalama
+- ✅ EMA Stack trend tespiti (EMA 20 vs EMA 50)
+- ✅ Çoklu HTF onay mekanizması (bull_count / bear_count)
+- ✅ Major HTF veto yetkisi
+- ✅ Geriye dönük uyumluluk (eski API çalışır)
+
+**DOSYALAR:**
+| Dosya | Değişiklik | Satır |
+|-------|-----------|-------|
+| `config.yaml` | HTF bölümü eklendi | +29 |
+| `core/exchange.py` | HTF analizi + EMA Stack | +129 |
+| `core/paper.py` | Dinamik HTF filtresi | +88 |
+| `test_htf.py` | Test scripti (yeni) | +70 |
+
+**TOPLAM:** +316 satır eklendi, 46 satır silindi
+
+---
+
+#### **10.3 Konfigürasyon**
+
+**config.yaml - HTF Bölümü:**
+```yaml
+htf:
+  enabled: true
+
+  # Altın Oran (1:4 / 1:6) dinamik haritalama
+  dynamic_map:
+    '1m':  ['5m', '15m']
+    '3m':  ['15m', '1h']
+    '5m':  ['15m', '1h']
+    '15m': ['1h', '4h']
+    '30m': ['2h', '6h']
+    '1h':  ['4h', '1d']
+    '4h':  ['1d', '1w']
+
+  trend_method: "ema_stack"
+  ema_fast: 20
+  ema_slow: 50
+```
+
+---
+
+#### **10.4 Filtre Mekanizması**
+
+**LONG Sinyali İçin:**
+```python
+if htf_trends.get(major_htf) == 'BEAR' or bull_count == 0:
+    return  # ❌ RED
+```
+
+**SHORT Sinyali İçin:**
+```python
+if htf_trends.get(major_htf) == 'BULL' or bear_count == 0:
+    return  # ❌ RED
+```
+
+---
+
+#### **10.5 Test ve Doğrulama**
+
+**Test Script:**
+```bash
+python test_htf.py
+```
+
+**TEST SONUÇLARI:**
+```
+[PASS] HTF enabled: True
+[PASS] Dynamic map: 7 timeframe
+[PASS] EMA Stack: 20 / 50
+[PASS] Trend method: ema_stack
+[PASS] EMA Stack trend mantığı doğru!
+TÜM TESTLER BAŞARILI!
+```
+
+---
+
+#### **10.6 İlgili Dokümanlar**
+
+- **Ana Doküman:** `features/htf_golden_ratio.md`
+- **INDEX:** `INDEX.md` (Hızlı Erişim bölümü güncellendi)
+- **Test:** `test_htf.py`
+
+---

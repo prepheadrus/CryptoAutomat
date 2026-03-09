@@ -49,6 +49,17 @@ knowledge/
 
 ## 🆕 Yeni Eklenenler (Mart 2026)
 
+### **HTF Altın Oran (Multi-Timeframe Analysis)**
+- **Dosya:** `features/htf_golden_ratio.md`
+- **Açıklama:** Dinamik çoklu zaman dilimi analizi + EMA Stack
+- **Özellikler:**
+  - Altın Oran (1:4 / 1:6) dinamik haritalama
+  - 2 seviyeli HTF analizi (Minor + Major)
+  - EMA Stack trend tespiti (EMA 20 vs EMA 50)
+  - Major HTF veto yetkisi
+  - Çoklu HTF onay mekanizması
+  - Config tabanlı dinamik mapping
+
 ### **Smart Hybrid Architecture**
 - **Dosya:** `architecture/smart-hybrid-architecture.md`
 - **Açıklama:** Local DB + REST Pagination + WSS Push
@@ -94,6 +105,17 @@ knowledge/
   - 2000+ kombinasyonu 50 denemede bul
   - %97-99 doğruluk (Grid Search'e göre)
 
+### **HTF Altın Oran (Multi-Timeframe Analysis)**
+- **Dosya:** `features/htf_golden_ratio.md` (YENİ!)
+- **Açıklama:** Dinamik çoklu zaman dilimi analizi + EMA Stack
+- **Özellikler:**
+  - Altın Oran (1:4 / 1:6) dinamik haritalama
+  - 2 seviyeli HTF analizi (Minor + Major)
+  - EMA Stack trend tespiti (EMA 20 vs EMA 50)
+  - Major HTF veto yetkisi
+  - Çoklu HTF onay mekanizması (bull/bear count)
+  - Config tabanlı dinamik mapping
+
 ---
 
 ## 🔍 Hızlı Erişim
@@ -113,6 +135,7 @@ knowledge/
 | **WFO** | `features/walk_forward_optimization.md` |
 | **Auto-Grid** | `features/auto_grid_generator.md` |
 | **Bayesian Opt.** | `features/bayesian_optimization.md` |
+| **HTF Altın Oran** | `features/htf_golden_ratio.md` |
 | No-Code Strateji | `features/no_code_strategy_builder.md` |
 | Strateji Oluşturucu | `features/strategy_builder_guide.md` |
 | ATR Trailing Stop | `features/ATR_TRAILING_STOP_SYSTEM.md` |
