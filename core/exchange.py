@@ -381,7 +381,7 @@ class ExchangeManager:
                 
         return all_downloaded
 
-    async def _process_bot_task(self, paper_engine, bot_id: str, df: pd.DataFrame, current_price: float, htf_trend: str, regime: str):
+    async def _process_bot_task(self, paper_engine, bot_id: str, df: pd.DataFrame, current_price: float, htf_trend: str, regime: str, htf_trends: dict = None):
         """
         Tek bir bot için sinyal işleme task'ı (async, izole, hata korumalı).
 
@@ -390,18 +390,30 @@ class ExchangeManager:
             bot_id: İşlenecek bot ID
             df: İndikatörlerle DataFrame
             current_price: Güncel fiyat
-            htf_trend: Yüksek timeframe trend
+            htf_trend: Yüksek timeframe trend (major HTF)
             regime: Piyasa rejimi
+            htf_trends: HTF trend sözlüğü (örn: {'5m': 'BULL', '15m': 'BEAR'})
         """
         try:
             # Bot sinyal işleme (ASYNC - await ile bekle)
-            await paper_engine.process_bot_signal(
-                bot_id=bot_id,
-                df=df,
-                current_price=current_price,
-                htf_trend=htf_trend,
-                regime=regime
-            )
+            # htf_trends iletiliyorsa kullan, yoksa htf_trend'i kullan (geriye dönük uyumluluk)
+            if htf_trends:
+                await paper_engine.process_bot_signal(
+                    bot_id=bot_id,
+                    df=df,
+                    current_price=current_price,
+                    htf_trend=htf_trend,
+                    htf_trends=htf_trends,  # YENİ: Çoklu HTF trend bilgisi
+                    regime=regime
+                )
+            else:
+                await paper_engine.process_bot_signal(
+                    bot_id=bot_id,
+                    df=df,
+                    current_price=current_price,
+                    htf_trend=htf_trend,
+                    regime=regime
+                )
         except Exception as e:
             logger.error(f"❌ [BOT TASK] {bot_id} işlem hatası: {e}")
             raise  # Gather'da yakalanması için tekrar fırlat
@@ -663,26 +675,72 @@ class ExchangeManager:
                 target_tf = paper_engine.active_timeframes.get(symbol, '1m')
                 df_target = StrategyIndicators.resample_data(df_1m, target_tf)
 
-                # 5. ÜST ZAMAN DİLİMİ (HTF) TEYİDİ
-                def get_higher_tf(tf_str):
-                    tf_map = {'1m': '15m', '3m': '15m', '5m': '30m', '15m': '1h', '30m': '4h', '1h': '4h', '4h': '1d'}
-                    return tf_map.get(tf_str, '4h')
+                # 5. ÜST ZAMAN DİLİMİ (HTF) TEYİDİ - ALTIN ORAN (1:4 / 1:6)
+                # Config'den dinamik HTF haritasını oku
+                htf_config = CONFIG.get('htf', {})
+                htf_enabled = htf_config.get('enabled', True)
+                htf_dynamic_map = htf_config.get('dynamic_map', {
+                    '1m': ['5m', '15m'],
+                    '3m': ['15m', '1h'],
+                    '5m': ['15m', '1h'],
+                    '15m': ['1h', '4h'],
+                    '30m': ['2h', '6h'],
+                    '1h': ['4h', '1d'],
+                    '4h': ['1d', '1w']
+                })
 
-                htf_tf = get_higher_tf(target_tf)
-                df_htf = StrategyIndicators.resample_data(df_1m, htf_tf)
-                df_htf = StrategyIndicators.add_all_indicators(df_htf)
-                
-                htf_trend = "NEUTRAL"
-                if not df_htf.empty and 'EMA_50' in df_htf.columns:
-                    htf_last = df_htf.iloc[-1]
-                    val_c = htf_last.get('close')
-                    val_e = htf_last.get('EMA_50')
-                    
-                    if val_c is not None and val_e is not None and not np.isnan(val_c) and not np.isnan(val_e):
-                        if val_c > val_e:
-                            htf_trend = "BULL"
-                        elif val_c < val_e:
-                            htf_trend = "BEAR"
+                # EMA Stack parametreleri
+                ema_fast = htf_config.get('ema_fast', 20)
+                ema_slow = htf_config.get('ema_slow', 50)
+                trend_method = htf_config.get('trend_method', 'ema_stack')
+
+                # Dinamik HTF seviyelerini al (örn: 1m -> ['5m', '15m'])
+                htf_levels = htf_dynamic_map.get(target_tf, ['5m', '15m'])
+
+                # Her HTF seviyesi için trend analizini yap
+                htf_trends = {}  # {'5m': 'BULL', '15m': 'BEAR'}
+
+                for htf_tf in htf_levels:
+                    # HTF verisini resample ve indikatör hesapla
+                    df_htf = StrategyIndicators.resample_data(df_1m, htf_tf)
+                    df_htf = StrategyIndicators.add_all_indicators(df_htf)
+
+                    # Trend tespiti (EMA Stack veya Close > EMA)
+                    trend = "NEUTRAL"
+                    if not df_htf.empty:
+                        htf_last = df_htf.iloc[-1]
+
+                        if trend_method == 'ema_stack':
+                            # EMA 20 > EMA 50 ise BULL, EMA 20 < EMA 50 ise BEAR
+                            ema_f = htf_last.get(f'EMA_{ema_fast}')
+                            ema_s = htf_last.get(f'EMA_{ema_slow}')
+
+                            if ema_f is not None and ema_s is not None and not np.isnan(ema_f) and not np.isnan(ema_s):
+                                if ema_f > ema_s:
+                                    trend = "BULL"
+                                elif ema_f < ema_s:
+                                    trend = "BEAR"
+                        else:
+                            # Fallback: Close > EMA 50
+                            val_c = htf_last.get('close')
+                            val_e = htf_last.get(f'EMA_{ema_slow}')
+
+                            if val_c is not None and val_e is not None and not np.isnan(val_c) and not np.isnan(val_e):
+                                if val_c > val_e:
+                                    trend = "BULL"
+                                elif val_c < val_e:
+                                    trend = "BEAR"
+
+                    htf_trends[htf_tf] = trend
+
+                # Major HTF (en büyük timeframe) ve Minor HTF (daha küçük timeframe) belirle
+                major_htf = htf_levels[-1] if htf_levels else None
+                minor_htf = htf_levels[0] if len(htf_levels) > 0 else None
+
+                # Geriye dönük uyumluluk için htf_trend (major HTF trendini kullan)
+                htf_trend = htf_trends.get(major_htf, "NEUTRAL") if major_htf else "NEUTRAL"
+
+                logger.debug(f"[HTF] {symbol} ({target_tf}) HTF Analizi: {htf_trends} → Major: {major_htf}={htf_trend}")
                 
                 # 6. İndikatörleri Hesapla (Hedef Vade Üzerinden)
                 df_target = StrategyIndicators.add_all_indicators(df_target)
@@ -731,8 +789,17 @@ class ExchangeManager:
                         bot_tasks = []
                         for bot_id in active_bot_ids:
                             # Her bot task'ı ayrı oluştur (non-blocking)
+                            # YENİ: htf_trends sözlüğünü de ilet
                             task = asyncio.create_task(
-                                self._process_bot_task(paper_engine, bot_id, df_target, current_price, htf_trend, regime_info['regime'])
+                                self._process_bot_task(
+                                    paper_engine,
+                                    bot_id,
+                                    df_target,
+                                    current_price,
+                                    htf_trend,
+                                    regime_info['regime'],
+                                    htf_trends  # YENİ: Çoklu HTF trend bilgisi
+                                )
                             )
                             bot_tasks.append(task)
 
@@ -756,7 +823,7 @@ class ExchangeManager:
                     # ESKİ MİMARİ KALDIRILDI! Sadece 1-to-N kullanılıyor
 
                     # 8. YAPAY ZEKA TAHMİNİ (Hedef Vade Verileriyle)
-                    logger.info(f"✅ {symbol} {target_tf} (HTF: {htf_trend} | REJİM: {regime_info['regime']}) analiz tamamlandı. Botlar işlendi.")
+                    logger.info(f"✅ {symbol} {target_tf} (HTF: {htf_trends} | REJİM: {regime_info['regime']}) analiz tamamlandı. Botlar işlendi.")
 
             # BAĞLANTI KOPMA VE RECONNECT KALKANI
             except ccxt.NetworkError as e:

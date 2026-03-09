@@ -52,3 +52,32 @@ wfo:
   optimization_metric: "sharpe"  # sharpe, net_pnl, veya sortino
 
 
+# ============================================
+# HTF (Higher Timeframe) AYARLARI
+# ============================================
+htf:
+  enabled: true
+  # Altın Oran (1:4 / 1:6) prensibi - Dinamik haritalama
+  # Her timeframe için 2 HTF seviyesi: [Minor (mikro trend), Major (makro trend)]
+  dynamic_map:
+    '1m':  ['5m', '15m']   # Mikro: 5m (1:5), Makro: 15m (1:15)
+    '3m':  ['15m', '1h']   # Mikro: 15m (1:5), Makro: 1h (1:20)
+    '5m':  ['15m', '1h']   # Mikro: 15m (1:3), Makro: 1h (1:12)
+    '15m': ['1h', '4h']    # Mikro: 1h (1:4), Makro: 4h (1:16)
+    '30m': ['2h', '6h']    # Mikro: 2h (1:4), Makro: 6h (1:12)
+    '1h':  ['4h', '1d']    # Mikro: 4h (1:4), Makro: 1d (1:24)
+    '4h':  ['1d', '1w']    # Mikro: 1d (1:6), Makro: 1w (1:7)
+
+  # Trend tespit metodu
+  trend_method: "ema_stack"  # ema_stack, close_ema, adx_filter
+
+  # EMA Stack için parametreler
+  ema_fast: 20
+  ema_slow: 50
+
+  # Filtre kuralları
+  filter_rules:
+    require_all_htf_agree: false  # Tüm HTF'ler aynı yönde olmalı mı?
+    # major_htf: Dinamik olarak htf_levels[-1] olacak (hardcoded değil)
+
+

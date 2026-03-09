@@ -503,14 +503,45 @@ class PaperTrader:
                 logger.warning(f"⚠️ [REGIME FILTER] {symbol} TREND sinyali var ama piyasa YATAY (RANGING). İşlem Engellendi.")
                 return
 
-            # --- MULTI-TIMEFRAME (HTF) TREND TEYİDİ ---
-            if final_signal == 2:
-                # LONG açmak için HTF Ayı (BEAR) olmamalı
-                if htf_trend == "BEAR":
-                    logger.warning(f"⚠️ [HTF FILTER] {symbol} 15m LONG sinyali var ama 1h-4h Trend AYI (BEAR). İşlem Engellendi.")
-                    return
+            # --- MULTI-TIMEFRAME (HTF) TREND TEYİDİ - ALTIN ORAN ---
+            # htf_trends = {'5m': 'BULL', '15m': 'BEAR'} (örn: 1m botu için)
+            # htf_trend = major HTF trendi (geriye dönük uyumluluk)
 
-                logger.info(f"🚀 [LONG] {symbol} Sinyali Yakalandı! ML: {ml_recommendation} ({ml_confidence_pct:.1f}%) (HTF: {htf_trend})")
+            # HTF filtre mantığı - dinamik major HTF kullanımı
+            htf_levels = list(htf_trends.keys()) if htf_trends else []
+
+            if htf_levels:
+                # Major HTF (en büyük timeframe) belirle
+                major_htf = htf_levels[-1]  # En son eleman = en büyük TF
+
+                # BULL ve BEAR sayısını hesapla
+                bull_count = sum(1 for tf in htf_levels if htf_trends.get(tf) == 'BULL')
+                bear_count = sum(1 for tf in htf_levels if htf_trends.get(tf) == 'BEAR')
+
+                logger.debug(f"[HTF FILTER] {symbol} HTF: {htf_trends} | Major: {major_htf}={htf_trends.get(major_htf)} | BULL: {bull_count}, BEAR: {bear_count}")
+
+                # LONG için: Major HTF kesinlikle BEAR olmamalı VE en az 1 HTF BULL olmalı
+                if final_signal == 2:
+                    if htf_trends.get(major_htf) == 'BEAR' or bull_count == 0:
+                        logger.warning(f"⚠️ [HTF FILTER] {symbol} LONG sinyali var ama Major HTF ({major_htf}) BEAR veya BULL yok. İşlem Engellendi.")
+                        return
+
+                # SHORT için: Major HTF kesinlikle BULL olmamalı VE en az 1 HTF BEAR olmalı
+                elif final_signal == 0:
+                    if htf_trends.get(major_htf) == 'BULL' or bear_count == 0:
+                        logger.warning(f"⚠️ [HTF FILTER] {symbol} SHORT sinyali var ama Major HTF ({major_htf}) BULL veya BEAR yok. İşlem Engellendi.")
+                        return
+
+            # Geriye dönük uyumluluk: htf_trends yoksa eski mantığı kullan
+            elif htf_trend == "BEAR" and final_signal == 2:
+                logger.warning(f"⚠️ [HTF FILTER] {symbol} LONG sinyali var ama HTF Trend AYI (BEAR). İşlem Engellendi.")
+                return
+            elif htf_trend == "BULL" and final_signal == 0:
+                logger.warning(f"⚠️ [HTF FILTER] {symbol} SHORT sinyali var ama HTF Trend BOĞA (BULL). İşlem Engellendi.")
+                return
+
+            if final_signal == 2:
+                logger.info(f"🚀 [LONG] {symbol} Sinyali Yakalandı! ML: {ml_recommendation} ({ml_confidence_pct:.1f}%) (HTF: {htf_trends if htf_trends else htf_trend})")
                 await self._open_new_position(symbol, "LONG", current_price, latest_candle, ml_confidence_pct, ml_recommendation)
 
             elif final_signal == 0:
@@ -531,19 +562,14 @@ class PaperTrader:
                     return
 
                 # Normal VADELİ (Future/Swap) mantığı devam eder
-                # SHORT açmak için HTF Boğa (BULL) olmamalı
-                if htf_trend == "BULL":
-                    logger.warning(f"⚠️ [HTF FILTER] {symbol} 15m SHORT sinyali var ama 1h-4h Trend BOĞA (BULL). İşlem Engellendi.")
-                    return
-
-                logger.info(f"🚀 [SHORT] {symbol} Sinyali Yakalandı! ML: {ml_recommendation} ({ml_confidence_pct:.1f}%) (HTF: {htf_trend})")
+                logger.info(f"🚀 [SHORT] {symbol} Sinyali Yakalandı! ML: {ml_recommendation} ({ml_confidence_pct:.1f}%) (HTF: {htf_trends if htf_trends else htf_trend})")
                 await self._open_new_position(symbol, "SHORT", current_price, latest_candle, ml_confidence_pct, ml_recommendation)
         else:
             # İşlem açılmamasının ana sebebi genellikle budur
             if final_signal != 1:
                 logger.debug(f"[FILTER] {symbol} ML Güven Skoru Yetersiz: {ml_confidence:.2f} (Eşik: {threshold})")
 
-    async def process_bot_signal(self, bot_id: str, df: pd.DataFrame, current_price: float, htf_trend: str = "NEUTRAL", regime: str = "UNKNOWN"):
+    async def process_bot_signal(self, bot_id: str, df: pd.DataFrame, current_price: float, htf_trend: str = "NEUTRAL", regime: str = "UNKNOWN", htf_trends: dict = None):
         """
         Belirli bir bot için sinyal işleme ve pozisyon yönetimi.
         Her bot izole olarak işlenir (ASYNC).
@@ -552,8 +578,9 @@ class PaperTrader:
             bot_id: Bot ID
             df: İndikatörlerle DataFrame
             current_price: Güncel fiyat
-            htf_trend: Yüksek timeframe trend
+            htf_trend: Yüksek timeframe trend (major HTF)
             regime: Piyasa rejimi
+            htf_trends: HTF trend sözlüğü (örn: {'5m': 'BULL', '15m': 'BEAR'})
         """
         if bot_id not in self.active_bots:
             return
@@ -602,6 +629,37 @@ class PaperTrader:
         elif strategy_signal == 0:  # SHORT
             if ml_confidence >= 0.65 or ml_recommendation in ["SHORT", "STRONG_SHORT"]:
                 final_signal = 0
+
+        # ============================================
+        # MULTI-TIMEFRAME (HTF) TREND TEYİDİ - ALTIN ORAN
+        # htf_trends = {'5m': 'BULL', '15m': 'BEAR'} (örn: 1m botu için)
+        # ============================================
+        if htf_trends:
+            # Dinamik HTF seviyeleri
+            htf_levels = list(htf_trends.keys())
+
+            if htf_levels:
+                # Major HTF (en büyük timeframe) ve Minor HTF belirle
+                major_htf = htf_levels[-1]  # En son eleman = en büyük TF
+                minor_htf = htf_levels[0]   # İlk eleman = en küçük TF
+
+                # BULL ve BEAR sayısını hesapla
+                bull_count = sum(1 for tf in htf_levels if htf_trends.get(tf) == 'BULL')
+                bear_count = sum(1 for tf in htf_levels if htf_trends.get(tf) == 'BEAR')
+
+                logger.debug(f"[HTF FILTER] {symbol} ({bot_info.get('timeframe', 'N/A')}) HTF: {htf_trends} | Major: {major_htf}={htf_trends.get(major_htf)} | BULL: {bull_count}, BEAR: {bear_count}")
+
+                # LONG için: Major HTF kesinlikle BEAR olmamalı VE en az 1 HTF BULL olmalı
+                if final_signal == 2:
+                    if htf_trends.get(major_htf) == 'BEAR' or bull_count == 0:
+                        logger.debug(f"⚠️ [HTF FILTER] LONG reddedildi. Major HTF ({major_htf}) BEAR, bull_count={bull_count}")
+                        return
+
+                # SHORT için: Major HTF kesinlikle BULL olmamalı VE en az 1 HTF BEAR olmalı
+                elif final_signal == 0:
+                    if htf_trends.get(major_htf) == 'BULL' or bear_count == 0:
+                        logger.debug(f"⚠️ [HTF FILTER] SHORT reddedildi. Major HTF ({major_htf}) BULL, bear_count={bear_count}")
+                        return
 
         # Sinyale göre işlem yap
         if final_signal == 2:  # LONG
