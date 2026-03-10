@@ -335,14 +335,14 @@ async function saveStrategy() {
 async function loadStrategies() {
     try {
         console.log('[INFO] Stratejiler yükleniyor...');
-        
-        const response = await fetch('/api/v1/strategy/list');
+
+        const response = await fetch('/api/v1/strategies');
         const result = await response.json();
-        
+
         if (response.ok && result.status === 'success') {
             const container = document.getElementById('saved-strategies-list');
-            
-            if (result.count === 0) {
+
+            if (!result.strategies || result.strategies.length === 0) {
                 container.innerHTML = `
                     <div style="text-align: center; padding: 20px; color: var(--text-muted);">
                         📭 Henüz kaydedilmiş strateji yok

@@ -648,3 +648,155 @@ TÜM TESTLER BAŞARILI!
 - **Test:** `test_htf.py`
 
 ---
+
+## 🆕 FAZ 2: API MODÜLERLEŞTİRME (Mart 2026)
+
+**TARİH:** 9 Mart 2026
+**DURUM:** ✅ Production Ready
+**GITHUB COMMIT:** `pending`
+
+---
+
+### **11.1 Genel Bakış**
+
+**API Modularization**, 1,374 satırlık monolitik `api/server.py` dosyasını modern FastAPI standartlarına göre modüler hale getirme sürecidir.
+
+**HEDEF:**
+- ✅ God Object pattern'ini kır
+- ✅ Router/Service/Schema katmanları oluştur
+- ✅ Test edilebilirlik artır
+- ✅ Bakımı kolaylaştır
+
+---
+
+### **11.2 Mimari Dönüşüm**
+
+**ÖNCE:**
+```
+api/server.py (1,374 satır)
+├── Tüm endpoint'ler (33+)
+├── Tüm business logic
+├── Pydantic modeller dağınık
+└── Tight coupling
+```
+
+**ŞİMDİ:**
+```
+api/server.py (161 satır)
+├── Router registration
+├── Lifespan events
+└── CORS, static files
+
+api/schemas/ (4 dosya, ~510 satır)
+├── bot.py
+├── ml.py
+├── strategy.py
+└── data.py
+
+api/services/ (4 dosya, ~575 satır)
+├── BotService
+├── MLService
+├── DataService
+└── StrategyService
+
+api/routers/ (4 yeni dosya, ~240 satır)
+├── bot.py (6 endpoint)
+├── ml.py (5 endpoint)
+├── strategy.py (2 endpoint)
+└── data.py (8 endpoint)
+```
+
+---
+
+### **11.3 İstatistikler**
+
+| Metrik | Önce | Sonra | Değişim |
+|--------|------|-------|---------|
+| **server.py Satır** | 1,374 | 161 | -88% |
+| **Toplam Dosya** | 4 | 19 | +15 |
+| **Schemas** | 0 | 4 dosya | +510 satır |
+| **Services** | 0 | 4 dosya | +575 satır |
+| **Routers** | 2 | 6 dosya | +240 satır |
+
+---
+
+### **11.4 Endpoint Haritası**
+
+**Bot Endpoints (6):**
+- POST `/api/v1/bot/start`
+- POST `/api/v1/bot/stop`
+- POST `/api/v1/bot/resume`
+- POST `/api/v1/bot/remove`
+- GET `/api/v1/bot/status`
+- GET `/api/v1/bots/list`
+
+**ML Endpoints (5):**
+- POST `/api/v1/ml/train`
+- GET `/api/v1/ml/status`
+- GET `/api/v1/ml/training-history`
+- DELETE `/api/v1/ml/training-history`
+- GET `/api/v1/ml/check-model`
+
+**Strategy Endpoints (2):**
+- GET `/api/v1/strategies`
+- POST `/api/v1/strategy/select`
+
+**Data Endpoints (8):**
+- GET `/api/v1/data/history-status`
+- POST `/api/v1/data/download-history`
+- POST `/api/v1/data/stop-download`
+- POST `/api/v1/data/resume-download`
+- GET `/api/v1/data/active-downloads`
+- POST `/api/v1/data/delete-task`
+- POST `/api/v1/data/toggle-pause`
+- GET `/api/v1/data/symbols-with-data`
+
+**TOPLAM:** 21+ endpoint
+
+---
+
+### **11.5 Kullanım Örneği**
+
+**Bot Başlatma:**
+```http
+POST /api/v1/bot/start
+Content-Type: application/json
+
+{
+    "symbol": "BTC/USDT:USDT",
+    "strategy_id": "trend_master",
+    "timeframe": "1m",
+    "market_type": "future",
+    "margin_type": "isolated"
+}
+```
+
+**Response:**
+```json
+{
+    "status": "success",
+    "bot_id": "BTC/USDT:USDT_trend_master_1m_1",
+    "message": "Bot başlatıldı: BTC/USDT:USDT_trend_master_1m_1"
+}
+```
+
+---
+
+### **11.6 Test Sonuçları**
+
+```
+✅ Syntax Check: PASSED (tüm dosyalar)
+✅ Import Test: PASSED
+✅ Endpoint Paths: CORRECT (tüm path'ler korundu)
+✅ Line Reduction: 1,374 → 161 satır (%88 azalma)
+```
+
+---
+
+### **11.7 İlgili Dokümanlar**
+
+- **Ana Doküman:** `architecture/api_modularization.md`
+- **INDEX:** `INDEX.md` (güncellendi)
+- **Event-Driven Architecture:** `architecture/event_driven_architecture.md`
+
+---

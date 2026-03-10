@@ -5,6 +5,10 @@ import numpy as np
 from core.logger import logger
 from core.config import CONFIG, BINANCE_API_KEY, BINANCE_API_SECRET
 
+# Event Bus import (Circular dependency kırıldı!)
+from shared.events import event_bus
+from shared.events.events import SignalGeneratedEvent, CandleClosedEvent
+
 # WFO Engine import (opsiyonel - WFO aktifse)
 try:
     from core.wfo_engine import get_wfo_engine, start_wfo_background_task
@@ -253,6 +257,11 @@ class ExchangeManager:
         all_downloaded = 0
         limit = 1000 # Binance tek seferde max 1000 mum verir
         
+        # İndirme başlangıç zamanı (speed tracking için)
+        import time
+        start_time = time.time()
+        last_ts = since  # Son mum timestamp'i
+
         logger.info(f"🚀 {key} ({timeframe}) indirme BAŞLADI: {pd.to_datetime(since, unit='ms')}")
         self.download_stops[key] = False
         self.download_pauses[key] = False
@@ -264,7 +273,9 @@ class ExchangeManager:
             'since': since,
             'current_ts': since,
             'target_start_ms': target_start_ms,
-            'status': 'running'
+            'status': 'running',
+            'progress': 0,  # İlerleme yüzdesi
+            'speed': 0  # Mum/saniye
         }
 
         await db_manager.save_download_task(self.active_downloads[key])
@@ -331,18 +342,42 @@ class ExchangeManager:
 
                 last_ts = ohlcv[-1][0]
                 all_downloaded += len(ohlcv)
-
+                
+                # Şu anki zaman
+                now_ms = int(time.time() * 1000)
+                
+                # İLERLEME YÜZDESİ HESAPLAMA
+                # Formül: (şu ana kadar indirilen zaman / toplam hedef zaman) * 100
+                if now_ms > target_start_ms:
+                    progress = ((last_ts - target_start_ms) / (now_ms - target_start_ms)) * 100
+                    progress = min(100, progress)  # %100'ü geçmesini engelle
+                else:
+                    progress = 0
+                
+                # İNDİRME HIZI HESAPLAMA (mum/saniye)
+                elapsed_time = time.time() - start_time  # Geçen süre (saniye)
+                if elapsed_time > 0:
+                    speed = all_downloaded / elapsed_time
+                else:
+                    speed = 0
+                
                 # Her 5000 mumda bir DB güncelle (daha az locked hatası)
                 if all_downloaded % 5000 == 0:
                     logger.info(f"📥 {symbol} İlerleme: {all_downloaded} mum kaydedildi... [Şu anki Tarih: {pd.to_datetime(last_ts, unit='ms')}]")
                     # DB görevini güncelle
                     if key in self.active_downloads:
                         self.active_downloads[key]['current_ts'] = last_ts
+                        self.active_downloads[key]['progress'] = round(progress, 2)
+                        self.active_downloads[key]['speed'] = round(speed, 2)
                         try:
                             await db_manager.save_download_task(self.active_downloads[key])
                         except Exception as db_err:
                             logger.warning(f"⚠️ DB güncelleme hatası (devam ediliyor): {db_err}")
                 else:
+                    # Her 500 mumda bir progress ve speed güncelle (RAM'de)
+                    if all_downloaded % 500 == 0 and key in self.active_downloads:
+                        self.active_downloads[key]['progress'] = round(progress, 2)
+                        self.active_downloads[key]['speed'] = round(speed, 2)
                     logger.debug(f"📥 {symbol} {len(ohlcv)} mum indirildi. Son: {pd.to_datetime(last_ts, unit='ms')}")
 
                 # Eğer son gelen mum anlık zamana çok yakınsa dur
@@ -367,26 +402,32 @@ class ExchangeManager:
                 await asyncio.sleep(5)
                 
         is_stopped = self.download_stops.get(key, False)
-        
+
         if is_stopped:
             logger.info(f"⏸️ {key} Veri İndirme Görevi Beklemeye / İptal Edilmeye Alındı. Toplam {all_downloaded} yeni veri eklendi.")
             if key in self.active_downloads:
+                self.active_downloads[key]['status'] = 'stopped'
+                self.active_downloads[key]['progress'] = 0  # Durduruldu
+                await db_manager.save_download_task(self.active_downloads[key])
                 del self.active_downloads[key]
         else:
             logger.info(f"✅ {key} Veri İndirme TAMAMLANDI. Toplam {all_downloaded} yeni veri eklendi.")
             if key in self.active_downloads:
                 self.active_downloads[key]['status'] = 'completed'
+                self.active_downloads[key]['progress'] = 100  # Tamamlandı
+                self.active_downloads[key]['speed'] = 0  # Hız sıfırla
                 await db_manager.save_download_task(self.active_downloads[key])
                 del self.active_downloads[key]
-                
+
         return all_downloaded
 
     async def _process_bot_task(self, paper_engine, bot_id: str, df: pd.DataFrame, current_price: float, htf_trend: str, regime: str, htf_trends: dict = None):
         """
         Tek bir bot için sinyal işleme task'ı (async, izole, hata korumalı).
+        EVENT-DRIVEN: Artık doğrudan fonksiyon çağrısı yerine Event Bus kullanıyor.
 
         Args:
-            paper_engine: PaperTrader instance
+            paper_engine: PaperTrader instance (geriye dönük uyumluluk)
             bot_id: İşlenecek bot ID
             df: İndikatörlerle DataFrame
             current_price: Güncel fiyat
@@ -395,25 +436,48 @@ class ExchangeManager:
             htf_trends: HTF trend sözlüğü (örn: {'5m': 'BULL', '15m': 'BEAR'})
         """
         try:
-            # Bot sinyal işleme (ASYNC - await ile bekle)
-            # htf_trends iletiliyorsa kullan, yoksa htf_trend'i kullan (geriye dönük uyumluluk)
-            if htf_trends:
-                await paper_engine.process_bot_signal(
-                    bot_id=bot_id,
-                    df=df,
-                    current_price=current_price,
-                    htf_trend=htf_trend,
-                    htf_trends=htf_trends,  # YENİ: Çoklu HTF trend bilgisi
-                    regime=regime
-                )
-            else:
-                await paper_engine.process_bot_signal(
-                    bot_id=bot_id,
-                    df=df,
-                    current_price=current_price,
-                    htf_trend=htf_trend,
-                    regime=regime
-                )
+            # Bot bilgilerini al
+            bot_info = paper_engine.active_bots.get(bot_id, {})
+            symbol = bot_info.get('symbol', '')
+            strategy_id = bot_info.get('strategy_id', '')
+            timeframe = bot_info.get('timeframe', '1m')
+
+            # Strateji sinyali üret
+            strategy = paper_engine.strategies.get(symbol)
+            if strategy is None or df.empty or len(df) < 50:
+                return
+
+            latest_candle = df.iloc[-1]
+            strategy_signal = strategy.generate_signal(latest_candle)
+
+            # EVENT-DRIVEN: SignalGeneratedEvent yayınla
+            # Artık doğrudan paper_engine.process_bot_signal() ÇAĞIRMIYORUZ!
+            event = SignalGeneratedEvent(
+                bot_id=bot_id,
+                symbol=symbol,
+                signal=strategy_signal,
+                price=current_price,
+                timeframe=timeframe,
+                indicators={
+                    'RSI_14': latest_candle.get('RSI_14', 0),
+                    'EMA_20': latest_candle.get('EMA_20', 0),
+                    'EMA_50': latest_candle.get('EMA_50', 0),
+                    'MACD_12_26_9': latest_candle.get('MACD_12_26_9', 0),
+                    'ATR_14': latest_candle.get('ATR_14', 0)
+                },
+                metadata={
+                    'htf_trend': htf_trend,
+                    'htf_trends': htf_trends,
+                    'regime': regime,
+                    'strategy_id': strategy_id
+                }
+            ).to_event(source="exchange_manager")
+
+            # Event Bus'a yayınla (Pub/Sub)
+            await event_bus.publish(event)
+
+            logger.debug(f"📤 Signal event published: {bot_id} signal={strategy_signal}")
+
         except Exception as e:
             logger.error(f"❌ [BOT TASK] {bot_id} işlem hatası: {e}")
             raise  # Gather'da yakalanması için tekrar fırlat

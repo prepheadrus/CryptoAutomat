@@ -26,6 +26,7 @@ fastapi
 uvicorn
 matplotlib
 plotly
+python-multipart  # Form data support for FastAPI
 
 # Configuration
 python-dotenv

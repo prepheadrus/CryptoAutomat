@@ -43,8 +43,8 @@ class StrategyValidator:
         """
         errors = []
 
-        # 1. Temel alanlar kontrolü
-        required_fields = ['name', 'indicators', 'conditions']
+        # 1. Temel alanlar kontrolü (conditions opsiyonel - executor default ekler)
+        required_fields = ['name', 'indicators']
         for field in required_fields:
             if field not in strategy:
                 errors.append(f"Eksik alan: {field}")
@@ -60,9 +60,10 @@ class StrategyValidator:
         indicator_errors = cls._validate_indicators(strategy['indicators'])
         errors.extend(indicator_errors)
 
-        # 4. Koşulları validate et
-        condition_errors = cls._validate_conditions(strategy['conditions'], strategy['indicators'])
-        errors.extend(condition_errors)
+        # 4. Koşulları validate et (varsa - yoksa executor default ekler)
+        if 'conditions' in strategy:
+            condition_errors = cls._validate_conditions(strategy['conditions'], strategy['indicators'])
+            errors.extend(condition_errors)
 
         # 5. Risk parametrelerini validate et
         if 'risk' in strategy:
@@ -104,40 +105,55 @@ class StrategyValidator:
     
     @classmethod
     def _validate_conditions(cls, conditions: Dict, indicators: List[Dict]) -> List[str]:
-        """Koşulları validate eder"""
+        """Koşulları validate eder (case-insensitive, safe get)"""
         errors = []
         indicator_ids = {ind['id'] for ind in indicators}
-        
-        for side in cls.VALID_SIDES:
-            if side not in conditions:
+
+        # Safe get - eğer conditions None veya boş ise hata ver
+        if not conditions:
+            return ["conditions alanı boş veya eksik"]
+
+        # Case-insensitive kontrol için anahtarları normalize et
+        normalized_conditions = {}
+        for key, value in conditions.items():
+            normalized_conditions[key.lower()] = value
+
+        for side in cls.VALID_SIDES:  # 'long', 'short'
+            if side not in normalized_conditions:
                 errors.append(f"{side} koşulu eksik")
                 continue
-            
-            side_cond = conditions[side]
-            
+
+            side_cond = normalized_conditions[side]
+
+            # None kontrolü
+            if not side_cond:
+                errors.append(f"{side} koşulu boş")
+                continue
+
             # Logic kontrolü
-            if 'logic' in side_cond and side_cond['logic'] not in cls.VALID_LOGIC:
-                errors.append(f"Geçersiz logic: {side_cond['logic']}")
-            
+            logic_val = side_cond.get('logic', '')
+            if logic_val and logic_val.upper() not in cls.VALID_LOGIC:
+                errors.append(f"Geçersiz logic: {side_cond.get('logic')}")
+
             # Rules kontrolü
             if 'rules' not in side_cond:
                 errors.append(f"{side} için rules eksik")
                 continue
-            
+
             for rule in side_cond['rules']:
                 # Gerekli alanlar
                 for field in ['indicator', 'operator', 'value']:
                     if field not in rule:
                         errors.append(f"Kuralda eksik alan: {field}")
-                
+
                 # Operatör kontrolü
                 if 'operator' in rule and rule['operator'] not in cls.VALID_OPERATORS:
                     errors.append(f"Geçersiz operatör: {rule['operator']}")
-                
+
                 # İndikatör kontrolü
                 if 'indicator' in rule and rule['indicator'] not in indicator_ids:
                     errors.append(f"Bilinmeyen indikatör: {rule['indicator']}")
-        
+
         return errors
     
     @classmethod

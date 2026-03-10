@@ -1,42 +1,108 @@
 @echo off
-title CryptoAlgoBot Baslatici
+title CryptoAlgoBot - Modern Start
 color 0A
 
-echo ========================================================
-echo        CRYPTO ALGO BOT BASLATILIYOR...
-echo        Lutfen bu pencereyi acik birakin! (Botun Motoru)
-echo ========================================================
+echo ================================================================
+echo           CRYPTO ALGO BOT - MODULAR SYSTEM STARTER
+echo           Event-Driven Architecture + FastAPI Backend
+echo ================================================================
 echo.
 
-:: Botun bulunduğu klasöre (bat dosyasının olduğu yere) git
+:: Change to the directory where this bat file is located
 cd /d "%~dp0"
 
-:: Sanal ortamı (venv) aktive et
-echo [1/3] Sanal ortam (venv) aktif ediliyor...
+:: Check if virtual environment exists
+if not exist "venv\Scripts\activate.bat" (
+    echo [ERROR] Sanal ortam bulunamadi!
+    echo [INFO] Lutfen once setup.bat dosyasini calistirin.
+    echo.
+    pause
+    exit /b 1
+)
+
+:: Activate virtual environment
+echo [1/4] Sanal ortam (venv) aktif ediliyor...
 call venv\Scripts\activate.bat
-echo [OK] Ortam aktif.
+if errorlevel 1 (
+    echo [ERROR] Sanal ortam aktif edilemedi!
+    pause
+    exit /b 1
+)
+echo [OK] Sanal ortam aktif: %VIRTUAL_ENV%
 echo.
 
-:: Ana python dosyasını arka planda başlat
-echo [2/3] Fast_API Sunucusu ve Core Engine calistiriliyor...
+:: Check if main.py exists
+if not exist "main.py" (
+    echo [ERROR] main.py dosyasi bulunamadi!
+    echo [INFO] Proje dosyalari eksik veya hasarli.
+    pause
+    exit /b 1
+)
+
+:: Start FastAPI server with uvicorn (main.py üzerinden)
+echo [2/4] FastAPI Sunucusu baslatiliyor...
+echo [INFO] Event Tracer, Position Manager, Risk Engine aktif ediliyor...
 start /B python main.py
-echo [OK] Sunucu arka planda başlatıldı.
+if errorlevel 1 (
+    echo [ERROR] FastAPI sunucusu baslatilamadi!
+    pause
+    exit /b 1
+)
+echo [OK] FastAPI sunucusu arka planda baslatildi
+echo [INFO] Endpoint: http://localhost:8000
 echo.
 
-:: Sunucunun başlaması için bekle
-echo [3/3] Sunucu hazirlaniyor (5 saniye)...
-timeout /t 5 /nobreak >nul
-
-:: Tarayıcıyı otomatik aç
-echo [OK] Dashboard aciliyor...
-start http://localhost:8000
+:: Wait for server to start
+echo [3/4] Sunucu hazirlaniyor (8 saniye)...
+echo [INFO] Database connection, Event Bus, Bot Managers yukleniyor...
+timeout /t 8 /nobreak >nul
 echo.
 
-echo ========================================================
-echo        BOT CALISIYOR - Tarayici acildi!
-echo        Kapatmak icin bu pencereyi kapatabilirsiniz
-echo ========================================================
+:: Open dashboard in browser (separate process - won't close with terminal)
+echo [4/4] Dashboard tarayicida aciliyor...
+start "" "http://localhost:8000"
+echo [OK] Dashboard acildi: http://localhost:8000
 echo.
 
-:: Pencereyi açık tut (kullanıcı kapatabilir)
-pause
+:: Show system info
+echo ================================================================
+echo                    SYSTEM STATUS
+echo ================================================================
+echo   FastAPI Server   : http://localhost:8000
+echo   Dashboard        : http://localhost:8000
+echo   API Docs         : http://localhost:8000/docs
+echo   Event Tracer     : Aktif (Terminal loglarini izleyin)
+echo   Architecture     : Event-Driven (Modular)
+echo ================================================================
+echo.
+echo   OZELLIKLER:
+echo   - Multi-Timeframe Analysis (HTF Altin Oran)
+echo   - Event-Driven Architecture
+echo   - Position Manager + Risk Engine
+echo   - ML Model Integration (XGBoost + RF Ensemble)
+echo   - Walk-Forward Optimization (WFO)
+echo   - Auto-Grid Generator
+echo   - Bayesian Optimization (Optuna)
+echo   - 1-to-N Multi-Bot Architecture
+echo   - Smart Hybrid Architecture
+echo ================================================================
+echo.
+echo   BOT CALISIYOR - Pencereyi kapatabilirsiniz
+echo   Durdurmak icin: CTRL+C veya terminal penceresini kapat
+echo ================================================================
+echo.
+
+:: Keep window open (user can close it)
+echo.
+echo ================================================================
+echo   BOT CALISIYOR - Pencereyi kapatabilirsiniz
+echo   Durdurmak icin: Bu pencereyi kapatın veya CTRL+C
+echo ================================================================
+echo.
+pause >nul
+
+:: Cleanup on exit
+echo.
+echo [INFO] Bot kapatiliyor...
+echo [OK] Bot kapatildi.
+echo [INFO] Goodbye!

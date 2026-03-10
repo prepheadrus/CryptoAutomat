@@ -1,4 +1,101 @@
-// Menü / Sekme (Tab) Değiştirme Mantığı
+/**
+ * CryptoAlgoBot Frontend App
+ * 
+ * Modern ES6 Module Architecture
+ * Orkestra Şefi - Modülleri yönetir, event listener'ları başlatır
+ */
+
+// ============================================================================
+// IMPORTS
+// ============================================================================
+
+import { api } from './services/api-client.js';
+import { store, selectors, actions } from './state/store.js';
+import { botManager } from './components/bots/bot-manager.js';
+import { ChartRenderer, PlotlyRenderer } from './components/charts/chart-renderer.js';
+
+// ============================================================================
+// GLOBAL STATE
+// ============================================================================
+
+let refreshIntervals = {
+    bots: null,
+    data: null,
+    dashboard: null,
+};
+
+// ============================================================================
+// INITIALIZATION
+// ============================================================================
+
+/**
+ * Ana uygulama başlatma
+ */
+async function initApp() {
+    console.log('🚀 CryptoAlgoBot başlatılıyor...');
+
+    try {
+        // Tab navigation
+        setupTabs();
+
+        // Initialize components
+        botManager.init();
+
+        // Initial data load
+        await loadInitialData();
+
+        // Start auto-refresh
+        startAutoRefresh();
+
+        // Setup global functions (for HTML onclick handlers)
+        setupGlobalFunctions();
+
+        // ❌ Store subscription KALDIRILDI (dropdown çakışma önleme)
+        // loadDropdownData() artık her şeyi yapıyor, store subscription gereksiz
+        /*
+        store.subscribe((state) => {
+            if (state.strategies.list && state.dataSymbols !== undefined) {
+                populateBotFormDropdowns();
+            }
+        });
+        */
+
+        console.log('✅ Uygulama başarıyla başlatıldı');
+    } catch (error) {
+        console.error('❌ Uygulama başlatma hatası:', error);
+    }
+}
+
+/**
+ * Initial data load
+ */
+async function loadInitialData() {
+    try {
+        // Load markets (for reference)
+        await loadMarkets();
+
+        // Load dashboard metrics
+        await loadDashboardMetrics();
+
+        // Load strategies
+        await loadStrategies();
+
+        // Load symbols with data (for bot form dropdown)
+        await loadDataSymbols();
+
+        // Load dropdown data (Sembol + Strateji) - CALIŞAN FONKSİYON
+        await loadDropdownData();
+        
+        console.log('[INFO] Initial data load completed');
+    } catch (error) {
+        console.error('Initial data load error:', error);
+    }
+}
+
+// ============================================================================
+// TAB NAVIGATION
+// ============================================================================
+
 function setupTabs() {
     const buttons = document.querySelectorAll('.menu-item');
     const tabs = document.querySelectorAll('.tab-content');
@@ -9,2686 +106,1594 @@ function setupTabs() {
 
             buttons.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
+
             const targetId = btn.getAttribute('data-target');
             tabs.forEach(tab => { tab.style.display = 'none'; });
             document.getElementById(targetId).style.display = 'block';
 
-            // Sekmelere özel işlemler
-            if (targetId === 'tab-history') {
-                fetchTradeHistory();
-            }
-            if (targetId === 'tab-ml') {
-                fetchAnalysableSymbols();
-                loadMLTrainingSymbols(); // ML Training için sembolleri yükle
-                // Eğitim geçmişini yükle (sekme açıldıktan sonra)
-                setTimeout(() => loadTrainingHistory(), 100);
-            }
-            if (targetId === 'tab-settings') {
-                // Çoklu Bot Yönetimi - aktif botları yükle
-                setTimeout(() => {
-                    loadActiveBots();
-                    loadBotFormOptions();
-                }, 500);
-            }
-            if (targetId === 'tab-strategies') {
-                fetchStrategies();
-            }
-            if (targetId === 'tab-data') {
-                fetchMarkets();
-            }
-            if (targetId === 'tab-strategy-builder') {
-                // Strateji Oluşturucu sekmesi açıldığında
-                loadStrategies(); // Kaydedilmiş stratejileri yükle
-            }
+            // Tab-specific actions
+            handleTabSwitch(targetId);
         });
     });
 }
 
-// --- MARKET SEÇİMİ VE YÖNETİMİ ---
-let allMarkets = [];
-let trackedSymbols = [];
+function handleTabSwitch(tabId) {
+    switch (tabId) {
+        case 'tab-history':
+            loadTradeHistory();
+            break;
+        case 'tab-ml':
+            loadMLSymbols();
+            loadMLTrainingHistory();
+            break;
+        case 'tab-settings':
+            setTimeout(() => {
+                botManager.loadBots();
+                loadBotFormOptions();
+                loadRiskSettings();  // Risk ayarlarını yükle
+                loadAdvancedSettings();  // Gelişmiş ayarları yükle (WFO, ML, HTF)
+                loadDropdownData();  // Dropdown'lara veri yükle (Sembol + Strateji)
+            }, 300);  // 300ms delay (daha hızlı)
+            break;
+        case 'tab-strategies':
+            loadStrategies();
+            break;
+        case 'tab-data':
+            // Veri Laboratuvarı sekmesi - sembolleri ve görevleri yükle
+            console.log('[INFO] Veri Laboratuvarı sekmesi açıldı, veriler yükleniyor...');
+            loadDataSymbols();  // Veritabanındaki verileri çek
+            updateActiveTasks();  // Aktif indirme görevlerini çek
+            loadDataStats();  // Veritabanı envanteri ve istatistiklerini yükle
+            loadMarkets();
+            break;
+    }
+}
 
-async function fetchMarkets() {
+// ============================================================================
+// DATA LOADING
+// ============================================================================
+
+async function loadMarkets() {
     try {
-        const [mRes, sRes] = await Promise.all([
-            fetch('/api/v1/exchange/markets'),
-            fetch('/api/v1/config/symbols')
-        ]);
-        const mData = await mRes.json();
-        const sData = await sRes.json();
+        console.log('[INFO] Marketler yükleniyor...');
 
-        allMarkets = mData.markets;
-        trackedSymbols = sData.symbols;
+        const [marketsRes, trackedRes] = await Promise.all([
+            api.getExchangeMarkets(),
+            api.getTrackedSymbols(),
+        ]);
+
+        console.log('[DEBUG] Markets response:', marketsRes);
+        console.log('[DEBUG] Tracked response:', trackedRes);
+
+        // Response yapısını düzelt
+        const markets = marketsRes.markets || marketsRes.data || marketsRes || [];
+        const tracked = trackedRes.symbols || trackedRes.data || trackedRes || [];
+
+        console.log(`[INFO] ${markets.length} market yüklendi, ${tracked.length} sembol izleniyor`);
+
+        store.setState('markets', {
+            all: markets,
+            tracked: tracked,
+        });
 
         renderMarketList();
+    } catch (error) {
+        console.error('❌ Market yükleme hatası:', error);
+        console.error('Stack trace:', error.stack);
+    }
+}
 
-        // Arama ve Filtreleme Listener'ları (Sadece 1 kere ekle)
+async function loadDashboardMetrics() {
+    try {
+        console.log('[INFO] Dashboard metrikleri yükleniyor...');
+
+        const metrics = await api.getDashboardMetrics();
+
+        console.log('[DEBUG] Metrics response:', metrics);
+
+        // Portfolio bilgisi varsa exchange ve borsa bilgisini güncelle
+        if (metrics && metrics.portfolio) {
+            // Borsa bilgisini güncelle
+            const exchangeEl = document.getElementById('exchange-val');
+            if (exchangeEl) {
+                exchangeEl.textContent = 'BINANCE';
+                console.log('[INFO] Borsa bilgisi güncellendi: BINANCE');
+            }
+        }
+
+        store.batchUpdate([
+            actions.setDashboardMetrics(metrics),
+            actions.setLatestDecisions(metrics?.latest_decisions || {}),
+            actions.setPortfolio(metrics?.portfolio || {}),
+        ]);
+
+        renderDashboard(metrics);
+    } catch (error) {
+        console.error('❌ Dashboard metrics error:', error);
+        console.error('Stack trace:', error.stack);
+    }
+}
+
+async function loadStrategies() {
+    try {
+        console.log('[DEBUG] loadStrategies - API çağrısı yapılıyor...');
+
+        const data = await api.getStrategies();
+
+        console.log('[DEBUG] loadStrategies - API response:', data);
+
+        // Backend response format: {status: 'success', strategies: [...]}
+        const strategies = data.strategies || data.data || [];
+
+        console.log(`[INFO] ${strategies.length} strateji yüklendi`);
+
+        store.setState('strategies', { list: strategies });
+        renderStrategyLibrary(strategies);
+    } catch (error) {
+        console.error('❌ Strateji yükleme hatası:', error);
+        console.error('Stack trace:', error.stack);
+    }
+}
+
+async function loadTradeHistory() {
+    try {
+        const data = await api.getTradeHistory();
+        store.setState('trades', { history: data.trades || [] });
+        renderTradeHistory(data.trades || []);
+    } catch (error) {
+        console.error('Trade history error:', error);
+    }
+}
+
+async function loadMLSymbols() {
+    try {
+        const data = await api.getSymbolsWithData();
+        populateMLSymbolSelect(data.symbols || []);
+    } catch (error) {
+        console.error('ML symbols error:', error);
+    }
+}
+
+async function loadMLTrainingHistory() {
+    try {
+        const data = await api.getMLTrainingHistory(50);
+        store.setState('ml', { history: data.history || [] });
+    } catch (error) {
+        console.error('ML history error:', error);
+    }
+}
+
+async function loadDataSymbols() {
+    try {
+        console.log('[DEBUG] loadDataSymbols - API çağrısı yapılıyor...');
+
+        const data = await api.getSymbolsWithData();
+
+        console.log('[DEBUG] loadDataSymbols - API response:', data);
+
+        // Backend response format: {status: 'success', symbols: [...]}
+        const symbols = data.symbols || data.data || [];
+
+        console.log(`[INFO] ${symbols.length} sembol yüklendi`);
+
+        store.setState('dataSymbols', symbols);
+
+        // Not: Dropdown güncelleme loadDropdownData tarafından yapılıyor
+        // populateBotFormDropdowns(symbols); // ❌ Kaldırıldı (çakışma önleme)
+        
+    } catch (error) {
+        console.error('❌ Data symbols error:', error);
+        console.error('Stack trace:', error.stack);
+        store.setState('dataSymbols', []);
+    }
+}
+
+/**
+ * Dropdown'lara veri yükle (Sembol + Strateji)
+ */
+async function loadDropdownData() {
+    try {
+        console.log('[INFO] 🔄 Dropdown verileri yükleniyor...');
+
+        // Sembol listesini çek
+        const symbolsData = await api.getDataSymbols();
+        const symbols = symbolsData.symbols || symbolsData.data || [];
+
+        console.log(`[INFO] ✅ ${symbols.length} sembol bulundu`);
+
+        // Sembol dropdown'ı doldur
+        const symbolSelect = document.getElementById('bot-symbol');
+        if (symbolSelect) {
+            // ÖNCE TEMİZLE (çakışma önleme)
+            symbolSelect.innerHTML = '';
+
+            if (symbols && symbols.length > 0) {
+                // İlk option: Default seçim
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = 'Sembol seçin';
+                symbolSelect.appendChild(defaultOption);
+
+                // Sembolleri ekle
+                symbols.forEach(symbol => {
+                    const option = document.createElement('option');
+                    option.value = symbol.symbol || symbol;
+                    option.textContent = symbol.symbol || symbol;
+                    symbolSelect.appendChild(option);
+                });
+                console.log(`[INFO] ✅ Sembol dropdown'a ${symbols.length} sembol eklendi`);
+            } else {
+                // Veri yoksa uyarı göster
+                const warningOption = document.createElement('option');
+                warningOption.value = '';
+                warningOption.textContent = '⚠️ Veri Laboratuvarından veri indirin';
+                symbolSelect.appendChild(warningOption);
+                console.warn('⚠️ Veritabanında veri yok');
+            }
+        }
+
+        // Strateji listesini çek
+        const strategiesData = await api.getStrategies();
+        const strategies = strategiesData.strategies || strategiesData.data || [];
+
+        console.log(`[INFO] ✅ ${strategies.length} strateji bulundu`);
+
+        // Strateji dropdown'ı doldur
+        const strategySelect = document.getElementById('bot-strategy');
+        if (strategySelect) {
+            // ÖNCE TEMİZLE (çakışma önleme)
+            strategySelect.innerHTML = '';
+
+            if (strategies && strategies.length > 0) {
+                // İlk option: Default seçim
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = 'Strateji seçin';
+                strategySelect.appendChild(defaultOption);
+
+                // Stratejileri ekle
+                strategies.forEach(strategy => {
+                    const option = document.createElement('option');
+                    option.value = strategy.id || strategy.strategy_id;
+                    option.textContent = strategy.name || strategy.strategy_name;
+                    strategySelect.appendChild(option);
+                });
+                console.log(`[INFO] ✅ Strateji dropdown'a ${strategies.length} strateji eklendi`);
+            } else {
+                // Strateji yoksa uyarı göster
+                const warningOption = document.createElement('option');
+                warningOption.value = '';
+                warningOption.textContent = '⚠️ Strateji bulunamadı';
+                strategySelect.appendChild(warningOption);
+                console.warn('⚠️ Strateji yok');
+            }
+        }
+
+        console.log('[INFO] ✅ Dropdown verileri yüklendi');
+    } catch (error) {
+        console.error('❌ loadDropdownData hatası:', error);
+        console.error('Stack trace:', error.stack);
+
+        // Hata durumunda default mesajlar
+        const symbolSelect = document.getElementById('bot-symbol');
+        if (symbolSelect) {
+            symbolSelect.innerHTML = '<option value="">❌ Yüklenemedi</option>';
+        }
+
+        const strategySelect = document.getElementById('bot-strategy');
+        if (strategySelect) {
+            strategySelect.innerHTML = '<option value="">❌ Yüklenemedi</option>';
+        }
+    }
+}
+
+/**
+ * Sistem Ayarları sekmesindeki sembol dropdown'ını doldur
+ */
+function populateSettingsSymbolDropdown(symbols) {
+    try {
+        const settingsSymbolSelect = document.getElementById('settings-symbol');
+        if (settingsSymbolSelect) {
+            if (symbols && symbols.length > 0) {
+                settingsSymbolSelect.innerHTML = '<option value="">Sembol seçin</option>';
+                symbols.forEach(symbol => {
+                    const option = document.createElement('option');
+                    option.value = symbol.symbol || symbol;
+                    option.textContent = symbol.symbol || symbol;
+                    settingsSymbolSelect.appendChild(option);
+                });
+                console.log(`[INFO] Settings dropdown'a ${symbols.length} sembol eklendi`);
+            } else {
+                settingsSymbolSelect.innerHTML = '<option value="">⚠️ Veri Laboratuvarından veri indirin</option>';
+                console.warn('⚠️ Veritabanında veri yok');
+            }
+        }
+    } catch (error) {
+        console.error('❌ populateSettingsSymbolDropdown hatası:', error);
+    }
+}
+
+/**
+ * Risk Ayarlarını Kaydet
+ */
+async function saveRiskSettings() {
+    try {
+        const maxRisk = parseFloat(document.getElementById('risk-max-risk').value);
+        const maxLeverage = parseInt(document.getElementById('risk-max-leverage').value);
+        const maxPositions = parseInt(document.getElementById('risk-max-positions').value);
+        const maxLosses = parseInt(document.getElementById('risk-max-losses').value);
+
+        // Frontend validasyonu
+        if (maxRisk < 0.1 || maxRisk > 5.0) {
+            showToast('⚠️ Maksimum risk %0.1 ile %5.0 arasında olmalı', 'error');
+            document.getElementById('risk-max-risk').focus();
+            return;
+        }
+
+        if (maxLeverage < 1 || maxLeverage > 50) {
+            showToast('⚠️ Maksimum kaldıraç 1x ile 50x arasında olmalı', 'error');
+            document.getElementById('risk-max-leverage').focus();
+            return;
+        }
+
+        if (maxPositions < 1 || maxPositions > 20) {
+            showToast('⚠️ Maksimum pozisyon 1 ile 20 arasında olmalı', 'error');
+            document.getElementById('risk-max-positions').focus();
+            return;
+        }
+
+        if (maxLosses < 1 || maxLosses > 10) {
+            showToast('⚠️ Maksimum ardışık kayıp 1 ile 10 arasında olmalı', 'error');
+            document.getElementById('risk-max-losses').focus();
+            return;
+        }
+
+        showToast('📊 Risk ayarları kaydediliyor...', 'info');
+
+        // Backend API çağrısı (JSON body)
+        const response = await fetch('/api/v1/config/risk', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                max_risk_per_trade_percent: maxRisk,
+                max_leverage: maxLeverage,
+                max_open_positions: maxPositions,
+                max_consecutive_losses: maxLosses
+            })
+        });
+
+        const result = await response.json();
+
+        // 422 Validation Error kontrolü (Pydantic)
+        if (response.status === 422) {
+            console.error('❌ 422 Validation Error:', result);
+            console.error('❌ Error details:', result.detail);
+            if (result.detail && Array.isArray(result.detail)) {
+                const errors = result.detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join(', ');
+                showToast('❌ Validasyon hatası: ' + errors, 'error');
+            } else {
+                showToast('❌ 422 Validasyon hatası: ' + JSON.stringify(result.detail), 'error');
+            }
+            return;
+        }
+
+        if (result.status === 'success') {
+            showToast('✅ ' + result.message, 'success');
+            console.log('[INFO] Risk ayarları güncellendi:', result.data);
+        } else {
+            showToast('❌ ' + result.message, 'error');
+        }
+    } catch (error) {
+        console.error('❌ saveRiskSettings hatası:', error);
+        showToast('❌ Risk ayarları kaydedilemedi: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Risk Ayarlarını Yükle (Sayfa açılışında)
+ */
+async function loadRiskSettings() {
+    try {
+        const response = await fetch('/api/v1/config/risk');
+        const result = await response.json();
+
+        if (result.status === 'success' && result.data) {
+            // Form değerlerini ayarla
+            document.getElementById('risk-max-risk').value = result.data.max_risk_per_trade_percent || 0.2;
+            document.getElementById('risk-max-leverage').value = result.data.max_leverage || 10;
+            document.getElementById('risk-max-positions').value = result.data.max_open_positions || 5;
+            document.getElementById('risk-max-losses').value = result.data.max_consecutive_losses || 5;
+
+            console.log('[INFO] Risk ayarları yüklendi:', result.data);
+        }
+    } catch (error) {
+        console.error('❌ loadRiskSettings hatası:', error);
+    }
+}
+
+/**
+ * Gelişmiş Ayarları Kaydet (WFO, ML, HTF)
+ */
+async function saveAdvancedSettings() {
+    try {
+        // Form değerlerini al
+        const wfoData = {
+            enabled: document.getElementById('wfo-enabled').checked,
+            train_days: parseInt(document.getElementById('wfo-train-days').value),
+            test_days: parseInt(document.getElementById('wfo-test-days').value),
+            reoptimize_interval: parseInt(document.getElementById('wfo-interval').value)
+        };
+
+        const mlData = {
+            enabled: document.getElementById('ml-enabled').checked,
+            confidence_threshold: parseFloat(document.getElementById('ml-threshold').value)
+        };
+
+        const htfData = {
+            enabled: document.getElementById('htf-enabled').checked,
+            trend_method: document.getElementById('htf-method').value
+        };
+
+        // Frontend validasyonu
+        if (wfoData.train_days < 7 || wfoData.train_days > 90) {
+            showToast('⚠️ WFO Eğitim günleri 7-90 arasında olmalı', 'error');
+            return;
+        }
+
+        if (wfoData.test_days < 1 || wfoData.test_days > 30) {
+            showToast('⚠️ WFO Test günleri 1-30 arasında olmalı', 'error');
+            return;
+        }
+
+        if (mlData.confidence_threshold < 0.50 || mlData.confidence_threshold > 0.95) {
+            showToast('⚠️ ML Confidence threshold 0.50-0.95 arasında olmalı', 'error');
+            return;
+        }
+
+        showToast('🔧 Gelişmiş ayarlar kaydediliyor...', 'info');
+
+        // Backend API çağrısı (JSON body)
+        const response = await fetch('/api/v1/config/advanced', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                wfo: wfoData,
+                ml: mlData,
+                htf: htfData
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            showToast('✅ ' + result.message, 'success');
+            console.log('[INFO] Gelişmiş ayarlar güncellendi:', result.data);
+        } else {
+            showToast('❌ ' + result.message, 'error');
+        }
+    } catch (error) {
+        console.error('❌ saveAdvancedSettings hatası:', error);
+        showToast('❌ Gelişmiş ayarlar kaydedilemedi: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Gelişmiş Ayarları Yükle (Sayfa açılışında)
+ */
+async function loadAdvancedSettings() {
+    try {
+        const response = await fetch('/api/v1/config/advanced');
+        const result = await response.json();
+
+        if (result.status === 'success' && result.data) {
+            const {wfo, ml, htf} = result.data;
+
+            // WFO ayarları
+            if (wfo) {
+                document.getElementById('wfo-enabled').checked = wfo.enabled !== false;
+                document.getElementById('wfo-train-days').value = wfo.train_days || 30;
+                document.getElementById('wfo-test-days').value = wfo.test_days || 7;
+                document.getElementById('wfo-interval').value = wfo.reoptimize_interval || 168;
+            }
+
+            // ML ayarları
+            if (ml) {
+                document.getElementById('ml-enabled').checked = ml.enabled !== false;
+                document.getElementById('ml-threshold').value = ml.confidence_threshold || 0.65;
+            }
+
+            // HTF ayarları
+            if (htf) {
+                document.getElementById('htf-enabled').checked = htf.enabled !== false;
+                document.getElementById('htf-method').value = htf.trend_method || 'ema_stack';
+            }
+
+            console.log('[INFO] Gelişmiş ayarlar yüklendi:', result.data);
+        }
+    } catch (error) {
+        console.error('❌ loadAdvancedSettings hatası:', error);
+    }
+}
+
+/**
+ * API Anahtarlarını Test Et
+ */
+async function testApiKeys() {
+    try {
+        const apiKey = document.getElementById('api-key').value.trim();
+        const apiSecret = document.getElementById('api-secret').value.trim();
+
+        if (!apiKey || !apiSecret) {
+            showToast('⚠️ Lütfen API Key ve Secret girin', 'warning');
+            return;
+        }
+
+        showToast('🧪 API anahtarları test ediliyor...', 'info');
+
+        // Backend API çağrısı (JSON body)
+        const response = await fetch('/api/v1/config/test-api-keys', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({api_key: apiKey, api_secret: apiSecret})
+        });
+
+        const result = await response.json();
+
+        // 422 Validation Error kontrolü
+        if (response.status === 422) {
+            console.error('❌ 422 Validation Error:', result);
+            console.error('❌ Error details:', result.detail);
+            if (result.detail && Array.isArray(result.detail)) {
+                const errors = result.detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join(', ');
+                showToast('❌ Validasyon hatası: ' + errors, 'error');
+            } else {
+                showToast('❌ 422 Validasyon hatası: ' + JSON.stringify(result.detail), 'error');
+            }
+            return;
+        }
+
+        if (result.valid) {
+            showToast('✅ ' + result.message, 'success');
+            console.log('[INFO] API Key test edildi:', apiKey.substring(0, 8) + '...');
+        } else {
+            showToast('❌ ' + result.message, 'error');
+        }
+    } catch (error) {
+        console.error('❌ testApiKeys hatası:', error);
+        showToast('❌ API testi başarısız: ' + error.message, 'error');
+    }
+}
+
+/**
+ * API Anahtarlarını Kaydet
+ */
+async function saveApiKeys() {
+    try {
+        const apiKey = document.getElementById('api-key').value.trim();
+        const apiSecret = document.getElementById('api-secret').value.trim();
+
+        if (!apiKey || !apiSecret) {
+            showToast('⚠️ Lütfen API Key ve Secret girin', 'warning');
+            return;
+        }
+
+        if (apiKey.length < 10 || apiSecret.length < 10) {
+            showToast('⚠️ API Key/Secret çok kısa (min 10 karakter)', 'warning');
+            return;
+        }
+
+        showToast('🔐 API anahtarları şifreleniyor...', 'info');
+
+        // Backend API çağrısı (JSON body)
+        const response = await fetch('/api/v1/config/api-keys', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({api_key: apiKey, api_secret: apiSecret})
+        });
+
+        const result = await response.json();
+
+        // 422 Validation Error kontrolü
+        if (response.status === 422) {
+            console.error('❌ 422 Validation Error:', result);
+            console.error('❌ Error details:', result.detail);
+            if (result.detail && Array.isArray(result.detail)) {
+                const errors = result.detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join(', ');
+                showToast('❌ Validasyon hatası: ' + errors, 'error');
+            } else {
+                showToast('❌ 422 Validasyon hatası: ' + JSON.stringify(result.detail), 'error');
+            }
+            return;
+        }
+
+        if (result.status === 'success') {
+            showToast('✅ ' + result.message, 'success');
+            console.log('[INFO] API Key kaydedildi:', apiKey.substring(0, 8) + '...');
+
+            // Inputları temizle (güvenlik)
+            document.getElementById('api-key').value = '';
+            document.getElementById('api-secret').value = '';
+        } else {
+            showToast('❌ ' + result.message, 'error');
+        }
+    } catch (error) {
+        console.error('❌ saveApiKeys hatası:', error);
+        showToast('❌ API anahtarları kaydedilemedi: ' + error.message, 'error');
+    }
+}
+
+async function loadDataStats() {
+    try {
+        console.log('[INFO] Veritabanı envanteri ve istatistikleri yükleniyor...');
+
+        // Envanter verisini çek (market type bilgisi var)
+        const data = await api.getDataInventory();
+
+        console.log('[DEBUG] Inventory response:', data);
+
+        // Backend response format: {status: 'success', total_candles: N, inventory: [...]}
+        const totalCandles = data.total_candles || 0;
+        const inventory = data.inventory || [];
+
+        // Özet bilgi - En üste
+        const statsSummaryEl = document.getElementById('data-stats-summary');
+        if (statsSummaryEl) {
+            const millions = (totalCandles / 1000000).toFixed(2);
+            const thousands = (totalCandles / 1000).toFixed(0);
+            
+            // Büyük sayılar için farklı gösterim
+            let totalDisplay;
+            if (totalCandles >= 1000000) {
+                totalDisplay = `<span style="font-size:1.3rem; font-weight:700; color:var(--neon-blue);">📊 Toplam: ${millions} Milyon</span>`;
+            } else if (totalCandles >= 1000) {
+                totalDisplay = `<span style="font-size:1.3rem; font-weight:700; color:var(--neon-blue);">📊 Toplam: ${thousands} Bin</span>`;
+            } else {
+                totalDisplay = `<span style="font-size:1.3rem; font-weight:700; color:var(--neon-blue);">📊 Toplam: ${totalCandles.toLocaleString('tr-TR')}</span>`;
+            }
+            
+            statsSummaryEl.innerHTML = `
+                ${totalDisplay}
+                <div style="display:flex; gap:20px; margin-top:8px;">
+                    <span style="font-size:0.85rem; color:var(--text-muted);">
+                        📦 ${inventory.length} farklı sembol/timeframe kombinasyonu
+                    </span>
+                </div>
+            `;
+        }
+
+        // Verileri grupla (sembol + market type bazında)
+        const grouped = {};
+        
+        inventory.forEach(item => {
+            // Sembol adını ve market type'ı çıkar
+            let symbolName = item.symbol;
+            let marketType = 'spot'; // Varsayılan
+            
+            if (item.symbol.includes('_future') || item.symbol.includes(':USDT')) {
+                marketType = 'future';
+                symbolName = item.symbol.replace('_future', '').replace(':USDT', '');
+            } else if (item.symbol.includes('_spot')) {
+                marketType = 'spot';
+                symbolName = item.symbol.replace('_spot', '');
+            }
+            
+            const key = `${symbolName}_${marketType}`;
+            if (!grouped[key]) {
+                grouped[key] = {
+                    symbol: symbolName,
+                    marketType: marketType,
+                    timeframes: [],
+                    totalCandles: 0,
+                    minDate: item.min_date,
+                    maxDate: item.max_date,
+                    minTimestamp: item.min_timestamp,
+                    maxTimestamp: item.max_timestamp
+                };
+            }
+            
+            grouped[key].timeframes.push({
+                tf: item.timeframe,
+                count: item.count
+            });
+            grouped[key].totalCandles += item.count;
+        });
+
+        // Tablo oluştur
+        const statsTableEl = document.getElementById('data-stats-table');
+        if (statsTableEl && Object.keys(grouped).length > 0) {
+            // Grupları sırala (toplam mum sayısına göre)
+            const sorted = Object.values(grouped).sort((a, b) => b.totalCandles - a.totalCandles);
+            
+            const rows = sorted.map(group => {
+                const countFormatted = group.totalCandles.toLocaleString('tr-TR');
+                // Büyük sayılar için K/M/B kısaltması
+                let countShort = countFormatted;
+                let countColor = 'var(--neon-green)';
+                if (group.totalCandles >= 1000000) {
+                    countShort = `${(group.totalCandles / 1000000).toFixed(2)}M`;
+                    countColor = '#00ff88'; // Parlak yeşil
+                } else if (group.totalCandles >= 100000) {
+                    countShort = `${(group.totalCandles / 1000).toFixed(0)}K`;
+                    countColor = 'var(--neon-green)';
+                }
+                
+                // Market type badge
+                const marketTypeDisplay = group.marketType === 'future' ? '💹 Vadeli' : '💰 Spot';
+                const badgeBg = group.marketType === 'future' ? 'rgba(88, 166, 255, 0.2)' : 'rgba(46, 220, 135, 0.2)';
+                const badgeColor = group.marketType === 'future' ? 'var(--neon-blue)' : 'var(--neon-green)';
+                
+                // Timeframe özeti
+                const tfSummary = group.timeframes.map(tf => tf.tf).join(', ');
+                
+                // Tarih formatlaması - daha belirgin
+                const startDate = group.minDate !== 'N/A' ? group.minDate : '—';
+                const endDate = group.maxDate !== 'N/A' ? group.maxDate : '—';
+                
+                return `
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05); transition: background 0.2s;"
+                        onmouseover="this.style.background='rgba(255,255,255,0.03)'" 
+                        onmouseout="this.style.background='transparent'">
+                        <td style="padding:12px 10px;">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span style="font-weight:700; font-size:0.95rem; color:var(--text-main);">${group.symbol}</span>
+                                <span style="font-size:0.7rem; padding:2px 8px; border-radius:4px; 
+                                            background:${badgeBg}; color:${badgeColor}; font-weight:600;">
+                                    ${marketTypeDisplay}
+                                </span>
+                            </div>
+                            <div style="font-size:0.7rem; color:var(--text-muted); margin-top:4px;">
+                                ⏱️ ${tfSummary}
+                            </div>
+                        </td>
+                        <td style="padding:12px 10px;">
+                            <span style="font-size:0.85rem; color:#ffa500; font-weight:600;">📅 ${startDate}</span>
+                        </td>
+                        <td style="padding:12px 10px;">
+                            <span style="font-size:0.85rem; color:#ff6b6b; font-weight:600;">📅 ${endDate}</span>
+                        </td>
+                        <td style="padding:12px 10px; text-align:right;">
+                            <span style="font-size:1rem; font-weight:700; color:${countColor};">${countShort}</span>
+                            <div style="font-size:0.7rem; color:var(--text-muted); margin-top:2px;">
+                                ${countFormatted} mum
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            
+            statsTableEl.innerHTML = `
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr style="border-bottom:2px solid rgba(255,255,255,0.15); position: sticky; top: 0; background: #0a0e1a;">
+                            <th style="padding:12px 10px; text-align:left; font-size:0.8rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">🪙 Sembol</th>
+                            <th style="padding:12px 10px; text-align:left; font-size:0.8rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">📅 Başlangıç</th>
+                            <th style="padding:12px 10px; text-align:left; font-size:0.8rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">📅 Bitiş</th>
+                            <th style="padding:12px 10px; text-align:right; font-size:0.8rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">📊 Mum Sayısı</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+            `;
+        } else if (statsTableEl) {
+            statsTableEl.innerHTML = '<p style="text-align:center; color:var(--text-muted); padding:20px; font-size:0.9rem;">📭 Veritabanında henüz veri yok</p>';
+        }
+
+        console.log(`[INFO] Envanter yüklendi: ${totalCandles.toLocaleString()} mum, ${Object.keys(grouped).length} sembol`);
+    } catch (error) {
+        console.error('❌ Envanter yükleme hatası:', error);
+        console.error('Stack trace:', error.stack);
+        const statsTableEl = document.getElementById('data-stats-table');
+        if (statsTableEl) {
+            statsTableEl.innerHTML = '<p style="text-align:center; color:var(--danger-text);">❌ Envanter yüklenemedi: ' + error.message + '</p>';
+        }
+    }
+}
+
+function loadBotFormOptions() {
+    // Load data symbols (for bot form dropdown)
+    loadDataSymbols();
+
+    // Load strategies
+    loadStrategies();
+
+    // Load dropdown data (Sembol + Strateji) - YENİ FONKSİYON
+    loadDropdownData();
+}
+
+// ============================================================================
+// RENDERING
+// ============================================================================
+
+function renderMarketList() {
+    try {
+        const state = store.getState();
+        const container = document.getElementById('market-selection-list');
         const searchInput = document.getElementById('market-search');
         const filterSelect = document.getElementById('market-type-filter');
 
-        if (!searchInput.hasListener) {
-            searchInput.addEventListener('input', renderMarketList);
-            filterSelect.addEventListener('change', renderMarketList);
-            searchInput.hasListener = true;
-        }
-    } catch (e) { console.error("Market Listesi Hatası:", e); }
-}
+        console.log('[DEBUG] renderMarketList - state.markets.all:', state.markets.all?.length);
 
-function renderMarketList() {
-    const container = document.getElementById('market-selection-list');
-    const searchTerm = document.getElementById('market-search').value.toLowerCase();
-    const typeFilter = document.getElementById('market-type-filter').value;
-
-    container.innerHTML = '';
-
-    const filtered = allMarkets.filter(m => {
-        const matchesSearch = m.symbol.toLowerCase().includes(searchTerm);
-        const matchesType = typeFilter === 'all' || m.type === typeFilter;
-        return matchesSearch && matchesType;
-    });
-
-    if (filtered.length === 0) {
-        container.innerHTML = '<p style="grid-column:span 4; text-align:center; padding:20px; color:var(--text-muted);">Eşleşen market bulunamadı.</p>';
-        return;
-    }
-
-    filtered.forEach(m => {
-        const isTracked = trackedSymbols.includes(m.symbol);
-        const item = document.createElement('div');
-        item.className = `market-item ${isTracked ? 'selected' : ''}`;
-        item.style.cursor = 'pointer';
-        item.style.padding = '8px 12px';
-        item.style.borderRadius = '6px';
-        item.style.marginBottom = '4px';
-        item.style.display = 'flex';
-        item.style.alignItems = 'center';
-        item.style.gap = '10px';
-        item.style.background = isTracked ? 'rgba(88, 166, 255, 0.1)' : 'transparent';
-
-        // Satırın kendisine tıklayınca DOWNLOAD için seçer
-        item.onclick = (e) => {
-            if (e.target.type !== 'checkbox') {
-                selectForDownload(m.symbol, m.type);
-            }
-        };
-
-        item.innerHTML = `
-            <input type="checkbox" ${isTracked ? 'checked' : ''} onchange="toggleLocalSymbol('${m.symbol}', this)" style="cursor:pointer;">
-            <div style="flex:1;">
-                <div style="font-weight:bold; font-size:0.9rem;">${m.symbol}</div>
-                <div style="font-size:0.7rem; color:var(--text-muted);">${m.type.toUpperCase()}</div>
-            </div>
-        `;
-        container.appendChild(item);
-    });
-}
-
-function selectForDownload(symbol, type) {
-    const display = document.getElementById('selected-symbol-val');
-    if (display) {
-        display.innerText = symbol;
-        display.dataset.type = type; // Tipi sakla (spot/swap)
-        display.style.color = 'var(--neon-green)';
-        checkHistoryStatus(); // Hemen veritabanı durumunu sorgula
-    }
-}
-
-function toggleLocalSymbol(symbol, cb) {
-    if (cb.checked) {
-        if (!trackedSymbols.includes(symbol)) trackedSymbols.push(symbol);
-        cb.closest('.market-item').classList.add('selected');
-    } else {
-        trackedSymbols = trackedSymbols.filter(s => s !== symbol);
-        cb.closest('.market-item').classList.remove('selected');
-    }
-}
-
-async function saveMarketSelection() {
-    const btn = event.target;
-    const originalText = btn.innerText;
-
-    try {
-        btn.innerText = '⚠️ Güncelleniyor...';
-        btn.disabled = true;
-
-        const res = await fetch('/api/v1/config/symbols', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ symbols: trackedSymbols })
-        });
-        const result = await res.json();
-
-        if (result.status === 'success') {
-            btn.innerText = '✅ Başarıyla Kaydedildi!';
-            setTimeout(() => {
-                btn.innerText = originalText;
-                btn.disabled = false;
-                fetchStrategies(); // Strateji tablosunu da güncelle (yeni coinler için)
-                fetchBotData();
-            }, 1500);
-        }
-    } catch (e) {
-        console.error("Kaydetme Hatası:", e);
-        btn.innerText = '❌ Hata!';
-        btn.disabled = false;
-    }
-}
-
-function initChart() {
-    const trace1 = {
-        x: ['2025-01', '2025-02', '2025-03', '2025-04', '2025-05', 'Canlı'],
-        y: [10000, 10150, 10120, 10300, 10450, 10540],
-        type: 'scatter',
-        mode: 'lines+markers',
-        line: { color: '#bc8cff', width: 3, shape: 'spline' },
-        fill: 'tozeroy',
-        fillcolor: 'rgba(188, 140, 255, 0.1)',
-        name: 'Kasa Büyümesi'
-    };
-    Plotly.newPlot('plotly-chart', [trace1], {
-        paper_bgcolor: 'transparent',
-        plot_bgcolor: 'transparent',
-        font: { color: '#8b949e', family: 'Inter' },
-        margin: { t: 10, b: 40, l: 40, r: 10 },
-        xaxis: { showgrid: true, gridcolor: 'rgba(255,255,255,0.05)' },
-        yaxis: { showgrid: true, gridcolor: 'rgba(255,255,255,0.05)', tickprefix: '$' }
-    }, { responsive: true, displayModeBar: false });
-}
-
-async function fetchBotData() {
-    try {
-        // Sistem Durumu
-        const statusRes = await fetch('/api/v1/status');
-        const statusData = await statusRes.json();
-        const envEl = document.getElementById('env-status');
-        if (envEl) {
-            envEl.innerText = statusData.environment.toUpperCase() + ' MODE';
-            envEl.classList.add('neon-text');
-        }
-        document.getElementById('exchange-val').innerText = statusData.exchange.toUpperCase();
-
-        // --- SİSTEM DURUM ÖZETİ (AKTİF EMİRLER SAYFASI İÇİN) ---
-        const statusSummary = document.getElementById('system-status-summary');
-        const loadingMsg = document.getElementById('system-loading-msg');
-
-        if (statusSummary) {
-            // YENİ 1-to-N: Her bot için AYRI kart göster (sembol bazında gruplama YOK)
-            const botsRes = await fetch('/api/v1/bots/list');
-            const botsData = await botsRes.json();
-
-            const allBots = botsData.bots || [];
-
-            // Strateji bilgilerini al (strateji adlarını bulmak için)
-            const stratRes = await fetch('/api/v1/strategies');
-            const stratData = await stratRes.json();
-
-            // Dashboard metriklerini al (latest_decisions için gerekli)
-            const metricsRes = await fetch('/api/v1/dashboard-metrics');
-            const metricsData = await metricsRes.json();
-            const metrics = metricsData;
-
-            // Loading mesajını gizle (botlar çekildi)
-            if (loadingMsg) {
-                loadingMsg.style.display = 'none';
-            }
-
-            if (allBots.length === 0) {
-                // Bot yoksa loading mesajını tekrar göster
-                if (loadingMsg) {
-                    loadingMsg.style.display = 'block';
-                    loadingMsg.innerHTML = '📭 Henüz aktif strateji yok';
-                }
-            } else {
-                // MEVCUT KARTLARI GÜNCELLE (Yeniden oluşturma yerine)
-                const existingCards = statusSummary.querySelectorAll('.system-status-card');
-                const cardMap = new Map();
-
-                // Mevcut kartları bot_id'ye göre map'le
-                existingCards.forEach(card => {
-                    const botIdEl = card.querySelector('.status-bot-id');
-                    if (botIdEl && botIdEl.textContent) {
-                        cardMap.set(botIdEl.textContent, card);
-                    }
-                });
-
-                // Her bot için AYRI kart oluştur/güncelle
-                allBots.forEach((bot, index) => {
-                    const botId = bot.bot_id || `${bot.symbol}_${bot.strategy_id}_${bot.timeframe}`;
-                    const sym = bot.symbol;
-                    const strategyId = bot.strategy_id || 'unknown';
-                    const timeframe = bot.timeframe || '1m';
-                    const marketType = bot.market_type || 'future';
-
-                    // Strateji adını bul (API'den gelen strategies listesinde ara)
-                    const strategyName = stratData && stratData.strategies ?
-                        (stratData.strategies.find(s => s.id === strategyId)?.name || strategyId) :
-                        strategyId;
-
-                    // Son kararı bul (latest_decisions'dan)
-                    const decision = metrics.latest_decisions ? metrics.latest_decisions[sym] : null;
-                    const signalText = decision && decision.signal_val !== undefined ?
-                        (decision.signal_val === 2 ? '🟢 AL' : decision.signal_val === 0 ? '🔴 SAT' : '⚪ BEKLE') :
-                        '⚪ BEKLE';  // Varsayılan BEKLE (Başlatılıyor değil!)
-                    const signalColor = decision && decision.signal_val !== undefined ?
-                        (decision.signal_val === 2 ? '#2ea043' : decision.signal_val === 0 ? '#f85149' : '#8b949e') :
-                        '#8b949e';
-
-                    // Mevcut kartı bul veya yeni oluştur
-                    let card = cardMap.get(botId);
-
-                    if (!card) {
-                        // Yeni kart oluştur
-                        card = document.createElement('div');
-                        card.className = 'system-status-card';
-                        statusSummary.appendChild(card);
-                    }
-
-                    // İçeriği güncelle (her bot için AYRI kart - detaylı bilgi)
-                    card.innerHTML = `
-                        <div class="status-card-header-compact">
-                            <span class="status-symbol">${sym.replace('/USDT', '')} (${timeframe})</span>
-                            <span class="status-signal" style="color: ${signalColor}; font-weight: 700; font-size: 0.75rem;">${signalText}</span>
-                        </div>
-                        <div class="status-card-body-compact">
-                            <div class="status-row-compact">
-                                <span class="status-label">🤖</span>
-                                <span class="status-value" title="${strategyName}">${strategyName.split(' ')[0]}</span>
-                            </div>
-                            <div class="status-row-compact">
-                                <span class="status-label">⏱️</span>
-                                <span class="status-value">${timeframe}</span>
-                            </div>
-                            <div class="status-row-compact">
-                                <span class="status-label">💰</span>
-                                <span class="status-value" title="${marketType === 'spot' ? 'Spot' : 'Futures'}">${marketType.toUpperCase()}</span>
-                            </div>
-                        </div>
-                        <div class="status-bot-id" style="display:none;">${botId}</div>
-                    `;
-
-                    // Map'ten kaldır
-                    cardMap.delete(botId);
-                });
-
-                // Kullanılmayan kartları sil (artık aktif olmayan botlar)
-                cardMap.forEach((card, botId) => {
-                    card.remove();
-                });
-            }
-        }
-
-        const res = await fetch('/api/v1/dashboard-metrics');
-        const metrics = await res.json();
-        const p = metrics.portfolio;
-
-        // --- PORTFÖY ANALİZİ SEKME GÜNCELLEMELERİ ---
-        if (document.getElementById('realized-pnl')) {
-            document.getElementById('total-balance').innerText = '$' + p.equity.toLocaleString(undefined, { minimumFractionDigits: 2 });
-            document.getElementById('realized-pnl').innerText = (p.total_pnl >= 0 ? '+$' : '-$') + Math.abs(p.total_pnl).toFixed(2);
-            document.getElementById('realized-pnl').className = p.total_pnl >= 0 ? 'success-text' : 'danger-text';
-
-            document.getElementById('daily-roi').innerText = '%' + p.daily_roi_percent;
-            document.getElementById('roi-status').innerText = p.daily_roi_percent >= 0 ? 'Piyasa Üstü Performans' : 'Risk Yönetimi Devrede';
-            document.getElementById('roi-status').className = p.daily_roi_percent >= 0 ? 'success-text' : 'warning-text';
-
-            // İleri Düzey İstatistikler
-            document.getElementById('stat-profit-factor').innerText = p.profit_factor;
-            document.getElementById('stat-drawdown').innerText = p.max_drawdown + '%';
-            document.getElementById('stat-sharpe').innerText = p.sharpe_ratio;
-
-            // Isı Haritası ve Dağılım Grafiği
-            renderMarketHeatmap(metrics.latest_decisions);
-            renderAllocationChart(p);
-        }
-
-        // --- ÜST PERFORMANS PANELİ (Orders sekmesi için) ---
-        if (document.getElementById('perf-balance')) {
-            document.getElementById('perf-balance').innerText = '$' + p.total_balance.toLocaleString(undefined, { minimumFractionDigits: 2 });
-            document.getElementById('perf-equity').innerText = '$' + p.equity.toLocaleString(undefined, { minimumFractionDigits: 2 });
-            document.getElementById('perf-count').innerText = metrics.open_positions.length;
-            document.getElementById('perf-winrate').innerText = p.win_rate + '%';
-            document.getElementById('perf-total-trades').innerText = p.total_trades;
-            document.getElementById('perf-total-pnl').innerText = (p.total_pnl >= 0 ? '+$' : '-$') + Math.abs(p.total_pnl).toFixed(2);
-            document.getElementById('perf-total-fees').innerText = '$' + p.total_commission.toFixed(2);
-
-            // MARKET REGIME UPDATE
-            const regimeEl = document.getElementById('perf-regime');
-            if (regimeEl && p.market_regime) {
-                regimeEl.innerText = p.market_regime.replace('_', ' ');
-                const iconEl = document.getElementById('perf-regime-icon');
-
-                if (p.market_regime === 'TRENDING_BULL') {
-                    regimeEl.style.color = '#00ff88';
-                    iconEl.innerHTML = '🚀';
-                } else if (p.market_regime === 'TRENDING_BEAR') {
-                    regimeEl.style.color = '#ff3366';
-                    iconEl.innerHTML = '📉';
-                } else if (p.market_regime === 'RANGING') {
-                    regimeEl.style.color = '#ffcc00';
-                    iconEl.innerHTML = '↔️';
-                } else if (p.market_regime === 'SQUEEZE_PRE_TREND') {
-                    regimeEl.style.color = '#bc8cff';
-                    iconEl.innerHTML = '🌀';
-                }
-            }
-        }
-
-        // --- SERMAYE KULLANIMI --- (Yeni)
-        if (document.getElementById('usage-used-margin')) {
-            document.getElementById('usage-used-margin').innerText = '$' + p.used_margin.toLocaleString();
-            document.getElementById('usage-free-margin').innerText = '$' + p.free_margin.toLocaleString();
-            document.getElementById('usage-notional').innerText = '$' + p.total_notional.toLocaleString();
-            document.getElementById('usage-leverage').innerText = p.avg_leverage + 'x';
-        }
-
-        // --- AKILLI KARAR KARTLARI ---
-        const decGrid = document.getElementById('decision-grid');
-        if (decGrid) {
-            const decisions = metrics.latest_decisions || {};
-
-            // MEVCUT KARTLARI KORU (Yeniden oluşturma yerine)
-            const existingCards = decGrid.querySelectorAll('.decision-card-multi');
-            const cardMap = new Map();
-
-            // Mevcut kartları sembole göre map'le
-            existingCards.forEach(card => {
-                const symbolEl = card.querySelector('strong');
-                if (symbolEl) {
-                    cardMap.set(symbolEl.textContent, card);
-                }
-            });
-
-            // Yeni kararlar için kartları güncelle veya oluştur
-            if (Object.keys(decisions).length > 0) {
-                for (const sym in decisions) {
-                    const dec = decisions[sym];
-                    let sigText = "HOLD"; let sigColor = "var(--text-muted)";
-                    if (dec.signal_val === 2) { sigText = "LONG"; sigColor = "var(--neon-green)"; }
-                    if (dec.signal_val === 0) { sigText = "SHORT"; sigColor = "var(--neon-red)"; }
-
-                    const isAdaptive = dec.bot_name === "Adaptive Koncorde X";
-                    const metricsHtml = isAdaptive ? `
-                        <div class="mini-item"><span>Koncorde (A/V):</span> <strong>${dec.azul} / ${dec.verde}</strong></div>
-                        <div class="mini-item"><span>Kalman / VIX:</span> <strong>${dec.kalman.toFixed(1)} / ${dec.vix}</strong></div>
-                    ` : `
-                        <div class="mini-item"><span>RSI/ATR:</span> <strong>${dec.rsi} / ${dec.atr.toFixed(2)}</strong></div>
-                        <div class="mini-item"><span>EMA 5/13:</span> <strong>${dec.ema_5} / ${dec.ema_13}</strong></div>
-                    `;
-
-                    // Mevcut kartı bul veya yeni oluştur
-                    let card = cardMap.get(sym);
-
-                    if (!card) {
-                        // Yeni kart oluştur
-                        card = document.createElement('div');
-                        card.className = "card glass-panel decision-card-multi";
-                        decGrid.appendChild(card);
-                    }
-
-                    // İçeriği güncelle
-                    card.innerHTML = `
-                        <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                            <strong style="color:var(--neon-blue)">${dec.symbol}</strong>
-                            <span style="font-size:0.7rem; color:var(--text-muted)">via ${dec.bot_name}</span>
-                        </div>
-                        <div style="margin-bottom:10px; font-size:1.1rem; font-family:monospace">$${dec.price.toFixed(2)}</div>
-                        <div class="mini-metrics">
-                            ${metricsHtml}
-                        </div>
-                        <div class="cf-bar">
-                            <div class="cf-fill" style="width:${dec.ml_conf}%"></div>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
-                            <span style="font-size:0.75rem; color:var(--text-muted)">%${dec.ml_conf} Güven</span>
-                            <strong style="color:${sigColor}">${sigText}</strong>
-                        </div>
-                    `;
-
-                    // Map'ten kaldır
-                    cardMap.delete(sym);
-                }
-            }
-
-            // Kullanılmayan kartları sil
-            cardMap.forEach(card => {
-                card.remove();
-            });
-        }
-
-        // --- DETAYLI POZİSYON TABLOSU --- (Güncellendi)
-        const tbody = document.getElementById('positions-body');
-        if (tbody) {
-            tbody.innerHTML = '';
-            if (metrics.open_positions.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color:var(--text-muted); padding:30px;">Açık pozisyon yok. Makine fırsat kolluyor...</td></tr>';
-            } else {
-                metrics.open_positions.forEach((pos, idx) => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td style="color:var(--text-muted)">#${idx + 1}</td>
-                        <td>
-                            <div class="${pos.direction === 'LONG' ? 'success-text' : 'danger-text'}" style="font-weight:bold;">
-                                ${pos.direction === 'LONG' ? '🚀 LONG' : '🔻 SHORT'}
-                            </div>
-                            <div style="font-size:0.7rem; color:var(--text-muted)">${pos.symbol}</div>
-                        </td>
-                        <td>
-                            <div>${pos.size.toFixed(4)}</div>
-                            <div class="timeframe-tag" style="display:inline-block; font-size:0.65rem;">${pos.leverage}x</div>
-                        </td>
-                        <td>
-                            <div>$${pos.entry_price.toFixed(2)}</div>
-                            <div style="font-size:0.7rem; color:var(--text-muted)">Val: $${pos.notional_value.toFixed(2)}</div>
-                        </td>
-                        <td>
-                            <div>$${pos.current_price.toFixed(2)}</div>
-                            <div class="${pos.unrealized_usd >= 0 ? 'success-text' : 'danger-text'}">
-                                ${pos.unrealized_usd >= 0 ? '+' : ''}$${pos.unrealized_usd.toFixed(2)}
-                            </div>
-                        </td>
-                        <td class="${pos.pnl_percent >= 0 ? 'success-text' : 'danger-text'}" style="font-weight:bold;">
-                            ${pos.pnl_percent.toFixed(2)}%
-                        </td>
-                        <td>
-                            <span class="target-badge target-tp">TP: $${pos.take_profit.toFixed(2)}</span>
-                            <span class="target-badge target-sl">SL: $${pos.stop_loss.toFixed(2)}</span>
-                            <span class="target-badge target-liq">Liq: $${pos.liquidation_price.toFixed(2)}</span>
-                        </td>
-                        <td>
-                            <button class="btn-close-pos" onclick="closePosition('${pos.symbol}')">KAPAT</button>
-                        </td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-            }
-        }
-    } catch (e) {
-        console.error("Dashboard Güncelleme Hatası:", e);
-    }
-}
-
-async function closePosition(symbol) {
-    if (!confirm(`${symbol} pozisyonunu kapatmak istediğinize emin misiniz?`)) return;
-    try {
-        const res = await fetch('/api/v1/position/close', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ symbol: symbol })
-        });
-        const result = await res.json();
-        if (result.status === 'success') {
-            fetchBotData();
-        }
-    } catch (e) { console.error("Kapatma Hatası:", e); }
-}
-
-async function fetchTradeHistory() {
-    try {
-        const res = await fetch('/api/v1/trade-history');
-        const data = await res.json();
-        const tbody = document.getElementById('history-body');
-        tbody.innerHTML = '';
-        if (data.trades) {
-            data.trades.forEach(t => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td style="font-size:0.75rem">${new Date(t.timestamp).toLocaleString()}</td>
-                    <td>${t.symbol}</td>
-                    <td>G: ${t.entry_price.toFixed(2)} <br> Ç: ${t.exit_price.toFixed(2)}</td>
-                    <td class="${t.pnl_usd >= 0 ? 'success-text' : 'danger-text'}">$${t.pnl_usd.toFixed(2)}</td>
-                    <td>${t.reason}</td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-    } catch (e) { console.error("Geçmiş Hatası:", e); }
-}
-
-async function fetchStrategies() {
-    try {
-        const stratRes = await fetch('/api/v1/strategies');
-        const data = await stratRes.json();
-
-        // Strateji Kütüphanesi (Dokümantasyon) - Sadece bunu render et
-        const libContainer = document.getElementById('strategy-library-container');
-        if (libContainer) {
-            libContainer.innerHTML = '';
-            data.strategies.forEach(s => {
-                const card = document.createElement('div');
-                card.className = 'card glass-panel';
-                card.style.borderLeft = `4px solid var(--neon-blue)`;
-                card.style.transition = 'transform 0.2s';
-                card.style.cursor = 'default';
-
-                // Stratejiye özel detayları (göstergeler vs) tahmin ederek veya meta veriden çekerek ekleyelim
-                let techDetails = "";
-                if (s.id === 'trend_master') {
-                    techDetails = `
-                        <div style="margin-top:10px; font-size:0.75rem;">
-                            <div style="margin-bottom:5px;"><b>🔍 Göstergeler:</b> EMA (200), SMA (20), RSI (14)</div>
-                            <div style="margin-bottom:5px;"><b>📈 Giriş Mantığı:</b> Fiyat EMA 200 üzerindeyken SMA 20'yi yukarı keserse ve RSI 50-70 arasındaysa LONG girer.</div>
-                            <div><b>🛡️ Risk:</b> 3.5x ATR Stop-Loss, 2.0x TP.</div>
-                        </div>`;
-                } else if (s.id === 'scalper_ninja') {
-                    techDetails = `
-                        <div style="margin-top:10px; font-size:0.75rem;">
-                            <div style="margin-bottom:5px;"><b>🔍 Göstergeler:</b> EMA (5), EMA (13), RSI (14)</div>
-                            <div style="margin-bottom:5px;"><b>📉 Giriş Mantığı:</b> EMA 5, EMA 13'ü yukarı kestiğinde RSI boğa bölgesindeyse hızlı kâr odaklı LONG girer.</div>
-                            <div><b>🛡️ Risk:</b> 1.5x ATR Dar Stop, 1.5x TP.</div>
-                        </div>`;
-                } else if (s.id === 'adaptive_koncorde') {
-                    techDetails = `
-                        <div style="margin-top:10px; font-size:0.75rem;">
-                            <div style="margin-bottom:5px;"><b>🔍 Göstergeler:</b> Kalman Filtresi, Koncorde (PVI/NVI), BTC VIX, EWO</div>
-                            <div style="margin-bottom:5px;"><b>📉 Giriş Mantığı:</b> VIX'e göre dinamik eşik belirler. Akıllı Para (Azul) ve Küçük Yatırımcı (Verde) ters korelasyonu (Ayna Modeli) ve Kalman trendini takip eder.</div>
-                            <div><b>🛡️ Risk:</b> 2.5x ATR Esnek Stop, 3.0x TP.</div>
-                        </div>`;
-                }
-
-                card.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                        <h4 style="color:var(--neon-blue); margin:0;">${s.name}</h4>
-                        <span style="font-size:0.6rem; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.05); color:var(--text-muted);">v1.0</span>
-                    </div>
-                    <p style="font-size:0.8rem; margin:10px 0; line-height:1.4;">${s.desc}</p>
-                    <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.03);">
-                        ${techDetails || `<p style="font-size:0.75rem; color:var(--text-muted); font-style:italic;">Teknik detaylar hazırlanıyor...</p>`}
-                    </div>
-                `;
-                libContainer.appendChild(card);
-            });
-        }
-    } catch (e) { console.error("Strateji Listeleme Hatası:", e); }
-}
-
-window.selectStrategy = async function (symbol) {
-    const stratEl = document.getElementById(`strat-sel-${symbol.replace('/', '-')}`);
-    const tfEl = document.getElementById(`tf-sel-${symbol.replace('/', '-')}`);
-    const marketEl = document.getElementById(`market-sel-${symbol.replace('/', '-')}`);
-    const marginEl = document.getElementById(`margin-sel-${symbol.replace('/', '-')}`);
-    const statusEl = document.getElementById(`status-${symbol.replace('/', '-')}`);
-
-    const strategyId = stratEl.value;
-    const timeframe = tfEl.value;
-    const marketType = marketEl.value;
-    const marginType = marginEl.value;
-
-    if (!strategyId) {
-        alert("Lütfen bir strateji (bot) seçin!");
-        return;
-    }
-
-    // FAZ 2: MODEL TIMEFRAME KONTROLÜ (GÜVENLİK KALKANI)
-    // Kullanıcı botu başlatmadan önce model-frame uyumluluğunu kontrol et
-    const modelCheck = await checkModelCompatibility(symbol, timeframe);
-
-    if (!modelCheck.compatible) {
-        // Model yok veya timeframe uyuşmuyor - kullanıcıyı uyar
-        showErrorToast(
-            `⚠️ <strong>Model Bulunamadı!</strong><br>${modelCheck.error}`,
-            8000
-        );
-
-        // Yine de devam etmek istiyor mu? (ML olmadan çalışacak)
-        const confirmContinue = confirm(
-            `⚠️ UYARI: ${symbol} için ${timeframe} timeframe'inde eğitilmiş ML modeli bulunamadı.\n\n` +
-            `Bot ML olmadan (sadece teknik indikatörlerle) çalışacak.\n\n` +
-            `Devam etmek istiyor musunuz?\n\n` +
-            `İPTAL: Botu başlatma\n` +
-            `TAMAM: ML olmadan devam et`
-        );
-
-        if (!confirmContinue) {
-            statusEl.innerText = '● İptal';
-            statusEl.className = 'danger-text';
+        if (!container) {
+            console.error('❌ market-selection-list elementi bulunamadı!');
             return;
         }
-    }
 
-    try {
-        statusEl.innerText = '● Atanıyor...';
-        statusEl.className = 'warning-text'; // Sarımsı bir renk (CSS'e eklenebilir)
+        const searchTerm = searchInput?.value.toLowerCase() || '';
+        const typeFilter = filterSelect?.value || 'all';
 
-        const res = await fetch('/api/v1/strategy/select', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                strategy_id: strategyId,
-                symbol: symbol,
-                timeframe: timeframe,
-                market_type: marketType,
-                margin_type: marginType
-            })
+        const filtered = (state.markets.all || []).filter(m => {
+            const matchesSearch = m.symbol?.toLowerCase().includes(searchTerm);
+            const matchesType = typeFilter === 'all' || m.type === typeFilter;
+            return matchesSearch && matchesType;
         });
-        const result = await res.json();
-        if (result.status === 'success') {
-            console.log("Strateji ve Periyot başarıyla atandı:", result.symbol, result.active_timeframe);
 
-            // Kullanıcıya bilgi ver (ML varsa veya yoksa)
-            if (modelCheck.compatible) {
-                showErrorToast(`✅ <strong>${symbol}</strong> başlatıldı!<br>ML Model: ${timeframe} timeframe için hazır.`, 3000);
-            } else {
-                showErrorToast(`⚠️ <strong>${symbol}</strong> başlatıldı!<br>ML olmadan çalışıyor (sadece indikatörler).`, 5000);
-            }
+        console.log(`[INFO] ${filtered.length} market filtrelendi`);
 
-            setTimeout(() => {
-                fetchStrategies(); // Tabloyu tazele
-                fetchBotData();
-            }, 500);
+        if (filtered.length === 0) {
+            container.innerHTML = '<p style="grid-column:span 4; text-align:center; padding:20px; color:var(--text-muted);">Eşleşen market bulunamadı.</p>';
+            return;
         }
-    } catch (e) {
-        console.error("Strateji Seçim Hatası:", e);
-        statusEl.innerText = '● Hata!';
-        statusEl.className = 'danger-text';
-        showErrorToast(`❌ Hata: ${e.message}`, 5000);
+
+        container.innerHTML = filtered.map(m => {
+            const isTracked = (state.markets.tracked || []).includes(m.symbol);
+            return `
+                <div class="market-item ${isTracked ? 'selected' : ''}"
+                     onclick="selectMarket('${m.symbol}', '${m.type}')">
+                    <input type="checkbox" ${isTracked ? 'checked' : ''}
+                           onchange="event.stopPropagation(); toggleMarketSymbol('${m.symbol}', this.checked)">
+                    <div style="flex:1;">
+                        <div style="font-weight:bold; font-size:0.9rem;">${m.symbol}</div>
+                        <div style="font-size:0.7rem; color:var(--text-muted);">${m.type?.toUpperCase() || 'UNKNOWN'}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Setup search listener once
+        if (searchInput && !searchInput.hasListener) {
+            searchInput.addEventListener('input', renderMarketList);
+            searchInput.hasListener = true;
+        }
+    } catch (error) {
+        console.error('❌ renderMarketList hatası:', error);
+        console.error('Stack trace:', error.stack);
     }
 }
 
-function renderMarketHeatmap(decisions) {
-    const container = document.getElementById('market-heatmap');
-    if (!container || !decisions) return;
-
-    container.innerHTML = '';
-    for (const sym in decisions) {
-        const data = decisions[sym];
-        const box = document.createElement('div');
-        box.className = 'heatmap-box';
-
-        // Rastgele değişim simülasyonu veya gerçek veri (şuan veri yoksa 0.0)
-        const chg = (Math.random() * 4 - 2).toFixed(2); // Örnek değişim
-        const chgClass = chg >= 0 ? 'success-text' : 'danger-text';
-
-        box.innerHTML = `
-            <span class="sym">${sym}</span>
-            <span class="price">$${data.price.toFixed(2)}</span>
-            <span class="chg ${chgClass}">${chg >= 0 ? '+' : ''}${chg}%</span>
-        `;
-        container.appendChild(box);
-    }
-}
-
-let allocationChart = null;
-function renderAllocationChart(p) {
-    const el = document.getElementById('allocation-chart');
-    if (!el) return;
-
-    const data = [{
-        values: [p.free_margin, p.used_margin],
-        labels: ['Nakit (Boş)', 'Marjin (İşlemde)'],
-        type: 'pie',
-        hole: .6,
-        marker: {
-            colors: ['#58a6ff', '#f85149']
-        },
-        textinfo: 'none'
-    }];
-
-    const layout = {
-        showlegend: false,
-        margin: { t: 0, b: 0, l: 0, r: 0 },
-        paper_bgcolor: 'transparent',
-        plot_bgcolor: 'transparent',
-        height: 180
-    };
-
-    if (!allocationChart) {
-        Plotly.newPlot('allocation-chart', data, layout, { displayModeBar: false });
-        allocationChart = true;
-    } else {
-        Plotly.react('allocation-chart', data, layout, { displayModeBar: false });
-    }
-}
-
-// --- VERİ LABORATUVARI YÖNETİMİ ---
-
-let statusRefreshInterval = null;
-window.isDownloading = false;
-
-async function checkHistoryStatus() {
-    const symbol = document.getElementById('selected-symbol-val').innerText;
-    const timeframe = document.getElementById('download-timeframe').value;
-    const view = document.getElementById('history-status-view');
-
-    if (!symbol || symbol === '-- SEÇİNİZ --') return;
-
+function renderDashboard(metrics) {
     try {
-        const res = await fetch(`/api/v1/data/history-status?symbol=${encodeURIComponent(symbol)}&timeframe=${timeframe}`);
-        const data = await res.json();
+        console.log('[DEBUG] renderDashboard - metrics:', metrics);
 
-        // Aktif görevleri alalım
-        const tasksRes = await fetch('/api/v1/data/active-downloads');
-        const tasks = await tasksRes.json();
-        const isActive = symbol in tasks;
-        const taskObj = tasks[symbol];
-
-        const pContainer = document.getElementById('progress-container');
-        const pBar = document.getElementById('progress-bar');
-        const pText = document.getElementById('progress-text');
-        const startBtn = document.getElementById('start-download-btn');
-        const stopBtn = document.getElementById('stop-download-btn');
-
-        // Buton ve İlerleme Görünümü Yönetimi (Veri durumundan bağımsız)
-        let percent = "0";
-        if (isActive) {
-            if (startBtn) startBtn.style.display = 'none';
-            if (stopBtn) stopBtn.style.display = 'block';
-
-            if (data.status !== 'no_data') {
-                const safeEndDate = data.end_date.replace(' ', 'T'); // Safari/Cross-browser fix
-                const endTs = new Date(safeEndDate).getTime();
-                const nowTs = new Date().getTime();
-                const taskStartTs = Math.min(taskObj.target_start_ms, taskObj.since);
-                const totalExpected = Math.max(1, nowTs - taskStartTs);
-                const currentProgress = Math.max(0, endTs - taskStartTs);
-                percent = Math.max(0, Math.min(100, (currentProgress / totalExpected) * 100)).toFixed(1);
-            }
-
-            if (pContainer) pContainer.style.display = 'block';
-            if (pText) {
-                pText.style.display = 'block';
-                pText.innerText = `[${symbol}] Senkronize Ediliyor: %${percent} ${taskObj.status === 'paused' ? '(DURAKLATILDI)' : ''}`;
-            }
-            if (pBar) {
-                pBar.style.width = percent + '%';
-                pBar.style.background = taskObj.status === 'paused' ? '#f1c40f' : 'var(--neon-blue)';
-            }
-
-        } else if (Object.keys(tasks).length > 0) {
-            // Başka bir şey inerken bu pariteye bakıyoruz
-            const activeSymbol = Object.keys(tasks)[0];
-            if (startBtn) startBtn.style.display = 'block';
-            if (stopBtn) stopBtn.style.display = 'none';
-
-            if (pContainer) pContainer.style.display = 'block';
-            if (pText) {
-                pText.style.display = 'block';
-                pText.innerText = `⚠️ Şu an ${activeSymbol} (ve ${Object.keys(tasks).length - 1} diğer) indiriliyor... (İzleniyor: ${symbol})`;
-            }
-            if (pBar) pBar.style.width = '100%';
-        } else {
-            if (startBtn) startBtn.style.display = 'block';
-            if (stopBtn) stopBtn.style.display = 'none';
-            if (pContainer) pContainer.style.display = 'none';
-            if (pText) pText.style.display = 'none';
+        if (!metrics) {
+            console.warn('⚠️ Metrics verisi boş');
+            return;
         }
 
-        if (data.status === 'no_data') {
-            view.innerHTML = `
-                <div style="text-align:center; padding:40px; color:var(--text-muted);">
-                    <div style="font-size:2rem; margin-bottom:10px;">📉</div>
-                    <div style="font-weight:700; color:var(--text-main); margin-bottom:5px; font-size:1.2rem;">${symbol}</div>
-                    <p>Veritabanında bu parite için henüz hiçbir kayıt bulunamadı.</p>
-                </div>`;
-        } else {
-            // Tarih ve saat parçalarını ayıran yardımcı fonksiyon
-            const formatDateTime = (dtStr) => {
-                if (!dtStr) return '--';
-                const parts = dtStr.split(' ');
-                return `<span style="font-size:1.1rem; font-weight:700; color:var(--text-main);">${parts[0]}</span> <span style="font-size:0.8rem; color:var(--text-muted); margin-left:5px;">${parts[1]}</span>`;
-            };
+        // Update portfolio cards
+        updatePortfolioCards(metrics.portfolio);
 
-            const formattedStart = formatDateTime(data.start_date);
-            const formattedEnd = formatDateTime(data.end_date);
+        // Update decision grid
+        updateDecisionGrid(metrics.latest_decisions);
 
-            view.innerHTML = `
-                ${isActive ? `
-                <div id="history-loader" style="position:absolute; top:10px; right:12px; display:flex; align-items:center; gap:8px;">
-                    <div class="pulse-dot" style="width:8px; height:8px; background:${taskObj.status === 'paused' ? '#f1c40f' : 'var(--neon-green)'}"></div>
-                    <span style="font-size:0.75rem; color:${taskObj.status === 'paused' ? '#f1c40f' : 'var(--neon-green)'}; font-weight:600; letter-spacing:0.5px;">${taskObj.status === 'paused' ? 'DURAKLATILDI' : 'ŞU AN İNDİRİLİYOR...'}</span>
-                </div>` : ''}
-                
-                <div style="text-align:left; background:rgba(255,255,255,0.02); padding:20px; border-radius:12px; border: 1px solid rgba(255,255,255,0.05);">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:12px;">
-                        <div>
-                            <div style="font-size:1.1rem; font-weight:800; color:var(--neon-blue);">${symbol}</div>
-                            <div style="font-size:0.65rem; color:var(--text-muted); letter-spacing:1px; margin-top:2px;">VERİTABANI DURUMU</div>
-                        </div>
-                        <span style="font-size:0.65rem; padding:4px 10px; border-radius:15px; background:rgba(0,0,0,0.3); color:var(--text-muted); border:1px solid rgba(255,255,255,0.1)">
-                            ${isActive ? `AKTİF: %${percent}` : 'İZLEME MODU'}
+        // Update positions table
+        updatePositionsTable(metrics.positions);
+    } catch (error) {
+        console.error('❌ renderDashboard hatası:', error);
+        console.error('Stack trace:', error.stack);
+    }
+}
+
+function updatePortfolioCards(portfolio) {
+    try {
+        console.log('[DEBUG] updatePortfolioCards - portfolio:', portfolio);
+
+        if (!portfolio) {
+            console.warn('⚠️ Portfolio verisi boş');
+            return;
+        }
+
+        const elements = {
+            'balance-val': portfolio.balance,
+            'free-margin-val': portfolio.free_margin,
+            'used-margin-val': portfolio.used_margin,
+            'total-pnl-val': portfolio.total_pnl,
+        };
+
+        Object.entries(elements).forEach(([id, value]) => {
+            const el = document.getElementById(id);
+            if (el) {
+                if (value !== undefined && value !== null) {
+                    el.textContent = `$${value.toFixed(2)}`;
+                    el.classList.toggle('success-text', value >= 0);
+                    el.classList.toggle('danger-text', value < 0);
+                    console.log(`[INFO] ${id} güncellendi: $${value.toFixed(2)}`);
+                } else {
+                    console.warn(`⚠️ ${id} için değer yok`);
+                }
+            } else {
+                console.error(`❌ Element bulunamadı: ${id}`);
+            }
+        });
+    } catch (error) {
+        console.error('❌ updatePortfolioCards hatası:', error);
+        console.error('Stack trace:', error.stack);
+    }
+}
+
+function updateDecisionGrid(decisions) {
+    try {
+        const container = document.getElementById('decision-grid');
+        if (!container) {
+            console.error('❌ decision-grid elementi bulunamadı!');
+            return;
+        }
+
+        if (!decisions || Object.keys(decisions).length === 0) {
+            container.innerHTML = '<p style="grid-column:span 4; text-align:center; padding:20px;">Henüz karar yok</p>';
+            return;
+        }
+
+        container.innerHTML = Object.entries(decisions).map(([symbol, dec]) => {
+            const signalColors = { 2: '#2ea043', 0: '#f85149', 1: '#8b949e' };
+            const signalTexts = { 2: '🟢 AL', 0: '🔴 SAT', 1: '⚪ BEKLE' };
+
+            return `
+                <div class="decision-card-multi">
+                    <div class="decision-header">
+                        <strong>${symbol}</strong>
+                        <span style="color: ${signalColors[dec.signal_val] || '#8b949e'}">
+                            ${signalTexts[dec.signal_val] || '⚪ BEKLE'}
                         </span>
                     </div>
-
-                    <div style="display:flex; flex-direction:column; gap:20px; position:relative; padding-left:18px; border-left:2px solid rgba(188, 140, 255, 0.2);">
-                        <div style="position:relative;">
-                            <div style="position:absolute; left:-24px; top:5px; width:10px; height:10px; border-radius:50%; background:var(--neon-blue); box-shadow:0 0 10px var(--neon-blue);"></div>
-                            <div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px; font-weight:600;">Başlangıç Noktası (DB)</div>
-                            <div>${formattedStart}</div>
-                        </div>
-
-                        <div style="position:relative;">
-                            <div style="position:absolute; left:-24px; top:5px; width:10px; height:10px; border-radius:50%; background:var(--neon-green); box-shadow:0 0 12px var(--neon-green); ${window.isDownloading ? 'animation: pulse 1s infinite;' : ''}"></div>
-                            <div style="font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px; font-weight:600;">Güncel Uç Nokta</div>
-                            <div>${formattedEnd}</div>
-                        </div>
+                    <div class="decision-body">
+                        <div>🤖 ${dec.bot_name || 'Unknown'}</div>
+                        <div>📊 RSI: ${dec.rsi || 0}</div>
+                        <div>📈 ML: ${dec.ml_recommendation || 'HOLD'} (${dec.ml_confidence || 0}%)</div>
                     </div>
-
-                    <div style="margin-top:20px; font-size:0.75rem; color:var(--text-muted); background:rgba(0,0,0,0.22); padding:12px; border-radius:8px; font-style:italic; border:1px solid rgba(255,255,255,0.03);">
-                        ${window.isDownloading ?
-                    '🚀 Veriler Binance üzerinden çekilerek yerel veritabanına işleniyor. Panel 5 saniyede bir otomatik güncellenir.' :
-                    '✨ Bu sembol için seçili tarih aralığı yerel veritabanında kullanıma hazır durumdadır.'}
-                    </div>
-                </div>`;
-        }
-    } catch (e) {
-        console.error("Geçmiş Sorgu Hatası:", e);
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('❌ updateDecisionGrid hatası:', error);
+        console.error('Stack trace:', error.stack);
     }
 }
 
-async function startDownload() {
-    const symbol = document.getElementById('selected-symbol-val').innerText;
-    const timeframe = document.getElementById('download-timeframe').value;
-    const startDate = document.getElementById('download-start-date').value;
-    const btn = document.getElementById('start-download-btn');
-    const originalText = btn.innerText;
-
-    if (!symbol || symbol === '-- SEÇİNİZ --') {
-        alert("Lütfen önce listeden bir sembol seçin.");
-        return;
-    }
-
-    // Artık çoklu indirme destekleniyor!
-    // Sadece AYNI sembol için mükerrer kontrolü backend'de yapılıyor.
-
+function updatePositionsTable(positions) {
     try {
-        btn.disabled = true;
-        btn.innerText = '⚙️ Görev Başlatıldı...';
-        window.isDownloading = true;
-        window.activeDownloadSymbol = symbol;
-
-        const type = document.getElementById('selected-symbol-val').dataset.type || 'future';
-
-        const res = await fetch('/api/v1/data/download-history', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                symbol: symbol,
-                timeframe: timeframe,
-                start_date: startDate,
-                market_type: type
-            })
-        });
-        const result = await res.json();
-
-        if (result.status === 'exists') {
-            const confirmed = confirm(`⚠️ ${symbol} için zaten mevcut bir kayıt var.\nDurumu: ${result.task.status.toUpperCase()}\n\nEski kaydı TAMAMEN SİLİP yeni tarihle (${startDate}) baştan başlamak istiyor musunuz? \n\n(Not: İndirmeye devam etmek istiyorsanız aşağıdan "Yeniden Başlat" butonuna basınız.)`);
-            if (confirmed) {
-                // Önce eskiyi temizle
-                await fetch('/api/v1/data/delete-task', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ symbol: symbol, with_data: true })
-                });
-                // Sonra yeni kaydı tetikle
-                return startDownload();
-            } else {
-                btn.disabled = false;
-                btn.innerText = originalText;
-                return;
-            }
+        const tbody = document.getElementById('positions-body');
+        if (!tbody) {
+            console.error('❌ positions-body elementi bulunamadı!');
+            return;
         }
 
-        if (result.status === 'started') {
-            updateActiveTasks(); // Listeyi anında tazele
-            checkHistoryStatus(); // Butonları ve görünümü anında güncelle
-            // Eğer daha önce durdurulmuş bir durumu varsa hafızada, temizle
-            if (statusRefreshInterval) clearInterval(statusRefreshInterval);
-            statusRefreshInterval = setInterval(checkHistoryStatus, 5000);
-
-            setTimeout(() => {
-                btn.disabled = false;
-                btn.innerText = originalText;
-            }, 2000);
+        if (!positions || positions.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px;">Açık pozisyon yok</td></tr>';
+            return;
         }
-    } catch (e) {
-        console.error("İndirme Başlatma Hatası:", e);
-        alert("İndirme görevi başlatılamadı.");
-        btn.disabled = false;
-        btn.innerText = originalText;
-        window.isDownloading = false;
+
+        tbody.innerHTML = positions.map(pos => `
+            <tr>
+                <td>${pos.symbol || 'Unknown'}</td>
+                <td><span class="badge ${pos.direction === 'LONG' ? 'success' : 'danger'}">${pos.direction || 'UNKNOWN'}</span></td>
+                <td>$${(pos.entry_price || 0).toFixed(2)}</td>
+                <td>$${(pos.current_price || 0).toFixed(2)}</td>
+                <td class="${(pos.unrealized_usd || 0) >= 0 ? 'success-text' : 'danger-text'}">
+                    $${(pos.unrealized_usd || 0).toFixed(2)}
+                </td>
+                <td>${pos.leverage || 1}x</td>
+                <td>
+                    <button class="btn btn-sm btn-danger" onclick="closePosition('${pos.symbol || ''}')">
+                        Kapat
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('❌ updatePositionsTable hatası:', error);
+        console.error('Stack trace:', error.stack);
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    setupTabs();
-    initChart();
-    fetchBotData();
-    setInterval(fetchBotData, 5000);
-
-    // Aktif görevleri takip et
-    updateActiveTasks();
-    setInterval(updateActiveTasks, 3000);
-});
-async function stopDownload(symbolToStopArg = null) {
-    const symbolToStop = symbolToStopArg || window.activeDownloadSymbol || document.getElementById('selected-symbol-val').innerText;
-    const btn = symbolToStopArg ? null : document.getElementById('stop-download-btn');
-
+function renderStrategyLibrary(strategies) {
     try {
-        if (btn) {
-            btn.innerText = `🛑 ${symbolToStop} Durduruluyor...`;
-            btn.disabled = true;
+        const container = document.getElementById('strategy-library-container');
+        if (!container) {
+            console.error('❌ strategy-library-container elementi bulunamadı!');
+            return;
         }
 
-        const res = await fetch('/api/v1/data/stop-download', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ symbol: symbolToStop })
-        });
-        const result = await res.json();
+        console.log('[DEBUG] renderStrategyLibrary - strategies:', strategies?.length);
 
-        if (result.status === 'success') {
-            if (symbolToStop === window.activeDownloadSymbol) {
-                window.isDownloading = false;
-                window.activeDownloadSymbol = null;
-            }
-            updateActiveTasks(); // Listeyi hemen güncelle
-
-            if (btn) {
-                setTimeout(() => {
-                    checkHistoryStatus();
-                    btn.disabled = false;
-                    btn.innerText = '🛑 İndirmeyi Durdur';
-                }, 1000);
-            }
-        } else {
-            alert(result.message);
+        if (!strategies || strategies.length === 0) {
+            container.innerHTML = '<p style="text-align:center; padding:20px; color:var(--text-muted);">📭 Strateji bulunamadı</p>';
+            return;
         }
-    } catch (e) {
-        console.error("Durdurma Hatası:", e);
-        if (btn) btn.disabled = false;
+
+        container.innerHTML = strategies.map(s => {
+            if (!s) return '';
+            return `
+                <div class="strategy-card">
+                    <h4>${s.name || 'Bilinmeyen'}</h4>
+                    <p>${s.description || ''}</p>
+                    <div class="strategy-type">${s.type === 'builtin' ? '📦 Built-in' : '🔧 Custom'}</div>
+                </div>
+            `;
+        }).filter(Boolean).join('');
+    } catch (error) {
+        console.error('❌ renderStrategyLibrary hatası:', error);
+        console.error('Stack trace:', error.stack);
     }
 }
 
-async function togglePause(symbol) {
+function renderTradeHistory(trades) {
     try {
-        const res = await fetch('/api/v1/data/toggle-pause', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ symbol: symbol })
-        });
-        const result = await res.json();
-        if (result.status === 'success') {
-            updateActiveTasks();
+        const tbody = document.getElementById('history-body');
+        if (!tbody) {
+            console.error('❌ history-body elementi bulunamadı!');
+            return;
         }
-    } catch (e) {
-        console.error("Pause Hatası:", e);
+
+        if (!trades || trades.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px;">İşlem geçmişi yok</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = trades.slice(0, 50).map(trade => `
+            <tr>
+                <td>${new Date(trade.closed_at).toLocaleDateString()}</td>
+                <td>${trade.symbol || 'Unknown'}</td>
+                <td><span class="badge ${trade.direction === 'LONG' ? 'success' : 'danger'}">${trade.direction || 'UNKNOWN'}</span></td>
+                <td class="${(trade.pnl_usd || 0) >= 0 ? 'success-text' : 'danger-text'}">$${(trade.pnl_usd || 0).toFixed(2)}</td>
+                <td>${(trade.pnl_percent || 0).toFixed(2)}%</td>
+                <td>${trade.reason || 'Manual'}</td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('❌ renderTradeHistory hatası:', error);
+        console.error('Stack trace:', error.stack);
     }
+}
+
+// ============================================================================
+// AUTO REFRESH
+// ============================================================================
+
+function startAutoRefresh() {
+    // Dashboard metrics - every 3 seconds
+    refreshIntervals.dashboard = setInterval(loadDashboardMetrics, 3000);
+
+    // Bots - every 5 seconds
+    refreshIntervals.bots = setInterval(() => botManager.loadBots(), 5000);
+
+    // Active downloads - every 2 seconds
+    refreshIntervals.data = setInterval(updateActiveTasks, 2000);
+
+    // Data symbols (for dropdown) - every 5 seconds
+    // YORUMA ALINDI: Veri Laboratuvarı sayfasında sembol seçimi otomatik yenilenmesin
+    // refreshIntervals.dataSymbols = setInterval(loadDataSymbols, 5000);
+
+    console.log('[INFO] Auto-refresh başlatıldı');
+}
+
+function stopAutoRefresh() {
+    Object.values(refreshIntervals).forEach(interval => {
+        if (interval) clearInterval(interval);
+    });
+    console.log('[INFO] Auto-refresh durduruldu');
 }
 
 async function updateActiveTasks() {
-    const list = document.getElementById('active-tasks-list');
-    const countDisplay = document.getElementById('active-tasks-count');
-    if (!list) return;
-
     try {
-        const res = await fetch('/api/v1/data/active-downloads');
-        const tasks = await res.json();
-        const symbols = Object.keys(tasks);
-        countDisplay.innerText = `${symbols.length} Görev / Geçmiş`;
+        console.log('[DEBUG] updateActiveTasks - API çağrısı yapılıyor...');
 
-        if (symbols.length === 0) {
-            list.innerHTML = `<p style="text-align:center; padding:20px; color:var(--text-muted); font-style:italic;">Şu an kayıtlı bir görev geçmişi bulunmuyor.</p>`;
-            window.isDownloading = false;
-            return;
-        }
+        // Tüm indirmeleri çek (aktif + tamamlanan)
+        // getAllDownloadTasks endpoint'i kullanılıyor
+        const data = await api.getAllDownloadTasks();
 
-        let html = `
-            <table style="width:100%; border-collapse: collapse; font-size:0.75rem; color:var(--text-main);">
-                <thead>
-                    <tr style="text-align:left; color:var(--text-muted); border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <th style="padding:10px;">Sembol</th>
-                        <th style="padding:10px;">Aralık / İlerleme</th>
-                        <th style="padding:10px;">Durum</th>
-                        <th style="padding:10px; text-align:right;">İşlem</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
+        console.log('[DEBUG] updateActiveTasks - API response:', data);
 
-        symbols.forEach(s => {
-            const t = tasks[s];
-            const now = new Date().getTime();
-            const startPoint = (t.target_start_ms && t.target_start_ms > 0) ? Math.min(t.target_start_ms, (t.since || t.target_start_ms)) : (t.since || now);
-            const total = Math.max(1, now - startPoint);
-            const progress = Math.max(0, (t.current_ts || t.since || startPoint) - startPoint);
-            let percent = ((progress / total) * 100);
-            if (isNaN(percent)) percent = 0;
-            percent = Math.max(0, Math.min(100, percent)).toFixed(1);
+        // Backend response format: {status: 'success', downloads: {...}, active_count: N, total_count: N}
+        const downloads = data.downloads || data.data || {};
+        const activeCount = data.active_count || Object.keys(downloads).length;
+        const totalCount = data.total_count || activeCount;
 
-            const formatTs = (ts) => (ts && ts > 100000) ? new Date(ts).toLocaleDateString() + ' ' + new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--';
-            const isStarted = t.current_ts && t.current_ts > 0;
-            const dateRange = `<b>Başlangıç:</b> ${t.start_date || formatTs(t.target_start_ms)} <br> <b>Son Veri:</b> ${isStarted ? formatTs(t.current_ts) : '<span style="color:#f39c12">Veri İ bekleniyor...</span>'}`;
+        store.setState('downloads', { active: downloads, total: totalCount });
 
-            let statusColor = 'var(--neon-green)';
-            if (t.status === 'paused') statusColor = '#f1c40f';
-            if (t.status === 'stopped' || t.status === 'error' || t.status === 'completed') statusColor = t.status === 'completed' ? '#2ecc71' : '#e74c3c';
+        const list = document.getElementById('active-tasks-list');
+        const countDisplay = document.getElementById('active-tasks-count');
 
-            html += `
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); background:rgba(255,255,255,0.01);">
-                    <td style="padding:10px; font-weight:700;">
-                        <span style="color:${statusColor}">●</span> ${s}<br>
-                        <span style="font-size:0.6rem; color:var(--text-muted);">${t.timeframe} | ${t.market_type.toUpperCase()}</span>
-                    </td>
-                    <td style="padding:10px;">
-                        <div style="margin-bottom:5px; font-size:0.65rem; color:var(--text-muted); line-height:1.4;">${dateRange}</div>
-                        <div style="background:rgba(0,0,0,0.3); height:4px; border-radius:2px; overflow:hidden;">
-                            <div style="width:${percent}%; height:100%; background:${statusColor};" title="%${percent}"></div>
-                        </div>
-                    </td>
-                    <td style="padding:10px;">
-                        <span style="color:${statusColor}; font-weight:700; font-size:0.6rem; letter-spacing:0.5px;">${t.status.toUpperCase()}</span>
-                    </td>
-                    <td style="padding:10px; text-align:right;">
-                        <div style="display:flex; gap:5px; justify-content:flex-end;">
-                            ${(t.status === 'stopped' || t.status === 'completed' || t.status === 'error') ? `
-                                <button onclick="resumeDownload('${s}', '${t.timeframe}', '${t.start_date}', '${t.market_type}')" 
-                                        class="btn-select" style="padding:3px 8px; font-size:0.6rem; background:rgba(88, 166, 255, 0.1); color:var(--neon-blue); border:1px solid var(--neon-blue)33;">
-                                    ${t.status === 'completed' ? '🔄 Güncelle' : '🔄 Devam Et'}
-                                </button>
-                                <button onclick="removeTaskPermanently('${s}')" class="btn-select" style="padding:3px 8px; font-size:0.6rem; background:rgba(255, 77, 77, 0.05); color:#ff4d4d;">
-                                    🗑️ Sil
-                                </button>
-                            ` : `
-                                <button onclick="togglePause('${s}')" class="btn-select" style="padding:3px 8px; font-size:0.6rem;">
-                                    ${t.status === 'paused' ? '▶️' : '⏸️'}
-                                </button>
-                                <button onclick="stopDownload('${s}')" class="btn-select" title="Durdur" style="padding:3px 8px; font-size:0.6rem; background:rgba(255, 77, 77, 0.1); color:#ff4d4d; border:1px solid #ff4d4d33;">
-                                    🛑 Durdur
-                                </button>
-                                <button onclick="removeTaskPermanently('${s}')" class="btn-select" title="Vazgeç ve Sil" style="padding:3px 8px; font-size:0.6rem; background:rgba(255, 255, 255, 0.05);">
-                                    ❌ Vazgeç
-                                </button>
-                            `}
-                        </div>
-                    </td>
-                </tr>
-            `;
-        });
+        if (list && countDisplay) {
+            // Object.keys ile downloads'ı iterate et
+            const symbols = Object.keys(downloads);
 
-        html += '</tbody></table>';
-        list.innerHTML = html;
-        window.isDownloading = symbols.some(s => tasks[s].status === 'running');
+            console.log(`[INFO] ${symbols.length} aktif/tamamlanmış indirme bulundu`);
+            countDisplay.textContent = `${activeCount} Aktif / ${totalCount} Toplam Görev`;
 
-    } catch (e) {
-        console.error("Görev Listesi Güncelleme Hatası:", e);
-    }
-}
-
-async function resumeDownload(symbol, timeframe, startDate, marketType) {
-    try {
-        const res = await fetch('/api/v1/data/resume-download', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ symbol: symbol })
-        });
-        const result = await res.json();
-        if (result.status === 'success') {
-            updateActiveTasks();
-            checkHistoryStatus();
-        } else {
-            console.error("Resume Hatası:", result.message);
-        }
-    } catch (e) {
-        console.error("Resume Bağlantı Hatası:", e);
-    }
-}
-
-async function removeTaskPermanently(symbol) {
-    const withData = confirm(`🗑️ ${symbol} görev kaydını silmek üzeresiniz.\n\nAYNI ZAMANDA indirilmiş tüm grafikleri (klines) de veritabanından temizlemek ister misiniz? \n\n(Tamam = Her şeyi sil, İptal = Sadece görevi listeden kaldır)`);
-
-    try {
-        const res = await fetch('/api/v1/data/delete-task', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                symbol: symbol,
-                with_data: withData
-            })
-        });
-        const result = await res.json();
-        if (result.status === 'success') {
-            console.log(result.message);
-            updateActiveTasks(); // Listeyi hemen güncelle
-        } else {
-            alert(result.message);
-        }
-    } catch (e) {
-        console.error("Kalıcı Silme Hatası:", e);
-    }
-}
-
-let globalChartInstance = null;
-
-async function runMLVisualAnalysis() {
-    const symbolField = document.getElementById('ml-analysis-symbol');
-    const stratField = document.getElementById('ml-analysis-strategy');
-    const tfField = document.getElementById('ml-analysis-timeframe');
-    const container = document.getElementById('ml-analysis-chart');
-    const importanceContainer = document.getElementById('feature-importance-chart');
-
-    if (!container || !importanceContainer || !symbolField || !stratField || !tfField) return;
-
-    container.innerHTML = '<div class="loader-container" style="text-align:center; padding-top:100px; color:var(--neon-blue);"><span class="pulse-dot"></span> Simülasyon Motoru Hazırlanıyor...</div>';
-    importanceContainer.innerHTML = '<div style="text-align:center; padding-top:100px; font-size:0.8rem;">İndikatörler Hesaplanıyor...</div>';
-
-    const symbolValue = symbolField.value;
-    const strategyId = stratField.value;
-    const tfValue = tfField.value;
-
-    const marketTypeField = document.getElementById('ml-analysis-market-type');
-    const marginTypeField = document.getElementById('ml-analysis-margin-type');
-    const marketType = marketTypeField ? marketTypeField.value : 'swap';
-    const marginType = marginTypeField ? marginTypeField.value : 'isolated';
-
-    if (!symbolValue) return;
-
-    try {
-        const encodedSymbol = encodeURIComponent(symbolValue);
-
-        // ⚠️ DİKKAT: ML analizi için strateji başlatmıyoruz!
-        // Sadece görselleştirme yapıyoruz, gerçek strateji değişikliği yapmıyoruz.
-        // Eğer kullanıcı strateji değiştirmek isterse "Sistem Ayarları" sayfasını kullanmalı.
-
-        const res = await fetch(`/api/v1/ml/visual-analysis?symbol=${encodedSymbol}&strategy_id=${strategyId}&timeframe=${tfValue}&limit=300`);
-        const data = await res.json();
-
-        if (data.status === 'error') {
-            container.innerHTML = `<div style="color:var(--neon-error); text-align:center; padding-top:100px;">${data.message}</div>`;
-            return;
-        }
-
-        const candles = data.candles || [];
-        const mlPredictions = data.ml_predictions || [];
-        const stratSignals = data.strategy_signals || [];
-        const importance = data.feature_importance || {};
-
-        if (candles.length === 0) {
-            container.innerHTML = `<div style="color:var(--text-muted); text-align:center; padding-top:100px;">Bu parite için henüz veri yok.</div>`;
-            return;
-        }
-
-        // Temizle ve Eski Grafiği Yok Et (LWC Bellek Yönetimi)
-        if (globalChartInstance) {
-            try { globalChartInstance.remove(); } catch (err) { }
-            globalChartInstance = null;
-        }
-        container.innerHTML = '';
-        importanceContainer.innerHTML = '';
-
-        if (typeof LightweightCharts === 'undefined') {
-            container.innerHTML = `
-                <div style="color:var(--neon-error); text-align:center; padding-top:100px;">
-                    <p>Hata: Grafik motoru (lightweight-charts.js) yüklenemedi.</p>
-                    <p style="font-size:0.75rem; color:var(--text-muted); margin-top:10px;">Lütfen sayfayı yenileyiniz veya dosyanın varlığını kontrol ediniz.</p>
-                </div>`;
-            return;
-        }
-        if (!candles || candles.length === 0) {
-            container.innerHTML = `<div style="color:var(--neon-error); text-align:center; padding-top:100px;">Hata: Mum verisi bulunamadı.</div>`;
-            return;
-        }
-
-        // Fiyat büyüklüğüne göre Dinamik Ondalık (Decimal) Hassasiyeti belirle
-        let precision = 2;
-        const samplePrice = candles[candleIdxCheck = candles.length > 0 ? 0 : 0].close;
-        if (samplePrice < 0.0001) precision = 8;
-        else if (samplePrice < 0.01) precision = 6;
-        else if (samplePrice < 1) precision = 5;
-        else if (samplePrice < 100) precision = 4;
-
-        const formatPrice = (p) => p.toFixed(precision);
-
-        // 1. TRADINGVIEW LIGHTWEIGHT CHART BAŞLATMA
-        const chart = LightweightCharts.createChart(container, {
-            layout: { background: { color: 'transparent' }, textColor: '#d1d4dc' },
-            grid: {
-                vertLines: { color: 'rgba(42, 46, 57, 0.5)' },
-                horzLines: { color: 'rgba(42, 46, 57, 0.5)' },
-            },
-            rightPriceScale: { borderColor: 'rgba(197, 203, 206, 0.1)', autoScale: true },
-            timeScale: { borderColor: 'rgba(197, 203, 206, 0.1)', timeVisible: true, secondsVisible: false },
-            crosshair: { mode: 0 },
-            localization: {
-                priceFormatter: price => formatPrice(price)
-            }
-        });
-        globalChartInstance = chart;
-
-        // Mum Çubukları Serisini Ekle (Versiyon Uyumluluk Modu)
-        let candleSeries = null;
-        try {
-            if (typeof chart.addCandlestickSeries === 'function') {
-                candleSeries = chart.addCandlestickSeries({
-                    upColor: '#00ff88', downColor: '#ff3366', borderVisible: false,
-                    wickUpColor: '#00ff88', wickDownColor: '#ff3366',
-                });
+            if (symbols.length === 0) {
+                list.innerHTML = '<p style="text-align:center; color:var(--text-muted); padding:20px;">📭 Aktif veya tamamlanmış indirme yok</p>';
             } else {
-                candleSeries = chart.addSeries(LightweightCharts.SeriesType.Candlestick, {
-                    upColor: '#00ff88', downColor: '#ff3366', borderVisible: false,
-                    wickUpColor: '#00ff88', wickDownColor: '#ff3366',
-                });
+                // Object.entries ile hem key hem value al
+                list.innerHTML = Object.entries(downloads).map(([symbolKey, task]) => {
+                    const progress = task.progress || 100; // Tamamlananlar için %100
+                    const status = task.status || 'completed';
+                    const statusClass = status === 'running' ? 'status-running' :
+                                       status === 'completed' ? 'status-completed' :
+                                       status === 'paused' ? 'status-paused' : 'status-stopped';
+
+                    // Sembol ve market type'ı ayır
+                    let symbolName = symbolKey;
+                    let marketType = task.market_type || 'future';
+                    
+                    // symbol_key formatından temizle (BTC/USDT_future → BTC/USDT + future)
+                    if (symbolKey.includes('_future') || symbolKey.includes('_spot')) {
+                        const parts = symbolKey.split('_');
+                        marketType = parts[parts.length - 1]; // future veya spot
+                        symbolName = parts.slice(0, -1).join('_'); // Geri kalan sembol
+                    }
+                    
+                    // Market type'ı okunabilir yap
+                    const marketTypeDisplay = marketType === 'future' ? '💹 Vadeli' : 
+                                             marketType === 'spot' ? '💰 Spot' : marketType;
+                    
+                    // Status'u Türkçeleştir ve emoji ekle
+                    const statusDisplay = status === 'running' ? '🔄 İndiriliyor' :
+                                         status === 'completed' ? '✅ Tamamlandı' :
+                                         status === 'paused' ? '⏸️ Duraklatıldı' : '⏹️ Durduruldu';
+
+                    // Başlangıç tarihini hesapla
+                    let startDate = task.start_date || '...';
+                    let lastCandleDate = 'Hesaplanıyor...';
+                    
+                    if (task.target_start_ms && !startDate) {
+                        startDate = new Date(task.target_start_ms).toLocaleDateString('tr-TR');
+                    }
+                    
+                    // SON MUM TARİHİNİ HESAPLA
+                    if (task.current_ts) {
+                        lastCandleDate = new Date(task.current_ts).toLocaleString('tr-TR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                    } else if (task.progress >= 100 || status === 'completed') {
+                        lastCandleDate = '✅ Tamamlandı';
+                    }
+
+                    // İlerleme durumu
+                    const progressText = status === 'running' ? `%${Math.round(progress)} tamamlandı` : 'Tamamlandı';
+                    const progressColor = status === 'running' ? 'var(--neon-blue)' :
+                                         status === 'completed' ? 'var(--neon-green)' :
+                                         status === 'paused' ? 'var(--neon-yellow)' : 'var(--neon-red)';
+                    
+                    // Silme butonu - sadece completed/stopped/paused için
+                    let showDeleteButton = status !== 'running';
+                    
+                    // ÖZEL: Geçersiz sembolleri her zaman silinebilir göster
+                    const isInvalidSymbol = symbolKey.includes('-- SEÇİNİZ --') || 
+                                           symbolKey.includes('SEÇİNİZ') ||
+                                           symbolKey === '_future' ||
+                                           symbolKey === '_spot';
+                    if (isInvalidSymbol) {
+                        showDeleteButton = true; // Her zaman silinebilir
+                        console.warn(`⚠️ Geçersiz sembol tespit edildi: ${symbolKey}`);
+                    }
+                    
+                    // task.market_type yoksa, symbol'den çıkar (BTC/USDT:USDT_future gibi)
+                    if (!task.market_type) {
+                        // symbol_market_type formatından çıkar
+                        const parts = symbolKey.split('_');
+                        marketType = parts.length > 1 ? parts[parts.length - 1] : 'future';
+                    }
+                    const deleteButton = showDeleteButton ? `
+                        <button onclick="deleteDownloadTask('${symbolKey}', '${marketType}')" 
+                                style="background:rgba(255,25,25,0.2); color:#ff4d4d; border:1px solid #ff4d4d33; 
+                                       padding:4px 8px; border-radius:4px; cursor:pointer; font-size:0.65rem;"
+                                title="Görevi sil">
+                            🗑️ Sil
+                        </button>
+                    ` : '';
+
+                    return `
+                        <div class="task-item" style="padding:12px; margin:8px 0; background:rgba(255,255,255,0.02); border-radius:8px; border-left:3px solid ${progressColor};">
+                            <div style="display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:center; margin-bottom:8px;">
+                                <div>
+                                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                                        <span style="font-weight:700; font-size:0.95rem; color:var(--text-main);">${symbolName}</span>
+                                        <span class="task-status ${statusClass}" style="font-size:0.7rem; padding:2px 6px; border-radius:4px;">${marketTypeDisplay}</span>
+                                    </div>
+                                    <div style="font-size:0.7rem; color:var(--text-muted); display:flex; gap:12px; margin-top:4px;">
+                                        <span>📅 Başlangıç: ${startDate}</span>
+                                        <span style="color:var(--neon-blue);">→ Son Mum: ${lastCandleDate}</span>
+                                    </div>
+                                </div>
+                                <div style="text-align:right;">
+                                    <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">${statusDisplay}</div>
+                                    ${deleteButton}
+                                </div>
+                            </div>
+                            <div class="task-progress" style="margin:8px 0;">
+                                <div style="height:6px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden;">
+                                    <div class="progress-bar" style="width: ${progress}%; height:100%; background:${progressColor}; transition: width 0.3s;"></div>
+                                </div>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.75rem; color:var(--text-muted);">
+                                <span>
+                                    ${status === 'completed' ? '✅ Tamamlandı' : `📊 İlerleme: %${Math.round(progress)}`}
+                                </span>
+                                ${status !== 'completed' && task.speed ? `
+                                    <span style="font-size:0.7rem; color:var(--neon-blue);">
+                                        ⚡ ${Math.round(task.speed)} mum/sn
+                                    </span>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
             }
-        } catch (e) {
-            console.error("Grafik serisi oluşturulamadı:", e);
-            throw new Error("Grafik motoru başlatılamadı. Kütüphane uyumsuz veya bozuk.");
-        }
-
-        // Veriyi TV formatına çevir ve sırala/temizle
-        let tvCandles = candles.map(c => ({
-            time: Math.floor(c.timestamp / 1000),
-            open: parseFloat(c.open),
-            high: parseFloat(c.high),
-            low: parseFloat(c.low),
-            close: parseFloat(c.close)
-        }));
-
-        // Kronolojik sıralama ve benzersizlik kontrolü (LWC şartı)
-        tvCandles.sort((a, b) => a.time - b.time);
-        tvCandles = tvCandles.filter((v, i, a) => i === 0 || v.time > a[i - 1].time);
-
-        candleSeries.setData(tvCandles);
-
-        // Markerları hazırla (Hiyerarşik Gösterim Modeli)
-        const markers = [];
-
-        // 1. ML Tahminleri (Sadece Nokta - Arka Plan Bilgisi)
-        mlPredictions.forEach(p => {
-            if (p.choice === 2) {
-                markers.push({ time: Math.floor(p.timestamp / 1000), position: 'belowBar', color: 'rgba(0, 255, 136, 0.4)', shape: 'circle', text: '' });
-            } else if (p.choice === 0) {
-                markers.push({ time: Math.floor(p.timestamp / 1000), position: 'aboveBar', color: 'rgba(255, 51, 102, 0.4)', shape: 'circle', text: '' });
-            }
-        });
-
-        // 2. Teknik Strateji Sinyalleri (Sadece Nokta - Arka Plan Bilgisi)
-        stratSignals.forEach(s => {
-            if (s.signal === 2) {
-                markers.push({
-                    time: Math.floor(s.timestamp / 1000),
-                    position: 'belowBar',
-                    color: '#bc8cff',
-                    shape: 'circle',
-                    text: 'STRAT:AL'  // ← Etiket eklendi
-                });
-            } else if (s.signal === 0) {
-                markers.push({
-                    time: Math.floor(s.timestamp / 1000),
-                    position: 'aboveBar',
-                    color: '#ffcc00',
-                    shape: 'circle',
-                    text: 'STRAT:SAT'  // ← Etiket eklendi
-                });
-            }
-        });
-
-        // 3. GERÇEK AL-SAT SİMÜLASYONU (NET İŞLEMLER - Odak Noktası)
-        const actualTrades = data.actual_trades || [];
-        actualTrades.forEach(t => {
-            if (t.action === "LONG_ENTER") {
-                markers.push({
-                    time: Math.floor(t.timestamp / 1000), position: 'belowBar', color: '#00FA9A', shape: 'arrowUp', size: 2, text: 'İŞLEM: AL'
-                });
-            } else if (t.action === "SHORT_ENTER") {
-                markers.push({
-                    time: Math.floor(t.timestamp / 1000), position: 'aboveBar', color: '#FF4500', shape: 'arrowDown', size: 2, text: 'İŞLEM: SAT'
-                });
-            } else if (t.action === "LONG_EXIT" || t.action === "SHORT_EXIT") {
-                markers.push({
-                    time: Math.floor(t.timestamp / 1000), position: 'aboveBar', color: '#FFFFFF', shape: 'square', text: 'KAPANIŞ'
-                });
-            }
-        });
-
-        // Markerları filtretle (Hatalı zaman damgalarını ayıkla)
-        const validMarkers = markers.filter(m => !isNaN(m.time) && m.time > 0);
-        validMarkers.sort((a, b) => a.time - b.time);
-        candleSeries.setMarkers(validMarkers);
-
-        // Responsive boyutlandırma
-        const resizeObserver = new ResizeObserver(entries => {
-            if (entries.length === 0 || !entries[0].contentRect || !globalChartInstance) return;
-            const { width, height } = entries[0].contentRect;
-            try { globalChartInstance.applyOptions({ width, height }); } catch (err) { }
-        });
-        resizeObserver.observe(container);
-
-        // Tooltip (Popup) Mantığı
-        const tooltip = document.getElementById('chart-tooltip');
-        if (globalChartInstance && tooltip) {
-            globalChartInstance.subscribeCrosshairMove(param => {
-                if (
-                    param.point === undefined ||
-                    !param.time ||
-                    param.point.x < 0 ||
-                    param.point.x > container.clientWidth ||
-                    param.point.y < 0 ||
-                    param.point.y > container.clientHeight
-                ) {
-                    tooltip.style.display = 'none';
-                    return;
-                }
-
-                const candleData = param.seriesData.get(candleSeries);
-                if (!candleData) {
-                    tooltip.style.display = 'none';
-                    return;
-                }
-
-                // O zamana denk gelen arka plan sinyallerini bul
-                const currentMarkers = validMarkers.filter(m => m.time === param.time);
-
-                let tooltipContent = `<div style="font-weight:bold; margin-bottom:5px; border-bottom:1px solid rgba(255,255,255,0.2); padding-bottom:3px; color:#a0a5ba;">Fiyat Analizi</div>`;
-                tooltipContent += `<div style="line-height:1.4;">
-                    Açılış: <span style="color:#d1d4dc">${formatPrice(candleData.open)}</span><br>
-                    Yüksek: <span style="color:#d1d4dc">${formatPrice(candleData.high)}</span><br>
-                    Düşük: <span style="color:#d1d4dc">${formatPrice(candleData.low)}</span><br>
-                    Kapanış: <span style="font-weight:bold; color:${candleData.close >= candleData.open ? '#00FA9A' : '#FF4500'}">${formatPrice(candleData.close)}</span>
-                </div>`;
-
-                if (currentMarkers.length > 0) {
-                    tooltipContent += `<div style="font-weight:bold; margin-top:8px; margin-bottom:5px; border-bottom:1px solid rgba(255,255,255,0.2); padding-bottom:3px; color:#a0a5ba;">Arka Plan Sinyalleri</div>`;
-                    currentMarkers.forEach(m => {
-                        let text = m.text || '';
-                        let displayColor = m.color;
-                        if (!text) {
-                            if (m.color === 'rgba(0, 255, 136, 0.4)') { text = '🤖 ML: AL Önerisi'; displayColor = '#00ff88'; }
-                            else if (m.color === 'rgba(255, 51, 102, 0.4)') { text = '🤖 ML: SAT Önerisi'; displayColor = '#ff3366'; }
-                            else if (m.color === '#bc8cff') { text = '📐 Strateji: AL Sinyali'; }
-                            else if (m.color === '#ffcc00') { text = '📐 Strateji: SAT Sinyali'; }
-                        }
-                        tooltipContent += `<div style="color:${displayColor}; font-weight:500; margin-top:2px;">${text}</div>`;
-                    });
-                }
-
-                tooltip.innerHTML = tooltipContent;
-                tooltip.style.display = 'block';
-
-                // Tooltip'in ekrandan taşmasını engelle
-                let x = param.point.x + 15;
-                const y = param.point.y;
-
-                // Sağ kenara yaklaştıysa sola al
-                if (x > container.clientWidth - 150) {
-                    x = param.point.x - 160;
-                }
-
-                tooltip.style.left = x + 'px';
-                tooltip.style.top = y + 'px';
-            });
-        }
-
-        // 2. FEATURE IMPORTANCE CHART
-        if (importance && Object.keys(importance).length > 0) {
-            const keys = Object.keys(importance).sort((a, b) => importance[a] - importance[b]);
-            const vals = keys.map(k => importance[k]);
-
-            const traceImportance = {
-                x: vals,
-                y: keys,
-                type: 'bar',
-                orientation: 'h',
-                marker: {
-                    color: 'rgba(88, 166, 255, 0.5)',
-                    line: { color: 'var(--neon-blue)', width: 1 }
-                }
-            };
-
-            const layoutImportance = {
-                paper_bgcolor: 'transparent',
-                plot_bgcolor: 'transparent',
-                font: { color: '#fff', size: 9, family: 'Inter' },
-                margin: { t: 5, b: 20, l: 110, r: 10 },
-                xaxis: { gridcolor: 'rgba(255,255,255,0.05)', tickformat: '.0%' },
-                yaxis: { gridcolor: 'transparent' }
-            };
-
-            try {
-                Plotly.newPlot('feature-importance-chart', [traceImportance], layoutImportance, { responsive: true, displayModeBar: false });
-            } catch (err) {
-                console.error("Plotly Error:", err);
-            }
-        } else {
-            importanceContainer.innerHTML = '<div style="text-align:center; padding-top:100px; font-size:0.8rem; color:var(--text-muted);">Model ağırlık verisi bulunamadı.</div>';
-        }
-
-    } catch (e) {
-        console.error("ML Visual Analysis Error Details:", e);
-        if (container) {
-            container.innerHTML = `
-                <div style="color:var(--neon-error); text-align:center; padding-top:80px;">
-                    <p>Analiz yüklenirken hata oluştu.</p>
-                    <p style="font-size:0.75rem; color:var(--text-muted); margin-top:10px;">Detay: ${e.message}</p>
-                    <button class="btn" onclick="runMLVisualAnalysis()" style="margin-top:15px; font-size:0.7rem;">Yeniden Dene</button>
-                </div>
-            `;
-        }
-    }
-}
-
-window.runMLVisualAnalysis = runMLVisualAnalysis;
-
-async function fetchAnalysableSymbols() {
-    const select = document.getElementById('ml-analysis-symbol');
-    if (!select) return;
-
-    try {
-        const res = await fetch('/api/v1/data/symbols-with-data');
-        const data = await res.json();
-
-        select.innerHTML = '';
-        if (data.symbols && data.symbols.length > 0) {
-            data.symbols.forEach(sym => {
-                const opt = document.createElement('option');
-                opt.value = sym;
-                opt.innerText = sym;
-                select.appendChild(opt);
-            });
-        } else {
-            select.innerHTML = '<option value="">Cihazda Veri Yok</option>';
-        }
-    } catch (e) {
-        console.error("Analiz Sembolleri Yüklenemedi:", e);
-    }
-}
-
-// Global'e bağla
-window.runMLVisualAnalysis = runMLVisualAnalysis;
-window.fetchAnalysableSymbols = fetchAnalysableSymbols;
-
-// ============================================
-// 1-to-N (ÇOKLU BOT) MİMARİSİ FONKSİYONLARI
-// ============================================
-
-async function startBot(symbol, strategy_id, timeframe, market_type = 'future', margin_type = 'isolated') {
-    /**
-     * Yeni bir bot başlatır. Aynı sembolde birden fazla bot çalışabilir.
-     */
-    try {
-        const response = await fetch('/api/v1/bot/start', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                symbol: symbol,
-                strategy_id: strategy_id,
-                timeframe: timeframe,
-                market_type: market_type,
-                margin_type: margin_type
-            })
-        });
-
-        const result = await response.json();
-
-        if (result.status === 'success') {
-            console.log(`✅ Bot başlatıldı: ${result.bot_id}`);
-            showErrorToast(`🤖 Bot başlatıldı: ${result.bot_id}`, 3000);
-            loadActiveBots(); // Bot listesini güncelle
-            return result.bot_id;
-        } else {
-            console.error(`❌ Bot başlatma hatası: ${result.message}`);
-            showErrorToast(`❌ ${result.message}`, 5000);
-            return null;
         }
     } catch (error) {
-        console.error('Bot başlatma hatası:', error);
-        showErrorToast(`❌ Bot başlatılamadı: ${error.message}`, 5000);
-        return null;
+        console.error('❌ Active tasks update error:', error);
+        console.error('Stack trace:', error.stack);
+        const list = document.getElementById('active-tasks-list');
+        if (list) {
+            list.innerHTML = '<p style="text-align:center; color:var(--danger-text);">❌ Görevler yüklenemedi</p>';
+        }
     }
 }
 
-async function stopBot(bot_id) {
-    /**
-     * Belirli bir botu durdurur.
-     */
-    if (!confirm(`Botu DURDURMAK istediğinize emin misiniz?\n\nBot ID: ${bot_id}\n\nBot durdurulduğunda pozisyonlar kapanmaz, sadece yeni işlem açmaz.`)) {
+// ============================================================================
+// GLOBAL FUNCTIONS (for HTML onclick)
+// ============================================================================
+
+function setupGlobalFunctions() {
+    // Make functions available globally for onclick handlers
+    window.selectMarket = selectMarket;
+    window.toggleMarketSymbol = toggleMarketSymbol;
+    window.saveMarketSelection = saveMarketSelection;
+    window.startDownload = startDownload;
+    window.stopDownload = stopDownload;
+    window.deleteDownloadTask = deleteDownloadTask;  // YENİ: Görev silme
+    window.closePosition = closePosition;
+    window.startMLTraining = startMLTraining;
+    window.runMLVisualAnalysis = runMLVisualAnalysis;
+
+    // YENİ: Risk ve API yönetimi
+    window.saveRiskSettings = saveRiskSettings;
+    window.testApiKeys = testApiKeys;
+    window.saveApiKeys = saveApiKeys;
+
+    // YENİ: Gelişmiş ayarlar (WFO, ML, HTF)
+    window.saveAdvancedSettings = saveAdvancedSettings;
+    window.loadAdvancedSettings = loadAdvancedSettings;
+
+    // Data symbols refresh (for manual refresh button)
+    window.loadDataSymbols = loadDataSymbols;
+    window.loadDropdownData = loadDropdownData;  // Dropdown'lara veri yükle
+    window.handleBotSubmit = handleBotSubmit;  // Bot form submit handler
+
+    // Bot manager functions are already exposed
+    window.botManager = botManager;
+}
+
+/**
+ * Bot form submit handler
+ */
+async function handleBotSubmit(event) {
+    event.preventDefault();
+
+    // Form değerlerini al
+    const symbol = document.getElementById('bot-symbol').value;
+    const strategy = document.getElementById('bot-strategy').value;
+    const timeframe = document.getElementById('bot-timeframe').value;
+    const market = document.getElementById('bot-market').value;
+
+    console.log('[INFO] Bot başlatılıyor:', {symbol, strategy, timeframe, market});
+
+    // VALIDASYON: Sembol ve strateji seçilmiş mi?
+    if (!symbol || symbol === '') {
+        showToast('⚠️ Lütfen geçerli bir sembol seçin', 'error');
+        document.getElementById('bot-symbol').focus();
         return;
     }
 
-    try {
-        const response = await fetch('/api/v1/bot/stop', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bot_id: bot_id, action: 'stop' })
-        });
-
-        const result = await response.json();
-
-        if (result.status === 'success') {
-            console.log(`🛑 Bot durduruldu: ${bot_id}`);
-            showErrorToast(`🛑 Bot durduruldu: ${bot_id}`, 3000);
-            loadActiveBots(); // Bot listesini güncelle
-        } else {
-            console.error(`❌ Bot durdurma hatası: ${result.message}`);
-            showErrorToast(`❌ ${result.message}`, 5000);
-        }
-    } catch (error) {
-        console.error('Bot durdurma hatası:', error);
-        showErrorToast(`❌ Bot durdurulamadı: ${error.message}`, 5000);
-    }
-}
-
-async function resumeBot(bot_id) {
-    /**
-     * Durdurulmuş botu devam ettirir.
-     */
-    try {
-        const response = await fetch('/api/v1/bot/resume', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bot_id: bot_id, action: 'resume' })
-        });
-
-        const result = await response.json();
-
-        if (result.status === 'success') {
-            console.log(`▶️ Bot devam ettirildi: ${bot_id}`);
-            showErrorToast(`▶️ Bot devam ettirildi: ${bot_id}`, 3000);
-            loadActiveBots(); // Bot listesini güncelle
-        } else {
-            console.error(`❌ Bot devam ettirme hatası: ${result.message}`);
-            showErrorToast(`❌ ${result.message}`, 5000);
-        }
-    } catch (error) {
-        console.error('Bot devam ettirme hatası:', error);
-        showErrorToast(`❌ Bot devam ettirilemedi: ${error.message}`, 5000);
-    }
-}
-
-async function loadActiveBots() {
-    /**
-     * Tüm aktif botları yükler ve tabloda gösterir.
-     */
-    console.log('🔄 [DEBUG] loadActiveBots() çağrıldı...');
-
-    try {
-        console.log('📡 [DEBUG] /api/v1/bots/list API çağrısı...');
-        const response = await fetch('/api/v1/bots/list');
-        const data = await response.json();
-
-        console.log('📊 [DEBUG] API Response:', data);
-
-        const container = document.getElementById('active-bots-container');
-        if (!container) {
-            console.error('❌ [DEBUG] active-bots-container bulunamadı!');
-            return;
-        }
-
-        if (!data.bots || data.bots.length === 0) {
-            console.log('⚠️ [DEBUG] Aktif bot yok');
-            container.innerHTML = '<p style="text-align: center; padding: 40px; color: var(--text-muted);">Aktif bot yok. Yukarıdan yeni bot başlatabilirsiniz.</p>';
-            return;
-        }
-
-        console.log(`✅ [DEBUG] ${data.bots.length} bot yüklendi`);
-
-        // İlk bot'u logla
-        if (data.bots.length > 0) {
-            console.log('🤖 [DEBUG] İlk bot:', data.bots[0]);
-        }
-
-        // Bot kartlarını oluştur
-        const botCards = data.bots.map(bot => {
-            console.log('🎨 [DEBUG] Bot kartı oluşturuluyor:', bot.bot_id || bot.symbol);
-
-            // Backend ile aynı bot_id formatını kullan
-            const botId = bot.bot_id || `${bot.symbol.replace('/', '_').replace(':', '_')}_${bot.market_type || 'future'}_${bot.strategy_id}_${bot.timeframe}`;
-            const isRunning = bot.status === 'running';
-
-            return `
-            <div class="card glass-panel" style="margin-bottom:15px; background: rgba(88, 166, 255, 0.05); border: 2px solid var(--neon-blue);">
-                <div style="display:flex; justify-content:space-between; align-items:start;">
-                    <div style="flex:1;">
-                        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
-                            <h3 style="color:var(--neon-blue); margin:0;">
-                                🤖 ${bot.strategy_id}
-                            </h3>
-                            <span style="padding:4px 10px; border-radius:12px; font-size:0.7rem; font-weight:bold; background: ${isRunning ? 'rgba(46, 220, 135, 0.2)' : 'rgba(255, 69, 0, 0.2)'}; color: ${isRunning ? 'var(--neon-green)' : 'var(--neon-red)'};">
-                                ${isRunning ? '● ÇALIŞIYOR' : '● DURDURULDU'}
-                            </span>
-                        </div>
-                        <div style="font-size:0.85rem; color:var(--text-muted);">
-                            <div><strong>Sembol:</strong> ${bot.symbol}</div>
-                            <div><strong>Timeframe:</strong> ${bot.timeframe}</div>
-                            <div><strong>Market:</strong> ${bot.market_type || 'future'}</div>
-                            <div><strong>Bot ID:</strong> <code style="font-size:0.75rem;">${botId}</code></div>
-                            <div><strong>Başlangıç:</strong> ${new Date(bot.started_at).toLocaleString()}</div>
-                        </div>
-                    </div>
-                    <div style="text-align:right;">
-                        <div style="font-size:1.5rem; font-weight:bold; color:${(bot.state?.realized_pnl || 0) >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'};">
-                            $${(bot.state?.realized_pnl || 0).toFixed(2)}
-                        </div>
-                        <div style="font-size:0.75rem; color:var(--text-muted);">
-                            PnL (${bot.positions_count || 0} pozisyon)
-                        </div>
-                        <div style="display:flex; gap:8px; margin-top:10px;">
-                            ${isRunning ? `
-                            <button class="btn btn-danger"
-                                    onclick="stopBot('${botId}')"
-                                    style="padding:8px 15px; font-size:0.75rem;">
-                                🛑 Durdur
-                            </button>
-                            ` : `
-                            <button class="btn btn-success"
-                                    onclick="resumeBot('${botId}')"
-                                    style="padding:8px 15px; font-size:0.75rem;">
-                                ▶️ Devam Et
-                            </button>
-                            `}
-                            <button class="btn"
-                                    onclick="removeBot('${botId}')"
-                                    style="padding:8px 15px; font-size:0.75rem; background:rgba(255,255,255,0.05);">
-                                🗑️ Kaldır
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            `;
-        });
-
-        console.log('📦 [DEBUG] Bot kartları oluşturuldu, HTML uzunluğu:', botCards.join('').length);
-        container.innerHTML = botCards.join('');
-        console.log('✅ [DEBUG] Bot kartları render edildi');
-
-        // Container'ın görünür olduğunu kontrol et
-        console.log('👁️ [DEBUG] Container display:', window.getComputedStyle(container).display);
-        console.log('👁️ [DEBUG] Container visibility:', window.getComputedStyle(container).visibility);
-
-    } catch (error) {
-        console.error('Aktif botlar yüklenemedi:', error);
-    }
-}
-
-// Global'e ekle
-window.startBot = startBot;
-window.stopBot = stopBot;
-window.resumeBot = resumeBot;
-window.removeBot = removeBot;
-window.loadActiveBots = loadActiveBots;
-window.handleStartBot = handleStartBot;
-
-// ============================================
-// EVENT DELEGATION - Bot Başlatma Formu
-// ============================================
-document.addEventListener('submit', async function(e) {
-    // Bot başlatma formu submit event'i yakala
-    console.log('🔍 [DEBUG] Submit event:', e.target.id, e.target.tagName);
-
-    if (e.target && e.target.id === 'bot-start-form') {
-        e.preventDefault();
-        console.log('✅ [DEBUG] Bot başlatma formu submit edildi');
-
-        try {
-            // Form verilerini topla
-            const symbol = document.getElementById('bot-symbol')?.value;
-            const strategy = document.getElementById('bot-strategy')?.value;
-            const timeframe = document.getElementById('bot-timeframe')?.value;
-            const market = document.getElementById('bot-market')?.value;
-
-            console.log('📊 [DEBUG] Form verileri:', { symbol, strategy, timeframe, market });
-
-            if (!symbol || !strategy || !timeframe) {
-                showErrorToast('❌ Lütfen tüm alanları doldurun!', 3000);
-                return;
-            }
-
-            console.log('🚀 [DEBUG] startBot() çağrılıyor...');
-
-            // Bot başlat
-            const result = await startBot(symbol, strategy, timeframe, market);
-
-            console.log('✅ [DEBUG] Bot başlatıldı:', result);
-
-            // Bot listesini güncelle
-            if (result) {
-                console.log('🔄 [DEBUG] loadActiveBots() çağrılıyor...');
-                await loadActiveBots();
-            }
-
-            // Formu sıfırla
-            e.target.reset();
-
-        } catch (error) {
-            console.error('❌ [DEBUG] Form submit hatası:', error);
-            showErrorToast('❌ Bot başlatılamadı: ' + error.message, 5000);
-        }
-    }
-});
-
-async function removeBot(bot_id) {
-    /**
-     * Botu listeden kaldırır (durdurulmuş botlar için).
-     */
-    if (!confirm(`Botu LİSTEDEN KALDIRMAK istediğinize emin misiniz?\n\nBot ID: ${bot_id}\n\nBu işlem botu tamamen kaldıracak.`)) {
-        return;
-    }
-
-    try {
-        const response = await fetch('/api/v1/bot/remove', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bot_id: bot_id })
-        });
-
-        const result = await response.json();
-
-        if (result.status === 'success') {
-            console.log(`🗑️ Bot kaldırıldı: ${bot_id}`);
-            showErrorToast(`🗑️ Bot kaldırıldı: ${bot_id}`, 3000);
-            loadActiveBots(); // Bot listesini güncelle
-        } else {
-            console.error(`❌ Bot kaldırma hatası: ${result.message}`);
-            showErrorToast(`❌ ${result.message}`, 5000);
-        }
-    } catch (error) {
-        console.error('Bot kaldırma hatası:', error);
-        showErrorToast(`❌ Bot kaldırılamadı: ${error.message}`, 5000);
-    }
-}
-
-async function loadBotFormOptions() {
-    /**
-     * Bot başlatma formu için dinamik seçenekleri yükler.
-     * OPTGROUP ile builtin ve custom stratejileri grupla.
-     */
-    try {
-        console.log('🔄 [DEBUG] loadBotFormOptions() çağrıldı...');
-
-        // DOM elemanlarını kontrol et
-        const symbolSelect = document.getElementById('bot-symbol');
-        const strategySelect = document.getElementById('bot-strategy');
-
-        console.log('🔍 [DEBUG] DOM Elemanları:', {
-            'bot-symbol': symbolSelect ? '✅ Var' : '❌ YOK',
-            'bot-strategy': strategySelect ? '✅ Var' : '❌ YOK'
-        });
-
-        if (!symbolSelect || !strategySelect) {
-            console.warn('⚠️ [DEBUG] Form elemanları bulunamadı, bekleniyor...');
-            return;
-        }
-
-        // 1. Sembolleri yükle (DB'de verisi olanlar)
-        console.log('📡 [DEBUG] Semboller API çağrısı...');
-        const symbolsRes = await fetch('/api/v1/data/symbols-with-data');
-        const symbolsData = await symbolsRes.json();
-
-        if (symbolSelect && symbolsData.symbols) {
-            symbolSelect.innerHTML = '';
-            symbolsData.symbols.forEach(symbol => {
-                const opt = document.createElement('option');
-                opt.value = symbol;
-                opt.textContent = symbol;
-                symbolSelect.appendChild(opt);
-            });
-            if (symbolsData.symbols.length === 0) {
-                symbolSelect.innerHTML = '<option value="">DB\'de veri yok</option>';
-            }
-            console.log(`✅ [DEBUG] ${symbolsData.symbols.length} sembol yüklendi`);
-        }
-
-        // 2. Stratejileri yükle (OPTGROUP ile grupla)
-        console.log('📡 [DEBUG] Stratejiler API çağrısı: /api/v1/strategies');
-
-        // Önce API'yi test et - DOĞRU ENDPOINT
-        try {
-            const testRes = await fetch('/api/v1/strategies');
-            const testData = await testRes.json();
-            console.log('🧪 [DEBUG] Test API Response:', testData);
-            console.log('🔍 [DEBUG] İlk strateji:', testData.strategies ? testData.strategies[0] : 'YOK');
-        } catch (testErr) {
-            console.error('❌ [DEBUG] Test API hatası:', testErr);
-        }
-
-        // DOĞRU ENDPOINT: /api/v1/strategies (strategy_builder.py/list DEĞİL!)
-        const strategiesRes = await fetch('/api/v1/strategies?t=' + Date.now()); // Cache bypass
-        const strategiesData = await strategiesRes.json();
-
-        console.log('📊 [DEBUG] API Response TAM:', JSON.stringify(strategiesData, null, 2));
-
-        if (strategySelect && strategiesData.strategies) {
-            strategySelect.innerHTML = '';
-
-            // Filtrele
-            const builtinStrategies = strategiesData.strategies.filter(s => s.type === 'builtin');
-            const customStrategies = strategiesData.strategies.filter(s => s.type === 'custom');
-
-            console.log(`📊 [DEBUG] Builtin: ${builtinStrategies.length}, Custom: ${customStrategies.length}`);
-
-            // OPTGROUP: Yerleşik Stratejiler (Builtin)
-            if (builtinStrategies.length > 0) {
-                const builtinGroup = document.createElement('optgroup');
-                builtinGroup.label = '🤖 Yerleşik Stratejiler';
-
-                builtinStrategies.forEach(strat => {
-                    const opt = document.createElement('option');
-                    opt.value = strat.id;
-                    opt.textContent = strat.name;
-                    builtinGroup.appendChild(opt);
-                });
-
-                strategySelect.appendChild(builtinGroup);
-                console.log(`✅ [DEBUG] ${builtinStrategies.length} builtin strateji eklendi`);
-            }
-
-            // OPTGROUP: Özel Stratejiler (Custom)
-            if (customStrategies.length > 0) {
-                const customGroup = document.createElement('optgroup');
-                customGroup.label = '🎨 Özel Stratejiler';
-
-                customStrategies.forEach(strat => {
-                    const opt = document.createElement('option');
-                    opt.value = strat.id;
-                    opt.textContent = strat.name + ' ⚡';
-                    customGroup.appendChild(opt);
-                });
-
-                strategySelect.appendChild(customGroup);
-                console.log(`✅ [DEBUG] ${customStrategies.length} custom strateji eklendi`);
-            }
-
-            const totalStrategies = builtinStrategies.length + customStrategies.length;
-            console.log(`✅ [DEBUG] Toplam ${totalStrategies} strateji yüklendi`);
-
-            if (totalStrategies === 0) {
-                strategySelect.innerHTML = '<option value="">Strateji yok</option>';
-            }
-        } else {
-            console.error('❌ [DEBUG] Strateji verisi yok:', strategiesData);
-        }
-
-    } catch (error) {
-        console.error('❌ [DEBUG] Bot form seçenekleri yüklenemedi:', error);
-        console.error('❌ [DEBUG] Stack:', error.stack);
-        showErrorToast('⚠️ Stratejiler yüklenemedi: ' + error.message, 5000);
-    }
-}
-
-function handleStartBot() {
-    /**
-     * Bot başlatma formunu işler.
-     */
-    const symbol = document.getElementById('bot-symbol')?.value;
-    const strategy = document.getElementById('bot-strategy')?.value;
-    const timeframe = document.getElementById('bot-timeframe')?.value;
-    const market = document.getElementById('bot-market')?.value;
-
-    if (!symbol || !strategy || !timeframe) {
-        showErrorToast('❌ Lütfen tüm alanları doldurun!', 3000);
+    if (!strategy || strategy === '') {
+        showToast('⚠️ Lütfen geçerli bir strateji seçin', 'error');
+        document.getElementById('bot-strategy').focus();
         return;
     }
 
     // Bot başlat
-    startBot(symbol, strategy, timeframe, market);
-}
-
-/**
- * Strateji uygula ve başlat
- */
-async function selectStrategy(symbol) {
-    const strategyId = document.getElementById(`strat-sel-${symbol.replace('/', '-')}`).value;
-    const timeframe = document.getElementById(`tf-sel-${symbol.replace('/', '-')}`).value;
-    const marketType = document.getElementById(`market-sel-${symbol.replace('/', '-')}`).value;
-    const marginType = document.getElementById(`margin-sel-${symbol.replace('/', '-')}`).value;
-
-    if (!strategyId) {
-        alert("Lütfen önce bir strateji seçin!");
-        return;
-    }
-
-    const btn = event.target;
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '⏳ Uygulanıyor...';
-    btn.disabled = true;
-
     try {
-        const res = await fetch('/api/v1/strategy/select', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                strategy_id: strategyId,
-                symbol: symbol,
-                timeframe: timeframe,
-                market_type: marketType,
-                margin_type: marginType
-            })
+        const result = await botManager.startBot({
+            symbol: symbol,
+            strategy_id: strategy,
+            timeframe: timeframe,
+            market_type: market
+            // margin_type kaldırıldı
         });
 
-        const result = await res.json();
-
-        if (result.status === 'success') {
-            btn.innerHTML = '✅ Uygulandı!';
-            btn.style.background = 'var(--neon-green)';
-
-            // Status güncelle
-            const statusEl = document.getElementById(`status-${symbol.replace('/', '-')}`);
-            if (statusEl) {
-                statusEl.innerHTML = '● Aktif';
-                statusEl.className = 'success-text';
-            }
-
-            setTimeout(() => {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-                btn.style.background = '';
-                fetchStrategies(); // Tabloyu yenile
-            }, 2000);
+        if (result.success) {
+            showToast('✅ ' + result.message, 'success');
+            // Formu temizle
+            document.getElementById('bot-start-form').reset();
+            // Bot listesini yenile
+            botManager.loadBots();
         } else {
-            alert("Hata: " + result.message);
-            btn.innerHTML = originalText;
-            btn.disabled = false;
+            showToast('❌ ' + result.message, 'error');
         }
-    } catch (e) {
-        alert("Bağlantı hatası: " + e.message);
-        btn.innerHTML = originalText;
-        btn.disabled = false;
+    } catch (error) {
+        console.error('Bot başlatma hatası:', error);
+        showToast('❌ Bot başlatılamadı: ' + error.message, 'error');
     }
 }
 
-/**
- * Stratejiyi durdur
- */
-async function stopStrategy(symbol) {
-    if (!confirm(`${symbol} için botu DURDURMAK istediğinize emin misiniz?\n\nBu işlem botu durdurur ama pozisyonları kapatmaz.`)) {
-        return;
-    }
-
-    const btn = event.target;
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '⏹ Durduruluyor...';
-    btn.disabled = true;
-
-    try {
-        // Şimdilik sadece stratejiyi sıfırlıyoruz
-        const res = await fetch('/api/v1/strategy/select', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                strategy_id: '', // Boş strateji = durdur
-                symbol: symbol,
-                timeframe: '1m',
-                market_type: 'swap',
-                margin_type: 'isolated'
-            })
-        });
-
-        const result = await res.json();
-
-        if (result.status === 'success') {
-            btn.innerHTML = '✅ Durduruldu';
-            btn.style.background = 'var(--neon-red)';
-
-            // Status güncelle
-            const statusEl = document.getElementById(`status-${symbol.replace('/', '-')}`);
-            if (statusEl) {
-                statusEl.innerHTML = '○ Durduruldu';
-                statusEl.className = 'text-muted';
-            }
-
-            setTimeout(() => {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-                btn.style.background = '';
-                fetchStrategies(); // Tabloyu yenile
-            }, 2000);
-        } else {
-            alert("Hata: " + result.message);
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-        }
-    } catch (e) {
-        alert("Bağlantı hatası: " + e.message);
-        btn.innerHTML = originalText;
-        btn.disabled = false;
-    }
-}
-
-/**
- * Stratejiyi yeniden başlat
- */
-async function restartStrategy(symbol) {
-    if (!confirm(`${symbol} için botu YENİDEN BAŞLATMAK istediğinize emin misiniz?\n\nMevcut ayarlarla bot yeniden başlatılacak.`)) {
-        return;
-    }
-
-    const btn = event.target;
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '🔄 Başlatılıyor...';
-    btn.disabled = true;
-
-    try {
-        // Mevcut ayarları al
-        const strategyId = document.getElementById(`strat-sel-${symbol.replace('/', '-')}`).value;
-        const timeframe = document.getElementById(`tf-sel-${symbol.replace('/', '-')}`).value;
-        const marketType = document.getElementById(`market-sel-${symbol.replace('/', '-')}`).value;
-        const marginType = document.getElementById(`margin-sel-${symbol.replace('/', '-')}`).value;
-
-        const res = await fetch('/api/v1/strategy/select', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                strategy_id: strategyId || 'trend_master', // Varsayılan
-                symbol: symbol,
-                timeframe: timeframe || '1m',
-                market_type: marketType || 'swap',
-                margin_type: marginType || 'isolated'
-            })
-        });
-
-        const result = await res.json();
-
-        if (result.status === 'success') {
-            btn.innerHTML = '✅ Başlatıldı';
-            btn.style.background = 'var(--neon-green)';
-
-            // Status güncelle
-            const statusEl = document.getElementById(`status-${symbol.replace('/', '-')}`);
-            if (statusEl) {
-                statusEl.innerHTML = '● Aktif';
-                statusEl.className = 'success-text';
-            }
-
-            setTimeout(() => {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-                btn.style.background = '';
-                fetchStrategies(); // Tabloyu yenile
-            }, 2000);
-        } else {
-            alert("Hata: " + result.message);
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-        }
-    } catch (e) {
-        alert("Bağlantı hatası: " + e.message);
-        btn.innerHTML = originalText;
-        btn.disabled = false;
-    }
-}
-
-// İlk yükleme
-setTimeout(() => {
-    fetchAnalysableSymbols().then(() => {
-        if (document.getElementById('ml-analysis-chart')) runMLVisualAnalysis();
-    });
-}, 1000);
-
-// --- STRATEJİ RAPORU YÜKLEME ---
-async function loadStrategyReport() {
-    const container = document.getElementById('strategy-report-container');
-    if (!container) return;
-
-    container.innerHTML = '<p style="text-align:center; padding: 40px; color:var(--text-muted); grid-column: span 100%;">🤖 Botların nöronları analiz ediliyor...</p>';
-
-    try {
-        const res = await fetch('/api/v1/strategy-report');
-        if (!res.ok) throw new Error("API Hatası");
-        const data = await res.json();
-
-        container.innerHTML = '';
-
-        if (!data.report || data.report.length === 0) {
-            container.innerHTML = '<p style="text-align:center; padding: 40px; color:var(--text-muted); grid-column: span 100%;">⚠️ Henüz raporlanacak kapanmış bir işlem kaydı yok. Simülasyon devam etmeli.</p>';
+function selectMarket(symbol, type) {
+    const display = document.getElementById('selected-symbol-val');
+    if (display) {
+        // ÖNLEME: Geçersiz sembolleri engelle
+        if (!symbol || symbol === '-- SEÇİNİZ --' || symbol === 'SEÇİNİZ' || symbol.trim() === '') {
+            showToast('⚠️ Lütfen geçerli bir sembol seçin', 'warning');
             return;
         }
-
-        data.report.forEach(strat => {
-            let symbolRows = '';
-            strat.symbols.forEach(sym => {
-                const pColor = sym.pnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
-                symbolRows += `
-                    <div style="display:flex; justify-content:space-between; margin-top:5px; font-size:0.85rem; border-bottom: 1px dashed rgba(255,255,255,0.05); padding-bottom:3px;">
-                        <span style="color:var(--text-muted);">${sym.name} <small>(${sym.trades} İşlem)</small></span>
-                        <span style="color:${pColor}; font-family:monospace;">${sym.pnl >= 0 ? '+' : ''}$${sym.pnl.toFixed(2)} (%${sym.win_rate})</span>
-                    </div>
-                `;
-            });
-
-            const cardBg = strat.total_pnl >= 0 ? "rgba(0, 255, 136, 0.02)" : "rgba(255, 51, 102, 0.02)";
-            const pnlColor = strat.total_pnl >= 0 ? "var(--neon-green)" : "var(--neon-red)";
-            const pnlSign = strat.total_pnl >= 0 ? "+" : "";
-
-            const cardHtml = `
-                <div class="card glass-panel" style="background: ${cardBg}; border: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column;">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <h3 style="color:var(--neon-blue); margin: 0; font-size: 1.1rem;">${strat.strategy}</h3>
-                        <span class="timeframe-tag" style="font-size: 0.75rem;">${strat.total_trades} Toplam İşlem</span>
-                    </div>
-                    
-                    <div style="margin: 20px 0; display:flex; gap:20px;">
-                        <div>
-                            <span style="display:block; font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;">Win Rate</span>
-                            <strong style="font-size:1.4rem; font-family:var(--font-mono); color:${strat.win_rate >= 50 ? 'var(--neon-green)' : 'var(--neon-red)'};">%${strat.win_rate}</strong>
-                        </div>
-                        <div>
-                            <span style="display:block; font-size:0.75rem; color:var(--text-muted); text-transform:uppercase;">Net Kâr/Zarar</span>
-                            <strong style="font-size:1.4rem; font-family:var(--font-mono); color:${pnlColor};">${pnlSign}$${strat.total_pnl.toFixed(2)}</strong>
-                        </div>
-                    </div>
-                    
-                    <div style="margin-bottom: 20px; flex-grow: 1;">
-                        <span style="display:block; font-size:0.75rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:10px;">📉 Sembol Kırılımı</span>
-                        ${symbolRows}
-                    </div>
-                    
-                    <div style="padding: 12px; background: rgba(0,0,0,0.3); border-radius: 8px; border-left: 3px solid ${strat.total_pnl > 0 ? 'var(--neon-green)' : 'var(--neon-blue)'};">
-                        <span style="display:block; font-size:0.7rem; color:var(--neon-blue); margin-bottom:5px; font-weight:bold;">🤖 YAPAY ZEKA ÖNERİSİ:</span>
-                        <p style="font-size: 0.8rem; color: #ddd; line-height:1.4; margin:0;">${strat.recommendation}</p>
-                    </div>
-                </div>
-            `;
-            container.insertAdjacentHTML('beforeend', cardHtml);
-        });
-
-    } catch (e) {
-        console.error("Rapor Yükleme Hatası:", e);
-        container.innerHTML = '<p style="text-align:center; padding: 40px; color:var(--neon-red); grid-column: span 100%;">Analiz sunucusuyla iletişim kurulamadı.</p>';
+        
+        display.innerText = symbol;
+        display.dataset.type = type;
+        display.style.color = 'var(--neon-green)';
+        checkHistoryStatus();
     }
 }
 
-window.loadStrategyReport = loadStrategyReport;
+function toggleMarketSymbol(symbol, checked) {
+    const state = store.getState();
+    const tracked = [...state.markets.tracked];
+    
+    if (checked) {
+        if (!tracked.includes(symbol)) tracked.push(symbol);
+    } else {
+        const index = tracked.indexOf(symbol);
+        if (index > -1) tracked.splice(index, 1);
+    }
+    
+    store.setState('markets', { tracked });
+}
 
-
-// ============================================
-// ML MODEL EĞİTİM FONKSİYONLARI
-// ============================================
-
-// Veri laboratuvarından indirilmiş coinleri ML training dropdown'una yükle
-async function loadMLTrainingSymbols() {
+async function saveMarketSelection() {
+    const state = store.getState();
     try {
-        const response = await fetch('/api/v1/data/symbols-with-data');
-        const data = await response.json();
-
-        const select = document.getElementById('ml-train-symbol');
-        if (!select || !data.symbols || data.symbols.length === 0) return;
-
-        // Dropdown'u tamamen temizle
-        select.innerHTML = '';
-
-        // Veri laboratuvarından gelen coinleri ekle (GERÇEK DB FORMATI)
-        // Örnek: BTC/USDT:USDT_future, BNB/USDT:USDT_future vb.
-        data.symbols.forEach(symbol => {
-            const option = document.createElement('option');
-            option.value = symbol;  // DB'deki TAM formatı kullan
-            option.textContent = symbol.replace('_future', '');  // Kullanıcıya _future'siz göster
-            select.appendChild(option);
-        });
-
-        // İlk sembol seçildiğinde DB kontrolü yap
-        if (select.value) {
-            setTimeout(() => checkDbMumCount(), 100);
-        }
-
+        await api.updateTrackedSymbols(state.markets.tracked);
+        showToast('✅ Market seçimi kaydedildi', 'success');
+        loadStrategies();
+        loadDashboardMetrics();
     } catch (error) {
-        console.error('ML Training sembolleri yüklenemedi:', error);
+        showToast('❌ Kaydetme hatası: ' + error.message, 'error');
+    }
+}
+
+async function checkHistoryStatus() {
+    const symbol = document.getElementById('selected-symbol-val')?.innerText;
+    const timeframe = document.getElementById('download-timeframe')?.value || '1m';
+
+    if (!symbol || symbol === '-- SEÇİNİZ --') {
+        const view = document.getElementById('history-status-view');
+        if (view) {
+            view.innerHTML = '<p>⚠️ Lütfen bir sembol seçin</p>';
+        }
+        return;
+    }
+
+    try {
+        const data = await api.getHistoryStatus(symbol, timeframe);
+        const view = document.getElementById('history-status-view');
+
+        if (view) {
+            if (data.status === 'success' && data.start_date && data.end_date) {
+                view.innerHTML = `
+                    <p>📊 <strong>Veri Bulundu:</strong></p>
+                    <p style="margin-top:5px;">
+                        <strong>Başlangıç:</strong> ${data.start_date}<br>
+                        <strong>Bitiş:</strong> ${data.end_date}
+                    </p>
+                `;
+            } else {
+                view.innerHTML = '<p>⚠️ Veritabanında bu sembol için veri yok. Lütfen aşağıdan indirin.</p>';
+            }
+        }
+    } catch (error) {
+        // Sessizce geç - gereksiz hata loglarını önle
+        console.debug('History status check (no data):', symbol);
+    }
+}
+
+async function startDownload() {
+    const symbol = document.getElementById('selected-symbol-val')?.innerText;
+    const timeframe = document.getElementById('download-timeframe')?.value || '1m';
+    const startDate = document.getElementById('download-start-date')?.value || '2024-01-01';
+    
+    if (!symbol) {
+        showToast('❌ Lütfen bir sembol seçin', 'error');
+        return;
+    }
+    
+    try {
+        const result = await api.startDownload(symbol, timeframe, startDate);
+        showToast(result.message, result.status === 'started' ? 'success' : 'info');
+    } catch (error) {
+        showToast('❌ İndirme hatası: ' + error.message, 'error');
+    }
+}
+
+async function stopDownload() {
+    const symbol = document.getElementById('selected-symbol-val')?.innerText;
+
+    if (!symbol) return;
+
+    try {
+        const result = await api.stopDownload(symbol);
+        showToast(result.message, result.status === 'success' ? 'success' : 'error');
+    } catch (error) {
+        showToast('❌ Durdurma hatası: ' + error.message, 'error');
+    }
+}
+
+async function deleteDownloadTask(symbol, marketType = 'future') {
+    if (!confirm(`${symbol} (${marketType}) için indirme görevi silinecek. Emin misiniz?`)) {
+        return;
+    }
+
+    try {
+        const result = await api.deleteDownloadTask(symbol, marketType);
+        
+        if (result.status === 'success') {
+            showToast(`✅ ${result.message}`, 'success');
+            // Listeyi hemen güncelle
+            await updateActiveTasks();
+        } else {
+            showToast(`❌ Silme hatası: ${result.message}`, 'error');
+        }
+    } catch (error) {
+        showToast('❌ Silme hatası: ' + error.message, 'error');
+    }
+}
+
+async function closePosition(symbol) {
+    if (!confirm(`${symbol} pozisyonu kapatılsın mı?`)) return;
+    
+    try {
+        await api.closePosition(symbol);
+        showToast('✅ Pozisyon kapatıldı', 'success');
+        loadDashboardMetrics();
+    } catch (error) {
+        showToast('❌ Kapatma hatası: ' + error.message, 'error');
     }
 }
 
 async function startMLTraining() {
-    const symbol = document.getElementById('ml-train-symbol').value;
-    const timeframe = document.getElementById('ml-train-timeframe').value;
-    const limit = document.getElementById('ml-train-limit').value;
-    const tp = document.getElementById('ml-train-tp').value;
-    const sl = document.getElementById('ml-train-sl').value;
-
-    // UI güncelle
-    const progressDiv = document.getElementById('ml-training-progress');
-    const progressBar = document.getElementById('ml-progress-bar');
-    const progressMsg = document.getElementById('ml-training-message');
-    const resultDiv = document.getElementById('ml-training-result');
-
-    progressDiv.style.display = 'block';
-    resultDiv.style.display = 'none';
-    progressBar.style.width = '0%';
-    progressMsg.textContent = 'Eğitim başlatılıyor...';
-
+    const symbol = document.getElementById('ml-training-symbol')?.value;
+    const timeframe = document.getElementById('ml-training-timeframe')?.value || '1h';
+    const limit = parseInt(document.getElementById('ml-training-limit')?.value) || 1000;
+    
+    if (!symbol) {
+        showToast('❌ Sembol seçin', 'error');
+        return;
+    }
+    
     try {
-        const response = await fetch('/api/v1/ml/train', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                symbol: symbol,
-                timeframe: timeframe,
-                limit: parseInt(limit),
-                tp_multiplier: parseFloat(tp),
-                sl_multiplier: parseFloat(sl),
-                time_horizon: 10,
-                train_ratio: 0.8
-            })
-        });
-
-        const data = await response.json();
-
-        if (data.status === 'error') {
-            showError(data.message);
-            return;
-        }
-
-        progressMsg.textContent = data.message;
-
-        // İlerlemeyi poll et (her 2 saniyede bir kontrol et)
-        const pollInterval = setInterval(async () => {
-            const statusRes = await fetch('/api/v1/ml/status');
-            const statusData = await statusRes.json();
-
-            if (statusData.training) {
-                const training = statusData.training;
-                progressBar.style.width = training.progress + '%';
-                progressMsg.textContent = training.message;
-
-                if (!training.is_training) {
-                    // Eğitim tamamlandı
-                    clearInterval(pollInterval);
-
-                    if (training.progress === 100) {
-                        // Başarılı
-                        resultDiv.style.display = 'block';
-                        resultDiv.style.background = 'rgba(0, 255, 136, 0.1)';
-                        resultDiv.style.border = '1px solid var(--neon-green)';
-                        resultDiv.innerHTML = `
-                            <h4 style="color: var(--neon-green); margin-bottom: 10px;">✅ Eğitim Başarılı!</h4>
-                            <p style="color: #fff;">Model kaydedildi: <strong>${training.model_path}</strong></p>
-                            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 10px;">
-                                Model artık PaperTrader tarafından kullanılıyor.
-                            </p>
-                        `;
-                        progressDiv.style.display = 'none';
-                    } else {
-                        // Hata
-                        showError(training.message);
-                        progressDiv.style.display = 'none';
-                    }
-                }
-            }
-        }, 2000);
-
+        store.setState('ml', { training: { isTraining: true, progress: 0, message: 'Başlatılıyor...' } });
+        
+        const result = await api.trainModel(symbol, timeframe, limit);
+        showToast(result.message, 'success');
+        
+        // Poll training status
+        pollTrainingStatus();
     } catch (error) {
-        showError('Eğitim başlatılamadı: ' + error.message);
-        progressDiv.style.display = 'none';
+        store.setState('ml', { training: { isTraining: false } });
+        showToast('❌ Eğitim hatası: ' + error.message, 'error');
     }
 }
 
-function showError(message) {
-    const resultDiv = document.getElementById('ml-training-result');
-    resultDiv.style.display = 'block';
-    resultDiv.style.background = 'rgba(255, 69, 0, 0.1)';
-    resultDiv.style.border = '1px solid var(--neon-red)';
-    resultDiv.innerHTML = `
-        <h4 style="color: var(--neon-red); margin-bottom: 10px;">❌ Eğitim Hatası</h4>
-        <p style="color: #fff;">${message}</p>
-    `;
-}
-
-// Global scope'a ekle
-window.startMLTraining = startMLTraining;
-
-
-// ============================================
-// EĞİTİM GEÇMİŞİ TABLOSU
-// ============================================
-
-async function loadTrainingHistory() {
-    const container = document.getElementById('training-history-table');
-    if (!container) return;
-
-    container.innerHTML = '<p style="text-align: center; padding: 40px; color: var(--text-muted);">Yükleniyor...</p>';
-
-    try {
-        const response = await fetch('/api/v1/ml/training-history');
-        const data = await response.json();
-
-        if (!data.history || data.history.length === 0) {
-            container.innerHTML = '<p style="text-align: center; padding: 40px; color: var(--text-muted);">Henüz eğitilmiş model yok. İlk modelinizi eğitin! 🚀</p>';
-            return;
-        }
-
-        // Tarihe göre sırala (en yeni önce)
-        const sortedHistory = data.history.sort((a, b) =>
-            new Date(b.trained_at) - new Date(a.trained_at)
-        );
-
-        let html = `
-            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
-                <thead>
-                    <tr style="border-bottom: 2px solid var(--neon-blue);">
-                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Sembol</th>
-                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Zaman Dilimi</th>
-                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Mum Sayısı</th>
-                        <th colspan="3" style="padding: 12px; text-align: center; color: var(--neon-blue);">Model Doğrulukları</th>
-                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Eğitim Zamanı</th>
-                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);">Durum</th>
-                    </tr>
-                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.75rem;">
-                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);"></th>
-                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);"></th>
-                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);"></th>
-                        <th style="padding: 12px; text-align: center; color: #26a69a;">📊 XGBoost</th>
-                        <th style="padding: 12px; text-align: center; color: #66bb6a;">🌲 RF</th>
-                        <th style="padding: 12px; text-align: center; color: var(--neon-blue);">🔗 Ensemble</th>
-                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);"></th>
-                        <th style="padding: 12px; text-align: left; color: var(--neon-blue);"></th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
-
-        sortedHistory.forEach((model, index) => {
-            const date = new Date(model.trained_at);
-            const dateStr = date.toLocaleString('tr-TR', {
-                day: '2-digit', month: '2-digit',
-                hour: '2-digit', minute: '2-digit'
+async function pollTrainingStatus() {
+    const poll = async () => {
+        const state = store.getState();
+        if (!state.ml.training.isTraining) return;
+        
+        try {
+            const status = await api.getMLStatus();
+            store.setState('ml', {
+                training: {
+                    isTraining: status.is_training,
+                    progress: status.progress,
+                    message: status.message,
+                }
             });
-
-            // Model doğrulukları
-            const xgb_acc = (model.metrics.xgb_accuracy * 100).toFixed(1);
-            const rf_acc = (model.metrics.rf_accuracy * 100).toFixed(1);
-            const ensemble_acc = (model.metrics.ensemble_accuracy * 100).toFixed(1);
-
-            // En yüksek doğruluğu vurgula
-            const bestModel = Math.max(xgb_acc, rf_acc, ensemble_acc);
-            let xgbColor = xgb_acc >= 60 ? '#26a69a' : 'var(--text-muted)'; if (xgb_acc == bestModel && ensemble_acc < xgb_acc) xgbColor = 'var(--neon-green)';
-            let rfColor = rf_acc >= 60 ? '#66bb6a' : 'var(--text-muted)'; if (rf_acc == bestModel && ensemble_acc < rf_acc) rfColor = 'var(--neon-green)';
-            const ensembleColor = ensemble_acc >= 60 ? 'var(--neon-blue)' : 'var(--text-muted)';
-
-            const rowColor = index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)';
-
-            html += `
-                <tr style="background: ${rowColor}; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <td style="padding: 12px; font-weight: bold; color: var(--neon-blue);">${model.symbol.replace('USDT', '/USDT')}</td>
-                    <td style="padding: 12px;">${model.timeframe}</td>
-                    <td style="padding: 12px;">${model.limit.toLocaleString()}</td>
-                    <td style="padding: 12px; text-align: center; color: ${xgbColor}; font-weight: ${xgb_acc == bestModel ? 'bold' : 'normal'};">%${xgb_acc}</td>
-                    <td style="padding: 12px; text-align: center; color: ${rfColor}; font-weight: ${rf_acc == bestModel ? 'bold' : 'normal'};">%${rf_acc}</td>
-                    <td style="padding: 12px; text-align: center; color: ${ensembleColor}; font-weight: bold;">%${ensemble_acc}</td>
-                    <td style="padding: 12px; color: var(--text-muted);">${dateStr}</td>
-                    <td style="padding: 12px;">
-                        <span style="display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; background: rgba(0, 255, 136, 0.1); border-radius: 4px; color: var(--neon-green); font-size: 0.75rem;">
-                            ✅ Hazır
-                        </span>
-                    </td>
-                </tr>
-            `;
-        });
-
-        html += '</tbody></table>';
-        container.innerHTML = html;
-
-    } catch (error) {
-        console.error('Eğitim geçmişi yüklenemedi:', error);
-        container.innerHTML = '<p style="text-align: center; padding: 40px; color: var(--neon-red);">Geçmiş yüklenemedi.</p>';
-    }
-}
-
-// Global scope'a ekle
-window.loadTrainingHistory = loadTrainingHistory;
-
-
-// ============================================
-// ML EĞİTİM - DİNAMİK MUM SAYISI
-// ============================================
-
-let currentDbMumCount = 0;  // DB'deki mevcut mum sayısı
-
-async function checkDbMumCount() {
-    /**
-     * Seçili sembol ve timeframe için DB'deki mum sayısını kontrol eder
-     * RESAMPLING MANTIĞI: DB'de her zaman 1m var, diğer TF'ler resample ile oluşur
-     */
-    const symbol = document.getElementById('ml-train-symbol')?.value;
-    const timeframe = document.getElementById('ml-train-timeframe')?.value;
-    const countDisplay = document.getElementById('ml-db-count');
-
-    if (!symbol || !timeframe || !countDisplay) return;
-
-    // Timeframe multipliers (çarpanlar)
-    const timeframeMultipliers = {
-        '1m': 1, '3m': 3, '5m': 5, '10m': 10, '15m': 15, '20m': 20, '30m': 30, '45m': 45,
-        '1h': 60, '2h': 120, '3h': 180, '4h': 240, '6h': 360, '8h': 480, '12h': 720, '1d': 1440
-    };
-
-    const multiplier = timeframeMultipliers[timeframe] || 1;
-
-    try {
-        // DB'den 1m mum sayısını al
-        const response = await fetch(`/api/v1/data/klines-count?symbol=${encodeURIComponent(symbol)}&timeframe=1m`);
-        const data = await response.json();
-
-        currentDbMumCount = data.count || 0;
-
-        // Hedef timeframe'de kaç mum olur?
-        const availableTargetCandles = Math.floor(currentDbMumCount / multiplier);
-
-        if (currentDbMumCount > 0) {
-            if (timeframe === '1m') {
-                countDisplay.textContent = `(DB'de: ${currentDbMumCount.toLocaleString()} mum)`;
+            
+            if (!status.is_training) {
+                showToast('✅ ML eğitimi tamamlandı', 'success');
+                loadMLTrainingHistory();
             } else {
-                countDisplay.textContent = `(DB'de: ${currentDbMumCount.toLocaleString()} mum 1m ≈ ${availableTargetCandles.toLocaleString()} mum ${timeframe})`;
+                setTimeout(poll, 2000);
             }
-            countDisplay.style.color = 'var(--neon-green)';
-
-            // Input max değerini güncelle (hedef timeframe bazında)
-            const limitInput = document.getElementById('ml-train-limit');
-            if (limitInput) {
-                limitInput.max = availableTargetCandles;
-                if (parseInt(limitInput.value) > availableTargetCandles) {
-                    limitInput.value = availableTargetCandles;
-                }
-            }
-        } else {
-            countDisplay.textContent = '(DB\'de veri yok!)';
-            countDisplay.style.color = 'var(--neon-red)';
+        } catch (error) {
+            console.error('Training status poll error:', error);
         }
-
-        validateMumCount();
-    } catch (error) {
-        console.error('DB mum count hatası:', error);
-        countDisplay.textContent = '(Kontrol edilemedi)';
-        countDisplay.style.color = 'var(--text-muted)';
-    }
+    };
+    
+    poll();
 }
 
-function validateMumCount() {
-    /**
-     * Kullanıcının girdiği mum sayısını DB'deki mevcut mum sayısı ile karşılaştırır
-     */
-    const limitInput = document.getElementById('ml-train-limit');
-    const warningSpan = document.getElementById('ml-limit-warning');
-    const countDisplay = document.getElementById('ml-db-count');
-
-    if (!limitInput || !warningSpan) return;
-
-    const userLimit = parseInt(limitInput.value) || 0;
-
-    if (currentDbMumCount > 0 && userLimit > currentDbMumCount) {
-        // Kullanıcı DB'den fazla mum istiyor
-        warningSpan.style.display = 'block';
-        warningSpan.textContent = `⚠️ DB'de sadece ${currentDbMumCount.toLocaleString()} mum var!`;
-        limitInput.style.borderColor = 'var(--neon-red)';
-    } else if (userLimit < 100) {
-        // Çok az mum
-        warningSpan.style.display = 'block';
-        warningSpan.textContent = '⚠️ Minimum 100 mum önerilir!';
-        limitInput.style.borderColor = 'var(--neon-red)';
-    } else {
-        // Her şey yolunda
-        warningSpan.style.display = 'none';
-        limitInput.style.borderColor = 'rgba(255,255,255,0.1)';
-
-        if (currentDbMumCount > 0) {
-            const percentage = Math.round((userLimit / currentDbMumCount) * 100);
-            countDisplay.textContent = `(DB'de: ${currentDbMumCount.toLocaleString()} mum - ${percentage}%)`;
-            countDisplay.style.color = percentage <= 100 ? 'var(--neon-green)' : 'var(--neon-blue)';
-        }
+async function runMLVisualAnalysis() {
+    const symbol = document.getElementById('ml-analysis-symbol')?.value;
+    const strategy = document.getElementById('ml-analysis-strategy')?.value;
+    const timeframe = document.getElementById('ml-analysis-timeframe')?.value || '1h';
+    
+    if (!symbol || !strategy) {
+        showToast('❌ Sembol ve strateji seçin', 'error');
+        return;
     }
-}
-
-// Sembol veya timeframe değiştiğinde DB kontrolü yap
-function setupMLTrainListeners() {
-    const symbolSelect = document.getElementById('ml-train-symbol');
-    const timeframeSelect = document.getElementById('ml-train-timeframe');
-
-    if (symbolSelect) {
-        symbolSelect.addEventListener('change', checkDbMumCount);
-    }
-    if (timeframeSelect) {
-        timeframeSelect.addEventListener('change', checkDbMumCount);
-    }
-}
-
-// Sayfa yüklendiğinde listener'ları ayarla
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', setupMLTrainListeners);
-} else {
-    setupMLTrainListeners();
-}
-
-
-// ============================================
-// EĞİTİM GEÇMİŞİNİ TEMİZLE
-// ============================================
-
-async function clearTrainingHistory() {
-    if (!confirm('⚠️ Tüm eğitim geçmişini silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz!')) return;
-
+    
     try {
-        const response = await fetch('/api/v1/ml/training-history', {
-            method: 'DELETE'
-        });
-
-        const result = await response.json();
-
-        if (result.status === 'success') {
-            alert('✅ ' + result.message);
-            loadTrainingHistory(); // Tabloyu yenile
-        } else {
-            alert('❌ Hata: ' + result.message);
+        const data = await api.runVisualAnalysis(symbol, strategy, timeframe);
+        
+        // Render chart
+        const chart = new ChartRenderer('ml-analysis-chart');
+        chart.init();
+        chart.setCandlestickData(data.candles || []);
+        
+        if (data.markers && data.markers.length > 0) {
+            chart.addMarkers(data.markers);
         }
+        
+        // Render feature importance
+        if (data.feature_importance) {
+            PlotlyRenderer.renderFeatureImportance('feature-importance-chart', data.feature_importance);
+        }
+        
+        showToast('✅ Analiz tamamlandı', 'success');
     } catch (error) {
-        console.error('Geçmiş silme hatası:', error);
-        alert('❌ Geçmiş silinemedi: ' + error.message);
+        showToast('❌ Analiz hatası: ' + error.message, 'error');
     }
 }
 
-// Global scope'a ekle
-window.clearTrainingHistory = clearTrainingHistory;
-
-
-// ============================================
-// MODEL TIMEFRAME KONTROLÜ (GÜVENLİK KALKANI)
-// ============================================
-
-async function checkModelCompatibility(symbol, timeframe) {
-    /**
-     * Seçili sembol ve timeframe için modelin var olup olmadığını kontrol eder.
-     * @returns {Promise<{compatible: boolean, error: string|null}>}
-     */
-    try {
-        const response = await fetch(`/api/v1/ml/check-model?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}`);
-        const result = await response.json();
-
-        if (result.error) {
-            return {
-                compatible: false,
-                error: result.error
-            };
-        }
-
-        return {
-            compatible: result.timeframe_match,
-            error: null
-        };
-    } catch (error) {
-        console.error('Model kontrol hatası:', error);
-        return {
-            compatible: false,
-            error: 'Model kontrolü yapılamadı: ' + error.message
-        };
-    }
-}
-
-function showErrorToast(message, duration = 5000) {
-    /**
-     * Ekrana kırmızı uyarı mesajı (toast) gösterir.
-     */
-    // Toast container oluştur (yoksa)
-    let container = document.getElementById('error-toast-container');
-    if (!container) {
-        container = document.createElement('div');
-        container.id = 'error-toast-container';
-        container.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 10000;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        `;
-        document.body.appendChild(container);
-    }
-
-    // Toast oluştur
+function showToast(message, type = 'info') {
     const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
     toast.style.cssText = `
-        background: linear-gradient(135deg, #ff4500, #ff6347);
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        padding: 12px 24px;
+        background: ${type === 'success' ? '#2ea043' : type === 'error' ? '#f85149' : '#0969da'};
         color: white;
-        padding: 15px 20px;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(255, 69, 0, 0.4);
-        font-size: 0.9rem;
-        font-weight: 500;
-        max-width: 400px;
-        animation: slideIn 0.3s ease-out;
-        border-left: 4px solid #fff;
+        border-radius: 6px;
+        font-weight: 600;
+        z-index: 9999;
     `;
-    toast.innerHTML = `
-        <div style="display: flex; align-items: start; gap: 10px;">
-            <span style="font-size: 1.2rem;">⚠️</span>
-            <div style="flex: 1;">${message}</div>
-            <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; color: white; cursor: pointer; font-size: 1.2rem;">&times;</button>
-        </div>
-    `;
-
-    container.appendChild(toast);
-
-    // Otomatik kaldır
-    setTimeout(() => {
-        if (toast.parentElement) {
-            toast.remove();
-        }
-    }, duration);
+    
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
 }
 
-// Global scope'a ekle
-window.checkModelCompatibility = checkModelCompatibility;
-window.showErrorToast = showErrorToast;
+// ============================================================================
+// APP LIFECYCLE
+// ============================================================================
 
-// Sekme dinleyicisini ezmeden global bağlama yap
-document.addEventListener('click', (e) => {
-    if (e.target.matches('.menu-item') && e.target.dataset.target === 'tab-reports') {
-        loadStrategyReport();
-    }
-    // Ayarlar sekmesi açıldığında aktif botları ve form seçeneklerini yükle
-    if (e.target.matches('.menu-item') && e.target.dataset.target === 'tab-settings') {
-        setTimeout(() => {
-            loadActiveBots();
-            loadBotFormOptions();
-        }, 500);
-    }
+// Start app when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApp);
+} else {
+    initApp();
+}
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+    stopAutoRefresh();
+    botManager.destroy();
 });
 
-// Sayfa yüklendiğinde aktif botları ve form seçeneklerini yükle
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        setTimeout(() => {
-            loadActiveBots();
-            loadBotFormOptions();
-        }, 1000);
-    });
-} else {
-    setTimeout(() => {
-        loadActiveBots();
-        loadBotFormOptions();
-    }, 1000);
-}
-
-
+// Export for debugging
+export { initApp, store, api, botManager };

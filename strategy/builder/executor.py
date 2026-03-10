@@ -137,35 +137,49 @@ class StrategyExecutor:
     def _validate_strategy_json(self) -> None:
         """
         JSON'un geçerliliğini kontrol et.
-        
+        Eski stratejiler için varsayılan değerler ekler.
+
         Raises:
             ValueError: Gerekli alanlar eksikse
         """
-        required_fields = ["name", "indicators", "conditions"]
+        required_fields = ["name", "indicators"]
         for field in required_fields:
             if field not in self.strategy_data:
                 raise ValueError(f"Eksik alan: {field}")
-        
-        # Conditions kontrolü
-        conditions = self.strategy_data["conditions"]
-        if "LONG" not in conditions or "SHORT" not in conditions:
-            raise ValueError("Koşullar LONG ve SHORT içermeli")
+
+        # "conditions" alanı için safe get - yoksa varsayılan ekle
+        conditions = self.strategy_data.get('conditions')
+
+        if not conditions:
+            logger.warning(f"⚠️ {self.strategy_data.get('name', 'Bilinmeyen')} stratejisi 'conditions' alanı içermiyor. Varsayılan boş koşullar ekleniyor.")
+            self.strategy_data["conditions"] = {
+                "LONG": {"logic": "AND", "rules": []},
+                "SHORT": {"logic": "AND", "rules": []}
+            }
+        else:
+            # Case-insensitive kontrol (LONG/SHORT veya long/short kabul edilir)
+            normalized = {k.upper(): v for k, v in conditions.items()}
+            if "LONG" not in normalized or "SHORT" not in normalized:
+                raise ValueError("Koşullar LONG ve SHORT içermeli")
+
+            # Normalize edilmiş conditions'ı kaydet
+            self.strategy_data["conditions"] = normalized
     
     def _parse_strategy_config(self) -> StrategyConfig:
         """
         JSON verisini StrategyConfig objesine dönüştür.
-        
+
         Returns:
             StrategyConfig: Parse edilmiş konfigürasyon
         """
-        # LONG koşullarını parse et
+        # LONG koşullarını parse et (normalize edilmiş)
         long_data = self.strategy_data["conditions"]["LONG"]
         if isinstance(long_data, str):
             long_conditions = parse_condition_json(long_data)
         else:
             long_conditions = RuleGroup.from_dict(long_data)
-        
-        # SHORT koşullarını parse et
+
+        # SHORT koşullarını parse et (normalize edilmiş)
         short_data = self.strategy_data["conditions"]["SHORT"]
         if isinstance(short_data, str):
             short_conditions = parse_condition_json(short_data)

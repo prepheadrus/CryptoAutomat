@@ -250,35 +250,61 @@ class DatabaseManager:
             await self.sqlite_conn.commit()
 
     async def get_candle_range(self, symbol, timeframe='1m'):
-        """Veritabanındaki bir sembole ait en eski ve en yeni mum tarihlerini mili saniye (ms) cinsinden döner."""
-        sql = "SELECT MIN(timestamp) as start_ts, MAX(timestamp) as end_ts FROM klines WHERE (symbol = ? OR symbol LIKE ?) AND timeframe = ?"
-        pattern = f"{symbol}:%"
-        if self.engine_type == "postgres":
-            sql = "SELECT MIN(timestamp) as start_ts, MAX(timestamp) as end_ts FROM klines WHERE (symbol = $1 OR symbol LIKE $2) AND timeframe = $3"
-            async with self.db_pool.acquire() as conn:
-                row = await conn.fetchrow(sql, symbol, pattern, timeframe)
-        else:
-            async with self.sqlite_conn.execute(sql, (symbol, pattern, timeframe)) as cursor:
-                row = await cursor.fetchone()
+        """
+        Veritabanındaki bir sembole ait en eski ve en yeni mum tarihlerini mili saniye (ms) cinsinden döner.
+        
+        SEMBOL NORMALİZASYONU (FALLBACK MEKANİZMASI):
+        1. Önce gelen symbol ile dene
+        2. Bulamazsa _future ekle
+        3. Bulamazsa / ve : temizle + _future ekle
+        4. İlk bulunan pozitif sonucu döner
+        """
+        # Sembol varyasyonları oluştur (Fallback sırası)
+        symbol_variants = [
+            symbol,  # 1. Orijinal sembol
+            f"{symbol}_future",  # 2. _future ekli
+        ]
+        
+        # 3. Temizlenmiş + _future (örn: BTCUSDT_future)
+        symbol_clean = symbol.replace('/', '').replace(':', '').replace('-', '')
+        if symbol_clean != symbol:
+            symbol_variants.append(f"{symbol_clean}_future")
+        
+        sql = "SELECT MIN(timestamp) as start_ts, MAX(timestamp) as end_ts FROM klines WHERE symbol = ? AND timeframe = ?"
+        
+        # Her varyasyonu dene
+        for sym_variant in symbol_variants:
+            if self.engine_type == "postgres":
+                sql_pg = "SELECT MIN(timestamp) as start_ts, MAX(timestamp) as end_ts FROM klines WHERE symbol = $1 AND timeframe = $2"
+                async with self.db_pool.acquire() as conn:
+                    row = await conn.fetchrow(sql_pg, sym_variant, timeframe)
+            else:
+                async with self.sqlite_conn.execute(sql, (sym_variant, timeframe)) as cursor:
+                    row = await cursor.fetchone()
+            
+            if row and row['start_ts']:
+                # SQLite'da string/datetime dönebilir, asanp/postgres'de datetime. Unix timestamp (ms) çevirelim.
+                import datetime
+                def to_ms(val):
+                    if isinstance(val, str):
+                        # SQLite'dan gelen string'i UTC olarak oku
+                        dt = pd.to_datetime(val)
+                        if dt.tzinfo is None: dt = dt.tz_localize('UTC')
+                        else: dt = dt.tz_convert('UTC')
+                        return int(dt.timestamp() * 1000)
+                    # Datetime ise
+                    if val.tzinfo is None: val = val.replace(tzinfo=datetime.timezone.utc)
+                    return int(val.timestamp() * 1000)
 
-        if row and row['start_ts']:
-            # SQLite'da string/datetime dönebilir, asanp/postgres'de datetime. Unix timestamp (ms) çevirelim.
-            import datetime
-            def to_ms(val):
-                if isinstance(val, str):
-                    # SQLite'dan gelen string'i UTC olarak oku
-                    dt = pd.to_datetime(val)
-                    if dt.tzinfo is None: dt = dt.tz_localize('UTC')
-                    else: dt = dt.tz_convert('UTC')
-                    return int(dt.timestamp() * 1000)
-                # Datetime ise
-                if val.tzinfo is None: val = val.replace(tzinfo=datetime.timezone.utc)
-                return int(val.timestamp() * 1000)
-
-            return {
-                "start": to_ms(row['start_ts']),
-                "end": to_ms(row['end_ts'])
-            }
+                logger.debug(f"✅ DB Sembol eşleşti (get_candle_range): {symbol} → {sym_variant}")
+                return {
+                    "start": to_ms(row['start_ts']),
+                    "end": to_ms(row['end_ts'])
+                }
+        
+        # Hiçbir varyant bulunamadı
+        logger.debug(f"⚠️ DB'de sembol bulunamadı: {symbol}")
+        return None
 
     async def get_klines(self, symbol: str, timeframe: str = '1m', limit: int = 1000) -> list:
         """
@@ -405,8 +431,218 @@ class DatabaseManager:
             async with self.sqlite_conn.execute(sql) as cursor:
                 rows = await cursor.fetchall()
                 symbols = [row[0] for row in rows]
-                
+
         return sorted(symbols)
+
+    async def get_data_inventory(self):
+        """
+        Veritabanındaki tüm kline verilerinin envanterini çıkarır.
+        
+        Returns:
+            dict: {
+                'total_candles': int,
+                'inventory': [
+                    {
+                        'symbol': str,
+                        'timeframe': str,
+                        'min_timestamp': datetime,
+                        'max_timestamp': datetime,
+                        'count': int
+                    },
+                    ...
+                ]
+            }
+        """
+        import pandas as pd
+        
+        sql = """
+            SELECT 
+                symbol, 
+                timeframe, 
+                MIN(timestamp) as min_ts, 
+                MAX(timestamp) as max_ts, 
+                COUNT(*) as candle_count
+            FROM klines
+            GROUP BY symbol, timeframe
+            ORDER BY symbol, timeframe
+        """
+        
+        total_candles = 0
+        inventory = []
+        
+        try:
+            if self.engine_type == "sqlite":
+                async with self.sqlite_conn.execute(sql) as cursor:
+                    rows = await cursor.fetchall()
+                    logger.info(f"📊 Envanter sorgusu: {len(rows)} kayıt bulundu")
+                    
+                    for row in rows:
+                        count = row[4] or 0
+                        total_candles += count
+                        inventory.append({
+                            'symbol': row[0],
+                            'timeframe': row[1],
+                            'min_timestamp': row[2],
+                            'max_timestamp': row[3],
+                            'count': count
+                        })
+                    
+                    logger.info(f"📊 Toplam mum sayısı: {total_candles}")
+            else:
+                async with self.db_pool.acquire() as conn:
+                    rows = await conn.fetch(sql)
+                    for row in rows:
+                        count = row['candle_count'] or 0
+                        total_candles += count
+                        inventory.append({
+                            'symbol': row['symbol'],
+                            'timeframe': row['timeframe'],
+                            'min_timestamp': row['min_ts'],
+                            'max_timestamp': row['max_ts'],
+                            'count': count
+                        })
+            
+            # Timestamp'leri okunabilir formata çevir
+            for item in inventory:
+                if item['min_timestamp']:
+                    if isinstance(item['min_timestamp'], (int, float)):
+                        item['min_date'] = pd.to_datetime(item['min_timestamp'], unit='ms').strftime('%Y-%m-%d %H:%M')
+                    elif isinstance(item['min_timestamp'], str):
+                        item['min_date'] = item['min_timestamp']
+                    else:
+                        item['min_date'] = str(item['min_timestamp'])
+                else:
+                    item['min_date'] = 'N/A'
+                    
+                if item['max_timestamp']:
+                    if isinstance(item['max_timestamp'], (int, float)):
+                        item['max_date'] = pd.to_datetime(item['max_timestamp'], unit='ms').strftime('%Y-%m-%d %H:%M')
+                    elif isinstance(item['max_timestamp'], str):
+                        item['max_date'] = item['max_timestamp']
+                    else:
+                        item['max_date'] = str(item['max_timestamp'])
+                else:
+                    item['max_date'] = 'N/A'
+            
+            return {
+                'total_candles': total_candles,
+                'inventory': inventory
+            }
+        except Exception as e:
+            logger.error(f"❌ Envanter hatası: {e}")
+            logger.error(f"Exception type: {type(e).__name__}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            # Hata olsa bile boş response dön
+            return {
+                'total_candles': total_candles,
+                'inventory': [],
+                'error': str(e)
+            }
+
+    async def get_database_stats(self):
+        """
+        Veritabanı özet istatistiklerini çıkarır.
+        
+        Returns:
+            dict: {
+                'total_candles': int,
+                'stats': [
+                    {
+                        'symbol': str,
+                        'min_date': str,
+                        'max_date': str,
+                        'count': int
+                    },
+                    ...
+                ]
+            }
+        """
+        import pandas as pd
+        
+        # Toplam mum sayısı
+        sql_total = "SELECT COUNT(*) as total FROM klines"
+        
+        # Sembol bazlı istatistikler
+        sql_stats = """
+            SELECT 
+                symbol,
+                MIN(timestamp) as min_ts,
+                MAX(timestamp) as max_ts,
+                COUNT(*) as candle_count
+            FROM klines
+            GROUP BY symbol
+            ORDER BY symbol
+        """
+        
+        total_candles = 0
+        stats = []
+        
+        try:
+            if self.engine_type == "sqlite":
+                # Toplam mum
+                async with self.sqlite_conn.execute(sql_total) as cursor:
+                    row = await cursor.fetchone()
+                    total_candles = row[0] if row else 0
+                
+                # Sembol istatistikleri
+                async with self.sqlite_conn.execute(sql_stats) as cursor:
+                    rows = await cursor.fetchall()
+                    for row in rows:
+                        stats.append({
+                            'symbol': row[0],
+                            'min_timestamp': row[1],
+                            'max_timestamp': row[2],
+                            'count': row[3] or 0
+                        })
+            else:
+                async with self.db_pool.acquire() as conn:
+                    row = await conn.fetchrow(sql_total)
+                    total_candles = row['total'] if row else 0
+                    
+                    rows = await conn.fetch(sql_stats)
+                    for row in rows:
+                        stats.append({
+                            'symbol': row['symbol'],
+                            'min_timestamp': row['min_ts'],
+                            'max_timestamp': row['max_ts'],
+                            'count': row['candle_count'] or 0
+                        })
+            
+            # Timestamp'leri okunabilir formata çevir
+            for item in stats:
+                if item['min_timestamp']:
+                    if isinstance(item['min_timestamp'], (int, float)):
+                        item['min_date'] = pd.to_datetime(item['min_timestamp'], unit='ms').strftime('%Y-%m-%d')
+                    else:
+                        item['min_date'] = str(item['min_timestamp'])
+                else:
+                    item['min_date'] = 'N/A'
+                    
+                if item['max_timestamp']:
+                    if isinstance(item['max_timestamp'], (int, float)):
+                        item['max_date'] = pd.to_datetime(item['max_timestamp'], unit='ms').strftime('%Y-%m-%d')
+                    else:
+                        item['max_date'] = str(item['max_timestamp'])
+                else:
+                    item['max_date'] = 'N/A'
+            
+            return {
+                'total_candles': total_candles,
+                'stats': stats,
+                'total_symbols': len(stats)
+            }
+        except Exception as e:
+            logger.error(f"❌ Database stats hatası: {e}")
+            logger.error(f"Exception type: {type(e).__name__}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return {
+                'total_candles': 0,
+                'stats': [],
+                'total_symbols': 0,
+                'error': str(e)
+            }
     async def save_trade(self, trade_info: dict):
         """Kapatılan bir işlemi kalıcı hafızaya yazar."""
         sql = """
@@ -479,6 +715,38 @@ class DatabaseManager:
             async with self.sqlite_conn.execute(sql) as cursor:
                 rows = await cursor.fetchall()
                 return [dict(row) for row in rows]
+
+    async def get_all_download_tasks_from_db(self) -> dict:
+        """
+        Veritabanındaki tüm indirme görevlerini dict formatında döner.
+        Key: {symbol}_{market_type}, Value: task info
+        
+        Returns:
+            dict: {symbol_market: task_info, ...}
+        """
+        try:
+            tasks = await self.get_all_download_tasks()
+            result = {}
+            
+            for task in tasks:
+                symbol = task.get('symbol', '')
+                market_type = task.get('market_type', 'future')
+                key = f"{symbol}_{market_type}"
+                
+                # Tamamlanmış görevler için progress %100
+                status = task.get('status', 'completed')
+                progress = 100 if status == 'completed' else task.get('progress', 0)
+                
+                result[key] = {
+                    **task,
+                    'progress': progress,
+                    'source': 'database'  # DB'den geldiğini işaretle
+                }
+            
+            return result
+        except Exception as e:
+            logger.error(f"get_all_download_tasks_from_db error: {e}")
+            return {}
 
     async def delete_download_task(self, symbol: str, market_type: str):
         """Görevi veritabanından SADECE sembol ve market tipine göre hassas şekilde siler."""

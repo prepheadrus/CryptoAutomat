@@ -735,7 +735,7 @@
                     </div>
 
                     <!-- YENİ BOT BAŞLATMA FORMU -->
-                    <form id="bot-start-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end; margin-bottom: 20px;">
+                    <form id="bot-start-form" onsubmit="handleBotSubmit(event)" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end; margin-bottom: 20px;">
                         <div>
                             <label style="font-size:0.75rem; color:var(--text-muted);">Sembol</label>
                             <select id="bot-symbol" class="strategy-select" style="width: 100%;">
@@ -793,6 +793,219 @@
                         </p>
                     </div>
                 </div>
+                
+                <!-- RİSK AYARLARI -->
+                <div class="card glass-panel" style="margin-bottom: 20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                        <div>
+                            <h3>⚠️ Risk Ayarları</h3>
+                            <p style="color:var(--text-muted); font-size:0.85rem;">Trading risk parametrelerini yapılandır</p>
+                        </div>
+                        <button class="btn-select" style="width:auto; padding:6px 15px; font-size:0.8rem;"
+                            onclick="saveRiskSettings()">💾 Kaydet</button>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+                        <div>
+                            <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:5px;">
+                                📊 Maksimum Risk (%)
+                                <span style="color:var(--neon-blue); font-size:0.7rem;"> (0.1 - 5.0)</span>
+                            </label>
+                            <input type="number" id="risk-max-risk" class="strategy-select" 
+                                   value="0.2" min="0.1" max="5.0" step="0.1"
+                                   style="width: 100%;"
+                                   title="Her işlemde maksimum risk yüzdesi">
+                        </div>
+                        
+                        <div>
+                            <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:5px;">
+                                📈 Maksimum Kaldıraç (x)
+                                <span style="color:var(--neon-blue); font-size:0.7rem;"> (1 - 50)</span>
+                            </label>
+                            <input type="number" id="risk-max-leverage" class="strategy-select" 
+                                   value="10" min="1" max="50" step="1"
+                                   style="width: 100%;"
+                                   title="Maksimum kaldıraç çarpanı">
+                        </div>
+                        
+                        <div>
+                            <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:5px;">
+                                💼 Maksimum Açık Pozisyon
+                                <span style="color:var(--neon-blue); font-size:0.7rem;"> (1 - 20)</span>
+                            </label>
+                            <input type="number" id="risk-max-positions" class="strategy-select" 
+                                   value="5" min="1" max="20" step="1"
+                                   style="width: 100%;"
+                                   title="Aynı anda açık olabilecek maksimum pozisyon sayısı">
+                        </div>
+                        
+                        <div>
+                            <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:5px;">
+                                📉 Maksimum Ardışık Kayıp
+                                <span style="color:var(--neon-blue); font-size:0.7rem;"> (1 - 10)</span>
+                            </label>
+                            <input type="number" id="risk-max-losses" class="strategy-select" 
+                                   value="5" min="1" max="10" step="1"
+                                   style="width: 100%;"
+                                   title="Kill switch aktif olacak ardışık kayıp sayısı">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 🧠 YAPAY ZEKA (ML) ve WFO AYARLARI -->
+                <div class="card glass-panel" style="margin-bottom: 20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                        <div>
+                            <h3>🧠 Yapay Zeka (ML) ve WFO Ayarları</h3>
+                            <p style="color:var(--text-muted); font-size:0.85rem;">Otonom optimizasyon ve ML model ayarları</p>
+                        </div>
+                        <button class="btn-select" style="background:var(--neon-purple); color:white;"
+                            onclick="saveAdvancedSettings()">💾 Kaydet</button>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <!-- WFO AYARLARI -->
+                        <div style="padding:15px; background:rgba(138, 43, 226, 0.05); border-radius:8px; border-left:3px solid #8a2be2;">
+                            <h4 style="margin:0 0 15px 0; color:#8a2be2; font-size:0.95rem;">🔄 WFO (Walk-Forward Optimization)</h4>
+
+                            <div style="margin-bottom:12px;">
+                                <label style="font-size:0.75rem; color:var(--text-muted); display:flex; align-items:center; gap:8px;">
+                                    <input type="checkbox" id="wfo-enabled" style="width:auto;">
+                                    WFO Aktif (Otonom Optimizasyon)
+                                </label>
+                            </div>
+
+                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                                <div>
+                                    <label style="font-size:0.7rem; color:var(--text-muted); display:block; margin-bottom:3px;">Eğitim Günleri</label>
+                                    <input type="number" id="wfo-train-days" class="strategy-select" value="30" min="7" max="90" style="width:100%;">
+                                </div>
+                                <div>
+                                    <label style="font-size:0.7rem; color:var(--text-muted); display:block; margin-bottom:3px;">Test Günleri</label>
+                                    <input type="number" id="wfo-test-days" class="strategy-select" value="7" min="1" max="30" style="width:100%;">
+                                </div>
+                            </div>
+
+                            <div style="margin-top:10px;">
+                                <label style="font-size:0.7rem; color:var(--text-muted); display:block; margin-bottom:3px;">Re-optimizasyon (saat)</label>
+                                <input type="number" id="wfo-interval" class="strategy-select" value="168" min="24" max="720" style="width:100%;">
+                                <p style="font-size:0.65rem; color:var(--text-muted); margin:3px 0 0 0;">168 saat = 1 hafta</p>
+                            </div>
+                        </div>
+
+                        <!-- ML AYARLARI -->
+                        <div style="padding:15px; background:rgba(255, 20, 147, 0.05); border-radius:8px; border-left:3px solid #ff1493;">
+                            <h4 style="margin:0 0 15px 0; color:#ff1493; font-size:0.95rem;">🤖 ML Model Ayarları</h4>
+
+                            <div style="margin-bottom:12px;">
+                                <label style="font-size:0.75rem; color:var(--text-muted); display:flex; align-items:center; gap:8px;">
+                                    <input type="checkbox" id="ml-enabled" style="width:auto;">
+                                    ML Model Aktif
+                                </label>
+                            </div>
+
+                            <div>
+                                <label style="font-size:0.7rem; color:var(--text-muted); display:block; margin-bottom:3px;">
+                                    Confidence Threshold (Güven Skoru)
+                                    <span style="color:var(--neon-blue); font-size:0.65rem;"> (0.50 - 0.95)</span>
+                                </label>
+                                <input type="number" id="ml-threshold" class="strategy-select" value="0.65" min="0.50" max="0.95" step="0.05" style="width:100%;">
+                                <p style="font-size:0.65rem; color:var(--text-muted); margin:3px 0 0 0;">
+                                    ≥65% güven → İşlem açılır
+                                </p>
+                            </div>
+
+                            <div style="margin-top:15px; padding:8px; background:rgba(255,255,255,0.03); border-radius:4px;">
+                                <p style="font-size:0.65rem; color:var(--text-muted); margin:0;">
+                                    ℹ️ ML modeli her bot için ayrı eğitilir
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- HTF AYARLARI -->
+                    <div style="margin-top:20px; padding:15px; background:rgba(0, 255, 127, 0.05); border-radius:8px; border-left:3px solid #00ff7f;">
+                        <h4 style="margin:0 0 15px 0; color:#00ff7f; font-size:0.95rem;">📊 HTF (Higher Timeframe) Analizi</h4>
+
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+                            <div>
+                                <label style="font-size:0.75rem; color:var(--text-muted); display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+                                    <input type="checkbox" id="htf-enabled" style="width:auto;">
+                                    HTF Analizi Aktif (Multi-Timeframe)
+                                </label>
+
+                                <div>
+                                    <label style="font-size:0.7rem; color:var(--text-muted); display:block; margin-bottom:3px;">Trend Metodu</label>
+                                    <select id="htf-method" class="strategy-select" style="width:100%;">
+                                        <option value="ema_stack">EMA Stack (EMA 20 vs EMA 50)</option>
+                                        <option value="close_ema">Close vs EMA</option>
+                                        <option value="adx_filter">ADX Filter</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div style="padding:10px; background:rgba(255,255,255,0.03); border-radius:4px;">
+                                <p style="font-size:0.7rem; color:var(--text-muted); margin:0;">
+                                    ⚠️ <strong>Altın Oran (1:4 / 1:6)</strong><br>
+                                    Major HTF veto yetkisine sahiptir.<br>
+                                    Örnek: 1m bot → 15m (Minor) + 1h (Major)
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- API YÖNETİMİ -->
+                <div class="card glass-panel" style="margin-bottom: 20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                        <div>
+                            <h3>🔐 API Yönetimi</h3>
+                            <p style="color:var(--text-muted); font-size:0.85rem;">Binance API anahtarlarını yönet</p>
+                        </div>
+                        <div style="display:flex; gap:8px;">
+                            <button class="btn-select" style="background:var(--neon-blue); color:white;"
+                                onclick="testApiKeys()">🧪 Test Et</button>
+                            <button class="btn-select" style="background:var(--neon-green); color:black;"
+                                onclick="saveApiKeys()">💾 Kaydet</button>
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div>
+                            <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:5px;">
+                                🔑 Binance API Key
+                            </label>
+                            <input type="password" id="api-key" class="strategy-select" 
+                                   placeholder="pk_live_..." 
+                                   style="width: 100%; font-family: monospace;"
+                                   title="Binance API Anahtarınız">
+                            <p style="font-size:0.65rem; color:var(--text-muted); margin-top:5px;">
+                                ℹ️ API key şifrelenerek saklanır
+                            </p>
+                        </div>
+                        
+                        <div>
+                            <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:5px;">
+                                🔒 Binance API Secret
+                            </label>
+                            <input type="password" id="api-secret" class="strategy-select" 
+                                   placeholder="••••••••••••••••" 
+                                   style="width: 100%; font-family: monospace;"
+                                   title="Binance API Gizli Anahtarınız">
+                            <p style="font-size:0.65rem; color:var(--text-muted); margin-top:5px;">
+                                ℹ️ Secret key asla gösterilmez
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top:15px; padding:10px; background:rgba(88, 166, 255, 0.05); border-radius:6px; border-left:3px solid var(--neon-blue);">
+                        <p style="font-size:0.75rem; color:var(--text-muted); margin:0;">
+                            ⚠️ <strong>Güvenlik Uyarısı:</strong> API anahtarlarınızı kimseyle paylaşmayın. 
+                            API key'lerinize sadece <strong>Spot & Futures Trading</strong> izni verin. 
+                            <strong>Withdrawal (Para Çekme)</strong> izni vermeyin!
+                        </p>
+                    </div>
+                </div>
             </div>
 
             <!-- SEKME 7: VERİ LABORATUVARI -->
@@ -801,6 +1014,7 @@
                     <h2>💾 Veri Laboratuvarı & Geçmiş Veri İndirme</h2>
                     <p style="color:var(--text-muted);">Yapay zekayı eğitmek için Binance üzerinden veri toplayın.</p>
                 </div>
+
                 <div class="grid-content">
                     <div class="card glass-panel">
                         <div
@@ -810,15 +1024,15 @@
                                 onclick="saveMarketSelection()">✅ Takibi Güncelle</button>
                         </div>
                         <div style="display:flex; gap:8px; margin-bottom:12px;">
-                            <input type="text" id="market-search" placeholder="Coin Ara..." class="strategy-select"
+                            <input type="text" id="market-search" placeholder="🔍 Coin Ara..." class="strategy-select"
                                 style="flex:1;">
-                            <select id="market-type-filter" class="strategy-select" style="width:100px;">
+                            <select id="market-type-filter" class="strategy-select" style="width:120px;">
                                 <option value="all">Tümü</option>
-                                <option value="spot">Spot</option>
-                                <option value="swap">Futures</option>
+                                <option value="spot">💰 Spot</option>
+                                <option value="swap">💹 Futures</option>
                             </select>
                         </div>
-                        <div id="market-selection-list" style="max-height: 350px; overflow-y: auto;"></div>
+                        <div id="market-selection-list" style="max-height: 400px; overflow-y: auto;"></div>
                     </div>
 
                     <div class="card glass-panel">
@@ -858,8 +1072,6 @@
                                         <option value="12h">12h</option>
                                         <option value="1d">1d</option>
                                     </select>
-                                        <option value="1h">1h</option>
-                                    </select>
                                 </div>
                             </div>
 
@@ -877,12 +1089,23 @@
                                 </div>
                             </div>
 
-                            <button id="start-download-btn" class="btn-select"
-                                style="background:var(--neon-green); color:black; font-weight:700; border:none;"
-                                onclick="startDownload()">🚀 İndirmeyi Başlat</button>
-                            <button id="stop-download-btn" class="btn-select"
-                                style="background:rgba(255,25,25,0.2); color:#ff4d4d; border:1px solid #ff4d4d33; display:none;"
-                                onclick="stopDownload()">🛑 İndirmeyi Durdur</button>
+                            <!-- VERİ DURUMU -->
+                            <div id="history-status-view"
+                                style="margin-top:10px; padding:10px; background:rgba(88, 166, 255, 0.05); border-radius:6px; font-size:0.75rem; color:var(--text-muted);">
+                                <p>📊 Veri durumu yükleniyor...</p>
+                            </div>
+
+                            <div style="display:flex; gap:8px; margin-top:10px;">
+                                <button id="start-download-btn" class="btn-select"
+                                    style="flex:1; background:var(--neon-green); color:black; font-weight:700; border:none;"
+                                    onclick="startDownload()">🚀 İndirmeyi Başlat</button>
+                                <button id="stop-download-btn" class="btn-select"
+                                    style="background:rgba(255,25,25,0.2); color:#ff4d4d; border:1px solid #ff4d4d33; display:none;"
+                                    onclick="stopDownload()">🛑 İndirmeyi Durdur</button>
+                                <button class="btn-select"
+                                    style="background:rgba(88, 166, 255, 0.2); color:var(--neon-blue); border:1px solid rgba(88, 166, 255, 0.3);"
+                                    onclick="checkHistoryStatus()" title="Veri durumunu yenile">🔄 Yenile</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -890,9 +1113,24 @@
                 <div class="card glass-panel chart-span" style="margin-top:20px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                         <h3>🚀 Veri Laboratuvarı Görev Geçmişi</h3>
-                        <div id="active-tasks-count" class="timeframe-tag">0 Görev / Geçmiş</div>
+                        <div id="active-tasks-count" class="timeframe-tag">0 Aktif / 0 Toplam Görev</div>
                     </div>
                     <div id="active-tasks-list"></div>
+                </div>
+                
+                <!-- VERİTABANI ENVANTERİ VE İSTATİSTİKLER (EN ALTTA) -->
+                <div class="card glass-panel chart-span" style="margin-top:20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                        <h3>🗄️ Veritabanı Envanteri & İstatistikler</h3>
+                        <button class="btn-select" style="width:auto; padding:6px 15px; font-size:0.8rem;"
+                            onclick="loadDataStats()">🔄 Yenile</button>
+                    </div>
+                    <div id="data-stats-summary" style="margin-bottom:20px; padding:15px; background:rgba(88, 166, 255, 0.1); border-radius:8px; border-left:4px solid var(--neon-blue);">
+                        Yükleniyor...
+                    </div>
+                    <div id="data-stats-table" style="max-height: 450px; overflow-y: auto; font-size:0.85rem;">
+                        <p style="text-align:center; color:var(--text-muted); padding:20px;">Envanter yükleniyor...</p>
+                    </div>
                 </div>
             </div>
 
@@ -919,8 +1157,10 @@
 
         </main>
     </div>
-    <script src="strategy-builder.js"></script>
-    <script src="app.js"></script>
+
+    <!-- ES6 Modules -->
+    <script type="module" src="app.js?v=2026031011"></script>
+    <script src="strategy-builder.js?v=2026031011"></script>
 </body>
 
 </html>

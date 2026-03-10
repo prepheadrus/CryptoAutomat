@@ -306,8 +306,11 @@ class RuleGroup:
         # Gerekli alanları kontrol et
         if "logic" not in data:
             raise ValueError("Eksik alan: logic")
-        if "conditions" not in data:
-            raise ValueError("Eksik alan: conditions")
+
+        # "conditions" veya "rules" alanı olabilir (eski stratejiler için)
+        rules_data = data.get('conditions') or data.get('rules')
+        if not rules_data:
+            raise ValueError("Eksik alan: conditions veya rules")
         
         # Logic'i enum'a çevir
         logic = data["logic"]
@@ -319,7 +322,7 @@ class RuleGroup:
         
         # Koşulları oluştur
         conditions = []
-        for cond_data in data["conditions"]:
+        for cond_data in rules_data:
             # Nested RuleGroup mu yoksa Condition mu?
             if "logic" in cond_data:
                 # Bu bir RuleGroup
@@ -327,7 +330,7 @@ class RuleGroup:
             else:
                 # Bu bir Condition
                 condition = Condition.from_dict(cond_data)
-            
+
             conditions.append(condition)
         
         return cls(logic=logic, conditions=conditions)

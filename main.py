@@ -3,18 +3,37 @@ import asyncio
 from core.logger import logger
 from core.config import CONFIG
 
+# Event Tracer import (Sistem Röntgeni - Event-Driven Architecture Diagnostic)
+from core.diagnostics.event_tracer import start_event_tracer, event_tracer
+
 def main():
     logger.info("==========================================")
     logger.info(f"Yüksek Frekanslı CryptoAlgoBot + Dashboard")
     logger.info("==========================================")
     logger.info(f"Aktif Borsa: {CONFIG['trading']['exchange'].upper()}")
-    
+
+    # Event Tracer başlat (Event-Driven mimari diagnostik)
+    logger.info("")
+    logger.info("🔍 EVENT TRACER BAŞLATILIYOR...")
+    logger.info("   Sistem röntgeni aktif - Tüm event'ler izleniyor")
+    logger.info("   Renkli terminal çıktısı için bekleyin...")
+    logger.info("")
+
+    # Event tracer'ı asenkron başlat
+    try:
+        loop = asyncio.get_event_loop()
+        loop.create_task(start_event_tracer())
+        logger.info("✅ Event Tracer aktif")
+    except Exception as e:
+        logger.warning(f"⚠️ Event Tracer başlatılamadı: {e}")
+        logger.warning("   Bot çalışmaya devam edecek, ancak event'ler loglanmayacak")
+
     # Tüm modüler sistemi, FastAPI endpoints ve arka plan Bot WebSockets dahil uvicorn ile başlatır.
     # Uvicorn, asenkron motoru çok verimli kullanır (Tek potada web + finansal işlemler).
     uvicorn.run(
-        "api.server:app", 
-        host="0.0.0.0", 
-        port=8000, 
+        "api.server:app",
+        host="0.0.0.0",
+        port=8000,
         log_level=CONFIG['bot']['log_level'].lower(),
         reload=True if CONFIG['bot']['environment'] == 'development' else False
     )
@@ -25,4 +44,14 @@ if __name__ == "__main__":
             asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
         main()
     except KeyboardInterrupt:
+        logger.info("")
+        logger.info("🛑 KULLANICI BOTU DURDURUYOR (CTRL+C)...")
+
+        # Event Tracer istatistiklerini göster
+        try:
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(event_tracer.stop())
+        except Exception:
+            pass
+
         logger.info("Kullanıcı (CTRL+C) botu ve Web Sunucusunu durdurdu.")

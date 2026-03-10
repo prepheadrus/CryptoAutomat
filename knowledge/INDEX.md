@@ -14,7 +14,11 @@ knowledge/
 ├── architecture/          # Sistem mimarisi ve veri akışı
 │   ├── overview.md       # 5 katmanlı mimari genel bakış
 │   ├── data_pipeline.md  # Veri boru hattı ve özellik mühendisliği
-│   └── 1-to-N-multi-bot-architecture.md  # Çoklu bot mimarisi (YENİ!)
+│   ├── 1-to-N-multi-bot-architecture.md  # Çoklu bot mimarisi
+│   ├── event_driven_architecture.md  # Event-Driven Architecture
+│   ├── value_objects.md  # Value Objects (DDD)
+│   ├── api_modularization.md  # API Modularization
+│   └── event_tracer.md  # Event Tracer (Sistem Röntgeni) (YENİ!)
 │
 ├── strategies/           # Trading stratejileri ve algoritmalar
 │   └── concept_and_implementation.md  # Strateji konseptleri ve tasarım
@@ -42,10 +46,60 @@ knowledge/
     ├── session_history.md  # Geliştirme oturum geçmişi
     ├── ai_skill.md         # AI asistan yetenek tanımlaması
     ├── technical_improvements.md  # Teknik iyileştirmeler
-    └── RECENT_IMPROVEMENTS.md  # Son iyileştirmeler (Mart 2026)
+    ├── RECENT_IMPROVEMENTS.md  # Son iyileştirmeler (Mart 2026)
+    └── MARCH_2026_FINAL_FIXES.md  # Mart 2026 Son Düzeltmeler (YENİ!)
 ```
 
 ---
+
+## 🔐 YENİ: GÜVENLİK DOKÜMANTASYONU
+
+```
+knowledge/security/         # Güvenlik dokümantasyonu (YENİ!)
+├── api_key_encryption.md  # API Key Şifreleme Sistemi
+└── best_practices.md      # Güvenlik En İyi Uygulamaları
+```
+
+---
+
+## 🆕 Yeni Eklenenler (Mart 2026 - Son Güncellemeler)
+
+### **SignalGeneratedEvent Düzeltmesi**
+- **Dosya:** `documentation/MARCH_2026_FINAL_FIXES.md`
+- **Sorun:** `'int' object has no attribute 'value'` hatası
+- **Çözüm:** `signal: SignalType` → `signal: int`
+- **Dosyalar:** `shared/events/events.py`, `core/paper.py`
+
+### **Dropdown Validasyon ve Çakışma Önleme**
+- **Dosya:** `documentation/MARCH_2026_FINAL_FIXES.md`
+- **Sorun:** Dropdown'lar boş kalıyor, sürekli yenileniyor
+- **Çözüm:** Store subscription kaldırıldı, `loadDropdownData()` tek sorumlu
+- **Dosyalar:** `frontend/app.js`, `frontend/index.html`
+
+### **API Key Şifreleme Sistemi**
+- **Dosya:** `security/api_key_encryption.md`
+- **Özellikler:**
+  - AES-128-CBC şifreleme
+  - Fernet symmetric encryption
+  - .key dosyası 0o600 permission
+  - Yedekleme (`.key.backup.*`)
+- **Dosyalar:** `core/security.py`, `api/routers/system.py`
+
+### **Bot Başlatma Validasyonu**
+- **Dosya:** `documentation/MARCH_2026_FINAL_FIXES.md`
+- **Özellikler:**
+  - Frontend validasyon (sembol/strateji)
+  - Form submit handler
+  - Toast bildirimleri
+- **Dosyalar:** `frontend/app.js`, `frontend/index.html`
+
+### **start_bot.bat Güncellemeleri**
+- **Dosya:** `documentation/MARCH_2026_FINAL_FIXES.md`
+- **Özellikler:**
+  - Browser ayrı process (kapanmıyor)
+  - main.py üzerinden başlatma (Event Tracer aktif)
+  - Cleanup düzeltildi
+- **Dosya:** `start_bot.bat`
 
 ## 🆕 Yeni Eklenenler (Mart 2026)
 
@@ -116,6 +170,51 @@ knowledge/
   - Çoklu HTF onay mekanizması (bull/bear count)
   - Config tabanlı dinamik mapping
 
+### **Event-Driven Architecture (EDA)**
+- **Dosya:** `architecture/event_driven_architecture.md` (YENİ!)
+- **Açıklama:** Modüler Event-Driven mimari
+- **Özellikler:**
+  - Event Bus (Pub/Sub)
+  - 40+ event tipi
+  - Loose coupling
+  - Circular dependency çözümü
+  - Async event işleme
+
+### **Value Objects (DDD)**
+- **Dosya:** `architecture/value_objects.md` (YENİ!)
+- **Açıklama:** Domain-Driven Design value objects
+- **Özellikler:**
+  - Position (immutable)
+  - Trade (immutable)
+  - Order (immutable)
+  - Type-safe dataclass'lar
+
+### **Position Manager**
+- **Dosya:** `features/position_manager.md` (YENİ!)
+- **Açıklama:** Pozisyon lifecycle yönetimi
+- **Özellikler:**
+  - Pozisyon açma/kapatma
+  - Trailing stop
+  - PnL hesaplama
+  - Likidasyon kontrolü
+
+### **Risk Engine**
+- **Dosya:** `features/risk_engine.md` (YENİ!)
+- **Açıklama:** Risk yönetimi motoru
+- **Özellikler:**
+  - Pozisyon boyutu hesaplama
+  - Dinamik kaldıraç
+  - Stop loss / take profit
+  - Kill switch
+
+### **Bot Manager**
+- **Dosya:** `features/bot_manager.md` (YENİ!)
+- **Açıklama:** Bot orkestrasyonu
+- **Özellikler:**
+  - Bot lifecycle yönetimi
+  - Bot state tracking
+  - Legacy uyumluluk
+
 ---
 
 ## 🔍 Hızlı Erişim
@@ -124,6 +223,10 @@ knowledge/
 |------|-------|
 | **Smart Hybrid** | `architecture/smart-hybrid-architecture.md` |
 | **1-to-N Bot Mimarisi** | `architecture/1-to-N-multi-bot-architecture.md` |
+| **Event-Driven** | `architecture/event_driven_architecture.md` |
+| **Value Objects** | `architecture/value_objects.md` |
+| **API Modularization** | `architecture/api_modularization.md` |
+| **Event Tracer** | `architecture/event_tracer.md` |
 | Sistem Mimarisi | `architecture/overview.md` |
 | Veri Pipeline | `architecture/data_pipeline.md` |
 | Strateji Ekleme | `strategies/concept_and_implementation.md` |
@@ -136,6 +239,9 @@ knowledge/
 | **Auto-Grid** | `features/auto_grid_generator.md` |
 | **Bayesian Opt.** | `features/bayesian_optimization.md` |
 | **HTF Altın Oran** | `features/htf_golden_ratio.md` |
+| **Position Manager** | `features/position_manager.md` |
+| **Risk Engine** | `features/risk_engine.md` |
+| **Bot Manager** | `features/bot_manager.md` |
 | No-Code Strateji | `features/no_code_strategy_builder.md` |
 | Strateji Oluşturucu | `features/strategy_builder_guide.md` |
 | ATR Trailing Stop | `features/ATR_TRAILING_STOP_SYSTEM.md` |
