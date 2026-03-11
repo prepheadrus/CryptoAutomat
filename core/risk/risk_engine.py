@@ -202,21 +202,27 @@ class RiskEngine:
         if confidence_score < 0.50:
             return base
         
-        # Confidence bazlı hesaplama (Agresif / Logaritmik Opsiyonu)
-        # 50% confidence = base, 100% = maximum
-        ratio = (confidence_score - 0.50) / 0.50
+        # Confidence bazlı hesaplama (Güçlü bir rampa için karekök/power curve)
+        # 50% confidence = threshold. 
+        # Hemen 1x'den kurtulmak için küçük bir 'floor ratio' ekleyelim (0.1)
+        # Bu, 50% güvende bile (eğer limit 50x ise) ~5x-10x arası bir başlangıç sağlar.
         
-        # Eğer çok yüksek güven varsa (%80+), daha hızlı yükselsin
-        if confidence_score > 0.80:
-            ratio = 0.5 + ((confidence_score - 0.80) / 0.20) * 0.5
+        raw_ratio = (confidence_score - 0.50) / 0.50
+        
+        # Power curve: Güven arttıkça kaldıraç daha hızlı artar
+        # Ancak başlangıçta (50% eşiğinde) doğrudan 'base' (1x) yerine küçük bir sıçrama yapalım
+        if raw_ratio == 0:
+            boosted_ratio = 0.05 # %5 başlangıç payı
+        else:
+            boosted_ratio = 0.05 + (0.95 * (raw_ratio ** 0.7))
             
-        calculated = base + (ratio * (maximum - base))
+        calculated = base + (boosted_ratio * (maximum - base))
         
         # Kaldıracı sınırla ve tam sayı yap
         final_leverage = int(round(min(maximum, max(base, calculated))))
         
         logger.debug(
-            f"Dinamik kaldıraç: Confidence={confidence_score:.2%}, "
+            f"🚀 Dinamik kaldıraç: Confidence={confidence_score:.2%}, "
             f"Leverage={final_leverage}x (Base={base}x, Max={maximum}x)"
         )
         

@@ -422,7 +422,9 @@ async def update_risk_config(request: dict) -> Dict[str, Any]:
         if hasattr(paper_engine, 'risk_engine'):
             paper_engine.risk_engine.config.max_risk_per_trade = max_risk / 100.0
             paper_engine.risk_engine.config.max_leverage = max_leverage
-            logger.info(f"✅ RiskEngine re-initialize edildi")
+            paper_engine.risk_engine.config.max_open_positions = max_positions
+            paper_engine.risk_engine.config.max_consecutive_losses = max_losses
+            logger.info(f"✅ RiskEngine ve PaperTrader ayarları güncellendi (Hot-Reload)")
         
         return {
             "status": "success",
@@ -544,6 +546,10 @@ async def update_advanced_config(request: dict) -> Dict[str, Any]:
             CONFIG['wfo'].update(config['wfo'])
         if 'ml' in request:
             CONFIG['ml'].update(config['ml'])
+            # PaperTrader instance'ındaki ml_enabled'ı da güncelle
+            from core.paper import paper_engine
+            paper_engine.ml_enabled = config['ml'].get('enabled', True)
+            logger.info(f"✅ PaperTrader ML status: {paper_engine.ml_enabled}")
         if 'htf' in request:
             CONFIG['htf'].update(config['htf'])
         

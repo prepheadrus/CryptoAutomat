@@ -1489,7 +1489,7 @@ function updatePositionsTable(positions) {
                             <span style="color: var(--neon-red);">SL: ${pos.stop_loss ? pos.stop_loss.toLocaleString() : '-'}</span>
                             <span style="color: var(--neon-green);">TP: ${pos.take_profit ? pos.take_profit.toLocaleString() : '-'}</span>
                             <span style="color: ${getColorForLiq(pos.liquidation_price, pos.current_price || pos.entry_price, pos.direction)}; font-weight:bold;">
-                                Liq: ${pos.leverage <= 1.1 ? 'GÜVENLİ (>%80)' : (pos.liquidation_price && pos.liquidation_price > 0 ? pos.liquidation_price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-')}
+                                Liq: ${pos.liquidation_price && pos.liquidation_price > 0 ? pos.liquidation_price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-'}
                             </span>
                         </div>
                     </td>
