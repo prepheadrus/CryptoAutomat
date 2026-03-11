@@ -2308,3 +2308,27 @@ body {
         align-items: flex-end;
     }
 }
+
+/* ============================================
+   Dropdown Select Global Fix
+   ============================================ */
+select, .strategy-select {
+    background-color: #1e232d !important;
+    color: var(--text-main) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 8px 12px;
+    border-radius: 6px;
+    outline: none;
+    font-family: var(--font-heading);
+}
+
+select:focus, .strategy-select:focus {
+    border-color: var(--neon-blue);
+    box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+}
+
+select option {
+    background-color: #161b22;
+    color: #e6edf3;
+    padding: 10px;
+}
