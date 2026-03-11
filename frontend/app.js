@@ -71,6 +71,9 @@ async function initApp() {
  */
 async function loadInitialData() {
     try {
+        // Load system status (environment)
+        await updateSystemStatus();
+
         // Load markets (for reference)
         await loadMarkets();
 
@@ -198,6 +201,9 @@ async function loadDashboardMetrics() {
     try {
         console.log('[INFO] Dashboard metrikleri yükleniyor...');
 
+        // Sistem durumunu güncelle (Environment: Production/Development)
+        updateSystemStatus();
+
         const metrics = await api.getDashboardMetrics();
 
         console.log('[DEBUG] Metrics response:', metrics);
@@ -241,8 +247,43 @@ async function loadStrategies() {
         store.setState('strategies', { list: strategies });
         renderStrategyLibrary(strategies);
     } catch (error) {
-        console.error('❌ Strateji yükleme hatası:', error);
-        console.error('Stack trace:', error.stack);
+        console.error('❌ History loading error:', error);
+    }
+}
+
+/**
+ * Update system status (Environment, Exchange, etc.)
+ */
+async function updateSystemStatus() {
+    try {
+        const data = await api.getStatus();
+        console.log('[DEBUG] System status response:', data);
+
+        if (data) {
+            // Update environment status in sidebar
+            const envStatusEl = document.getElementById('env-status');
+            if (envStatusEl) {
+                const env = data.environment || 'DEVELOPMENT';
+                envStatusEl.textContent = env.toUpperCase();
+                
+                // Color coding
+                if (env.toLowerCase() === 'production') {
+                    envStatusEl.style.color = 'var(--neon-red)';
+                    envStatusEl.classList.add('danger-text');
+                } else {
+                    envStatusEl.style.color = 'var(--neon-green)';
+                    envStatusEl.classList.add('success-text');
+                }
+            }
+
+            // Update exchange name if selector present
+            const exchangeEl = document.getElementById('exchange-val');
+            if (exchangeEl && data.exchange) {
+                exchangeEl.textContent = data.exchange.toUpperCase();
+            }
+        }
+    } catch (error) {
+        console.error('❌ System status update error:', error);
     }
 }
 
@@ -1308,21 +1349,33 @@ function updateDecisionGrid(decisions) {
         }
 
         container.innerHTML = Object.entries(decisions).map(([symbol, dec]) => {
-            const signalColors = { 2: '#2ea043', 0: '#f85149', 1: '#8b949e' };
-            const signalTexts = { 2: '🟢 AL', 0: '🔴 SAT', 1: '⚪ BEKLE' };
+            const signalColors = { 2: 'var(--neon-green)', 0: 'var(--neon-red)', 1: 'var(--text-muted)' };
+            const signalTexts = { 2: '🟢 AL (LONG)', 0: '🔴 SAT (SHORT)', 1: '⚪ BEKLE' };
+
+            const mlColor = dec.ml_confirmed ? 'var(--neon-blue)' : 'var(--neon-red)';
+            const timeStr = dec.time ? new Date(dec.time).toLocaleTimeString('tr-TR') : '--:--';
 
             return `
-                <div class="decision-card-multi">
+                <div class="decision-card-multi ${dec.ml_confirmed ? '' : 'filter-rejected'}">
                     <div class="decision-header">
-                        <strong>${symbol}</strong>
-                        <span style="color: ${signalColors[dec.signal_val] || '#8b949e'}">
+                        <strong class="neon-text">${symbol.replace('/USDT', '')}</strong>
+                        <span style="color: ${signalColors[dec.signal_val] || '#8b949e'}; font-weight: bold;">
                             ${signalTexts[dec.signal_val] || '⚪ BEKLE'}
                         </span>
                     </div>
-                    <div class="decision-body">
-                        <div>🤖 ${dec.bot_name || 'Unknown'}</div>
-                        <div>📊 RSI: ${dec.rsi || 0}</div>
-                        <div>📈 ML: ${dec.ml_recommendation || 'HOLD'} (${dec.ml_confidence || 0}%)</div>
+                    <div class="decision-body" style="font-size: 0.8rem; line-height: 1.4;">
+                        <div style="display:flex; justify-content:space-between;">
+                            <span>🧠 ML Tavsiye:</span>
+                            <span style="color:${mlColor}; font-weight:600;">${dec.ml_rec || 'HOLD'} (%${(dec.ml_confidence * 100).toFixed(0)})</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between;">
+                            <span>📊 HTF Trend:</span>
+                            <span style="color:var(--neon-purple);">${dec.htf_trend || 'NEUTRAL'}</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-top:4px; opacity:0.7; font-size:0.7rem;">
+                            <span>💰 Fiyat: $${dec.price?.toFixed(2) || 0}</span>
+                            <span>🕒 ${timeStr}</span>
+                        </div>
                     </div>
                 </div>
             `;

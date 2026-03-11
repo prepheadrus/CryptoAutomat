@@ -111,8 +111,6 @@ class PaperTrader:
         self.market_regime = "UNKNOWN"
         
         # ML Karar Motoru
-        from ml.model_training import ModelTrainer
-        self.ml_trainer = ModelTrainer()
         self.ml_models = {}  # {symbol_timeframe: trainer_instance}
         self.ml_enabled = True
         
@@ -138,6 +136,7 @@ class PaperTrader:
             Dict[str, Any] or None
         """
         try:
+            from ml.model_training import ModelTrainer
             cache_key = f"{symbol}_{timeframe}"
             
             # Model dosya yolunu belirle
@@ -289,22 +288,38 @@ class PaperTrader:
                     ml_confidence = ml_data.get('confidence', 0.5)
                     
                     # Filtreleme Mantığı (Conflict Resolution)
-                    if direction == "LONG" and "SHORT" in ml_rec:
+                    if signal == 2 and "SHORT" in ml_rec:  # Direction: LONG
                         logger.info(f"🛡️ [ML FILTER] {symbol} LONG reddedildi: ML zıt yön gösteriyor ({ml_rec}) | Conf: {ml_confidence:.2f}")
-                        return
+                        ml_confirmed = False
                     
-                    if direction == "SHORT" and "LONG" in ml_rec:
+                    elif signal == 0 and "LONG" in ml_rec: # Direction: SHORT
                         logger.info(f"🛡️ [ML FILTER] {symbol} SHORT reddedildi: ML zıt yön gösteriyor ({ml_rec}) | Conf: {ml_confidence:.2f}")
-                        return
+                        ml_confirmed = False
                     
                     # Nötr (Hold) durumu konfigürasyona bağlı olarak engellenebilir
-                    if ml_rec == "HOLD" and ml_confidence < 0.40:
+                    elif ml_rec == "HOLD" and ml_confidence < 0.40:
                         logger.info(f"🛡️ [ML FILTER] {symbol} reddedildi: ML belirsiz (HOLD) | Conf: {ml_confidence:.2f}")
-                        return
-
-                    logger.info(f"🧠 [ML CONFIRMED] {symbol} | Rec: {ml_rec} | Conf: {ml_confidence:.2f}")
+                        ml_confirmed = False
+                    else:
+                        logger.info(f"🧠 [ML CONFIRMED] {symbol} | Rec: {ml_rec} | Conf: {ml_confidence:.2f}")
                 else:
                     logger.debug(f"ℹ️ {symbol} için aktif ML modeli bulunamadı, sadece teknik sinyal ile gidiliyor.")
+
+            # Dashboard için en son kararı kaydet
+            self.latest_decisions[symbol] = {
+                'signal_val': signal,
+                'signal_text': "LONG" if signal == 2 else "SHORT" if signal == 0 else "HOLD",
+                'price': price,
+                'time': datetime.utcnow().isoformat(),
+                'ml_rec': ml_rec,
+                'ml_confidence': ml_confidence,
+                'ml_confirmed': ml_confirmed,
+                'htf_trend': htf_trend
+            }
+
+            # ML onayı yoksa dur
+            if not ml_confirmed:
+                return
 
             # ============================================
             # POZİSYON AÇ (PositionManager'a delegate)
@@ -602,22 +617,33 @@ class PaperTrader:
 
     def get_all_bots(self) -> List[Dict[str, Any]]:
         """
-        Tüm aktif botları listele.
+        Tüm botları listele. BotManager'dan güncel verileri (PnL, İşlem Sayısı vb.) çeker.
 
         Returns:
-            Bot listesi
+            Bot listesi (detaylı metriklerle birlikte)
         """
         bots = []
-        for bot_id, bot_info in self.active_bots.items():
+        for bot_id, bot in self.bot_manager.bots.items():
+            state = bot.state
+            config = bot.config
+            
+            # PnL yüzde hesapla (Bakiye bazlı basit oran)
+            pnl_percent = (state.pnl / self.initial_balance * 100) if self.initial_balance > 0 else 0.0
+
             bots.append({
                 'bot_id': bot_id,
-                'symbol': bot_info.get('symbol', ''),
-                'strategy_id': bot_info.get('strategy_id', ''),
-                'timeframe': bot_info.get('timeframe', '1m'),
-                'market_type': bot_info.get('market_type', 'swap'),
-                'status': bot_info.get('status', 'running'),
-                'pnl': bot_info.get('pnl', 0.0),
-                'margin': bot_info.get('margin', 0.0),
+                'symbol': config.symbol,
+                'strategy_id': config.strategy_id,
+                'timeframe': config.timeframe,
+                'market_type': config.market_type.value,
+                'status': state.status.value,
+                'pnl': round(state.pnl, 2),
+                'pnl_percent': round(pnl_percent, 2),
+                'margin': round(state.margin, 2),
+                'trades': state.trades,
+                'wins': state.wins,
+                'started_at': bot.started_at.isoformat(),
+                'last_signal_at': state.last_signal_at.isoformat() if state.last_signal_at else None
             })
         return bots
 

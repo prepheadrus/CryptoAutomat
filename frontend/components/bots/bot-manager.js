@@ -9,7 +9,7 @@ import { selectors } from '../../state/store.js';
 
 export const botManager = {
     containerId: 'active-bots-container',
-    statusContainerId: 'bot-status-summary',
+    statusContainerId: 'system-status-summary',
 
     init() {
         this.loadBots();
@@ -48,17 +48,13 @@ export const botManager = {
         console.log('[BotManager] Aktif botlar:', bots);
         const strategies = selectors.getStrategies(state);
 
-        // Active bots container
+        // Active bots container (Settings Tab)
         const container = document.getElementById(this.containerId);
-        console.log('[BotManager] Container:', container);
         if (container) {
             container.innerHTML = this.renderBotCards(bots, strategies);
-            console.log('[BotManager] Render tamamlandı');
-        } else {
-            console.error('[BotManager] Container bulunamadı!');
         }
 
-        // Status summary (dashboard)
+        // Status summary (Dashboard / Active Orders Tab)
         const statusContainer = document.getElementById(this.statusContainerId);
         if (statusContainer) {
             statusContainer.innerHTML = this.renderStatusCards(bots, state.dashboard.decisions);
@@ -91,6 +87,7 @@ export const botManager = {
                             <th style="width: 80px;">⏱️ TF</th>
                             <th style="width: 80px;">🏛️ Market</th>
                             <th style="width: 100px;">📊 Durum</th>
+                            <th style="width: 100px; text-align: right;">🎯 İşlem</th>
                             <th style="width: 120px; text-align: right;">💰 PnL ($)</th>
                             <th style="width: 120px; text-align: right;">📈 PnL (%)</th>
                             <th style="width: 150px;">🕒 Süre</th>
@@ -104,6 +101,8 @@ export const botManager = {
                             const pnlUsd = bot.pnl || 0;
                             const pnlPercent = bot.pnl_percent || 0;
                             const uptime = this.formatUptime(bot.started_at);
+                            const tradeCount = bot.trades || 0;
+                            const winRate = tradeCount > 0 ? (bot.wins / tradeCount * 100).toFixed(0) : 0;
                             
                             return `
                                 <tr class="bot-row ${isRunning ? 'running' : 'stopped'}" data-bot-id="${botId}">
@@ -122,6 +121,10 @@ export const botManager = {
                                         <span class="status-badge ${isRunning ? 'status-running' : 'status-stopped'}">
                                             ${isRunning ? '🟢 Aktif' : '🔴 Durduruldu'}
                                         </span>
+                                    </td>
+                                    <td style="text-align: right;">
+                                        <div style="font-size: 0.85rem; font-weight: 600;">${tradeCount}</div>
+                                        <div style="font-size: 0.7rem; color: var(--text-muted);">%${winRate} WR</div>
                                     </td>
                                     <td style="text-align: right;">
                                         <span class="pnl-value ${pnlUsd >= 0 ? 'positive' : 'negative'}">
@@ -182,12 +185,12 @@ export const botManager = {
     },
 
     /**
-     * Render status cards (dashboard)
+     * Render status cards (dashboard / active orders tab)
      */
     renderStatusCards(bots, decisions) {
         if (!bots || bots.length === 0) {
             return `
-                <div style="grid-column: span 4; text-align: center; padding: 40px; color: var(--text-muted);">
+                <div style="grid-column: span 100%; text-align: center; padding: 40px; color: var(--text-muted);">
                     📭 Henüz aktif strateji yok
                 </div>
             `;
@@ -198,34 +201,45 @@ export const botManager = {
             const sym = bot.symbol;
             const strategyId = bot.strategy_id || 'unknown';
             const timeframe = bot.timeframe || '1m';
-
-            const strategyName = strategyId;
+            const tradeCount = bot.trades || 0;
+            const winRate = tradeCount > 0 ? (bot.wins / tradeCount * 100).toFixed(0) : 0;
 
             const decision = decisions ? decisions[sym] : null;
             const signalText = decision && decision.signal_val !== undefined
-                ? (decision.signal_val === 2 ? '🟢 AL' : decision.signal_val === 0 ? '🔴 SAT' : '⚪ BEKLE')
-                : '⚪ BEKLE';
+                ? (decision.signal_val === 2 ? '🟢 AL' : decision.signal_val === 0 ? '🔴 SAT' : '⚪ HOLD')
+                : '⚪ HOLD';
             const signalColor = decision && decision.signal_val !== undefined
                 ? (decision.signal_val === 2 ? '#2ea043' : decision.signal_val === 0 ? '#f85149' : '#8b949e')
                 : '#8b949e';
+            
+            const mlConf = decision && decision.ml_confidence 
+                ? `<span style="font-size:0.7rem; opacity:0.8; margin-left:4px;">(%${(decision.ml_confidence * 100).toFixed(0)})</span>` 
+                : '';
 
             return `
                 <div class="system-status-card" data-bot-id="${botId}">
                     <div class="status-card-header-compact">
-                        <span class="status-symbol">${sym.replace('/USDT', '')} (${timeframe})</span>
+                        <span class="status-symbol">${sym.replace('/USDT', '')} <small style="opacity:0.6;">${timeframe}</small></span>
                         <span class="status-signal" style="background:${signalColor}; color:white;">
-                            ${signalText}
+                            ${signalText} ${mlConf}
                         </span>
                     </div>
                     <div class="status-card-body-compact">
                         <div class="status-row-compact">
-                            <span class="status-label">Strateji:</span>
-                            <span class="status-value">${strategyName}</span>
+                            <span class="status-label">Bot / Strt:</span>
+                            <span class="status-value">${strategyId}</span>
                         </div>
                         <div class="status-row-compact">
-                            <span class="status-label">PnL:</span>
-                            <span class="status-value ${bot.pnl >= 0 ? 'success-text' : 'danger-text'}">
-                                $${(bot.pnl || 0).toFixed(2)}
+                            <span class="status-label">PnL / WR:</span>
+                            <span class="status-value">
+                                <span class="${bot.pnl >= 0 ? 'success-text' : 'danger-text'}">$${(bot.pnl || 0).toFixed(2)}</span>
+                                <span style="color:var(--text-muted); font-size:0.75rem; margin-left:5px;">(%${winRate} WR)</span>
+                            </span>
+                        </div>
+                        <div class="status-row-compact">
+                            <span class="status-label">İşlem / Trend:</span>
+                            <span class="status-value">
+                                ${tradeCount} <span style="color:var(--neon-purple); font-size:0.75rem;">| ${decision?.htf_trend || 'NEUTRAL'}</span>
                             </span>
                         </div>
                     </div>
