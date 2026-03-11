@@ -1366,11 +1366,13 @@ function updatePortfolioCards(portfolio) {
 
         // Ortalama Kaldıraç hesapla ve güncelle
         const leverageEl = document.getElementById('usage-leverage');
-        if (leverageEl && portfolio.used_margin > 0 && portfolio.total_notional > 0) {
-            const avgLeverage = portfolio.total_notional / portfolio.used_margin;
-            leverageEl.textContent = `${avgLeverage.toFixed(1)}x`;
+        if (leverageEl && portfolio.total_notional > 0 && portfolio.equity > 0) {
+            // Gerçek hesap kaldıracı: Toplam Pozisyon Değeri / Özkaynak (Equity)
+            // Bu kullanıcının toplam riskini gösterir.
+            const accountLeverage = portfolio.total_notional / portfolio.equity;
+            leverageEl.textContent = `${accountLeverage.toFixed(2)}x`;
         } else if (leverageEl) {
-            leverageEl.textContent = `1x`;
+            leverageEl.textContent = `0.00x`;
         }
 
     } catch (error) {
@@ -1487,7 +1489,9 @@ function updatePositionsTable(positions) {
                         <div style="font-size: 0.7rem; display:flex; flex-direction:column; gap:2px;">
                             <span style="color: var(--neon-red);">SL: ${pos.stop_loss ? pos.stop_loss.toLocaleString() : '-'}</span>
                             <span style="color: var(--neon-green);">TP: ${pos.take_profit ? pos.take_profit.toLocaleString() : '-'}</span>
-                            <span style="color: #ffaa00; font-weight:bold;">Liq: ${pos.liquidation_price ? pos.liquidation_price.toLocaleString() : '-'}</span>
+                            <span style="color: ${getColorForLiq(pos.liquidation_price, pos.current_price || pos.entry_price, pos.direction)}; font-weight:bold;">
+                                Liq: ${pos.liquidation_price && pos.liquidation_price > 0 ? pos.liquidation_price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-'}
+                            </span>
                         </div>
                     </td>
                     <td>
@@ -2422,6 +2426,15 @@ window.addEventListener('beforeunload', () => {
     stopAutoRefresh();
     botManager.destroy();
 });
+
+function getColorForLiq(liq, current, direction) {
+    if (!liq || liq <= 0) return 'var(--text-muted)';
+    const dist = direction === 'LONG' ? (current - liq) / current : (liq - current) / current;
+    if (dist <= 0.02) return 'var(--neon-red)';
+    if (dist <= 0.05) return '#ffaa00';
+    return 'var(--text-muted)';
+}
+
 
 // Export for debugging
 export { initApp, store, api, botManager };

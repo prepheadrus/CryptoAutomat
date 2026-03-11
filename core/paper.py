@@ -74,6 +74,7 @@ class PaperTrader:
         risk_config = RiskConfig(
             max_risk_per_trade=CONFIG['risk_management'].get('max_risk_per_trade_percent', 0.01),
             max_leverage=CONFIG['risk_management'].get('max_leverage', 10),
+            max_open_positions=CONFIG['risk_management'].get('max_open_positions', 5),
             max_consecutive_losses=CONFIG['risk_management'].get('max_consecutive_losses', 5)
         )
         

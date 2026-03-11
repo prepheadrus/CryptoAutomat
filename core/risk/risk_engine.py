@@ -202,19 +202,25 @@ class RiskEngine:
         if confidence_score < 0.50:
             return base
         
-        # Confidence bazlı hesaplama
-        ratio = (confidence_score - 0.50) / 0.50  # 0.0 - 1.0 arası
+        # Confidence bazlı hesaplama (Agresif / Logaritmik Opsiyonu)
+        # 50% confidence = base, 100% = maximum
+        ratio = (confidence_score - 0.50) / 0.50
+        
+        # Eğer çok yüksek güven varsa (%80+), daha hızlı yükselsin
+        if confidence_score > 0.80:
+            ratio = 0.5 + ((confidence_score - 0.80) / 0.20) * 0.5
+            
         calculated = base + (ratio * (maximum - base))
         
-        # Min/max sınırları (Borsalar genelde tam sayı kaldıraç destekler)
-        leverage = int(round(min(maximum, max(base, calculated))))
+        # Kaldıracı sınırla ve tam sayı yap
+        final_leverage = int(round(min(maximum, max(base, calculated))))
         
         logger.debug(
             f"Dinamik kaldıraç: Confidence={confidence_score:.2%}, "
-            f"Leverage={leverage:.1f}x"
+            f"Leverage={final_leverage}x (Base={base}x, Max={maximum}x)"
         )
         
-        return leverage
+        return float(final_leverage)
     
     def calculate_leverage_from_ml_recommendation(
         self,
