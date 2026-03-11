@@ -676,9 +676,14 @@ class ExchangeManager:
                     current_candle_dt = pd.Timestamp(current_candle_ts)
 
                 if last_processed_ts is not None and current_candle_dt == last_processed_ts:
-                    # Bu mum zaten işlendi, sadece fiyat güncellemesi yap (trailing stop için)
-                    # İndikatör hesaplama ve broadcast YOK (CPU tasarrufu!)
-                    await paper_engine.update_live_prices(symbol, float(live_ohlcv[-1][4]))
+                    # Bu mum zaten işlendi, sadece fiyat güncellemesi yap (trailing stop + SL/TP için)
+                    last_ohlcv = live_ohlcv[-1]  # [ts, open, high, low, close, volume]
+                    await paper_engine.update_live_prices(
+                        symbol,
+                        current_price=float(last_ohlcv[4]),   # close
+                        current_high=float(last_ohlcv[2]),    # high
+                        current_low=float(last_ohlcv[3])      # low
+                    )
                     continue  # ⚠️ DEVAM ET - yeni mum gelene kadar bekle
 
                 # YENİ MUM GELDİ! Kilidi güncelle

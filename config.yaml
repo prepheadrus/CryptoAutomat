@@ -31,7 +31,7 @@ htf:
   enabled: true
   filter_rules:
     require_all_htf_agree: false
-  trend_method: ema_stack
+  trend_method: close_ema
 ml:
   confidence_threshold: 0.5
   enabled: true
@@ -43,8 +43,8 @@ risk_management:
   default_leverage: 1
   max_consecutive_losses: 5
   max_leverage: 50
-  max_open_positions: 5
-  max_risk_per_trade_percent: 0.2
+  max_open_positions: 10
+  max_risk_per_trade_percent: 2.0
 strategy:
   active_modules:
   - trend_following
@@ -62,5 +62,5 @@ wfo:
   min_improvement: 0.05
   optimization_metric: sharpe
   reoptimize_interval: 168
-  test_days: 7
-  train_days: 30
+  test_days: 30
+  train_days: 90

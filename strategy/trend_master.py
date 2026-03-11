@@ -52,9 +52,9 @@ class TrendMasterPro(BaseStrategy):
             return 2
 
         # --- SHORT ---
-        # Fiyat EMA slow ve SMA 20 altında, RSI rsi_lower-
+        # Fiyat EMA slow ve SMA 20 altında, RSI 50'nin altında (ayı momentumu)
         trend_down = (close_p < current_row.get(f'EMA_{ema_slow}', 999999)) and (close_p < current_row['SMA_20'])
-        mom_down = rsi_lower < current_row.get(f'RSI_{rsi_period}', 50) < rsi_upper
+        mom_down = current_row.get(f'RSI_{rsi_period}', 50) < 50  # RSI 50 altında ayı bölgesi
 
         if trend_down and mom_down:
             return 0

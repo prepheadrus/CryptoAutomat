@@ -251,25 +251,25 @@ class PaperTrader:
                 logger.warning(f"Strateji bulunamadı: {symbol}")
                 return
 
-            # HTF filter (Legacy logic)
+            # HTF filter - Sadece aktif zıt trend engeller, NEUTRAL geçer
             if htf_trends:
                 htf_levels = list(htf_trends.keys())
                 if htf_levels:
                     major_htf = htf_levels[-1]
-                    bull_count = sum(1 for tf in htf_levels if htf_trends.get(tf) == 'BULL')
-                    bear_count = sum(1 for tf in htf_levels if htf_trends.get(tf) == 'BEAR')
+                    major_trend = htf_trends.get(major_htf, 'NEUTRAL')
 
-                    # LONG için: Major HTF BEAR olmamalı (signal = 2)
-                    if signal == 2:  # SignalType.LONG.value = 2
-                        if htf_trends.get(major_htf) == 'BEAR' or bull_count == 0:
-                            logger.info(f"🛡️ [FILTER] HTF Trend Engelleyici: {symbol} LONG reddedildi (Major HTF BEAR)")
-                            return
+                    # LONG için: Sadece major HTF aktif BEAR ise engelle (NEUTRAL'a izin ver)
+                    if signal == 2 and major_trend == 'BEAR':
+                        logger.info(f"🛡️ [HTF] {symbol} LONG reddedildi: Major HTF={major_htf} → {major_trend}")
+                        return
 
-                    # SHORT için: Major HTF BULL olmamalı (signal = 0)
-                    elif signal == 0:  # SignalType.SHORT.value = 0
-                        if htf_trends.get(major_htf) == 'BULL' or bear_count == 0:
-                            logger.info(f"🛡️ [FILTER] HTF Trend Engelleyici: {symbol} SHORT reddedildi (Major HTF BULL)")
-                            return
+                    # SHORT için: Sadece major HTF aktif BULL ise engelle (NEUTRAL'a izin ver)
+                    elif signal == 0 and major_trend == 'BULL':
+                        logger.info(f"🛡️ [HTF] {symbol} SHORT reddedildi: Major HTF={major_htf} → {major_trend}")
+                        return
+                    
+                    if major_trend != 'NEUTRAL':
+                        logger.debug(f"✅ [HTF] {symbol} Sinyal geçti: {signal_type} | HTF={major_htf}:{major_trend}")
             
             # Risk kontrolü
             if not self.risk_engine.can_open_position(len(self.position_manager.get_all_positions())):
@@ -341,14 +341,16 @@ class PaperTrader:
             atr = indicators.get('ATR_14', price * 0.01)
             stop_params = strategy.get_stop_params()
             atr_multiplier = stop_params.get('atr_multiplier', 3.0)
+            rr_ratio = stop_params.get('risk_reward_ratio', 2.0)  # Strateji başına RR oranı
 
-            # Stop loss / take profit hesapla
+            # Stop loss / take profit hesapla (Strateji RR oranı kullan)
             direction = "LONG" if signal == 2 else "SHORT"  # 2=LONG, 0=SHORT
             stop_loss, take_profit = self.risk_engine.calculate_dynamic_stops(
                 price=price,
                 direction=direction,
                 atr=atr,
-                multiplier=atr_multiplier
+                multiplier=atr_multiplier,
+                risk_reward_ratio=rr_ratio   # ← Artık strateji RR oranını kullanıyor
             )
             
             # 1. Önce Kaldıraç hesapla (Dinamik)
@@ -696,28 +698,84 @@ class PaperTrader:
     # LEGACY COMPATIBILITY (Eski Metodlar - Delegate)
     # ========================================================================
     
-    async def update_live_prices(self, symbol: str, current_price: float):
+    async def update_live_prices(
+        self,
+        symbol: str,
+        current_price: float,
+        current_high: float = None,
+        current_low: float = None
+    ):
         """
-        Canlı fiyat güncelleme (legacy).
+        Canlı fiyat güncelleme + SL/TP/Likidasyon kontrolü.
         
         Args:
             symbol: Sembol
-            current_price: Şu anki fiyat
+            current_price: Şu anki kapanış fiyatı
+            current_high: Mum high (trailing stop için)
+            current_low: Mum low (trailing stop için)
         """
+        # High/Low fallback: Mumdan gelmiyorsa tahmini değer kullan
+        candle_high = current_high if current_high is not None else current_price
+        candle_low  = current_low  if current_low  is not None else current_price
+        
         # Legacy positions güncelle
-        for pos in self.position_manager.legacy_positions:
-            if pos['symbol'] == symbol:
-                pos['current_price'] = current_price
-                
-                # Trailing stop güncelle
-                self.position_manager.update_trailing_stop_legacy(
-                    pos, current_price, current_price
-                )
-                
-                # PnL hesapla
-                roe, pnl_usd = self.position_manager.get_unrealized_pnl_legacy(pos, current_price)
-                pos['unrealized_usd'] = pnl_usd
-                pos['pnl_percent'] = roe
+        positions_to_close = []  # Kapatılacaklar (döngü içinde silme)
+        
+        for pos in list(self.position_manager.legacy_positions):  # list() kopyasını al
+            if pos['symbol'] != symbol:
+                continue
+            
+            pos['current_price'] = current_price
+            
+            # 1. Trailing stop güncelle (doğru HIGH/LOW ile)
+            self.position_manager.update_trailing_stop_legacy(
+                pos, candle_high, candle_low
+            )
+            
+            # 2. PnL hesapla
+            roe, pnl_usd = self.position_manager.get_unrealized_pnl_legacy(pos, current_price)
+            pos['unrealized_usd'] = pnl_usd
+            pos['pnl_percent'] = roe
+            
+            # 3. Likidasyon kontrolü
+            if self.position_manager.check_liquidation_legacy(pos, current_price):
+                positions_to_close.append((pos['bot_id'], current_price, 'LİKİDASYON'))
+                continue
+            
+            # 4. Stop Loss / Take Profit kontrolü
+            sl = pos.get('stop_loss')
+            tp = pos.get('take_profit')
+            direction = pos.get('direction', 'LONG')
+            
+            if direction == 'LONG':
+                if sl and current_price <= sl:
+                    positions_to_close.append((pos['bot_id'], sl, 'STOP LOSS'))
+                elif tp and current_price >= tp:
+                    positions_to_close.append((pos['bot_id'], tp, 'TAKE PROFIT'))
+            else:  # SHORT
+                if sl and current_price >= sl:
+                    positions_to_close.append((pos['bot_id'], sl, 'STOP LOSS'))
+                elif tp and current_price <= tp:
+                    positions_to_close.append((pos['bot_id'], tp, 'TAKE PROFIT'))
+        
+        # Kapatılacak pozisyonları işle
+        for bot_id, exit_price, reason in positions_to_close:
+            logger.info(f"🔴 [{reason}] {symbol} @ {exit_price:.4f} | Bot: {bot_id}")
+            trade = await self.position_manager.close_position(
+                bot_id=bot_id,
+                exit_price=exit_price,
+                reason=reason
+            )
+            if trade:
+                self.balance += trade.pnl
+                self.free_margin = self.balance
+                self.open_positions = self.position_manager.legacy_positions
+                self.risk_engine.record_trade_result(trade.pnl)
+                self.bot_manager.record_bot_trade(bot_id, trade.pnl)
+                if trade.pnl > 0:
+                    logger.info(f"✅ {reason}: +${trade.pnl:.2f} ({trade.pnl_percent:.2%}) KAR")
+                else:
+                    logger.warning(f"⚠️ {reason}: ${trade.pnl:.2f} ({trade.pnl_percent:.2%}) ZARAR")
     
     @property
     def timeframe(self):

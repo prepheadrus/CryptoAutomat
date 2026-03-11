@@ -139,7 +139,7 @@ class PositionManager:
             
             # Likidasyon fiyatı hesapla
             liq_price = self._calculate_liquidation_price(
-                execution_price, leverage, margin_type, margin, position_value
+                execution_price, leverage, direction, margin_type, margin, position_value
             )
             
             # Position oluştur
@@ -190,6 +190,7 @@ class PositionManager:
         self,
         entry_price: float,
         leverage: float,
+        direction: str,
         margin_type: str,
         margin: float,
         position_value: float
@@ -197,25 +198,25 @@ class PositionManager:
         """
         Likidasyon fiyatı hesapla.
         
-        Args:
-            entry_price: Giriş fiyatı
-            leverage: Kaldıraç
-            margin_type: Marjin tipi
-            margin: Marjin miktarı
-            position_value: Pozisyon değeri
-        
-        Returns:
-            Likidasyon fiyatı
+        LONG: Fiyat aşağı düşürse likidasyon (entry'nin altı)
+        SHORT: Fiyat yukarı çıkarsa likidasyon (entry'nin üstü)
         """
+        if leverage <= 0:
+            return 0.0
+        
         if margin_type == "isolated":
-            # İzole marjin: %90 kayıpta likidasyon
-            if leverage <= 0:
-                return 0.0
-            liq_price = entry_price * (1 - 0.9 / leverage)
+            # İzole marjin: Margin'in %90'nı kaybedince likidasyon
+            if direction == "LONG":
+                liq_price = entry_price * (1 - 0.9 / leverage) 
+            else:  # SHORT
+                liq_price = entry_price * (1 + 0.9 / leverage)
         else:
-            # Cross marjin: Tüm free margin kullanılır
+            # Cross marjin
             risk_buffer = margin / position_value if position_value > 0 else 0
-            liq_price = entry_price * (1 - risk_buffer * 0.9)
+            if direction == "LONG":
+                liq_price = entry_price * (1 - risk_buffer * 0.9)
+            else:  # SHORT
+                liq_price = entry_price * (1 + risk_buffer * 0.9)
         
         return max(0.0, liq_price)
     

@@ -74,27 +74,22 @@ class DivergenceHunter(BaseStrategy):
         if is_pos_divergence and is_bull_trend and is_psar_bull:
             return 2
 
-        # --- SHORT (SAT) ŞARTLARI (Geçici Düzeltme) ---
-        # Hatalı olan orijinal `is_neg_divergence` mantığı, sistemde mevcut olan ve daha güvenilir göstergelerle değiştirildi.
-        # RSI'ın aşırı alımda olması, MACD'nin negatif kesişim yapması ve fiyatın üst Bollinger Bandı'na dokunması gibi bir kombinasyon arıyoruz.
+        # --- SHORT (SAT) ŞARTLARI ---
+        # Negatif Uyuşmazlık: Fiyat tepe yapıyor, ancak Demand ve UO düşüyor (dağılım)
+        is_neg_divergence = (
+            not current_row.get('DIV_PRICE_LOWER', False) and   # Fiyat dip yapmıyorsa (yani tepe veya yatay)
+            current_row['DEMAND_INDEX'] > 0 and                  # Demand hala pozitif (ama zayıflıyor)
+            current_row.get('DIV_UO_HIGHER', False) == False and # UO yükselmiyor (düşüyor)
+            current_row.get('RSI_14', 50) > 55                   # RSI zirveye yakın
+        )
 
-        # 1. RSI aşırı alım bölgesinde mi? (Örn: 70'in üstü)
-        is_rsi_overbought = current_row.get('RSI_14', 50) > rsi_overbought
-
-        # 2. MACD histogramı negatif mi? (Ayı kesişimi teyidi)
-        is_macd_bearish = current_row.get('MACDh_12_26_9', 0) < 0
-
-        # 3. Fiyat üst Bollinger Bandına ulaştı veya geçti mi?
-        is_price_at_bb_upper = current_row.get('close', 0) >= current_row.get('BBU_20_2.0_2.0', float('inf'))
-
-        # Bu üç koşul birleştiğinde bir SHORT sinyali oluşturabiliriz.
-        is_neg_confluence = is_rsi_overbought and is_macd_bearish and is_price_at_bb_upper
-
-        # Orijinal PSAR ve Trend koşullarını koruyalım
+        # Trend: -DI, +DI'nin üzerinde (ayı baskısı)
         is_bear_trend = current_row['DMN_14'] > current_row['DMP_14']
+
+        # Tetik (PSAR): Fiyat Parabolic SAR'ın altına inmiş
         is_psar_bear = current_row['close'] < current_row['PSAR']
 
-        if is_neg_confluence and is_bear_trend and is_psar_bear:
+        if is_neg_divergence and is_bear_trend and is_psar_bear:
             return 0
 
         return 1
