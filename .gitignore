@@ -39,3 +39,11 @@ artifacts/
 # IDEs
 .idea/
 .DS_Store
+
+# =============================================
+# Makineye Özel Yapılandırma (Her Makine Farklı)
+# Ubuntu ve Windows config'leri birbirini ezmez.
+# Şablon: config.example.yaml dosyasını kopyala
+#          -> config.yaml olarak kullan
+# =============================================
+config.yaml
