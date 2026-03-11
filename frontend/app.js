@@ -1364,15 +1364,14 @@ function updatePortfolioCards(portfolio) {
             }
         });
 
-        // Ortalama Kaldıraç hesapla ve güncelle
+        // Gerçek İşlem Kaldıracı (Trading Leverage): Toplam Pozisyon / Kullanılan Marjin
         const leverageEl = document.getElementById('usage-leverage');
-        if (leverageEl && portfolio.total_notional > 0 && portfolio.equity > 0) {
-            // Gerçek hesap kaldıracı: Toplam Pozisyon Değeri / Özkaynak (Equity)
-            // Bu kullanıcının toplam riskini gösterir.
-            const accountLeverage = portfolio.total_notional / portfolio.equity;
-            leverageEl.textContent = `${accountLeverage.toFixed(2)}x`;
+        if (leverageEl && portfolio.total_notional > 0 && portfolio.used_margin > 0) {
+            // Bir tüccarın görmek istediği işlem kaldıracı (Örn: 10.0x, 1.0x)
+            const exposureLeverage = portfolio.total_notional / portfolio.used_margin;
+            leverageEl.textContent = `${exposureLeverage.toFixed(1)}x`;
         } else if (leverageEl) {
-            leverageEl.textContent = `0.00x`;
+            leverageEl.textContent = `0.0x`;
         }
 
     } catch (error) {
@@ -1465,7 +1464,7 @@ function updatePositionsTable(positions) {
                     <td>
                         <div style="display:flex; flex-direction:column;">
                             <span style="color:var(--text-bright); font-weight:500;">${(pos.size || 0).toFixed(4)}</span>
-                            <span style="font-size:0.7rem; color:var(--text-muted);">${pos.leverage || 1}x</span>
+                            <span style="font-size:0.7rem; color:var(--text-muted);">${Math.round(pos.leverage || 1)}x</span>
                         </div>
                     </td>
                     <td>
@@ -1490,7 +1489,7 @@ function updatePositionsTable(positions) {
                             <span style="color: var(--neon-red);">SL: ${pos.stop_loss ? pos.stop_loss.toLocaleString() : '-'}</span>
                             <span style="color: var(--neon-green);">TP: ${pos.take_profit ? pos.take_profit.toLocaleString() : '-'}</span>
                             <span style="color: ${getColorForLiq(pos.liquidation_price, pos.current_price || pos.entry_price, pos.direction)}; font-weight:bold;">
-                                Liq: ${pos.liquidation_price && pos.liquidation_price > 0 ? pos.liquidation_price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-'}
+                                Liq: ${pos.leverage <= 1.1 ? 'GÜVENLİ (>%80)' : (pos.liquidation_price && pos.liquidation_price > 0 ? pos.liquidation_price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-')}
                             </span>
                         </div>
                     </td>
