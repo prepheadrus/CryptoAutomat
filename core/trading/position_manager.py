@@ -205,18 +205,22 @@ class PositionManager:
             return 0.0
         
         if margin_type == "isolated":
-            # İzole marjin: Margin'in %90'nı kaybedince likidasyon
+            # Binance USDT-M Vadeli İşlemler Temel Formülü (Tahmini)
+            # Maintenance Margin Rate (MMR) genelde %0.5 (0.005) civarıdır
+            # LONG Liq Price = Entry * (1 - (1/Leverage) + MMR)
+            mmr = 0.005
             if direction == "LONG":
-                liq_price = entry_price * (1 - 0.9 / leverage) 
+                liq_price = entry_price * (1 - (1 / leverage) + mmr)
             else:  # SHORT
-                liq_price = entry_price * (1 + 0.9 / leverage)
+                liq_price = entry_price * (1 + (1 / leverage) - mmr)
         else:
-            # Cross marjin
+            # Cross marjin (basitleştirilmiş)
             risk_buffer = margin / position_value if position_value > 0 else 0
+            mmr = 0.005
             if direction == "LONG":
-                liq_price = entry_price * (1 - risk_buffer * 0.9)
+                liq_price = entry_price * (1 - risk_buffer + mmr)
             else:  # SHORT
-                liq_price = entry_price * (1 + risk_buffer * 0.9)
+                liq_price = entry_price * (1 + risk_buffer - mmr)
         
         return max(0.0, liq_price)
     

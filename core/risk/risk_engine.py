@@ -103,7 +103,8 @@ class RiskEngine:
         entry_price: float,
         stop_loss_price: float,
         risk_percentage: Optional[float] = None,
-        leverage: float = 1.0
+        leverage: float = 1.0,
+        free_margin: Optional[float] = None
     ) -> float:
         """
         Pozisyon boyutu hesapla (risk bazlı).
@@ -140,16 +141,29 @@ class RiskEngine:
         # 1. Risk bazlı boyut
         size_by_risk = risk_amount / price_distance
         
-        # 2. Kaldıraç-Bakiye bazlı boyut (Kritik Cap!)
-        # İşlem büyüklüğü (notional) bakiye * kaldıracı geçemez
-        max_notional = account_balance * leverage * 0.98 # %2 margin buffer
-        size_by_leverage = max_notional / entry_price
+        # 2. İşlem Başına Maksimum Sermaye Limiti (Account limitine göre cap)
+        # Örn: max_open_positions = 10 ise, bir işleme en fazla %10 marjin ayrılabilir.
+        max_positions = getattr(self.config, 'max_open_positions', 10)
+        max_positions = max(1, max_positions)
+        max_margin_per_trade = account_balance / max_positions
         
+        # Seçilen kaldıraç ile ulaşılabilecek maksimum notional limit (Kullanılan Marjin Limiti ile)
+        max_notional_by_margin = max_margin_per_trade * leverage * 0.98 # %2 margin buffer
+        size_by_margin_limit = max_notional_by_margin / entry_price
+        
+        # 3. Serbest Bakiye Limiti (Gerçekte kullanılabilir olan bakiye kısıtlaması)
+        # Eğer free_margin belirtildiyse, yeni açılacak pozisyon free_margin'i de aşmamalı
+        size_by_free_margin = float('inf')
+        if free_margin is not None:
+            max_notional_by_free_margin = free_margin * leverage * 0.98
+            size_by_free_margin = max_notional_by_free_margin / entry_price
+
         # En küçüğünü al
-        position_size = min(size_by_risk, size_by_leverage)
+        position_size = min(size_by_risk, size_by_margin_limit, size_by_free_margin)
         
         logger.debug(
-            f"📏 Boyut Hesabı | Risk: {size_by_risk:.4f}, Leverage_Limit: {size_by_leverage:.4f} -> Final: {position_size:.4f}"
+            f"📏 Boyut Hesabı | Risk: {size_by_risk:.4f}, MarginLimit: {size_by_margin_limit:.4f}, "
+            f"FreeMarginLimit: {size_by_free_margin:.4f} -> Final: {position_size:.4f}"
         )
         
         return position_size

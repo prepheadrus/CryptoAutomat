@@ -373,7 +373,8 @@ class PaperTrader:
                 entry_price=price,
                 stop_loss_price=stop_loss,
                 risk_percentage=risk_percent,
-                leverage=leverage
+                leverage=leverage,
+                free_margin=self.free_margin
             )
             
             # Pozisyon aç
@@ -538,7 +539,7 @@ class PaperTrader:
         position = positions[0]
         current_price = position.metadata.get('current_price', position.entry_price)
         
-        await self.position_manager.close_position(
+        trade = await self.position_manager.close_position(
             bot_id=position.bot_id,
             exit_price=current_price,
             reason="manual"
