@@ -122,11 +122,6 @@ class Trade:
         
         if self.leverage < 1:
             raise ValueError("leverage en az 1x olmalı")
-        
-        # Duration hesapla (eğer None ise)
-        if 'duration' not in self.__dict__ or self.__dict__['duration'] is None:
-            duration = self.closed_at - self.opened_at
-            object.__setattr__(self, 'duration', duration)
     
     # ========================================================================
     # TRADE RESULT (İŞLEM SONUCU)
