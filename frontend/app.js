@@ -1300,38 +1300,72 @@ function renderDashboard(metrics) {
 
 function updatePortfolioCards(portfolio) {
     try {
-        console.log('[DEBUG] updatePortfolioCards - portfolio:', portfolio);
+        if (!portfolio) return;
 
-        if (!portfolio) {
-            console.warn('⚠️ Portfolio verisi boş');
-            return;
-        }
-
-        const elements = {
+        // 1. Ana Portföy Kartları (Tab 1)
+        const mainElements = {
             'balance-val': portfolio.balance,
             'free-margin-val': portfolio.free_margin,
             'used-margin-val': portfolio.used_margin,
             'total-pnl-val': portfolio.total_pnl,
         };
 
-        Object.entries(elements).forEach(([id, value]) => {
+        // 2. Performans KPI Kartları (Tab 3 - Aktif Emirler)
+        const perfElements = {
+            'perf-balance': portfolio.balance,
+            'perf-equity': portfolio.equity || portfolio.balance,
+            'perf-winrate': portfolio.win_rate * 100,
+            'perf-count': portfolio.total_trades,
+            'perf-total-trades': portfolio.total_trades, 
+            'perf-total-pnl': portfolio.total_pnl,
+            'perf-total-fees': portfolio.total_commission || 0
+        };
+
+        // Ana kartları güncelle
+        Object.entries(mainElements).forEach(([id, value]) => {
             const el = document.getElementById(id);
-            if (el) {
-                if (value !== undefined && value !== null) {
-                    el.textContent = `$${value.toFixed(2)}`;
-                    el.classList.toggle('success-text', value >= 0);
-                    el.classList.toggle('danger-text', value < 0);
-                    console.log(`[INFO] ${id} güncellendi: $${value.toFixed(2)}`);
-                } else {
-                    console.warn(`⚠️ ${id} için değer yok`);
+            if (el && value !== undefined) {
+                el.textContent = `$${value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                if (id === 'total-pnl-val') {
+                    el.className = value >= 0 ? 'success-text' : 'danger-text';
+                    el.textContent = (value >= 0 ? '+' : '') + el.textContent;
                 }
-            } else {
-                console.error(`❌ Element bulunamadı: ${id}`);
             }
         });
+
+        // KPI kartlarını güncelle
+        Object.entries(perfElements).forEach(([id, value]) => {
+            const el = document.getElementById(id);
+            if (el && value !== undefined) {
+                if (id === 'perf-winrate') {
+                    el.textContent = `${value.toFixed(1)}%`;
+                } else if (id === 'perf-count' || id === 'perf-total-trades') {
+                    el.textContent = value;
+                } else {
+                    el.textContent = `$${value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    if (id === 'perf-total-pnl') {
+                        el.style.color = value >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+                    }
+                }
+            }
+        });
+
+        // Tab 3'teki Sermaye Kullanımı kartlarını da güncelle
+        const usageElements = {
+            'usage-used-margin': portfolio.used_margin,
+            'usage-free-margin': portfolio.free_margin,
+            'usage-notional': (portfolio.used_margin * 10) // Varsayılan 10x
+        };
+
+        Object.entries(usageElements).forEach(([id, value]) => {
+            const el = document.getElementById(id);
+            if (el && value !== undefined) {
+                el.textContent = `$${value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            }
+        });
+
     } catch (error) {
         console.error('❌ updatePortfolioCards hatası:', error);
-        console.error('Stack trace:', error.stack);
     }
 }
 
@@ -1395,27 +1429,68 @@ function updatePositionsTable(positions) {
         }
 
         if (!positions || positions.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px;">Açık pozisyon yok</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color: var(--text-muted);">Açık pozisyon yok</td></tr>';
             return;
         }
 
-        tbody.innerHTML = positions.map(pos => `
-            <tr>
-                <td>${pos.symbol || 'Unknown'}</td>
-                <td><span class="badge ${pos.direction === 'LONG' ? 'success' : 'danger'}">${pos.direction || 'UNKNOWN'}</span></td>
-                <td>$${(pos.entry_price || 0).toFixed(2)}</td>
-                <td>$${(pos.current_price || 0).toFixed(2)}</td>
-                <td class="${(pos.unrealized_usd || 0) >= 0 ? 'success-text' : 'danger-text'}">
-                    $${(pos.unrealized_usd || 0).toFixed(2)}
-                </td>
-                <td>${pos.leverage || 1}x</td>
-                <td>
-                    <button class="btn btn-sm btn-danger" onclick="closePosition('${pos.symbol || ''}')">
-                        Kapat
-                    </button>
-                </td>
-            </tr>
-        `).join('');
+        tbody.innerHTML = positions.map(pos => {
+            const pnlColor = (pos.unrealized_usd || 0) >= 0 ? 'success-text' : 'danger-text';
+            const directionClass = pos.direction === 'LONG' ? 'badge-success' : 'badge-danger';
+            const notional = (pos.size || 0) * (pos.current_price || pos.entry_price || 0);
+            
+            return `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <td style="font-size: 0.65rem; color: var(--text-muted); font-family: monospace;">
+                        ${pos.bot_id ? pos.bot_id.split('_')[1] || pos.bot_id.substring(0,8) : 'N/A'}
+                    </td>
+                    <td>
+                        <div style="display:flex; flex-direction:column;">
+                            <span class="badge ${directionClass}" style="width:fit-content; font-size:0.6rem; padding: 2px 6px; margin-bottom:2px;">
+                                ${pos.direction || 'UNKNOWN'}
+                            </span>
+                            <span style="font-weight:bold; color:var(--text-bright);">${pos.symbol || 'Unknown'}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div style="display:flex; flex-direction:column;">
+                            <span style="color:var(--text-bright); font-weight:500;">${(pos.size || 0).toFixed(4)}</span>
+                            <span style="font-size:0.7rem; color:var(--text-muted);">${pos.leverage || 1}x</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div style="display:flex; flex-direction:column;">
+                            <span style="color:var(--text-bright);">$${(pos.entry_price || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                            <span style="font-size:0.7rem; color:var(--text-muted); font-weight:bold;">$${notional.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div style="display:flex; flex-direction:column;">
+                            <span style="color:var(--text-bright);">$${(pos.current_price || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                            <span class="${pnlColor}" style="font-weight:bold;">
+                                ${(pos.unrealized_usd || 0) >= 0 ? '+' : ''}$${(pos.unrealized_usd || 0).toFixed(2)}
+                            </span>
+                        </div>
+                    </td>
+                    <td class="${pnlColor}" style="font-weight:bold; font-size: inherit;">
+                        ${(pos.pnl_percent || 0) >= 0 ? '+' : ''}${(pos.pnl_percent || 0).toFixed(2)}%
+                    </td>
+                    <td>
+                        <div style="font-size: 0.7rem; display:flex; flex-direction:column; gap:2px;">
+                            <span style="color: var(--neon-red);">SL: ${pos.stop_loss ? pos.stop_loss.toLocaleString() : '-'}</span>
+                            <span style="color: var(--neon-green);">TP: ${pos.take_profit ? pos.take_profit.toLocaleString() : '-'}</span>
+                            <span style="color: #ffaa00; font-weight:bold;">Liq: ${pos.liquidation_price ? pos.liquidation_price.toLocaleString() : '-'}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-danger btn-close-pos" 
+                                onclick="closePosition('${pos.symbol || ''}')"
+                                style="font-size: 0.65rem; padding: 4px 8px; border-radius: 4px;">
+                            POZ. KAPAT
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
     } catch (error) {
         console.error('❌ updatePositionsTable hatası:', error);
         console.error('Stack trace:', error.stack);

@@ -403,6 +403,12 @@ class PaperTrader:
         
         logger.info(f"❌ Pozisyon kapatıldı: {bot_id} PnL=${pnl:.2f}")
         
+        # Bakiyeyi güncelle
+        self.balance += pnl
+        # Free margin'i güncelle (Basit model)
+        self.free_margin = self.balance
+        self.used_margin = 0.0 # Bireysel botlara bakılacak
+        
         # Risk engine'e kaydet
         self.risk_engine.record_trade_result(pnl)
         
@@ -523,14 +529,31 @@ class PaperTrader:
         Returns:
             Dict with all stats
         """
+        # Toplam unrealized PnL ve kullanılan marjin
+        unrealized_pnl = 0.0
+        used_margin = 0.0
+        for pos in self.position_manager.legacy_positions:
+            unrealized_pnl += pos.get('unrealized_usd', 0.0)
+            used_margin += pos.get('margin', 0.0)
+            
+        equity = self.balance + unrealized_pnl
+        free_margin = self.balance - used_margin
+        
+        # Legacy değişkenleri güncelle (UI için değil, iç mantık için gerekebilir)
+        self.used_margin = used_margin
+        self.free_margin = free_margin
+        
         return {
             'balance': self.balance,
-            'free_margin': self.free_margin,
-            'used_margin': self.used_margin,
+            'free_margin': free_margin,
+            'used_margin': used_margin,
+            'equity': equity,
+            'unrealized_pnl': unrealized_pnl,
             'total_trades': self.position_manager.total_trades,
             'total_wins': self.position_manager.total_wins,
             'win_rate': self.position_manager.total_wins / max(1, self.position_manager.total_trades),
             'total_pnl': self.position_manager.total_pnl,
+            'total_commission': self.position_manager.total_commission,
             'bot_stats': self.bot_manager.get_stats(),
             'risk_stats': self.risk_engine.get_stats(),
             'position_stats': self.position_manager.get_stats()
