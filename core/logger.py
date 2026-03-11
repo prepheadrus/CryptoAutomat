@@ -16,10 +16,10 @@ def setup_logger(name='CryptoAlgoBot'):
         console_handler = colorlog.StreamHandler()
         console_handler.setLevel(log_level)
 
-        # Konsol formatı: Renkli ve zaman detaylı
+        # Konsol formatı: Daha temiz ve kompakt
         formatter = colorlog.ColoredFormatter(
-            "%(log_color)s%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-            datefmt='%Y-%m-%d %H:%M:%S',
+            "%(log_color)s%(asctime)s | %(message)s",
+            datefmt='%H:%M:%S',
             reset=True,
             log_colors={
                 'DEBUG':    'cyan',
@@ -36,5 +36,21 @@ def setup_logger(name='CryptoAlgoBot'):
 
     return logger
 
+# Silencing noisy third-party loggers
+def silence_noisy_loggers():
+    """Silence external libraries that generate too much noise."""
+    noisy_loggers = [
+        "uvicorn.access",
+        "uvicorn.error",
+        "httpcore",
+        "httpx",
+        "ccxt",
+        "matplotlib",
+        "PIL",
+    ]
+    for logger_name in noisy_loggers:
+        logging.getLogger(logger_name).setLevel(logging.WARNING)
+
 # Logger örneği kullanımı için hazır
+silence_noisy_loggers()
 logger = setup_logger()

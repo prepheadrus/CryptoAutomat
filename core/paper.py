@@ -222,11 +222,19 @@ class PaperTrader:
             indicators = payload.get('indicators', {})
             metadata = payload.get('metadata', {})
 
-            logger.info(f"📬 Sinyal alındı: {bot_id} signal={signal}")
-
-            # HOLD ise işlem yapma (signal int olarak geliyor)
-            if signal == 1:  # SignalType.HOLD.value = 1
+            # Sinyal tipi belirle
+            signal_type = "LONG" if signal == 2 else "SHORT" if signal == 0 else "HOLD"
+            
+            # HOLD (Bekle) ise sadece DEBUG düzeyinde logla (Terminali kirletmez)
+            if signal == 1:
+                logger.debug(f"📬 {symbol} ({bot_id}) Sinyal: {signal_type}")
                 return
+
+            # EĞER GERÇEK BİR SİNYAL VARSA (0 veya 2) - GÖZE ÇARPACAK ŞEKİLDE LOGLA
+            logger.info("=" * 60)
+            logger.info(f"🔔 [YENİ SİNYAL] {symbol} ({bot_id}) | YÖN: {signal_type} | FİYAT: {price:.4f}")
+            logger.info(f"   📊 TREND: {htf_trend} | REJİM: {self.market_regime}")
+            logger.info("=" * 60)
 
             # Bot çalışıyor mu kontrol et
             if not self.bot_manager.is_bot_running(bot_id):
@@ -280,6 +288,7 @@ class PaperTrader:
             ml_confirmed = True
             ml_confidence = 0.5
             ml_rec = "HOLD"
+            ml_rec_norm = "HOLD"
 
             if self.ml_enabled:
                 ml_data = await self._get_ml_confirmation(symbol, timeframe, indicators)
@@ -287,13 +296,18 @@ class PaperTrader:
                     ml_rec = ml_data.get('recommendation', 'HOLD')
                     ml_confidence = ml_data.get('confidence', 0.5)
                     
+                    # ML Önerisini Normalize Et (TR -> EN)
+                    ml_rec_norm = str(ml_rec).upper()
+                    if "AL" in ml_rec_norm or "BUY" in ml_rec_norm: ml_rec_norm = "LONG"
+                    elif "SAT" in ml_rec_norm or "SELL" in ml_rec_norm: ml_rec_norm = "SHORT"
+                    
                     # Filtreleme Mantığı (Conflict Resolution)
-                    if signal == 2 and "SHORT" in ml_rec:  # Direction: LONG
-                        logger.info(f"🛡️ [ML FILTER] {symbol} LONG reddedildi: ML zıt yön gösteriyor ({ml_rec}) | Conf: {ml_confidence:.2f}")
+                    if signal == 2 and ml_rec_norm == "SHORT":  # Direction: LONG
+                        logger.info(f"🛡️ [ML FILTER] {symbol} LONG reddedildi: ML zıt yön gösteriyor ({ml_rec_norm}) | Conf: {ml_confidence:.2f}")
                         ml_confirmed = False
                     
-                    elif signal == 0 and "LONG" in ml_rec: # Direction: SHORT
-                        logger.info(f"🛡️ [ML FILTER] {symbol} SHORT reddedildi: ML zıt yön gösteriyor ({ml_rec}) | Conf: {ml_confidence:.2f}")
+                    elif signal == 0 and ml_rec_norm == "LONG": # Direction: SHORT
+                        logger.info(f"🛡️ [ML FILTER] {symbol} SHORT reddedildi: ML zıt yön gösteriyor ({ml_rec_norm}) | Conf: {ml_confidence:.2f}")
                         ml_confirmed = False
                     
                     # Nötr (Hold) durumu konfigürasyona bağlı olarak engellenebilir
@@ -311,7 +325,7 @@ class PaperTrader:
                 'signal_text': "LONG" if signal == 2 else "SHORT" if signal == 0 else "HOLD",
                 'price': price,
                 'time': datetime.utcnow().isoformat(),
-                'ml_rec': ml_rec,
+                'ml_rec': ml_rec_norm, # Normalize edilmiş halini kaydet
                 'ml_confidence': ml_confidence,
                 'ml_confirmed': ml_confirmed,
                 'htf_trend': htf_trend
@@ -337,25 +351,25 @@ class PaperTrader:
                 multiplier=atr_multiplier
             )
             
-            # Pozisyon boyutu hesapla
+            # 1. Önce Kaldıraç hesapla (Dinamik)
+            if self.ml_enabled and ml_confirmed:
+                rec_str = ml_rec_norm
+                if ml_confidence >= 0.85:
+                    rec_str = f"STRONG_{ml_rec_norm}"
+                
+                leverage = self.risk_engine.calculate_leverage_from_ml_recommendation(rec_str)
+            else:
+                leverage = CONFIG['risk_management'].get('default_leverage', 1.0)
+                
+            # 2. Sonra Pozisyon boyutu hesapla (Kaldıraç-Bakiye kalkanı ile)
             risk_percent = CONFIG['risk_management'].get('max_risk_per_trade_percent', 0.2)
             size = self.risk_engine.calculate_position_size(
                 account_balance=self.balance,
                 entry_price=price,
                 stop_loss_price=stop_loss,
-                risk_percentage=risk_percent
+                risk_percentage=risk_percent,
+                leverage=leverage
             )
-            
-            # Kaldıraç hesapla (Dinamik)
-            if self.ml_enabled and ml_confirmed:
-                # ML güvenine göre öneri belirle
-                rec_str = ml_rec
-                if ml_confidence >= 0.85:
-                    rec_str = f"STRONG_{ml_rec}"
-                
-                leverage = self.risk_engine.calculate_leverage_from_ml_recommendation(rec_str)
-            else:
-                leverage = CONFIG['risk_management'].get('default_leverage', 1.0)
             
             # Pozisyon aç
             position = self.position_manager.open_position(

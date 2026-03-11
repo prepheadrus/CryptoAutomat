@@ -683,7 +683,7 @@ class ExchangeManager:
 
                 # YENİ MUM GELDİ! Kilidi güncelle
                 last_processed_ts = current_candle_dt
-                logger.info(f"🕐 [NEW CANDLE] Yeni mum: {current_candle_dt}")
+                logger.debug(f"🕐 [NEW CANDLE] Yeni mum: {current_candle_dt}")
 
                 # Canlı veriyi DataFrame'e dönüştür
                 # live_ohlcv is a list of lists: [[timestamp, open, high, low, close, volume], ...]
@@ -846,7 +846,7 @@ class ExchangeManager:
                     ]
 
                     if active_bot_ids:
-                        logger.info(f"🤖 [1-to-N] {symbol} için {len(active_bot_ids)} aktif bot işleniyor...")
+                        logger.debug(f"🤖 [1-to-N] {symbol} için {len(active_bot_ids)} aktif bot işleniyor...")
 
                         # PARALEL İŞLEME: Her bot için asenkron task oluştur
                         # Kritik: 1h botunun ML hesaplaması 1m botunu bekletmez!
@@ -886,8 +886,8 @@ class ExchangeManager:
 
                     # ESKİ MİMARİ KALDIRILDI! Sadece 1-to-N kullanılıyor
 
-                    # 8. YAPAY ZEKA TAHMİNİ (Hedef Vade Verileriyle)
-                    logger.info(f"✅ {symbol} {target_tf} (HTF: {htf_trends} | REJİM: {regime_info['regime']}) analiz tamamlandı. Botlar işlendi.")
+                    # 8. ANALİZ ÖZETİ (DEBUG seviyesinde tutulur, gürültü yapmaz)
+                    logger.debug(f"✅ {symbol} {target_tf} (HTF: {htf_trends} | REJİM: {regime_info['regime']}) analiz tamamlandı. Botlar işlendi.")
 
             # BAĞLANTI KOPMA VE RECONNECT KALKANI
             except ccxt.NetworkError as e:

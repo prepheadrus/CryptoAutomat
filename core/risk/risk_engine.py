@@ -102,35 +102,31 @@ class RiskEngine:
         account_balance: float,
         entry_price: float,
         stop_loss_price: float,
-        risk_percentage: Optional[float] = None
+        risk_percentage: Optional[float] = None,
+        leverage: float = 1.0
     ) -> float:
         """
         Pozisyon boyutu hesapla (risk bazlı).
         
-        Formül: (Bakiye × Risk%) / |Giriş - Stop|
+        Formül: min((Bakiye × Risk%) / |Giriş - Stop|, (Bakiye × Kaldıraç) / Giriş)
         
         Args:
             account_balance: Hesap bakiyesi
             entry_price: Giriş fiyatı
             stop_loss_price: Stop loss fiyatı
             risk_percentage: Risk yüzdesi (None ise config.max_risk_per_trade kullanılır)
+            leverage: Kullanılan kaldıraç (boyut sınırlandırması için)
         
         Returns:
             Pozisyon boyutu (coin miktarı)
-        
-        Raises:
-            ValueError: Risk limiti geçersiz ise
         """
         # Risk yüzdesini belirle
         if risk_percentage is None:
-            risk_percentage = self.config.max_risk_per_trade * 100  # Convert to percentage
+            risk_percentage = self.config.max_risk_per_trade * 100
         
         # Validasyon
         if risk_percentage <= 0.0 or risk_percentage > 5.0:
-            raise ValueError(
-                f"Geçersiz risk limiti: {risk_percentage}%. "
-                f"Kabul edilebilir aralık: 0-5%"
-            )
+            risk_percentage = 1.0 # Güvenli fallback
         
         # Risk miktarı ($)
         risk_amount = account_balance * (risk_percentage / 100.0)
@@ -139,15 +135,21 @@ class RiskEngine:
         price_distance = abs(entry_price - stop_loss_price)
         
         if price_distance <= 0:
-            logger.warning("Stop loss mesafesi 0! Pozisyon boyutu 0 döndürülüyor.")
             return 0.0
         
-        # Pozisyon boyutu
-        position_size = risk_amount / price_distance
+        # 1. Risk bazlı boyut
+        size_by_risk = risk_amount / price_distance
+        
+        # 2. Kaldıraç-Bakiye bazlı boyut (Kritik Cap!)
+        # İşlem büyüklüğü (notional) bakiye * kaldıracı geçemez
+        max_notional = account_balance * leverage * 0.98 # %2 margin buffer
+        size_by_leverage = max_notional / entry_price
+        
+        # En küçüğünü al
+        position_size = min(size_by_risk, size_by_leverage)
         
         logger.debug(
-            f"Pozisyon boyutu: Balance=${account_balance:.2f}, "
-            f"Risk={risk_percentage:.2f}%, Size={position_size:.6f}"
+            f"📏 Boyut Hesabı | Risk: {size_by_risk:.4f}, Leverage_Limit: {size_by_leverage:.4f} -> Final: {position_size:.4f}"
         )
         
         return position_size

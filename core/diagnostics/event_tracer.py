@@ -285,7 +285,12 @@ class EventTracer:
         if event.source and event.source != "unknown":
             output += f" {Colors.DIM}(from: {event.source}){Colors.RESET}"
         
-        logger.info(output)
+        # AKILLI FİLTRELEME: Repetitive (tekrarlayan) eventleri DEBUG seviyesine çek
+        # Böylece sadece kritik olaylar (Sinyal, Pozisyon, Trade) INFO olarak görünür.
+        if category in [EventCategory.DATA, EventCategory.SYSTEM] or "processed" in event.type:
+            logger.debug(output)
+        else:
+            logger.info(output)
     
     def _print_statistics(self):
         """Event istatistiklerini yazdır"""
