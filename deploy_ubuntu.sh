@@ -1,10 +1,14 @@
 #!/bin/bash
+set -e # Herhangi bir komut hata verirse betiği güvenli bir şekilde durdur
 
 # ==============================================================================
 # CryptoAlgoBot - Otomatik Kurulum ve Başlatma Betiği (Ubuntu Linux)
 # ==============================================================================
 
 echo -e "\e[36m🚀 CryptoAlgoBot Kurulumu Başlıyor...\e[0m"
+
+# Betiğin çalıştığı dizini uygulamanın ana dizini olarak ayarla (Cron vs için güvenli)
+cd "$(dirname "$0")"
 
 # 1. Sistem Paketlerini Güncelle
 echo -e "\e[33m\n[1/5] Sistem güncellemeleri kontrol ediliyor...\e[0m"
@@ -25,23 +29,30 @@ else
 fi
 
 # 4. Kütüphaneleri (Bağımlılıkları) Yükle
-echo -e "\e[33m\n[4/5] Gerekli Python kütüphaneleri yükleniyor (requirements.txt)...\e[0m"
-source venv/bin/activate
-pip install --upgrade pip  # pip'in güncel versiyonunu kullanmak önemli
-pip install -r requirements.txt
+echo -e "\e[33m\n[4/5] Gerekli Python kütüphaneleri yükleniyor...\e[0m"
+# source komutu yerine doğrudan venv içindeki executable'ları kullanmak daha stabildir
+venv/bin/pip install --upgrade pip wheel
 
-# .env dosyası kontrolü
-if [ ! -f ".env" ]; then
-    echo -e "\e[31m\n⚠️ .env dosyası bulunamadı. Lütfen .env.example dosyasından kopyalayarak oluşturun ve BINANCE_API_KEY gibi değerleri içini doldurun.\e[0m"
+if [ -f "requirements.txt" ]; then
+    venv/bin/pip install -r requirements.txt
+    echo -e "\e[32m✅ Bağımlılıklar başarıyla yüklendi.\e[0m"
+else
+    echo -e "\e[31m⚠️ requirements.txt dosyası bulunamadı!\e[0m"
 fi
 
-echo -e "\e[32m\n✅[5/5] Kurulum Tamamlandı!\e[0m"
+# 5. Ortam (.env) kontrolü
+if [ ! -f ".env" ]; then
+    echo -e "\e[31m\n⚠️ .env dosyası bulunamadı! Lütfen '.env.example' dosyasından kopyalayarak oluşturun ve API bilgilerinizi doldurun.\e[0m"
+fi
+
+echo -e "\e[32m\n✅ [5/5] Kurulum Tamamlandı!\e[0m"
 echo -e "=============================================================================="
-echo -e "\e[36mBotu ve Dashboard'u Başlatmak İçin Arka Planda Aşağıdaki Komutu Çalıştırıyorum:\e[0m"
-echo -e "\e[36mpython3 main.py\e[0m"
+echo -e "\e[36mBot ve Dashboard Başlatılıyor...\e[0m"
+echo -e "\e[33m💡 İpucu: Sunucuyu kapattığınızda botun kapanmaması için bu betiği 'tmux' veya 'screen' içinde çalıştırmanız önerilir.\e[0m"
 echo -e "=============================================================================="
 
-# Sunucu kapanmasın diye nohup veya screen gibi bir araca ihtiyaç olabilir ancak test için normal çalıştırıyoruz.
-unset DISPLAY # Linux terminal ortamında görsel arayüz kütüphane hatalarını engellemek için
+# Linux terminal ortamında GUI/Matplotlib hatasını (X11) engellemek için
+export DISPLAY=""
 
-python3 main.py
+# Doğrudan sanal ortamdaki Python'u kullanarak ana uygulamayı başlat
+exec venv/bin/python main.py
