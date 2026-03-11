@@ -222,6 +222,10 @@ class PaperTrader:
             indicators = payload.get('indicators', {})
             metadata = payload.get('metadata', {})
 
+            # HTF verisi payload'dan hemen oku (sonraki satırlarda kullanılıyor)
+            htf_trends = metadata.get('htf_trends', {})
+            htf_trend = metadata.get('htf_trend', 'NEUTRAL')
+
             # Sinyal tipi belirle
             signal_type = "LONG" if signal == 2 else "SHORT" if signal == 0 else "HOLD"
             
@@ -233,7 +237,7 @@ class PaperTrader:
             # EĞER GERÇEK BİR SİNYAL VARSA (0 veya 2) - GÖZE ÇARPACAK ŞEKİLDE LOGLA
             logger.info("=" * 60)
             logger.info(f"🔔 [YENİ SİNYAL] {symbol} ({bot_id}) | YÖN: {signal_type} | FİYAT: {price:.4f}")
-            logger.info(f"   📊 TREND: {htf_trend} | REJİM: {self.market_regime}")
+            logger.info(f"   📊 HTF: {htf_trend} | REJİM: {self.market_regime}")
             logger.info("=" * 60)
 
             # Bot çalışıyor mu kontrol et
@@ -246,10 +250,6 @@ class PaperTrader:
             if strategy is None:
                 logger.warning(f"Strateji bulunamadı: {symbol}")
                 return
-
-            # HTF kontrolü (metadata'dan)
-            htf_trends = metadata.get('htf_trends', {})
-            htf_trend = metadata.get('htf_trend', 'NEUTRAL')
 
             # HTF filter (Legacy logic)
             if htf_trends:
