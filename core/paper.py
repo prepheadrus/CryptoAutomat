@@ -463,7 +463,7 @@ class PaperTrader:
     # DELEGATION METHODS (Legacy API Uyumluluğu)
     # ========================================================================
     
-    def start_bot(self, symbol: str, strategy_id: str, timeframe: str = "1m", market_type: str = "swap") -> str:
+    def start_bot(self, symbol: str, strategy_id: str, timeframe: str = "1m", market_type: str = "swap", margin_type: str = "isolated") -> str:
         """
         Bot başlat (legacy API -> BotManager'a delegate).
         
@@ -481,7 +481,8 @@ class PaperTrader:
             symbol=symbol,
             strategy_id=strategy_id,
             timeframe=timeframe,
-            market_type=MarketType(market_type.lower())
+            market_type=MarketType(market_type.lower()),
+            margin_type=MarginType(margin_type.lower())
         )
         
         # Bot başlat
@@ -493,11 +494,13 @@ class PaperTrader:
             'strategy_id': strategy_id,
             'timeframe': timeframe,
             'market_type': market_type,
+            'margin_type': margin_type,
             'status': 'running'
         }
         self.active_strategies[symbol] = strategy_id
         self.active_timeframes[symbol] = timeframe
         self.market_types[symbol] = market_type
+        self.margin_types[symbol] = margin_type
         
         # Strateji instance al
         strategy = StrategyManager.get_strategy(strategy_id)

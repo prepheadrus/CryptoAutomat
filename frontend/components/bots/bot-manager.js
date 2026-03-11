@@ -252,12 +252,12 @@ export const botManager = {
         try {
             const result = await api.startBot(botData);
 
-            if (result.success) {
-                window.showToast('✅ ' + result.message, 'success');
+            if (result.success || result.status === 'success') {
+                window.showToast('✅ ' + (result.message || 'Bot başlatıldı'), 'success');
                 this.loadBots();
                 return { success: true };
             } else {
-                window.showToast('❌ ' + result.message, 'error');
+                window.showToast('❌ ' + (result.message || 'Bilinmeyen hata'), 'error');
                 return { success: false, message: result.message };
             }
         } catch (error) {
@@ -274,11 +274,11 @@ export const botManager = {
 
             const result = await api.stopBot(botId);
 
-            if (result.success) {
+            if (result.success || result.status === 'success') {
                 window.showToast('✅ Bot durduruldu', 'success');
                 this.loadBots();
             } else {
-                window.showToast('❌ ' + result.message, 'error');
+                window.showToast('❌ ' + (result.message || 'Hata oluştu'), 'error');
             }
         } catch (error) {
             console.error('Bot durdurma hatası:', error);
@@ -290,11 +290,11 @@ export const botManager = {
         try {
             const result = await api.resumeBot(botId);
 
-            if (result.success) {
+            if (result.success || result.status === 'success') {
                 window.showToast('✅ Bot devam ediyor', 'success');
                 this.loadBots();
             } else {
-                window.showToast('❌ ' + result.message, 'error');
+                window.showToast('❌ ' + (result.message || 'Hata oluştu'), 'error');
             }
         } catch (error) {
             console.error('Bot devam ettirme hatası:', error);
@@ -309,15 +309,19 @@ export const botManager = {
 
             const result = await api.removeBot(botId);
 
-            if (result.success) {
+            if (result.success || result.status === 'success') {
                 window.showToast('✅ Bot kaldırıldı', 'success');
                 this.loadBots();
             } else {
-                window.showToast('❌ ' + result.message, 'error');
+                window.showToast('❌ ' + (result.message || 'Hata oluştu'), 'error');
             }
         } catch (error) {
             console.error('Bot kaldırma hatası:', error);
             window.showToast('❌ Bot kaldırılamadı: ' + error.message, 'error');
         }
     },
+    
+    destroy() {
+        console.log('[BotManager] Cleanup...');
+    }
 };

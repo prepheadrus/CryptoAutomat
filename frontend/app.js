@@ -34,6 +34,9 @@ let refreshIntervals = {
 async function initApp() {
     console.log('🚀 CryptoAlgoBot başlatılıyor...');
 
+    // Setup global functions (for HTML onclick handlers) - CRITICAL: MOVE TO TOP
+    setupGlobalFunctions();
+
     try {
         // Tab navigation
         setupTabs();
@@ -46,9 +49,6 @@ async function initApp() {
 
         // Start auto-refresh
         startAutoRefresh();
-
-        // Setup global functions (for HTML onclick handlers)
-        setupGlobalFunctions();
 
         // ❌ Store subscription KALDIRILDI (dropdown çakışma önleme)
         // loadDropdownData() artık her şeyi yapıyor, store subscription gereksiz
@@ -1572,14 +1572,14 @@ function onStrategySelect(strategyId, strategyName) {
     if (confirmed) {
         // Bot oluşturma modal'ını aç veya doğrudan bot başlatma akışına yönlendir
         // Şimdilik basitçe bot formuna scroll yap ve stratejiyi seç
-        const strategySelect = document.querySelector('select[name="strategy"]');
+        const strategySelect = document.getElementById('bot-strategy');
         if (strategySelect) {
             strategySelect.value = strategyId;
             strategySelect.dispatchEvent(new Event('change', { bubbles: true }));
         }
         
-        // Bot sekmesine git
-        const botTab = document.querySelector('[data-target="tab-bots"]');
+        // Bot sekmesine git (tab-settings içerisindedir)
+        const botTab = document.querySelector('[data-target="tab-settings"]');
         if (botTab) {
             botTab.click();
         }
@@ -1839,8 +1839,9 @@ async function handleBotSubmit(event) {
     const strategy = document.getElementById('bot-strategy').value;
     const timeframe = document.getElementById('bot-timeframe').value;
     const market = document.getElementById('bot-market').value;
+    const marginType = document.getElementById('bot-margin-type')?.value || 'isolated';
 
-    console.log('[INFO] Bot başlatılıyor:', {symbol, strategy, timeframe, market});
+    console.log('[INFO] Bot başlatılıyor:', {symbol, strategy, timeframe, market, marginType});
 
     // VALIDASYON: Sembol ve strateji seçilmiş mi?
     if (!symbol || symbol === '') {
@@ -1861,8 +1862,8 @@ async function handleBotSubmit(event) {
             symbol: symbol,
             strategy_id: strategy,
             timeframe: timeframe,
-            market_type: market
-            // margin_type kaldırıldı
+            market_type: market,
+            margin_type: marginType
         });
 
         if (result.success) {

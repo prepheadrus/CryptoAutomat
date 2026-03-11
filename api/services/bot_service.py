@@ -54,8 +54,8 @@ class BotService:
                 symbol=request.symbol,
                 strategy_id=request.strategy_id,
                 timeframe=request.timeframe,
-                market_type=request.market_type.value
-                # margin_type kaldırıldı (artık kullanılmıyor)
+                market_type=request.market_type.value,
+                margin_type=request.margin_type.value
             )
 
             # Strateji instance'ını oluştur ve kaydet
