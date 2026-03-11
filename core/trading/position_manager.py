@@ -314,7 +314,8 @@ class PositionManager:
             self._update_statistics(trade)
             
             # Position'ı sil
-            del self.positions[bot_id]
+            if bot_id in self.positions:
+                del self.positions[bot_id]
             
             # Legacy positions'dan sil
             self._remove_legacy_position(bot_id)
@@ -328,7 +329,13 @@ class PositionManager:
             return trade
             
         except Exception as e:
-            logger.error(f"Pozisyon kapatma hatası: {e}")
+            logger.error(f"❌ Pozisyon kapatma hatası ({bot_id}): {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            
+            # Hata durumunda kilidi aç (tekrar denenebilir olsun)
+            if bot_id in self.positions:
+                self.positions[bot_id].metadata['is_closing'] = False
             return None
     
     def _remove_legacy_position(self, bot_id: str):

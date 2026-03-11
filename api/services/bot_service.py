@@ -121,14 +121,13 @@ class BotService:
             Bot devam ettirme yanıtı
         """
         try:
-            if request.bot_id not in self.paper_engine.active_bots:
-                return {"status": "error", "message": "Bot bulunamadı"}
+            success = self.paper_engine.resume_bot(request.bot_id)
             
-            # Bot durumunu 'running' yap
-            self.paper_engine.active_bots[request.bot_id]['status'] = 'running'
-            
-            logger.info(f"▶️ Bot devam ettirildi: {request.bot_id}")
-            return {"status": "success", "message": f"Bot devam ettirildi: {request.bot_id}"}
+            if success:
+                logger.info(f"▶️ Bot devam ettirildi: {request.bot_id}")
+                return {"status": "success", "message": f"Bot devam ettirildi: {request.bot_id}"}
+            else:
+                return {"status": "error", "message": "Bot bulunamadı veya devam ettirilemedi"}
             
         except Exception as e:
             logger.error(f"Bot devam ettirme hatası: {e}")
@@ -145,22 +144,14 @@ class BotService:
             Bot silme yanıtı
         """
         try:
-            if request.bot_id not in self.paper_engine.active_bots:
-                return {"status": "error", "message": "Bot bulunamadı"}
+            # PaperTrader.remove_bot hem botManager'dan hem de active_bots listesinden siler
+            success = self.paper_engine.remove_bot(request.bot_id)
             
-            # Bot çalışıyorsa önce durdur
-            if self.paper_engine.active_bots[request.bot_id].get('status') == 'running':
-                self.paper_engine.stop_bot(request.bot_id)
-            
-            # Bot'u listeden kaldır
-            del self.paper_engine.active_bots[request.bot_id]
-            if request.bot_id in self.paper_engine.bot_positions:
-                del self.paper_engine.bot_positions[request.bot_id]
-            if request.bot_id in self.paper_engine.bot_state:
-                del self.paper_engine.bot_state[request.bot_id]
-            
-            logger.info(f"🗑️ Bot kaldırıldı: {request.bot_id}")
-            return {"status": "success", "message": f"Bot kaldırıldı: {request.bot_id}"}
+            if success:
+                logger.info(f"🗑️ Bot kaldırıldı: {request.bot_id}")
+                return {"status": "success", "message": f"Bot kaldırıldı: {request.bot_id}"}
+            else:
+                return {"status": "error", "message": "Bot bulunamadı veya kaldırılamadı"}
             
         except Exception as e:
             logger.error(f"Bot kaldırma hatası: {e}")

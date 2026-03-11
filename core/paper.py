@@ -699,6 +699,7 @@ class PaperTrader:
                 'strategy_id': config.strategy_id,
                 'timeframe': config.timeframe,
                 'market_type': config.market_type.value,
+                'margin_type': config.margin_type.value,
                 'status': state.status.value,
                 'pnl': round(state.pnl, 2),
                 'pnl_percent': round(pnl_percent, 2),
@@ -709,6 +710,36 @@ class PaperTrader:
                 'last_signal_at': state.last_signal_at.isoformat() if state.last_signal_at else None
             })
         return bots
+
+    def get_bot_status(self, bot_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Tek bir botun durumunu al.
+        """
+        bot = self.bot_manager.get_bot(bot_id)
+        if not bot:
+            return None
+            
+        state = bot.state
+        config = bot.config
+        
+        pnl_percent = (state.pnl / self.initial_balance * 100) if self.initial_balance > 0 else 0.0
+        
+        return {
+            'bot_id': bot_id,
+            'symbol': config.symbol,
+            'strategy_id': config.strategy_id,
+            'timeframe': config.timeframe,
+            'market_type': config.market_type.value,
+            'margin_type': config.margin_type.value,
+            'status': state.status.value,
+            'pnl': round(state.pnl, 2),
+            'pnl_percent': round(pnl_percent, 2),
+            'margin': round(state.margin, 2),
+            'trades': state.trades,
+            'wins': state.wins,
+            'started_at': bot.started_at.isoformat(),
+            'last_signal_at': state.last_signal_at.isoformat() if state.last_signal_at else None
+        }
 
     # ========================================================================
     # LEGACY COMPATIBILITY (Eski Metodlar - Delegate)
@@ -741,6 +772,14 @@ class PaperTrader:
             if pos['symbol'] != symbol:
                 continue
             
+            bot_id = pos.get('bot_id')
+            
+            # Position objesine bak (asıl lock orada)
+            position = self.position_manager.get_position(bot_id)
+            if position and position.metadata.get('is_closing', False):
+                # Zaten kapanıyor, işlem yapma
+                continue
+            
             pos['current_price'] = current_price
             
             # 1. Trailing stop güncelle (doğru HIGH/LOW ile)
@@ -755,7 +794,7 @@ class PaperTrader:
             
             # 3. Likidasyon kontrolü
             if self.position_manager.check_liquidation_legacy(pos, current_price):
-                positions_to_close.append((pos['bot_id'], current_price, 'LİKİDASYON'))
+                positions_to_close.append((bot_id, current_price, 'LİKİDASYON'))
                 continue
             
             # 4. Stop Loss / Take Profit kontrolü
@@ -765,14 +804,14 @@ class PaperTrader:
             
             if direction == 'LONG':
                 if sl and current_price <= sl:
-                    positions_to_close.append((pos['bot_id'], sl, 'STOP LOSS'))
+                    positions_to_close.append((bot_id, sl, 'STOP LOSS'))
                 elif tp and current_price >= tp:
-                    positions_to_close.append((pos['bot_id'], tp, 'TAKE PROFIT'))
+                    positions_to_close.append((bot_id, tp, 'TAKE PROFIT'))
             else:  # SHORT
                 if sl and current_price >= sl:
-                    positions_to_close.append((pos['bot_id'], sl, 'STOP LOSS'))
+                    positions_to_close.append((bot_id, sl, 'STOP LOSS'))
                 elif tp and current_price <= tp:
-                    positions_to_close.append((pos['bot_id'], tp, 'TAKE PROFIT'))
+                    positions_to_close.append((bot_id, tp, 'TAKE PROFIT'))
         
         # Kapatılacak pozisyonları işle
         for bot_id, exit_price, reason in positions_to_close:
