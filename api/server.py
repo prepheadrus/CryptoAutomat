@@ -44,28 +44,36 @@ async def lifespan(app: FastAPI):
     # ===== STARTUP =====
     logger.info("🚀 FastAPI Sunucusu başlatılıyor...")
     
+    # 1. Event Bus Başlat (Pub/Sub Motoru)
+    from shared.events import event_bus
+    await event_bus.start(num_workers=5)
+    
+    # 2. PaperTrader Handler'ları Kaydet
+    from core.paper import paper_engine
+    await paper_engine.start_event_handlers()
+    
     # Veritabanı bağlantısı
     await db_manager.connect()
-    logger.info("✅ Veritabanı bağlantısı kuruldu")
     
     # Yarım kalan indirme görevlerini geri yükle
     await exchange_manager.load_tasks_from_db()
-    logger.info("✅ İndirme görevleri yüklendi")
     
     # Bot task'larını başlat
     tasks = []
     for symbol in CONFIG['trading']['symbols']:
-        # WebSocket ticker dinleyici
         tasks.append(asyncio.create_task(exchange_manager.watch_ticker_loop(symbol)))
-        # Strateji poller
         tasks.append(asyncio.create_task(exchange_manager.run_strategy_poller(symbol)))
     
-    logger.info(f"✅ {len(tasks)} bot task'ı başlatıldı")
+    logger.info(f"✅ {len(tasks)} bot task'ı ve Event Engine başlatıldı")
     
     yield
     
     # ===== SHUTDOWN =====
     logger.info("🛑 FastAPI Sunucusu kapatılıyor...")
+    
+    # Event Bus Durdur
+    from shared.events import event_bus
+    await event_bus.stop()
     
     # Borsa bağlantısını kapat
     await exchange_manager.close()

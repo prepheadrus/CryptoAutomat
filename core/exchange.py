@@ -450,21 +450,21 @@ class ExchangeManager:
             latest_candle = df.iloc[-1]
             strategy_signal = strategy.generate_signal(latest_candle)
 
+            # ML ve Analiz için tüm indikatörleri topla (numeric columns)
+            indicators_payload = {}
+            for col, val in latest_candle.items():
+                if isinstance(val, (int, float, np.integer, np.floating)):
+                    # NaN kontrolü ve tip dönüşümü
+                    indicators_payload[col] = float(val) if not np.isnan(val) else 0.0
+
             # EVENT-DRIVEN: SignalGeneratedEvent yayınla
-            # Artık doğrudan paper_engine.process_bot_signal() ÇAĞIRMIYORUZ!
             event = SignalGeneratedEvent(
                 bot_id=bot_id,
                 symbol=symbol,
                 signal=strategy_signal,
                 price=current_price,
                 timeframe=timeframe,
-                indicators={
-                    'RSI_14': latest_candle.get('RSI_14', 0),
-                    'EMA_20': latest_candle.get('EMA_20', 0),
-                    'EMA_50': latest_candle.get('EMA_50', 0),
-                    'MACD_12_26_9': latest_candle.get('MACD_12_26_9', 0),
-                    'ATR_14': latest_candle.get('ATR_14', 0)
-                },
+                indicators=indicators_payload,
                 metadata={
                     'htf_trend': htf_trend,
                     'htf_trends': htf_trends,

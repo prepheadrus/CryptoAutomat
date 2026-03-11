@@ -20,6 +20,8 @@ Usage:
 """
 
 import pandas as pd
+import numpy as np
+import os
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
@@ -108,15 +110,73 @@ class PaperTrader:
         self.consecutive_losses = 0
         self.market_regime = "UNKNOWN"
         
-        # ML (legacy)
-        self.ml_model = None
-        self.ml_enabled = False
+        # ML Karar Motoru
+        from ml.model_training import ModelTrainer
+        self.ml_trainer = ModelTrainer()
+        self.ml_models = {}  # {symbol_timeframe: trainer_instance}
+        self.ml_enabled = True
         
         # Event handlers
         self._event_handlers_started = False
         
         logger.info("📄 PaperTrader (Refactored) initialized")
     
+    # ========================================================================
+    # ML CONFIRMATION HELPERS
+    # ========================================================================
+
+    async def _get_ml_confirmation(self, symbol: str, timeframe: str, indicators: Dict[str, float]) -> Optional[Dict[str, Any]]:
+        """
+        ML modelinden tahmin ve güven skoru alır.
+        
+        Args:
+            symbol: Sembol
+            timeframe: Zaman dilimi
+            indicators: Gelen indikatör verileri
+            
+        Returns:
+            Dict[str, Any] or None
+        """
+        try:
+            cache_key = f"{symbol}_{timeframe}"
+            
+            # Model dosya yolunu belirle
+            symbol_clean = symbol.replace('/', '').replace(':', '').replace('-', '').lower()
+            model_path = f"artifacts/models/xgb_model_{symbol_clean}_{timeframe}.json"
+            
+            if not os.path.exists(model_path):
+                return None
+            
+            # Cache kontrolü
+            if cache_key in self.ml_models:
+                trainer = self.ml_models[cache_key]
+            else:
+                # Yeni model yükle
+                trainer = ModelTrainer()
+                trainer.load_model(model_path)
+                self.ml_models[cache_key] = trainer
+                logger.info(f"🧠 [ML] Model belleğe yüklendi: {model_path}")
+            
+            if not trainer.is_trained or not trainer.feature_names:
+                return None
+            
+            # Feature mapping (indicators payload'undan model feature'larına)
+            features = []
+            for feat in trainer.feature_names:
+                # Modelin beklediği özelliği bul, yoksa 0.0 ver
+                val = indicators.get(feat, 0.0)
+                features.append(float(val))
+            
+            # Tahmin yap
+            X = pd.DataFrame([features], columns=trainer.feature_names)
+            prediction = trainer.predict_single(X)
+            
+            return prediction
+            
+        except Exception as e:
+            logger.error(f"❌ ML Onay hatası ({symbol}): {e}")
+            return None
+
     # ========================================================================
     # EVENT HANDLERS (Pub/Sub)
     # ========================================================================
@@ -163,7 +223,7 @@ class PaperTrader:
             indicators = payload.get('indicators', {})
             metadata = payload.get('metadata', {})
 
-            logger.debug(f"📬 Signal event received: {bot_id} signal={signal}")
+            logger.info(f"📬 Sinyal alındı: {bot_id} signal={signal}")
 
             # HOLD ise işlem yapma (signal int olarak geliyor)
             if signal == 1:  # SignalType.HOLD.value = 1
@@ -195,13 +255,13 @@ class PaperTrader:
                     # LONG için: Major HTF BEAR olmamalı (signal = 2)
                     if signal == 2:  # SignalType.LONG.value = 2
                         if htf_trends.get(major_htf) == 'BEAR' or bull_count == 0:
-                            logger.debug(f"HTF filter: LONG reddedildi")
+                            logger.info(f"🛡️ [FILTER] HTF Trend Engelleyici: {symbol} LONG reddedildi (Major HTF BEAR)")
                             return
 
                     # SHORT için: Major HTF BULL olmamalı (signal = 0)
                     elif signal == 0:  # SignalType.SHORT.value = 0
                         if htf_trends.get(major_htf) == 'BULL' or bear_count == 0:
-                            logger.debug(f"HTF filter: SHORT reddedildi")
+                            logger.info(f"🛡️ [FILTER] HTF Trend Engelleyici: {symbol} SHORT reddedildi (Major HTF BULL)")
                             return
             
             # Risk kontrolü
@@ -212,9 +272,40 @@ class PaperTrader:
             # Pozisyon zaten var mı?
             existing_position = self.position_manager.get_position(bot_id)
             if existing_position:
-                logger.debug(f"Pozisyon zaten açık: {bot_id}")
+                logger.info(f"ℹ️ Pozisyon zaten açık: {bot_id}")
                 return
             
+            # ============================================
+            # ML KARAR MOTORU (ML CONFIRMATION LAYER)
+            # ============================================
+            ml_confirmed = True
+            ml_confidence = 0.5
+            ml_rec = "HOLD"
+
+            if self.ml_enabled:
+                ml_data = await self._get_ml_confirmation(symbol, timeframe, indicators)
+                if ml_data:
+                    ml_rec = ml_data.get('recommendation', 'HOLD')
+                    ml_confidence = ml_data.get('confidence', 0.5)
+                    
+                    # Filtreleme Mantığı (Conflict Resolution)
+                    if direction == "LONG" and "SHORT" in ml_rec:
+                        logger.info(f"🛡️ [ML FILTER] {symbol} LONG reddedildi: ML zıt yön gösteriyor ({ml_rec}) | Conf: {ml_confidence:.2f}")
+                        return
+                    
+                    if direction == "SHORT" and "LONG" in ml_rec:
+                        logger.info(f"🛡️ [ML FILTER] {symbol} SHORT reddedildi: ML zıt yön gösteriyor ({ml_rec}) | Conf: {ml_confidence:.2f}")
+                        return
+                    
+                    # Nötr (Hold) durumu konfigürasyona bağlı olarak engellenebilir
+                    if ml_rec == "HOLD" and ml_confidence < 0.40:
+                        logger.info(f"🛡️ [ML FILTER] {symbol} reddedildi: ML belirsiz (HOLD) | Conf: {ml_confidence:.2f}")
+                        return
+
+                    logger.info(f"🧠 [ML CONFIRMED] {symbol} | Rec: {ml_rec} | Conf: {ml_confidence:.2f}")
+                else:
+                    logger.debug(f"ℹ️ {symbol} için aktif ML modeli bulunamadı, sadece teknik sinyal ile gidiliyor.")
+
             # ============================================
             # POZİSYON AÇ (PositionManager'a delegate)
             # ============================================
