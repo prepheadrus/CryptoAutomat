@@ -192,14 +192,14 @@ class PaperTrader:
                     bull_count = sum(1 for tf in htf_levels if htf_trends.get(tf) == 'BULL')
                     bear_count = sum(1 for tf in htf_levels if htf_trends.get(tf) == 'BEAR')
 
-                    # LONG için: Major HTF BEAR olmamalı (signal = 0)
-                    if signal == 0:  # SignalType.LONG.value = 0
+                    # LONG için: Major HTF BEAR olmamalı (signal = 2)
+                    if signal == 2:  # SignalType.LONG.value = 2
                         if htf_trends.get(major_htf) == 'BEAR' or bull_count == 0:
                             logger.debug(f"HTF filter: LONG reddedildi")
                             return
 
-                    # SHORT için: Major HTF BULL olmamalı (signal = 2)
-                    elif signal == 2:  # SignalType.SHORT.value = 2
+                    # SHORT için: Major HTF BULL olmamalı (signal = 0)
+                    elif signal == 0:  # SignalType.SHORT.value = 0
                         if htf_trends.get(major_htf) == 'BULL' or bear_count == 0:
                             logger.debug(f"HTF filter: SHORT reddedildi")
                             return
@@ -223,7 +223,7 @@ class PaperTrader:
             atr_multiplier = stop_params.get('atr_multiplier', 3.0)
 
             # Stop loss / take profit hesapla
-            direction = "LONG" if signal == 0 else "SHORT"  # 0=LONG, 2=SHORT
+            direction = "LONG" if signal == 2 else "SHORT"  # 2=LONG, 0=SHORT
             stop_loss, take_profit = self.risk_engine.calculate_dynamic_stops(
                 price=price,
                 direction=direction,
@@ -429,6 +429,85 @@ class PaperTrader:
             'risk_stats': self.risk_engine.get_stats(),
             'position_stats': self.position_manager.get_stats()
         }
+
+    def get_strategy_report(self) -> List[Dict[str, Any]]:
+        """
+        Kapanan işlemleri baz alarak stratejilerin karnesini (röntgenini) çıkarır.
+        
+        Returns:
+            List of strategy reports sorted by total_pnl
+        """
+        report = []
+        groups = {}
+
+        # Sadece kapanan (history) işlemleri baz alır
+        for trade in self.trade_history:
+            strat = trade.get('strategy', 'Bilinmiyor')
+            if strat not in groups:
+                groups[strat] = {
+                    "total_trades": 0,
+                    "wins": 0,
+                    "total_pnl": 0.0,
+                    "symbols": {}
+                }
+
+            groups[strat]["total_trades"] += 1
+            if trade.get('pnl_usd', 0) > 0:
+                groups[strat]["wins"] += 1
+            groups[strat]["total_pnl"] += trade.get('pnl_usd', 0)
+
+            sym = trade.get('symbol', 'Bilinmiyor')
+            tf = trade.get('timeframe', '1m')
+            sym_key = f"{sym} ({tf})"
+
+            if sym_key not in groups[strat]["symbols"]:
+                groups[strat]["symbols"][sym_key] = {
+                    "trades": 0,
+                    "wins": 0,
+                    "pnl": 0.0
+                }
+
+            groups[strat]["symbols"][sym_key]["trades"] += 1
+            if trade.get('pnl_usd', 0) > 0:
+                groups[strat]["symbols"][sym_key]["wins"] += 1
+            groups[strat]["symbols"][sym_key]["pnl"] += trade.get('pnl_usd', 0)
+
+        for strat, data in groups.items():
+            win_rate = (data["wins"] / data["total_trades"] * 100) if data["total_trades"] > 0 else 0
+
+            sym_perf = []
+            for s_name, s_data in data["symbols"].items():
+                s_wr = (s_data["wins"] / s_data["trades"] * 100) if s_data["trades"] > 0 else 0
+                sym_perf.append({
+                    "name": s_name,
+                    "trades": s_data["trades"],
+                    "win_rate": round(s_wr, 1),
+                    "pnl": round(s_data["pnl"], 2)
+                })
+
+            # Performans Önerileri
+            recommendation = ""
+            if win_rate < 40 and data["total_trades"] >= 3:
+                recommendation = "Düşük başarı oranı. Stop-Loss seviyesi hatalı veya işlem yapılan pariteler bu botun tarzına uymuyor (Yatay piyasa vs)."
+            elif win_rate >= 60 and data["total_pnl"] > 0:
+                recommendation = "Mükemmel uyum. Kârlılık ve kazanma oranı muazzam. Kaldıraç oranı ufak çaplı artırılarak gelir katlanabilir."
+            elif win_rate >= 50 and data["total_pnl"] < 0:
+                recommendation = "Kazanma oranı iyi fakat alınan risk (Stop L.) kârı eritiyor. Risk/Ödül oranı iyileştirilmeli veya spread/fee kontrol edilmeli."
+            elif data["total_trades"] < 3:
+                recommendation = "İşlem hacmi rapor ve öneri sunmak için henüz çok kısıtlı. Simülasyon devam etmeli."
+            else:
+                recommendation = "Ortalama bir performans. Risk toleransına göre makul sayılabilir."
+
+            report.append({
+                "strategy": strat,
+                "total_trades": data["total_trades"],
+                "win_rate": round(win_rate, 1),
+                "total_pnl": round(data["total_pnl"], 2),
+                "symbols": sym_perf,
+                "recommendation": recommendation
+            })
+
+        return sorted(report, key=lambda x: x['total_pnl'], reverse=True)
 
     def get_all_bots(self) -> List[Dict[str, Any]]:
         """

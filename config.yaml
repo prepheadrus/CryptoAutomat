@@ -1,5 +1,6 @@
 bot:
   environment: development
+  exchange: binance
   log_level: DEBUG
   name: CryptoAlgoBot
 htf:
@@ -27,13 +28,13 @@ htf:
     - 1h
   ema_fast: 20
   ema_slow: 50
-  enabled: false
+  enabled: true
   filter_rules:
     require_all_htf_agree: false
   trend_method: ema_stack
 ml:
   confidence_threshold: 0.5
-  enabled: false
+  enabled: true
   leverage:
     normal_threshold: 0.65
     strong_threshold: 0.8
@@ -57,7 +58,7 @@ trading:
   - 5m
   - 1h
 wfo:
-  enabled: false
+  enabled: true
   min_improvement: 0.05
   optimization_metric: sharpe
   reoptimize_interval: 168

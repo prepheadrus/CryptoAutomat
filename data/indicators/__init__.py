@@ -29,26 +29,11 @@ from data.indicators.volatility import VolatilityIndicators
 from data.indicators.volume import VolumeIndicators
 from data.indicators.advanced import AdvancedIndicators
 
-# Try to import TA-Lib or pandas_ta
-try:
-    import talib as ta
-    USING_TALIB = True
-    USING_PANDAS_TA = False
-except ImportError:
-    try:
-        import pandas_ta as ta
-        USING_TALIB = False
-        USING_PANDAS_TA = True
-    except ImportError:
-        ta = None
-        USING_TALIB = False
-        USING_PANDAS_TA = False
-        import warnings
-        warnings.warn(
-            "⚠️ Ne TA-Lib ne pandas_ta bulunamadı! Manuel hesaplama kullanılacak.\n"
-            "Kurulum için: sudo apt-get install libta-lib-dev && pip install TA-Lib",
-            UserWarning
-        )
+# TA-Lib ve pandas-ta bağımlılıkları SKILL.md gereği kaldırıldı.
+# Tüm hesaplamalar manuel (numpy/pandas) sınıflar üzerinden yapılır.
+USING_TALIB = False
+USING_PANDAS_TA = False
+ta = None
 
 
 # ============================================================================
@@ -185,7 +170,7 @@ class StrategyIndicators:
     @staticmethod
     def add_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
         """
-        Tüm indikatörleri hesapla (geriye dönük uyumluluk için).
+        Tüm indikatörleri hesapla (SKILL.md / Faz 4 Manuel Hesaplama).
         
         Args:
             df: OHLCV DataFrame
@@ -214,25 +199,12 @@ class StrategyIndicators:
         if df['close'].isnull().any():
             df.fillna(0, inplace=True)
         
-        # --- TREND ---
-        if USING_TALIB:
-            df['EMA_5'] = ta.EMA(df['close'], timeperiod=5)
-            df['EMA_13'] = ta.EMA(df['close'], timeperiod=13)
-            df['SMA_20'] = ta.SMA(df['close'], timeperiod=20)
-            df['EMA_50'] = ta.EMA(df['close'], timeperiod=50)
-            df['EMA_200'] = ta.EMA(df['close'], timeperiod=200)
-        elif USING_PANDAS_TA:
-            df['EMA_5'] = ta.ema(df['close'], length=5)
-            df['EMA_13'] = ta.ema(df['close'], length=13)
-            df['SMA_20'] = ta.sma(df['close'], length=20)
-            df['EMA_50'] = ta.ema(df['close'], length=50)
-            df['EMA_200'] = ta.ema(df['close'], length=200)
-        else:
-            df['EMA_5'] = TrendIndicators.ema(df['close'], 5)
-            df['EMA_13'] = TrendIndicators.ema(df['close'], 13)
-            df['SMA_20'] = TrendIndicators.sma(df['close'], 20)
-            df['EMA_50'] = TrendIndicators.ema(df['close'], 50)
-            df['EMA_200'] = TrendIndicators.ema(df['close'], 200)
+        # --- TREND (Manuel) ---
+        df['EMA_5'] = TrendIndicators.ema(df['close'], 5)
+        df['EMA_13'] = TrendIndicators.ema(df['close'], 13)
+        df['SMA_20'] = TrendIndicators.sma(df['close'], 20)
+        df['EMA_50'] = TrendIndicators.ema(df['close'], 50)
+        df['EMA_200'] = TrendIndicators.ema(df['close'], 200)
         
         # Kalman Filter
         df['KALMAN'] = TrendIndicators.kalman_filter(df['close'])
@@ -242,153 +214,81 @@ class StrategyIndicators:
         df['SUPERTREND'] = st
         df['SUPERTREND_DIR'] = direction
         
-        # EWO
+        # EWO (Elliott Wave Oscillator)
         df['EWO'] = AdvancedIndicators.ewo(df['close'])
         
-        # --- MOMENTUM ---
-        if USING_TALIB:
-            df['RSI_14'] = ta.RSI(df['close'], timeperiod=14)
-        elif USING_PANDAS_TA:
-            df['RSI_14'] = ta.rsi(df['close'], length=14)
-        else:
-            df['RSI_14'] = MomentumIndicators.rsi(df['close'], 14)
+        # --- MOMENTUM (Manuel) ---
+        df['RSI_14'] = MomentumIndicators.rsi(df['close'], 14)
         
-        # BTC VIX
-        df['BTC_VIX'] = VolatilityIndicators.btc_vix(df['close'])
+        # MACD (Manuel Unpack)
+        macd_line, signal_line, hist = MomentumIndicators.macd(df['close'], fast=12, slow=26, signal=9)
+        df['MACD_12_26_9'] = macd_line
+        df['MACDs_12_26_9'] = signal_line
+        df['MACDh_12_26_9'] = hist
         
-        # MACD
-        if USING_TALIB:
-            macd, signal, hist = ta.MACD(df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
-            df['MACD_12_26_9'] = macd
-            df['MACDs_12_26_9'] = signal
-            df['MACDh_12_26_9'] = hist
-        elif USING_PANDAS_TA:
-            macd, signal, hist = ta.macd(df['close'], fast=12, slow=26, signal=9)
-            df['MACD_12_26_9'] = macd
-            df['MACDs_12_26_9'] = signal
-            df['MACDh_12_26_9'] = hist
-        else:
-            macd_line, signal_line, hist = MomentumIndicators.macd(df['close'])
-            df['MACD_12_26_9'] = macd_line
-            df['MACDs_12_26_9'] = signal_line
-            df['MACDh_12_26_9'] = hist
+        # Stochastic
+        stoch_k, stoch_d = MomentumIndicators.stochastic(df['high'], df['low'], df['close'], 14, 3)
+        df['STOCH_K_14_3_3'] = stoch_k
+        df['STOCH_D_14_3_3'] = stoch_d
         
-        # --- VOLATILITY ---
-        if USING_TALIB:
-            df['ATR_14'] = ta.ATR(df['high'], df['low'], df['close'], timeperiod=14)
-        elif USING_PANDAS_TA:
-            df['ATR_14'] = ta.atr(df['high'], df['low'], df['close'], length=14)
-        else:
-            df['ATR_14'] = VolatilityIndicators.atr(df['high'], df['low'], df['close'], 14)
+        # UO (Ultimate Oscillator)
+        df['UO'] = MomentumIndicators.uo(df['high'], df['low'], df['close'], 7, 14, 28)
+        
+        # --- VOLATILITY (Manuel) ---
+        df['ATR_14'] = VolatilityIndicators.atr(df['high'], df['low'], df['close'], 14)
         
         # Bollinger Bands
-        if USING_TALIB:
-            upper, middle, lower = ta.BBANDS(df['close'], timeperiod=20, nbdevup=2, nbdevdn=2)
-            df['BBU_20_2.0_2.0'] = upper
-            df['BBM_20_2.0_2.0'] = middle
-            df['BBL_20_2.0_2.0'] = lower
-        elif USING_PANDAS_TA:
-            bb = ta.bbands(df['close'], length=20, std=2)
-            if bb is not None:
-                df = pd.concat([df, bb], axis=1)
-        else:
-            upper, middle, lower = VolatilityIndicators.bollinger_bands(df['close'])
-            df['BBU_20_2.0_2.0'] = upper
-            df['BBM_20_2.0_2.0'] = middle
-            df['BBL_20_2.0_2.0'] = lower
+        upper, middle, lower = VolatilityIndicators.bollinger_bands(df['close'], length=20, std=2)
+        df['BBU_20_2.0_2.0'] = upper
+        df['BBM_20_2.0_2.0'] = middle
+        df['BBL_20_2.0_2.0'] = lower
         
-        # --- KONKORDE ---
-        if 'volume' in df.columns and len(df) > 1:
-            koncorde = AdvancedIndicators.calculate_koncorde(
-                df['close'], df['high'], df['low'], df['volume'], 15
-            )
-            
-            df['PVI'] = koncorde['pvi']
-            df['NVI'] = koncorde['nvi']
-            df['PVIM'] = koncorde['pvim']
-            df['NVIM'] = koncorde['nvim']
-            df['KONKORDE_AZUL'] = koncorde['azul']
-            df['KONKORDE_VERDE'] = koncorde['verde']
-            df['KONKORDE_MARRON'] = koncorde['marron']
+        # BTC VIX (Dinamik Volatilite)
+        df['BTC_VIX'] = VolatilityIndicators.btc_vix(df['close'])
         
-        # --- VOLUME ---
+        # --- VOLUME (Manuel) ---
         if 'volume' in df.columns:
-            if USING_TALIB:
-                df['OBV'] = ta.OBV(df['close'], df['volume'])
-                if 'OBV' in df.columns:
-                    df['OBV_EMA'] = ta.EMA(df['OBV'], timeperiod=10)
-            elif USING_PANDAS_TA:
-                df['OBV'] = ta.obv(df['close'], df['volume'])
-                if 'OBV' in df.columns:
-                    df['OBV_EMA'] = ta.ema(df['OBV'], length=10)
-            else:
-                df['OBV'] = VolumeIndicators.obv(df['close'], df['volume'])
-                df['OBV_EMA'] = VolumeIndicators.obv(df['close'], df['volume']).ewm(span=10, adjust=False).mean()
+            # OBV
+            df['OBV'] = VolumeIndicators.obv(df['close'], df['volume'])
+            df['OBV_EMA'] = df['OBV'].ewm(span=10, adjust=False).mean()
             
+            # VWAP
             df['VWAP'] = VolumeIndicators.vwap(df['high'], df['low'], df['close'], df['volume'])
         
-        # --- ADX, Stoch ---
-        if USING_TALIB:
-            adx = ta.ADX(df['high'], df['low'], df['close'], timeperiod=14)
-            plus_di = ta.PLUS_DI(df['high'], df['low'], df['close'], timeperiod=14)
-            minus_di = ta.MINUS_DI(df['high'], df['low'], df['close'], timeperiod=14)
-            df['ADX_14'] = adx
-            df['DMP_14'] = plus_di
-            df['DMN_14'] = minus_di
-            
-            slowk, slowd = ta.STOCH(df['high'], df['low'], df['close'], fastk_period=14, slowk_period=3, slowk_matype=0, slowd_period=3, slowd_matype=0)
-            df['STOCH_K_14_3_3'] = slowk
-            df['STOCH_D_14_3_3'] = slowd
-        elif USING_PANDAS_TA:
-            adx_res = ta.adx(df['high'], df['low'], df['close'], length=14)
-            if adx_res is not None:
-                df = pd.concat([df, adx_res], axis=1)
-            
-            stoch_res = ta.stoch(df['high'], df['low'], df['close'], k=14, d=3, smooth_k=3)
-            if stoch_res is not None:
-                df = pd.concat([df, stoch_res], axis=1)
-        else:
-            adx, plus_di, minus_di = TrendIndicators.adx(df['high'], df['low'], df['close'], 14)
-            df['ADX_14'] = adx
-            df['DMP_14'] = plus_di
-            df['DMN_14'] = minus_di
-            
-            stoch_k, stoch_d = MomentumIndicators.stochastic(df['high'], df['low'], df['close'], 14, 3)
-            df['STOCH_K_14_3_3'] = stoch_k
-            df['STOCH_D_14_3_3'] = stoch_d
+        # --- KONKORDE (Gelişmiş) ---
+        if 'volume' in df.columns and len(df) > 1:
+            try:
+                koncorde = AdvancedIndicators.calculate_koncorde(
+                    df['close'], df['high'], df['low'], df['volume'], 15
+                )
+                df['PVI'] = koncorde['pvi']
+                df['NVI'] = koncorde['nvi']
+                df['PVIM'] = koncorde['pvim']
+                df['NVIM'] = koncorde['nvim']
+                df['KONKORDE_AZUL'] = koncorde['azul']
+                df['KONKORDE_VERDE'] = koncorde['verde']
+                df['KONKORDE_MARRON'] = koncorde['marron']
+            except Exception as e:
+                logger.warning(f"⚠️ [IND] Koncorde hesaplama hatası: {e}")
         
-        # UO
-        if USING_TALIB:
-            uo_res = ta.ULTOSC(df['high'], df['low'], df['close'], timeperiod1=7, timeperiod2=14, timeperiod3=28)
-            if uo_res is not None:
-                df['UO'] = uo_res
-        elif USING_PANDAS_TA:
-            uo_res = ta.uo(df['high'], df['low'], df['close'], fast=7, medium=14, slow=28)
-            if uo_res is not None:
-                df['UO'] = uo_res
-        else:
-            df['UO'] = MomentumIndicators.uo(df['high'], df['low'], df['close'], 7, 14, 28)
+        # --- TREND ADVANCED ---
+        # ADX
+        adx, plus_di, minus_di = TrendIndicators.adx(df['high'], df['low'], df['close'], 14)
+        df['ADX_14'] = adx
+        df['DMP_14'] = plus_di
+        df['DMN_14'] = minus_di
         
-        # PSAR
+        # PSAR (Parabolic SAR)
         try:
-            if ta is not None and hasattr(ta, 'psar'):
-                psar_res = ta.psar(df['high'], df['low'], df['close'], af0=0.02, af=0.02, max_af=0.2)
-                if psar_res is not None:
-                    df = pd.concat([df, psar_res], axis=1)
-                    psar_cols_l = [c for c in psar_res.columns if 'PSARl' in c]
-                    psar_cols_s = [c for c in psar_res.columns if 'PSARs' in c]
-                    if len(psar_cols_l) > 0 and len(psar_cols_s) > 0:
-                        df['PSAR'] = df[psar_cols_l[0]].fillna(df[psar_cols_s[0]])
-                    elif len(psar_cols_l) > 0:
-                        df['PSAR'] = df[psar_cols_l[0]]
-                    elif len(psar_cols_s) > 0:
-                        df['PSAR'] = df[psar_cols_s[0]]
-            else:
-                psar, direction = TrendIndicators.psar(df['high'], df['low'], df['close'])
-                df['PSAR'] = psar
-                df['PSAR_DIR'] = direction
-        except Exception:
-            pass
+            psar, direction = TrendIndicators.psar(df['high'], df['low'], df['close'])
+            df['PSAR'] = psar
+            df['PSAR_DIR'] = direction
+        except Exception as e:
+            logger.warning(f"⚠️ [IND] PSAR hesaplama hatası: {e}")
+        
+        # Veri Integrity: NaN/Inf Temizliği (SKILL.md)
+        df.replace([np.inf, -np.inf], np.nan, inplace=True)
+        df.fillna(0, inplace=True)
         
         return df
 

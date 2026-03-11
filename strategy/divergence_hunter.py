@@ -27,7 +27,7 @@ class DivergenceHunter(BaseStrategy):
         self.params = self.DEFAULT_PARAMS.copy()
 
     def name(self) -> str:
-        return "divergence_hunter"
+        return "Divergence Hunter"
 
     def description(self) -> str:
         return "Senkronize Uyuşmazlık Avcısı: Talep Endeksi ve Ultimate Osilatör uyuşmazlığını ADX gücüyle birleştirir ve PSAR ile tetiği çeker."

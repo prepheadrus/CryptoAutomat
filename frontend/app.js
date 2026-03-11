@@ -85,7 +85,10 @@ async function loadInitialData() {
 
         // Load dropdown data (Sembol + Strateji) - CALIŞAN FONKSİYON
         await loadDropdownData();
-        
+
+        // Load settings (Risk, Advanced, Bot Config)
+        await loadAllSettings();
+
         console.log('[INFO] Initial data load completed');
     } catch (error) {
         console.error('Initial data load error:', error);
@@ -100,16 +103,27 @@ function setupTabs() {
     const buttons = document.querySelectorAll('.menu-item');
     const tabs = document.querySelectorAll('.tab-content');
 
+    console.log(`[DEBUG] setupTabs: ${buttons.length} menü butonu, ${tabs.length} tab bulundu`);
+
     buttons.forEach(btn => {
         btn.addEventListener('click', () => {
             if (!btn.hasAttribute('data-target')) return;
+
+            console.log(`[DEBUG] Tab tıklandı: ${btn.getAttribute('data-target')}`);
 
             buttons.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
 
             const targetId = btn.getAttribute('data-target');
             tabs.forEach(tab => { tab.style.display = 'none'; });
-            document.getElementById(targetId).style.display = 'block';
+            
+            const targetTab = document.getElementById(targetId);
+            if (targetTab) {
+                targetTab.style.display = 'block';
+                console.log(`[DEBUG] Tab açıldı: ${targetId}`);
+            } else {
+                console.error(`[ERROR] Tab bulunamadı: ${targetId}`);
+            }
 
             // Tab-specific actions
             handleTabSwitch(targetId);
@@ -129,9 +143,8 @@ function handleTabSwitch(tabId) {
         case 'tab-settings':
             setTimeout(() => {
                 botManager.loadBots();
-                loadBotFormOptions();
-                loadRiskSettings();  // Risk ayarlarını yükle
-                loadAdvancedSettings();  // Gelişmiş ayarları yükle (WFO, ML, HTF)
+                loadBotFormOptions();  // Bot form dropdown'larını yükle
+                loadAllSettings();  // Tüm ayarları yükle (Risk, Advanced, Bot)
                 loadDropdownData();  // Dropdown'lara veri yükle (Sembol + Strateji)
             }, 300);  // 300ms delay (daha hızlı)
             break;
@@ -164,8 +177,6 @@ async function loadMarkets() {
 
         console.log('[DEBUG] Markets response:', marketsRes);
         console.log('[DEBUG] Tracked response:', trackedRes);
-
-        // Response yapısını düzelt
         const markets = marketsRes.markets || marketsRes.data || marketsRes || [];
         const tracked = trackedRes.symbols || trackedRes.data || trackedRes || [];
 
@@ -254,12 +265,158 @@ async function loadMLSymbols() {
     }
 }
 
+/**
+ * ML sembol dropdown'ını doldur
+ */
+function populateMLSymbolSelect(symbols) {
+    try {
+        const mlSymbolSelect = document.getElementById('ml-train-symbol');
+        if (mlSymbolSelect) {
+            // Önce temizle
+            mlSymbolSelect.innerHTML = '';
+            
+            if (symbols && symbols.length > 0) {
+                // Her sembol için option ekle
+                symbols.forEach(symbol => {
+                    const symbolName = symbol.symbol || symbol;
+                    const option = document.createElement('option');
+                    // Backend için format: BTC/USDT veya BTCUSDT
+                    option.value = symbolName;
+                    option.textContent = symbolName;
+                    mlSymbolSelect.appendChild(option);
+                });
+                console.log(`[INFO] ML dropdown'a ${symbols.length} sembol eklendi`);
+            } else {
+                // Sembol yoksa uyarı göster
+                mlSymbolSelect.innerHTML = '<option value="">⚠️ Veri Laboratuvarından veri indirin</option>';
+                console.warn('⚠️ Veritabanında veri yok');
+            }
+        }
+    } catch (error) {
+        console.error('❌ populateMLSymbolSelect hatası:', error);
+    }
+}
+
 async function loadMLTrainingHistory() {
     try {
         const data = await api.getMLTrainingHistory(50);
         store.setState('ml', { history: data.history || [] });
+        renderTrainingHistory(data.history || []);
     } catch (error) {
         console.error('ML history error:', error);
+        const container = document.getElementById('training-history-table');
+        if (container) {
+            container.innerHTML = '<p style="text-align:center; padding:40px; color:var(--text-muted);">❌ Eğitim geçmişi yüklenemedi</p>';
+        }
+    }
+}
+
+/**
+ * Eğitim geçmişini render et
+ */
+function renderTrainingHistory(history) {
+    const container = document.getElementById('training-history-table');
+    if (!container) {
+        console.error('❌ training-history-table elementi bulunamadı!');
+        return;
+    }
+
+    if (!history || history.length === 0) {
+        container.innerHTML = '<p style="text-align:center; padding:40px; color:var(--text-muted);">📭 Henüz eğitilmiş model yok. İlk modelinizi eğitin!</p>';
+        return;
+    }
+
+    container.innerHTML = `
+        <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+            <thead>
+                <tr style="background:rgba(88, 166, 255, 0.1); border-bottom:2px solid var(--neon-blue);">
+                    <th style="padding:12px; text-align:left; color:var(--neon-blue);">📅 Tarih</th>
+                    <th style="padding:12px; text-align:left; color:var(--neon-blue);">🪙 Sembol</th>
+                    <th style="padding:12px; text-align:left; color:var(--neon-blue);">⏱️ TF</th>
+                    <th style="padding:12px; text-align:left; color:var(--neon-blue);">📊 Dataset</th>
+                    <th style="padding:12px; text-align:left; color:var(--neon-blue);">🎯 XGB</th>
+                    <th style="padding:12px; text-align:left; color:var(--neon-blue);">🌲 RF</th>
+                    <th style="padding:12px; text-align:left; color:var(--neon-blue);">🔗 Ensemble</th>
+                    <th style="padding:12px; text-align:left; color:var(--neon-blue);">💾 Model</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${history.map(item => {
+                    const metrics = item.metrics || {};
+                    const xgbAcc = metrics.xgb_accuracy || metrics.accuracy || 0;
+                    const rfAcc = metrics.rf_accuracy || metrics.accuracy || 0;
+                    const ensAcc = metrics.ensemble_accuracy || metrics.accuracy || 0;
+                    
+                    const getAccColor = (acc) => {
+                        if (acc >= 0.5) return 'var(--neon-green)';
+                        if (acc >= 0.3) return '#ffc107';
+                        return 'var(--neon-red)';
+                    };
+                    
+                    const formatDate = (dateStr) => {
+                        if (!dateStr) return 'Invalid Date';
+                        try {
+                            const date = new Date(dateStr);
+                            if (isNaN(date.getTime())) return 'Invalid Date';
+                            return date.toLocaleString('tr-TR', { 
+                                day: '2-digit', 
+                                month: '2-digit', 
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
+                        } catch (e) {
+                            return 'Invalid Date';
+                        }
+                    };
+                    
+                    const date = formatDate(item.completed_at || item.started_at);
+                    const duration = item.duration_seconds ? `${Math.round(item.duration_seconds)}s` : '-';
+                    
+                    return `
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                            <td style="padding:12px; color:var(--text-main); white-space:nowrap;">${date}</td>
+                            <td style="padding:12px; color:var(--neon-blue); font-weight:600;">${item.symbol}</td>
+                            <td style="padding:12px; color:var(--text-main);">${item.timeframe}</td>
+                            <td style="padding:12px; color:var(--text-main);">${item.dataset_size || 'undefined'} örnek</td>
+                            <td style="padding:12px;">
+                                <span style="color:${getAccColor(xgbAcc)}; font-weight:700;" title="XGBoost Accuracy">🎯 %${(xgbAcc * 100).toFixed(1)}</span>
+                            </td>
+                            <td style="padding:12px;">
+                                <span style="color:${getAccColor(rfAcc)}; font-weight:700;" title="Random Forest Accuracy">🌲 %${(rfAcc * 100).toFixed(1)}</span>
+                            </td>
+                            <td style="padding:12px;">
+                                <span style="color:${getAccColor(ensAcc)}; font-weight:700;" title="Ensemble Accuracy">🔗 %${(ensAcc * 100).toFixed(1)}</span>
+                            </td>
+                            <td style="padding:12px; color:var(--text-muted); font-size:0.75rem;">
+                                ${item.model_path ? '✅ Kaydedildi' : '❌ Kaydedilmedi'}
+                            </td>
+                        </tr>
+                    `;
+                }).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+/**
+ * Eğitim geçmişini temizle
+ */
+async function clearTrainingHistory() {
+    if (!confirm('Tüm eğitim geçmişini silmek istediğinizden emin misiniz? Bu işlem geri alınamaz!')) {
+        return;
+    }
+
+    try {
+        const result = await api.deleteMLTrainingHistory();
+        if (result.status === 'success') {
+            showToast('✅ Eğitim geçmişi temizlendi', 'success');
+            loadMLTrainingHistory();
+        } else {
+            showToast('❌ Temizleme hatası: ' + result.message, 'error');
+        }
+    } catch (error) {
+        showToast('❌ Temizleme hatası: ' + error.message, 'error');
     }
 }
 
@@ -367,6 +524,19 @@ async function loadDropdownData() {
                 strategySelect.appendChild(warningOption);
                 console.warn('⚠️ Strateji yok');
             }
+        }
+
+        // ML analysis sembol dropdown'ı doldur
+        const mlSymbolSelect = document.getElementById('ml-analysis-symbol');
+        if (mlSymbolSelect && symbols && symbols.length > 0) {
+            mlSymbolSelect.innerHTML = '<option value="">Sembol seçin</option>';
+            symbols.forEach(symbol => {
+                const option = document.createElement('option');
+                option.value = symbol.symbol || symbol;
+                option.textContent = symbol.symbol || symbol;
+                mlSymbolSelect.appendChild(option);
+            });
+            console.log(`[INFO] ✅ ML analysis dropdown'a ${symbols.length} sembol eklendi`);
         }
 
         console.log('[INFO] ✅ Dropdown verileri yüklendi');
@@ -504,10 +674,150 @@ async function loadRiskSettings() {
             document.getElementById('risk-max-positions').value = result.data.max_open_positions || 5;
             document.getElementById('risk-max-losses').value = result.data.max_consecutive_losses || 5;
 
+            // Store'a kaydet
+            store.setState('settings', {
+                ...store.getState('settings'),
+                risk: result.data
+            });
+
             console.log('[INFO] Risk ayarları yüklendi:', result.data);
         }
     } catch (error) {
         console.error('❌ loadRiskSettings hatası:', error);
+    }
+}
+
+/**
+ * Gelişmiş Ayarları Yükle (WFO, ML, HTF)
+ */
+async function loadAdvancedSettings() {
+    try {
+        const response = await fetch('/api/v1/config/advanced');
+        const result = await response.json();
+
+        if (result.status === 'success' && result.data) {
+            const {wfo, ml, htf} = result.data;
+
+            // WFO ayarları
+            if (wfo) {
+                document.getElementById('wfo-enabled').checked = wfo.enabled !== false;
+                document.getElementById('wfo-train-days').value = wfo.train_days || 30;
+                document.getElementById('wfo-test-days').value = wfo.test_days || 7;
+                document.getElementById('wfo-interval').value = wfo.reoptimize_interval || 168;
+            }
+
+            // ML ayarları
+            if (ml) {
+                document.getElementById('ml-enabled').checked = ml.enabled !== false;
+                document.getElementById('ml-threshold').value = ml.confidence_threshold || 0.65;
+            }
+
+            // HTF ayarları
+            if (htf) {
+                document.getElementById('htf-enabled').checked = htf.enabled !== false;
+                document.getElementById('htf-method').value = htf.trend_method || 'ema_stack';
+            }
+
+            // Store'a kaydet
+            store.setState('settings', {
+                ...store.getState('settings'),
+                advanced: {wfo, ml, htf}
+            });
+
+            console.log('[INFO] Gelişmiş ayarlar yüklendi:', result.data);
+        }
+    } catch (error) {
+        console.error('❌ loadAdvancedSettings hatası:', error);
+    }
+}
+
+/**
+ * Bot Config Yükle
+ */
+async function loadBotConfig() {
+    try {
+        const response = await fetch('/api/v1/config/bot');
+        const result = await response.json();
+
+        if (result.status === 'success' && result.data) {
+            const {exchange, environment, log_level} = result.data;
+
+            if (exchange) {
+                document.getElementById('bot-config-exchange').value = exchange;
+            }
+            if (environment) {
+                document.getElementById('bot-config-environment').value = environment;
+            }
+            if (log_level) {
+                document.getElementById('bot-config-loglevel').value = log_level;
+            }
+
+            // Store'a kaydet
+            store.setState('settings', {
+                ...store.getState('settings'),
+                bot: result.data
+            });
+
+            console.log('[INFO] Bot config yüklendi:', result.data);
+        }
+    } catch (error) {
+        console.error('❌ loadBotConfig hatası:', error);
+    }
+}
+
+/**
+ * Tüm Ayarları Yükle (Settings sayfası açıldığında)
+ */
+async function loadAllSettings() {
+    console.log('[INFO] 🔄 Tüm sistem ayarları yükleniyor...');
+    
+    await Promise.all([
+        loadRiskSettings(),
+        loadAdvancedSettings(),
+        loadBotConfig()
+    ]);
+    
+    console.log('[INFO] ✅ Tüm ayarlar yüklendi');
+}
+
+/**
+ * Bot Config Kaydet
+ */
+async function saveBotConfig() {
+    try {
+        const exchange = document.getElementById('bot-config-exchange').value;
+        const environment = document.getElementById('bot-config-environment').value;
+        const logLevel = document.getElementById('bot-config-loglevel').value;
+
+        showToast('🤖 Bot yapılandırması kaydediliyor...', 'info');
+
+        // Backend API çağrısı
+        const response = await fetch('/api/v1/config/bot', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                exchange,
+                environment,
+                log_level: logLevel
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            showToast('✅ ' + result.message, 'success');
+            
+            // Store'a kaydet
+            store.setState('settings', {
+                ...store.getState('settings'),
+                bot: {exchange, environment, log_level: logLevel}
+            });
+        } else {
+            showToast('❌ ' + result.message, 'error');
+        }
+    } catch (error) {
+        console.error('❌ saveBotConfig hatası:', error);
+        showToast('❌ Bot yapılandırması kaydedilemedi: ' + error.message, 'error');
     }
 }
 
@@ -574,44 +884,6 @@ async function saveAdvancedSettings() {
     } catch (error) {
         console.error('❌ saveAdvancedSettings hatası:', error);
         showToast('❌ Gelişmiş ayarlar kaydedilemedi: ' + error.message, 'error');
-    }
-}
-
-/**
- * Gelişmiş Ayarları Yükle (Sayfa açılışında)
- */
-async function loadAdvancedSettings() {
-    try {
-        const response = await fetch('/api/v1/config/advanced');
-        const result = await response.json();
-
-        if (result.status === 'success' && result.data) {
-            const {wfo, ml, htf} = result.data;
-
-            // WFO ayarları
-            if (wfo) {
-                document.getElementById('wfo-enabled').checked = wfo.enabled !== false;
-                document.getElementById('wfo-train-days').value = wfo.train_days || 30;
-                document.getElementById('wfo-test-days').value = wfo.test_days || 7;
-                document.getElementById('wfo-interval').value = wfo.reoptimize_interval || 168;
-            }
-
-            // ML ayarları
-            if (ml) {
-                document.getElementById('ml-enabled').checked = ml.enabled !== false;
-                document.getElementById('ml-threshold').value = ml.confidence_threshold || 0.65;
-            }
-
-            // HTF ayarları
-            if (htf) {
-                document.getElementById('htf-enabled').checked = htf.enabled !== false;
-                document.getElementById('htf-method').value = htf.trend_method || 'ema_stack';
-            }
-
-            console.log('[INFO] Gelişmiş ayarlar yüklendi:', result.data);
-        }
-    } catch (error) {
-        console.error('❌ loadAdvancedSettings hatası:', error);
     }
 }
 
@@ -1108,23 +1380,71 @@ function renderStrategyLibrary(strategies) {
         console.log('[DEBUG] renderStrategyLibrary - strategies:', strategies?.length);
 
         if (!strategies || strategies.length === 0) {
-            container.innerHTML = '<p style="text-align:center; padding:20px; color:var(--text-muted);">📭 Strateji bulunamadı</p>';
+            container.innerHTML = '<p style="text-align:center; padding:40px; color:var(--text-muted); font-size:1.1rem;">📭 Strateji bulunamadı</p>';
             return;
         }
 
+        // Get active bot strategies to highlight active ones
+        const bots = store.getState('bots')?.list || [];
+        const activeStrategyIds = bots.filter(b => b.status === 'running').map(b => b.strategy_id);
+
         container.innerHTML = strategies.map(s => {
             if (!s) return '';
+            
+            const isBuiltin = s.type === 'builtin';
+            const badgeText = isBuiltin ? '📦 Built-in' : '🎨 Custom';
+            const badgeClass = isBuiltin ? 'builtin' : 'custom';
+            const isActive = activeStrategyIds.includes(s.id);
+            
             return `
                 <div class="strategy-card">
-                    <h4>${s.name || 'Bilinmeyen'}</h4>
-                    <p>${s.description || ''}</p>
-                    <div class="strategy-type">${s.type === 'builtin' ? '📦 Built-in' : '🔧 Custom'}</div>
+                    <div class="strategy-card-header">
+                        <h3 class="strategy-card-title">${s.name || 'Bilinmeyen'}</h3>
+                        <span class="strategy-badge ${badgeClass}">${badgeText}</span>
+                    </div>
+                    <p class="strategy-card-description">${s.description || 'Açıklama yok'}</p>
+                    <div class="strategy-card-footer">
+                        <button class="strategy-select-btn ${isActive ? 'active' : ''}" 
+                                onclick="onStrategySelect('${s.id}', '${s.name.replace(/'/g, "\\'")}')">
+                            ${isActive ? '✅ Aktif' : '🚀 Seç / Aktif Et'}
+                        </button>
+                    </div>
                 </div>
             `;
         }).filter(Boolean).join('');
     } catch (error) {
         console.error('❌ renderStrategyLibrary hatası:', error);
         console.error('Stack trace:', error.stack);
+    }
+}
+
+/**
+ * Strateji seçim butonu tıklandığında çağrılır
+ * @param {string} strategyId - Strateji ID
+ * @param {string} strategyName - Strateji adı
+ */
+function onStrategySelect(strategyId, strategyName) {
+    console.log(`[INFO] 🎯 Strateji seçildi: ${strategyName} (${strategyId})`);
+    
+    // Modal veya prompt ile onay al
+    const confirmed = confirm(`"${strategyName}" stratejisini aktif etmek istediğiniz sembolü seçin.\n\nTamam'a basarak devam edin.`);
+    
+    if (confirmed) {
+        // Bot oluşturma modal'ını aç veya doğrudan bot başlatma akışına yönlendir
+        // Şimdilik basitçe bot formuna scroll yap ve stratejiyi seç
+        const strategySelect = document.querySelector('select[name="strategy"]');
+        if (strategySelect) {
+            strategySelect.value = strategyId;
+            strategySelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        
+        // Bot sekmesine git
+        const botTab = document.querySelector('[data-target="tab-bots"]');
+        if (botTab) {
+            botTab.click();
+        }
+        
+        showToast(`✅ "${strategyName}" seçildi. Lütfen sembol seçin ve botu başlatın.`, 'success');
     }
 }
 
@@ -1190,7 +1510,6 @@ async function updateActiveTasks() {
         console.log('[DEBUG] updateActiveTasks - API çağrısı yapılıyor...');
 
         // Tüm indirmeleri çek (aktif + tamamlanan)
-        // getAllDownloadTasks endpoint'i kullanılıyor
         const data = await api.getAllDownloadTasks();
 
         console.log('[DEBUG] updateActiveTasks - API response:', data);
@@ -1206,130 +1525,115 @@ async function updateActiveTasks() {
         const countDisplay = document.getElementById('active-tasks-count');
 
         if (list && countDisplay) {
-            // Object.keys ile downloads'ı iterate et
             const symbols = Object.keys(downloads);
 
             console.log(`[INFO] ${symbols.length} aktif/tamamlanmış indirme bulundu`);
-            countDisplay.textContent = `${activeCount} Aktif / ${totalCount} Toplam Görev`;
+            countDisplay.textContent = `${activeCount} Aktif / ${totalCount} Toplam`;
 
             if (symbols.length === 0) {
-                list.innerHTML = '<p style="text-align:center; color:var(--text-muted); padding:20px;">📭 Aktif veya tamamlanmış indirme yok</p>';
+                list.innerHTML = '<p style="text-align:center; color:var(--text-muted); padding:40px;">📭 Aktif veya tamamlanmış indirme yok</p>';
             } else {
-                // Object.entries ile hem key hem value al
+                // Modern task cards with new CSS classes
                 list.innerHTML = Object.entries(downloads).map(([symbolKey, task]) => {
-                    const progress = task.progress || 100; // Tamamlananlar için %100
+                    const progress = task.progress || 100;
                     const status = task.status || 'completed';
-                    const statusClass = status === 'running' ? 'status-running' :
-                                       status === 'completed' ? 'status-completed' :
-                                       status === 'paused' ? 'status-paused' : 'status-stopped';
-
-                    // Sembol ve market type'ı ayır
+                    const speed = task.speed || 0;
+                    
+                    // Sembol ve market type ayır
                     let symbolName = symbolKey;
                     let marketType = task.market_type || 'future';
-                    
-                    // symbol_key formatından temizle (BTC/USDT_future → BTC/USDT + future)
+
                     if (symbolKey.includes('_future') || symbolKey.includes('_spot')) {
                         const parts = symbolKey.split('_');
-                        marketType = parts[parts.length - 1]; // future veya spot
-                        symbolName = parts.slice(0, -1).join('_'); // Geri kalan sembol
+                        marketType = parts[parts.length - 1];
+                        symbolName = parts.slice(0, -1).join('_');
                     }
+
+                    // Status class ve text
+                    const statusClass = status === 'running' ? 'running' :
+                                       status === 'completed' ? 'completed' :
+                                       status === 'paused' ? 'paused' : 'stopped';
                     
-                    // Market type'ı okunabilir yap
-                    const marketTypeDisplay = marketType === 'future' ? '💹 Vadeli' : 
-                                             marketType === 'spot' ? '💰 Spot' : marketType;
-                    
-                    // Status'u Türkçeleştir ve emoji ekle
                     const statusDisplay = status === 'running' ? '🔄 İndiriliyor' :
                                          status === 'completed' ? '✅ Tamamlandı' :
                                          status === 'paused' ? '⏸️ Duraklatıldı' : '⏹️ Durduruldu';
 
-                    // Başlangıç tarihini hesapla
+                    // Tarih bilgileri
                     let startDate = task.start_date || '...';
-                    let lastCandleDate = 'Hesaplanıyor...';
-                    
+                    let lastCandleDate = '-';
+
                     if (task.target_start_ms && !startDate) {
                         startDate = new Date(task.target_start_ms).toLocaleDateString('tr-TR');
                     }
-                    
-                    // SON MUM TARİHİNİ HESAPLA
+
                     if (task.current_ts) {
                         lastCandleDate = new Date(task.current_ts).toLocaleString('tr-TR', {
                             day: '2-digit',
                             month: '2-digit',
-                            year: 'numeric',
                             hour: '2-digit',
                             minute: '2-digit'
                         });
-                    } else if (task.progress >= 100 || status === 'completed') {
-                        lastCandleDate = '✅ Tamamlandı';
                     }
 
-                    // İlerleme durumu
-                    const progressText = status === 'running' ? `%${Math.round(progress)} tamamlandı` : 'Tamamlandı';
-                    const progressColor = status === 'running' ? 'var(--neon-blue)' :
-                                         status === 'completed' ? 'var(--neon-green)' :
-                                         status === 'paused' ? 'var(--neon-yellow)' : 'var(--neon-red)';
-                    
-                    // Silme butonu - sadece completed/stopped/paused için
-                    let showDeleteButton = status !== 'running';
-                    
-                    // ÖZEL: Geçersiz sembolleri her zaman silinebilir göster
-                    const isInvalidSymbol = symbolKey.includes('-- SEÇİNİZ --') || 
+                    // Silme butonu - STOPPED, COMPLETED, PAUSED için
+                    const isInvalidSymbol = symbolKey.includes('-- SEÇİNİZ --') ||
                                            symbolKey.includes('SEÇİNİZ') ||
                                            symbolKey === '_future' ||
                                            symbolKey === '_spot';
-                    if (isInvalidSymbol) {
-                        showDeleteButton = true; // Her zaman silinebilir
-                        console.warn(`⚠️ Geçersiz sembol tespit edildi: ${symbolKey}`);
-                    }
                     
-                    // task.market_type yoksa, symbol'den çıkar (BTC/USDT:USDT_future gibi)
-                    if (!task.market_type) {
-                        // symbol_market_type formatından çıkar
-                        const parts = symbolKey.split('_');
-                        marketType = parts.length > 1 ? parts[parts.length - 1] : 'future';
-                    }
+                    const showDeleteButton = (status !== 'running' || isInvalidSymbol);
+                    
                     const deleteButton = showDeleteButton ? `
-                        <button onclick="deleteDownloadTask('${symbolKey}', '${marketType}')" 
-                                style="background:rgba(255,25,25,0.2); color:#ff4d4d; border:1px solid #ff4d4d33; 
-                                       padding:4px 8px; border-radius:4px; cursor:pointer; font-size:0.65rem;"
-                                title="Görevi sil">
-                            🗑️ Sil
+                        <button class="task-btn task-btn-delete" onclick="deleteDownloadTask('${symbolKey}', '${marketType}')" title="Görevi Sil">
+                            🗑️
+                        </button>
+                    ` : '';
+
+                    const pauseButton = (status === 'running' || status === 'paused') ? `
+                        <button class="task-btn" onclick="togglePause('${symbolKey}', '${status === 'paused' ? 'resume' : 'pause'}')" title="${status === 'paused' ? 'Devam Et' : 'Duraklat'}">
+                            ${status === 'paused' ? '▶️' : '⏸️'}
                         </button>
                     ` : '';
 
                     return `
-                        <div class="task-item" style="padding:12px; margin:8px 0; background:rgba(255,255,255,0.02); border-radius:8px; border-left:3px solid ${progressColor};">
-                            <div style="display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:center; margin-bottom:8px;">
-                                <div>
-                                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
-                                        <span style="font-weight:700; font-size:0.95rem; color:var(--text-main);">${symbolName}</span>
-                                        <span class="task-status ${statusClass}" style="font-size:0.7rem; padding:2px 6px; border-radius:4px;">${marketTypeDisplay}</span>
-                                    </div>
-                                    <div style="font-size:0.7rem; color:var(--text-muted); display:flex; gap:12px; margin-top:4px;">
-                                        <span>📅 Başlangıç: ${startDate}</span>
-                                        <span style="color:var(--neon-blue);">→ Son Mum: ${lastCandleDate}</span>
-                                    </div>
+                        <div class="task-item ${statusClass}">
+                            <div class="task-header">
+                                <span class="task-symbol">${symbolName}</span>
+                                <span class="task-status ${statusClass}">${statusDisplay}</span>
+                            </div>
+                            
+                            <div class="task-body">
+                                <div class="task-info">
+                                    <span class="task-info-label">Timeframe</span>
+                                    <span class="task-info-value">${task.timeframe || '1m'}</span>
                                 </div>
-                                <div style="text-align:right;">
-                                    <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">${statusDisplay}</div>
-                                    ${deleteButton}
+                                <div class="task-info">
+                                    <span class="task-info-label">Market</span>
+                                    <span class="task-info-value">${marketType === 'future' ? '💹 Futures' : '💰 Spot'}</span>
+                                </div>
+                                <div class="task-info">
+                                    <span class="task-info-label">Başlangıç</span>
+                                    <span class="task-info-value">${startDate}</span>
+                                </div>
+                                <div class="task-info">
+                                    <span class="task-info-label">Son Mum</span>
+                                    <span class="task-info-value">${lastCandleDate}</span>
                                 </div>
                             </div>
-                            <div class="task-progress" style="margin:8px 0;">
-                                <div style="height:6px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden;">
-                                    <div class="progress-bar" style="width: ${progress}%; height:100%; background:${progressColor}; transition: width 0.3s;"></div>
+                            
+                            <div class="task-progress-section">
+                                <div class="task-progress-bar-wrapper">
+                                    <div class="task-progress-bar-fill" style="width: ${Math.min(progress, 100)}%"></div>
+                                </div>
+                                <div class="task-progress-text">
+                                    <span>📊 %${Math.round(progress)} tamamlandı</span>
+                                    ${speed > 0 ? `<span>⚡ ${Math.round(speed)} mum/sn</span>` : ''}
                                 </div>
                             </div>
-                            <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.75rem; color:var(--text-muted);">
-                                <span>
-                                    ${status === 'completed' ? '✅ Tamamlandı' : `📊 İlerleme: %${Math.round(progress)}`}
-                                </span>
-                                ${status !== 'completed' && task.speed ? `
-                                    <span style="font-size:0.7rem; color:var(--neon-blue);">
-                                        ⚡ ${Math.round(task.speed)} mum/sn
-                                    </span>
-                                ` : ''}
+                            
+                            <div class="task-actions">
+                                ${pauseButton}
+                                ${deleteButton}
                             </div>
                         </div>
                     `;
@@ -1370,6 +1674,10 @@ function setupGlobalFunctions() {
     // YENİ: Gelişmiş ayarlar (WFO, ML, HTF)
     window.saveAdvancedSettings = saveAdvancedSettings;
     window.loadAdvancedSettings = loadAdvancedSettings;
+
+    // YENİ: Bot config
+    window.saveBotConfig = saveBotConfig;
+    window.loadAllSettings = loadAllSettings;
 
     // Data symbols refresh (for manual refresh button)
     window.loadDataSymbols = loadDataSymbols;
@@ -1547,7 +1855,7 @@ async function deleteDownloadTask(symbol, marketType = 'future') {
 
     try {
         const result = await api.deleteDownloadTask(symbol, marketType);
-        
+
         if (result.status === 'success') {
             showToast(`✅ ${result.message}`, 'success');
             // Listeyi hemen güncelle
@@ -1557,6 +1865,24 @@ async function deleteDownloadTask(symbol, marketType = 'future') {
         }
     } catch (error) {
         showToast('❌ Silme hatası: ' + error.message, 'error');
+    }
+}
+
+/**
+ * İndirme görevini duraklat/devam ettir
+ */
+async function togglePause(symbol, action = 'pause') {
+    try {
+        const result = await api.togglePause(symbol, action);
+
+        if (result.status === 'success') {
+            showToast(`✅ ${result.message}`, 'success');
+            await updateActiveTasks();
+        } else {
+            showToast(`❌ Hata: ${result.message}`, 'error');
+        }
+    } catch (error) {
+        showToast('❌ Duraklatma hatası: ' + error.message, 'error');
     }
 }
 
@@ -1573,27 +1899,136 @@ async function closePosition(symbol) {
 }
 
 async function startMLTraining() {
-    const symbol = document.getElementById('ml-training-symbol')?.value;
-    const timeframe = document.getElementById('ml-training-timeframe')?.value || '1h';
-    const limit = parseInt(document.getElementById('ml-training-limit')?.value) || 1000;
-    
-    if (!symbol) {
-        showToast('❌ Sembol seçin', 'error');
+    const symbol = document.getElementById('ml-train-symbol')?.value;
+    const timeframe = document.getElementById('ml-train-timeframe')?.value || '1h';
+    const limit = parseInt(document.getElementById('ml-train-limit')?.value) || 5000;
+    const tp = parseFloat(document.getElementById('ml-train-tp')?.value) || 2.0;
+    const sl = parseFloat(document.getElementById('ml-train-sl')?.value) || 2.0;
+
+    console.log('[ML Training] Form values:', { symbol, timeframe, limit, tp, sl });
+
+    if (!symbol || symbol === '') {
+        showToast('❌ Lütfen sembol seçin', 'error');
         return;
     }
-    
+
+    // Mevcut veri sayısını kontrol et
     try {
-        store.setState('ml', { training: { isTraining: true, progress: 0, message: 'Başlatılıyor...' } });
+        const dataCountResponse = await fetch(`/api/v1/data/data-count?symbol=${encodeURIComponent(symbol)}&timeframe=${timeframe}`);
+        const dataCountData = await dataCountResponse.json();
+        const availableCount = dataCountData.count || 0;
         
-        const result = await api.trainModel(symbol, timeframe, limit);
-        showToast(result.message, 'success');
+        if (availableCount < 100) {
+            showToast(`❌ Yetersiz veri: ${availableCount} mum (min 100 gerekli)`, 'error');
+            return;
+        }
         
+        if (limit > availableCount) {
+            showToast(`⚠️ DB'de sadece ${availableCount.toLocaleString()} mum var. Limit ${availableCount.toLocaleString()} olarak ayarlanıyor.`, 'warning');
+        }
+        
+        // Limit'i DB'deki veriye göre ayarla (kullanıcı az girdiyse onu kullan)
+        const actualLimit = Math.min(limit, availableCount);
+        
+        console.log('[ML Training] Starting training:', { symbol, timeframe, limit: actualLimit, tp, sl, available: availableCount, userRequested: limit });
+
+        store.setState('ml', { training: { isTraining: true, progress: 5, message: 'Başlatılıyor...', current_step: 'DB bağlantısı' } });
+
+        // Backend'e TP ve SL değerlerini gönder
+        const result = await api.trainModel(symbol, timeframe, actualLimit, 'xgboost', tp, sl);
+        console.log('[ML Training] Response:', result);
+        showToast(result.message || '🚀 ML eğitimi başlatıldı', 'success');
+
         // Poll training status
         pollTrainingStatus();
     } catch (error) {
         store.setState('ml', { training: { isTraining: false } });
-        showToast('❌ Eğitim hatası: ' + error.message, 'error');
+        console.error('[ML Training] Error:', error);
+        
+        // 422 Validation Error detayını göster
+        let errorMessage = error.message;
+        if (error.response) {
+            error.response.json().then(data => {
+                console.error('[ML Training] Validation error details:', data);
+                if (data.detail) {
+                    errorMessage = data.detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join(', ');
+                }
+            }).catch(() => {});
+        }
+        
+        showToast('❌ Eğitim hatası: ' + errorMessage, 'error');
     }
+}
+
+/**
+ * Mum sayısı validasyonu - dinamik
+ */
+function validateMumCount() {
+    const symbol = document.getElementById('ml-train-symbol')?.value;
+    const timeframe = document.getElementById('ml-train-timeframe')?.value;
+    const limitInput = document.getElementById('ml-train-limit');
+    const warningSpan = document.getElementById('ml-limit-warning');
+    const rangeSpan = document.getElementById('ml-db-range');
+    const dbCountSpan = document.getElementById('ml-db-count');
+    
+    if (!symbol || !timeframe || !limitInput) return;
+    
+    const limit = parseInt(limitInput.value) || 0;
+    
+    // Mevcut veri sayısını al
+    fetch(`/api/v1/data/data-count?symbol=${encodeURIComponent(symbol)}&timeframe=${timeframe}`)
+        .then(r => r.json())
+        .then(data => {
+            const availableCount = data.count || 0;
+            
+            if (availableCount > 0) {
+                // Tarih aralığını göster
+                if (data.min_date && data.max_date) {
+                    rangeSpan.textContent = `${data.min_date} → ${data.max_date}`;
+                }
+                
+                // Limit kontrolü
+                if (limit > availableCount) {
+                    // Kullanıcı DB'den fazla girdi → UYARI
+                    warningSpan.style.display = 'block';
+                    warningSpan.textContent = `⚠️ DB'de sadece ${availableCount.toLocaleString()} mum var!`;
+                    warningSpan.style.color = 'var(--neon-red)';
+                    limitInput.style.borderColor = 'var(--neon-red)';
+                    dbCountSpan.textContent = `DB: ${availableCount.toLocaleString()} mum`;
+                    dbCountSpan.style.color = 'var(--neon-blue)';
+                } else if (limit < 100) {
+                    // Çok az → UYARI
+                    warningSpan.style.display = 'block';
+                    warningSpan.textContent = '⚠️ Min 100 mum gerekli!';
+                    warningSpan.style.color = 'var(--neon-red)';
+                    limitInput.style.borderColor = 'var(--neon-red)';
+                    dbCountSpan.textContent = `DB: ${availableCount.toLocaleString()} mum`;
+                    dbCountSpan.style.color = 'var(--neon-blue)';
+                } else {
+                    // Normal → Yüzde göster
+                    warningSpan.style.display = 'none';
+                    limitInput.style.borderColor = 'rgba(255,255,255,0.1)';
+                    
+                    const percentage = ((limit / availableCount) * 100).toFixed(1);
+                    dbCountSpan.textContent = `DB: ${availableCount.toLocaleString()} mum → Kullanılan: ${limit.toLocaleString()} (${percentage}%)`;
+                    dbCountSpan.style.color = percentage >= 50 ? 'var(--neon-green)' : 'var(--neon-blue)';
+                }
+            } else {
+                // Veri yok → HATA
+                dbCountSpan.textContent = '❌ Veri yok';
+                dbCountSpan.style.color = 'var(--neon-red)';
+                rangeSpan.textContent = '';
+                warningSpan.style.display = 'block';
+                warningSpan.textContent = '⚠️ Bu sembol için veri yok! Önce veri indirin.';
+                warningSpan.style.color = 'var(--neon-red)';
+                limitInput.style.borderColor = 'var(--neon-red)';
+            }
+        })
+        .catch(err => {
+            console.error('Data count fetch error:', err);
+            dbCountSpan.textContent = '❌ Hata';
+            dbCountSpan.style.color = 'var(--neon-red)';
+        });
 }
 
 async function pollTrainingStatus() {
@@ -1629,33 +2064,143 @@ async function runMLVisualAnalysis() {
     const symbol = document.getElementById('ml-analysis-symbol')?.value;
     const strategy = document.getElementById('ml-analysis-strategy')?.value;
     const timeframe = document.getElementById('ml-analysis-timeframe')?.value || '1h';
-    
+
+    console.log('[ML Visual Analysis] Starting:', { symbol, strategy, timeframe });
+
     if (!symbol || !strategy) {
         showToast('❌ Sembol ve strateji seçin', 'error');
         return;
     }
-    
+
     try {
-        const data = await api.runVisualAnalysis(symbol, strategy, timeframe);
+        // Loading state göster
+        const chartContainer = document.getElementById('ml-analysis-chart');
+        const featureContainer = document.getElementById('feature-importance-chart');
         
-        // Render chart
-        const chart = new ChartRenderer('ml-analysis-chart');
-        chart.init();
-        chart.setCandlestickData(data.candles || []);
-        
-        if (data.markers && data.markers.length > 0) {
-            chart.addMarkers(data.markers);
+        if (chartContainer) {
+            chartContainer.innerHTML = '<div style="position:absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.3);"><div class="loading-spinner"></div><p style="color:white; margin-left:15px;">📊 Analiz ediliyor...</p></div>';
         }
+
+        const limit = parseInt(document.getElementById('ml-train-limit')?.value) || 1000;
+        console.log('[ML Visual Analysis] Requesting data range:', limit);
         
+        const data = await api.runVisualAnalysis(symbol, strategy, timeframe, limit);
+
+        console.log('[ML Visual Analysis] Response:', data);
+        console.log('[ML Visual Analysis] Candles:', data.candles?.length, 'mum');
+        console.log('[ML Visual Analysis] Markers:', data.markers?.length, 'adet');
+        console.log('[ML Visual Analysis] Feature Importance:', data.feature_importance?.length, 'özellik');
+
+        if (data.status === 'error') {
+            showToast('❌ ' + data.message, 'error');
+            if (chartContainer) chartContainer.innerHTML = '';
+            return;
+        }
+
+        // 3. Render chart
+        if (data.status === 'success' && data.candles && data.candles.length > 0) {
+            const chartContainer = document.getElementById('ml-analysis-chart');
+            if (chartContainer) {
+                try {
+                    // [PROTECTION] Zaman Sıralama Kalkanı: LWC kronolojik veri bekler (Eski -> Yeni)
+                    data.candles.sort((a, b) => a.time - b.time);
+                    
+                    if (data.markers && data.markers.length > 0) {
+                        data.markers.sort((a, b) => a.time - b.time);
+                    }
+
+                    // [PROTECTION] Görünürlük ve Yükseklik Kontrolü
+                    chartContainer.innerHTML = '';
+                    chartContainer.style.height = '450px'; // Kesin yükseklik garantisi
+                    
+                    const chart = new ChartRenderer('ml-analysis-chart');
+                    chart.init();
+                    chart.setCandlestickData(data.candles);
+
+                    console.log('[ML Visual Analysis] Chart initialized with sorted data:', data.candles.length);
+                    
+                    if (data.markers && data.markers.length > 0) {
+                        console.log('[ML Visual Analysis] Adding sorted markers:', data.markers.length);
+                        chart.addMarkers(data.markers);
+                    }
+
+                    console.log('[ML Visual Analysis] Chart rendered successfully:', data.candles.length, 'candles');
+                } catch (renderError) {
+                    console.error('[ML Visual Analysis] Chart Render Error:', renderError);
+                    chartContainer.innerHTML = `<p style="color:var(--neon-red); padding:20px; text-align:center;">⚠️ Grafik çizim hatası: ${renderError.message}</p>`;
+                }
+            }
+        } else if (data.status === 'success') {
+            showToast('⚠️ Gösterilecek mum verisi bulunamadı', 'warning');
+            const chartContainer = document.getElementById('ml-analysis-chart');
+            if (chartContainer) chartContainer.innerHTML = '<p style="text-align:center; padding-top:180px; color:var(--text-muted);">Veri yok</p>';
+        }
+
         // Render feature importance
-        if (data.feature_importance) {
-            PlotlyRenderer.renderFeatureImportance('feature-importance-chart', data.feature_importance);
+        if (data.feature_importance && data.feature_importance.length > 0) {
+            renderFeatureImportance(data.feature_importance);
+        } else {
+            if (featureContainer) {
+                featureContainer.innerHTML = '<p style="text-align:center; padding:40px; color:var(--text-muted);">📊 Model bulunamadı. Önce model eğitin.</p>';
+            }
         }
-        
+
         showToast('✅ Analiz tamamlandı', 'success');
     } catch (error) {
+        console.error('[ML Visual Analysis] Error:', error);
         showToast('❌ Analiz hatası: ' + error.message, 'error');
+        const chartContainer = document.getElementById('ml-analysis-chart');
+        if (chartContainer) chartContainer.innerHTML = '';
     }
+}
+
+/**
+ * Feature importance render et
+ */
+function renderFeatureImportance(featureImportance) {
+    const container = document.getElementById('feature-importance-chart');
+    if (!container) {
+        console.error('❌ feature-importance-chart elementi bulunamadı!');
+        return;
+    }
+
+    if (!featureImportance || featureImportance.length === 0) {
+        container.innerHTML = '<p style="text-align:center; padding:40px; color:var(--text-muted);">📊 Feature importance verisi yok</p>';
+        return;
+    }
+
+    // Bar chart HTML
+    const maxVal = Math.max(...featureImportance.map(f => f.importance || f.value || 0));
+    
+    container.innerHTML = `
+        <div style="padding:20px;">
+            <h4 style="color:var(--neon-blue); margin-bottom:15px;">🧬 Model Ağırlık Analizi</h4>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                ${featureImportance.map((feature, idx) => {
+                    const importance = feature.importance || feature.value || 0;
+                    const percentage = maxVal > 0 ? (importance / maxVal * 100) : 0;
+                    const color = percentage >= 80 ? 'var(--neon-blue)' : percentage >= 50 ? 'var(--neon-purple)' : 'var(--text-muted)';
+                    
+                    return `
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <div style="width:150px; font-size:0.85rem; color:var(--text-main); text-align:right; font-weight:600;">
+                                ${feature.feature || feature.name || `Feature ${idx}`}
+                            </div>
+                            <div style="flex:1; background:rgba(255,255,255,0.05); border-radius:4px; height:20px; overflow:hidden;">
+                                <div style="width:${percentage}%; background:${color}; height:100%; border-radius:4px; transition: width 0.3s;"></div>
+                            </div>
+                            <div style="width:60px; font-size:0.75rem; color:var(--text-muted); text-align:right;">
+                                ${(importance * 100).toFixed(1)}%
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+            <p style="font-size:0.75rem; color:var(--text-muted); margin-top:15px; text-align:center;">
+                💡 Modelin karar verirken en çok hangi indikatörleri dikkate aldığını (yüzdelik etki) gösterir.
+            </p>
+        </div>
+    `;
 }
 
 function showToast(message, type = 'info') {
@@ -1673,10 +2218,56 @@ function showToast(message, type = 'info') {
         font-weight: 600;
         z-index: 9999;
     `;
-    
+
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 3000);
 }
+
+// Make showToast available globally for onclick handlers
+window.showToast = showToast;
+
+// ============================================================================
+// STRATEGY PERFORMANCE REPORT (Modernized)
+// ============================================================================
+
+async function loadStrategyReport() {
+    try {
+        console.log('[INFO] 📈 Strateji performans raporu yükleniyor...');
+        const container = document.getElementById('strategy-report-container');
+        if (!container) { console.error('❌ Container bulunamadı!'); return; }
+        container.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p class="loading-text">📊 Rapor hazırlanıyor...</p><p class="loading-subtext">Tüm işlemler analiz ediliyor</p></div>';
+        const response = await fetch('/api/v1/strategy-report');
+        const data = await response.json();
+        console.log('[DEBUG] Strategy report response:', data);
+        if (data.status === 'success' && data.report && data.report.length > 0) { renderStrategyReport(data.report); }
+        else if (data.status === 'success' && (!data.report || data.report.length === 0)) { container.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><h3 class="empty-title">Henüz işlem geçmişi yok</h3><p class="empty-text">Botları başlatıp işlem yaptıkça raporlar burada görünecek.</p><p class="empty-hint">💡 İpucu: Performans raporları sadece kapanan işlemleri baz alır.</p></div>'; }
+        else { container.innerHTML = '<div class="error-state"><div class="error-icon">❌</div><h3 class="error-title">Rapor yüklenemedi</h3><p class="error-message">' + (data.message || 'Bilinmeyen hata') + '</p></div>'; }
+    } catch (error) { console.error('❌ Rapor yükleme hatası:', error); showToast('❌ Rapor yüklenemedi: ' + error.message, 'error'); }
+}
+
+function renderStrategyReport(report) {
+    try {
+        const container = document.getElementById('strategy-report-container');
+        if (!container) { console.error('❌ Container bulunamadı!'); return; }
+        console.log('[DEBUG] renderStrategyReport - report:', report?.length);
+        container.innerHTML = '<div class="reports-grid">' + report.map(strat => {
+            const winRateClass = strat.win_rate >= 60 ? 'win-rate-excellent' : strat.win_rate >= 50 ? 'win-rate-good' : strat.win_rate >= 40 ? 'win-rate-average' : 'win-rate-poor';
+            const winRateColor = strat.win_rate >= 60 ? 'var(--neon-green)' : strat.win_rate >= 50 ? 'var(--neon-blue)' : strat.win_rate >= 40 ? '#ffc107' : 'var(--neon-red)';
+            const pnlColor = strat.total_pnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+            const recommendationIcon = strat.win_rate >= 60 && strat.total_pnl > 0 ? '✅' : strat.win_rate >= 50 ? '⚠️' : '❌';
+            const escapeHtml = (text) => { if (!text) return ''; const div = document.createElement('div'); div.textContent = text; return div.innerHTML; };
+            return '<div class="report-card glass-panel"><div class="report-card-header"><h3 class="report-card-title">' + escapeHtml(strat.strategy) + '</h3><span class="report-badge ' + winRateClass + '" style="background: ' + winRateColor + ';">📊 %' + strat.win_rate + ' Win Rate</span></div><div class="report-metrics"><div class="report-metric"><div class="report-metric-label">Toplam İşlem</div><div class="report-metric-value">' + strat.total_trades + '</div></div><div class="report-metric"><div class="report-metric-label">Net P&L</div><div class="report-metric-value" style="color: ' + pnlColor + ';">$' + strat.total_pnl.toFixed(2) + '</div></div></div>' + (strat.symbols && strat.symbols.length > 0 ? '<div class="report-section"><h4 class="report-section-title">🎯 Sembol Performansı</h4><div class="symbols-list">' + strat.symbols.map(sym => '<div class="symbol-item"><span class="symbol-name">' + escapeHtml(sym.name) + '</span><div class="symbol-stats"><span class="symbol-trades">' + sym.trades + ' işlem</span><span class="symbol-win-rate" style="color: ' + (sym.win_rate >= 60 ? 'var(--neon-green)' : sym.win_rate >= 40 ? '#ffc107' : 'var(--neon-red)') + ';">%' + sym.win_rate + '</span><span class="symbol-pnl" style="color: ' + (sym.pnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)') + ';">$' + sym.pnl.toFixed(2) + '</span></div></div>').join('') + '</div></div>' : '<div class="report-section"><p class="no-data">Sembol verisi yok</p></div>') + '<div class="report-recommendation"><div class="recommendation-icon">' + recommendationIcon + '</div><div class="recommendation-content"><div class="recommendation-label">Analiz Önerisi</div><p class="recommendation-text">' + escapeHtml(strat.recommendation) + '</p></div></div></div>';
+        }).join('') + '</div>';
+        console.log('[INFO] ✅ Strateji raporu render edildi');
+    } catch (error) { console.error('❌ renderStrategyReport hatası:', error); showToast('❌ Rapor render hatası: ' + error.message, 'error'); }
+}
+
+// Make loadStrategyReport available globally
+window.loadStrategyReport = loadStrategyReport;
+window.renderTrainingHistory = renderTrainingHistory;
+window.clearTrainingHistory = clearTrainingHistory;
+window.loadMLTrainingHistory = loadMLTrainingHistory;
+window.runMLVisualAnalysis = runMLVisualAnalysis;
 
 // ============================================================================
 // APP LIFECYCLE

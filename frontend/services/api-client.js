@@ -136,6 +136,14 @@ class ApiClient {
         });
     }
 
+    /**
+     * Strateji performans raporunu al
+     * @returns {Promise} Rapor verisi
+     */
+    getStrategyReport() {
+        return this.get('/api/v1/strategy-report');
+    }
+
     // ========================================================================
     // MARKET & DATA
     // ========================================================================
@@ -246,12 +254,14 @@ class ApiClient {
     // ML
     // ========================================================================
 
-    trainModel(symbol, timeframe = '1h', limit = 1000, modelType = 'xgboost') {
+    trainModel(symbol, timeframe = '1h', limit = 1000, modelType = 'xgboost', tp = 2.0, sl = 2.0) {
         return this.post('/api/v1/ml/train', {
             symbol,
             timeframe,
             limit,
             model_type: modelType,
+            tp,  // Take profit multiplier
+            sl,  // Stop loss multiplier
         });
     }
 

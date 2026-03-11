@@ -24,7 +24,7 @@ class KNNQuantATRShield(BaseStrategy):
         self.params = self.DEFAULT_PARAMS.copy()
 
     def name(self) -> str:
-        return "knn_quant_atr"
+        return "KNN Quant ATR Shield"
 
     def description(self) -> str:
         return "Nicel KNN Tahmin & ATR Kalkanı: Tarihsel verilere göre 'en benzer günlerin' geleceğini kopyalar. Duyguları siler."

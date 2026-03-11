@@ -16,25 +16,31 @@ from datetime import datetime
 class MLTrainRequest(BaseModel):
     """
     ML model eğitimi isteği.
-    
+
     Attributes:
         symbol: Sembol (örn: BTC/USDT)
         timeframe: Zaman dilimi (varsayılan: 1h)
-        limit: Mum sayısı (varsayılan: 1000)
+        limit: Mum sayısı (varsayılan: 5000, max: 100000)
         model_type: Model tipi (varsayılan: xgboost)
+        tp: Take profit multiplier (varsayılan: 2.0)
+        sl: Stop loss multiplier (varsayılan: 2.0)
     """
     symbol: str = Field(..., description="Sembol (örn: BTC/USDT)")
     timeframe: str = Field(default="1h", description="Zaman dilimi")
-    limit: int = Field(default=1000, description="Mum sayısı", ge=100, le=10000)
+    limit: int = Field(default=5000, description="Mum sayısı (DB'deki veriye göre otomatik ayarlanır)", ge=100)
     model_type: str = Field(default="xgboost", description="Model tipi")
-    
+    tp: float = Field(default=2.0, description="Take profit multiplier", ge=1.0, le=5.0)
+    sl: float = Field(default=2.0, description="Stop loss multiplier", ge=1.0, le=5.0)
+
     class Config:
         json_schema_extra = {
             "example": {
                 "symbol": "BTC/USDT",
                 "timeframe": "1h",
-                "limit": 1000,
-                "model_type": "xgboost"
+                "limit": 5000,
+                "model_type": "xgboost",
+                "tp": 2.0,
+                "sl": 2.0
             }
         }
 

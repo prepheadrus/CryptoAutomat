@@ -1,42 +1,36 @@
 /**
  * Bot Manager Component
- * 
- * Aktif bot listesi, bot kartları ve bot kontrol işlemleri.
+ * Manages active bots display and actions
  */
 
 import { api } from '../../services/api-client.js';
-import { store, selectors, actions } from '../../state/store.js';
+import { store } from '../../state/store.js';
+import { selectors } from '../../state/store.js';
 
-class BotManager {
-    constructor() {
-        this.containerId = 'active-bots-container';
-        this.statusContainerId = 'system-status-summary';
-        this.refreshInterval = null;
-    }
+export const botManager = {
+    containerId: 'active-bots-container',
+    statusContainerId: 'bot-status-summary',
 
-    /**
-     * Initialize bot manager
-     */
     init() {
         this.loadBots();
-        this.startAutoRefresh();
-    }
+    },
 
-    /**
-     * Load active bots
-     */
     async loadBots() {
         try {
+            console.log('[BotManager] loadBots başlatılıyor...');
             store.setState('bots', { loading: true });
 
             const data = await api.getBots();
+            console.log('[BotManager] API response:', data);
             const bots = data.bots || [];
+            console.log('[BotManager] Bots count:', bots.length);
 
             store.setState('bots', {
                 active: bots,
                 loading: false,
             });
 
+            console.log('[BotManager] render() çağrılıyor...');
             this.render();
         } catch (error) {
             console.error('Bot yükleme hatası:', error);
@@ -45,20 +39,23 @@ class BotManager {
                 error: error.message,
             });
         }
-    }
+    },
 
-    /**
-     * Render bot list
-     */
     render() {
+        console.log('[BotManager] render() çalışıyor...');
         const state = store.getState();
         const bots = selectors.getActiveBots(state);
+        console.log('[BotManager] Aktif botlar:', bots);
         const strategies = selectors.getStrategies(state);
 
         // Active bots container
         const container = document.getElementById(this.containerId);
+        console.log('[BotManager] Container:', container);
         if (container) {
             container.innerHTML = this.renderBotCards(bots, strategies);
+            console.log('[BotManager] Render tamamlandı');
+        } else {
+            console.error('[BotManager] Container bulunamadı!');
         }
 
         // Status summary (dashboard)
@@ -66,10 +63,10 @@ class BotManager {
         if (statusContainer) {
             statusContainer.innerHTML = this.renderStatusCards(bots, state.dashboard.decisions);
         }
-    }
+    },
 
     /**
-     * Render bot cards (settings tab)
+     * Render bot cards (settings tab) - TABLE FORMAT
      */
     renderBotCards(bots, strategies) {
         if (!bots || bots.length === 0) {
@@ -83,56 +80,106 @@ class BotManager {
             `;
         }
 
-        return bots.map(bot => {
-            const botId = bot.bot_id || `${bot.symbol}_${bot.strategy_id}_${bot.timeframe}`;
-            const isRunning = bot.status === 'running';
+        // Modern table format
+        return `
+            <div class="bots-table-container">
+                <table class="bots-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 120px;">🪙 Sembol</th>
+                            <th style="width: 180px;">📚 Strateji</th>
+                            <th style="width: 80px;">⏱️ TF</th>
+                            <th style="width: 80px;">🏛️ Market</th>
+                            <th style="width: 100px;">📊 Durum</th>
+                            <th style="width: 120px; text-align: right;">💰 PnL ($)</th>
+                            <th style="width: 120px; text-align: right;">📈 PnL (%)</th>
+                            <th style="width: 150px;">🕒 Süre</th>
+                            <th style="width: 180px; text-align: center;">⚙️ İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${bots.map(bot => {
+                            const botId = bot.bot_id || `${bot.symbol}_${bot.strategy_id}_${bot.timeframe}`;
+                            const isRunning = bot.status === 'running';
+                            const pnlUsd = bot.pnl || 0;
+                            const pnlPercent = bot.pnl_percent || 0;
+                            const uptime = this.formatUptime(bot.started_at);
+                            
+                            return `
+                                <tr class="bot-row ${isRunning ? 'running' : 'stopped'}" data-bot-id="${botId}">
+                                    <td>
+                                        <div class="bot-symbol-cell">
+                                            <span class="symbol-icon">₿</span>
+                                            <span class="symbol-text">${bot.symbol.replace('/USDT', '')}</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="strategy-badge">${bot.strategy_id || 'unknown'}</span>
+                                    </td>
+                                    <td><span class="timeframe-tag">${bot.timeframe || '1m'}</span></td>
+                                    <td><span class="market-tag">${bot.market_type || 'swap'}</span></td>
+                                    <td>
+                                        <span class="status-badge ${isRunning ? 'status-running' : 'status-stopped'}">
+                                            ${isRunning ? '🟢 Aktif' : '🔴 Durduruldu'}
+                                        </span>
+                                    </td>
+                                    <td style="text-align: right;">
+                                        <span class="pnl-value ${pnlUsd >= 0 ? 'positive' : 'negative'}">
+                                            $${pnlUsd.toFixed(2)}
+                                        </span>
+                                    </td>
+                                    <td style="text-align: right;">
+                                        <span class="pnl-percent ${pnlPercent >= 0 ? 'positive' : 'negative'}">
+                                            ${pnlPercent >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%
+                                        </span>
+                                    </td>
+                                    <td><span class="uptime-text">${uptime}</span></td>
+                                    <td style="text-align: center;">
+                                        <div class="bot-actions">
+                                            ${isRunning ? `
+                                                <button class="btn-icon btn-stop" onclick="botManager.stopBot('${botId}')" title="Durdur">
+                                                    ⏹️
+                                                </button>
+                                            ` : `
+                                                <button class="btn-icon btn-play" onclick="botManager.resumeBot('${botId}')" title="Devam Et">
+                                                    ▶️
+                                                </button>
+                                            `}
+                                            <button class="btn-icon btn-delete" onclick="botManager.removeBot('${botId}')" title="Kaldır">
+                                                🗑️
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    },
 
-            return `
-                <div class="bot-card" data-bot-id="${botId}">
-                    <div class="bot-card-header">
-                        <div class="bot-symbol">${bot.symbol.replace('/USDT', '')}</div>
-                        <div class="bot-status ${isRunning ? 'running' : 'stopped'}">
-                            ${isRunning ? '🟢 Çalışıyor' : '🔴 Durduruldu'}
-                        </div>
-                    </div>
-                    <div class="bot-card-body">
-                        <div class="bot-row">
-                            <span class="bot-label">Strateji:</span>
-                            <span class="bot-value">${bot.strategy_id || 'unknown'}</span>
-                        </div>
-                        <div class="bot-row">
-                            <span class="bot-label">Timeframe:</span>
-                            <span class="bot-value">${bot.timeframe || '1m'}</span>
-                        </div>
-                        <div class="bot-row">
-                            <span class="bot-label">Market:</span>
-                            <span class="bot-value">${bot.market_type || 'future'}</span>
-                        </div>
-                        <div class="bot-row">
-                            <span class="bot-label">PnL:</span>
-                            <span class="bot-value ${bot.pnl >= 0 ? 'success-text' : 'danger-text'}">
-                                $${(bot.pnl || 0).toFixed(2)}
-                            </span>
-                        </div>
-                    </div>
-                    <div class="bot-card-actions">
-                        ${isRunning ? `
-                            <button class="btn btn-warning" onclick="botManager.stopBot('${botId}')">
-                                ⏹️ Durdur
-                            </button>
-                        ` : `
-                            <button class="btn btn-success" onclick="botManager.resumeBot('${botId}')">
-                                ▶️ Devam Et
-                            </button>
-                        `}
-                        <button class="btn btn-danger" onclick="botManager.removeBot('${botId}')">
-                            🗑️ Kaldır
-                        </button>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    }
+    /**
+     * Format uptime string
+     */
+    formatUptime(startedAt) {
+        if (!startedAt) return '-';
+        
+        const start = new Date(startedAt);
+        const now = new Date();
+        const diffMs = now - start;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMins / 60);
+        const diffDays = Math.floor(diffHours / 24);
+        
+        if (diffDays > 0) {
+            return `${diffDays}g ${diffHours % 24}s`;
+        } else if (diffHours > 0) {
+            return `${diffHours}s ${diffMins % 60}d`;
+        } else {
+            return `${diffMins}d`;
+        }
+    },
 
     /**
      * Render status cards (dashboard)
@@ -152,10 +199,8 @@ class BotManager {
             const strategyId = bot.strategy_id || 'unknown';
             const timeframe = bot.timeframe || '1m';
 
-            // Find strategy name
-            const strategyName = strategyId; // Could be enhanced with strategy lookup
+            const strategyName = strategyId;
 
-            // Get latest decision
             const decision = decisions ? decisions[sym] : null;
             const signalText = decision && decision.signal_val !== undefined
                 ? (decision.signal_val === 2 ? '🟢 AL' : decision.signal_val === 0 ? '🔴 SAT' : '⚪ BEKLE')
@@ -168,28 +213,18 @@ class BotManager {
                 <div class="system-status-card" data-bot-id="${botId}">
                     <div class="status-card-header-compact">
                         <span class="status-symbol">${sym.replace('/USDT', '')} (${timeframe})</span>
-                        <span class="status-signal" style="color: ${signalColor}; font-weight: 700; font-size: 0.75rem;">
+                        <span class="status-signal" style="background:${signalColor}; color:white;">
                             ${signalText}
                         </span>
                     </div>
                     <div class="status-card-body-compact">
                         <div class="status-row-compact">
-                            <span class="status-label">🤖</span>
-                            <span class="status-value" title="${strategyName}">
-                                ${strategyName.split(' ')[0]}
-                            </span>
-                        </div>
-                        <div class="status-row-compact">
-                            <span class="status-label">⏱️</span>
-                            <span class="status-value">${timeframe}</span>
-                        </div>
-                        <div class="status-row-compact">
-                            <span class="status-label">💹</span>
-                            <span class="status-value">${bot.market_type || 'future'}</span>
+                            <span class="status-label">Strateji:</span>
+                            <span class="status-value">${strategyName}</span>
                         </div>
                         <div class="status-row-compact">
                             <span class="status-label">PnL:</span>
-                            <span class="status-value ${(bot.pnl || 0) >= 0 ? 'success-text' : 'danger-text'}">
+                            <span class="status-value ${bot.pnl >= 0 ? 'success-text' : 'danger-text'}">
                                 $${(bot.pnl || 0).toFixed(2)}
                             </span>
                         </div>
@@ -197,153 +232,78 @@ class BotManager {
                 </div>
             `;
         }).join('');
-    }
+    },
 
-    /**
-     * Start bot
-     */
     async startBot(botData) {
         try {
             const result = await api.startBot(botData);
-            
-            if (result.status === 'success') {
-                this.loadBots(); // Refresh list
-                return { success: true, message: result.message };
+
+            if (result.success) {
+                window.showToast('✅ ' + result.message, 'success');
+                this.loadBots();
+                return { success: true };
+            } else {
+                window.showToast('❌ ' + result.message, 'error');
+                return { success: false, message: result.message };
             }
-            
-            return { success: false, message: result.message };
         } catch (error) {
             console.error('Bot başlatma hatası:', error);
+            window.showToast('❌ Bot başlatılamadı: ' + error.message, 'error');
             return { success: false, message: error.message };
         }
-    }
+    },
 
-    /**
-     * Stop bot
-     */
     async stopBot(botId) {
-        if (!confirm(`Bot durdurulsun mu?\n\nBot ID: ${botId}`)) {
-            return;
-        }
-
         try {
+            const confirmed = confirm('Bu botu durdurmak istediğinizden emin misiniz?');
+            if (!confirmed) return;
+
             const result = await api.stopBot(botId);
-            
-            if (result.status === 'success') {
+
+            if (result.success) {
+                window.showToast('✅ Bot durduruldu', 'success');
                 this.loadBots();
-                showToast('Bot durduruldu', 'success');
             } else {
-                showToast('Bot durdurulamadı: ' + result.message, 'error');
+                window.showToast('❌ ' + result.message, 'error');
             }
         } catch (error) {
             console.error('Bot durdurma hatası:', error);
-            showToast('Bot durdurma hatası: ' + error.message, 'error');
+            window.showToast('❌ Bot durdurulamadı: ' + error.message, 'error');
         }
-    }
+    },
 
-    /**
-     * Resume bot
-     */
     async resumeBot(botId) {
         try {
             const result = await api.resumeBot(botId);
-            
-            if (result.status === 'success') {
+
+            if (result.success) {
+                window.showToast('✅ Bot devam ediyor', 'success');
                 this.loadBots();
-                showToast('Bot devam ettirildi', 'success');
             } else {
-                showToast('Bot devam ettirilemedi: ' + result.message, 'error');
+                window.showToast('❌ ' + result.message, 'error');
             }
         } catch (error) {
             console.error('Bot devam ettirme hatası:', error);
-            showToast('Bot devam ettirme hatası: ' + error.message, 'error');
+            window.showToast('❌ Bot devam ettirilemedi: ' + error.message, 'error');
         }
-    }
+    },
 
-    /**
-     * Remove bot
-     */
     async removeBot(botId) {
-        if (!confirm(`Bot listeden kaldırılsın mı?\n\nBot ID: ${botId}\n\nBu işlem geri alınamaz!`)) {
-            return;
-        }
-
         try {
+            const confirmed = confirm('Bu botu kaldırmak istediğinizden emin misiniz? Bu işlem geri alınamaz!');
+            if (!confirmed) return;
+
             const result = await api.removeBot(botId);
-            
-            if (result.status === 'success') {
+
+            if (result.success) {
+                window.showToast('✅ Bot kaldırıldı', 'success');
                 this.loadBots();
-                showToast('Bot kaldırıldı', 'success');
             } else {
-                showToast('Bot kaldırılamadı: ' + result.message, 'error');
+                window.showToast('❌ ' + result.message, 'error');
             }
         } catch (error) {
             console.error('Bot kaldırma hatası:', error);
-            showToast('Bot kaldırma hatası: ' + error.message, 'error');
+            window.showToast('❌ Bot kaldırılamadı: ' + error.message, 'error');
         }
-    }
-
-    /**
-     * Start auto-refresh
-     */
-    startAutoRefresh() {
-        // Refresh every 5 seconds
-        this.refreshInterval = setInterval(() => {
-            this.loadBots();
-        }, 5000);
-    }
-
-    /**
-     * Stop auto-refresh
-     */
-    stopAutoRefresh() {
-        if (this.refreshInterval) {
-            clearInterval(this.refreshInterval);
-            this.refreshInterval = null;
-        }
-    }
-
-    /**
-     * Destroy
-     */
-    destroy() {
-        this.stopAutoRefresh();
-    }
-}
-
-// ============================================================================
-// TOAST NOTIFICATION (Helper)
-// ============================================================================
-
-function showToast(message, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    toast.textContent = message;
-    toast.style.cssText = `
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        padding: 12px 24px;
-        background: ${type === 'success' ? '#2ea043' : type === 'error' ? '#f85149' : '#0969da'};
-        color: white;
-        border-radius: 6px;
-        font-weight: 600;
-        z-index: 9999;
-        animation: slideIn 0.3s ease;
-    `;
-
-    document.body.appendChild(toast);
-
-    setTimeout(() => {
-        toast.style.animation = 'slideOut 0.3s ease';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
-}
-
-// ============================================================================
-// EXPORTS
-// ============================================================================
-
-const botManager = new BotManager();
-
-export { BotManager, botManager, showToast };
+    },
+};

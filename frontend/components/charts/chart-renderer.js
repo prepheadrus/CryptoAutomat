@@ -31,9 +31,10 @@ class ChartRenderer {
 
         const defaultOptions = {
             width: container.clientWidth,
-            height: 400,
+            height: 450,
             layout: {
-                backgroundColor: 'transparent',
+                background: { type: 'solid', color: 'transparent' }, // v4 syntax
+                backgroundColor: 'transparent', // v3 backup
                 textColor: '#8b949e',
             },
             grid: {
@@ -42,12 +43,17 @@ class ChartRenderer {
             },
             crosshair: {
                 mode: LightweightCharts.CrosshairMode.Normal,
+                vertLine: { labelVisible: true },
+                horzLine: { labelVisible: true },
             },
             timeScale: {
                 borderColor: 'rgba(255,255,255,0.1)',
                 timeVisible: true,
                 secondsVisible: false,
+                rightOffset: 5,
+                barSpacing: 6,
             },
+            localization: { locale: 'tr-TR' },
             ...options,
         };
 
@@ -113,9 +119,9 @@ class ChartRenderer {
             this.init(options);
         }
 
-        // Convert to TV format
+        // Convert to TV format (backend sends 'time', not 'timestamp')
         const tvCandles = candles.map(c => ({
-            time: this.parseTime(c.timestamp),
+            time: this.parseTime(c.time || c.timestamp),
             open: c.open,
             high: c.high,
             low: c.low,
@@ -133,36 +139,72 @@ class ChartRenderer {
 
         this.candleSeries = this.chart.addCandlestickSeries(candleSeriesOptions);
         this.candleSeries.setData(tvCandles);
+        
+        // [FIT] Veriyi görünür yap
+        setTimeout(() => {
+            if (this.chart) this.chart.timeScale().fitContent();
+        }, 100);
 
         return this.candleSeries;
     }
 
     /**
      * Add markers (signals, trades)
+     * Markers zamana göre sıralanır ve validasyon yapılır
      */
     addMarkers(markers) {
-        if (!this.candleSeries) return;
+        if (!this.candleSeries) {
+            console.error('[ChartRenderer] candleSeries yok, markers eklenemedi');
+            return;
+        }
 
+        if (!markers || markers.length === 0) {
+            console.log('[ChartRenderer] Markers boş, eklenmedi');
+            return;
+        }
+
+        // Markers'ları filtrele ve parse et
         const validMarkers = markers
-            .filter(m => m.time && !isNaN(m.time))
+            .filter(m => {
+                if (m.time === undefined || m.time === null) {
+                    console.warn('[ChartRenderer] Marker time eksik:', m);
+                    return false;
+                }
+                const parsedTime = this.parseTime(m.time);
+                if (isNaN(parsedTime) || parsedTime <= 0) {
+                    console.warn('[ChartRenderer] Marker time geçersiz (0 veya NaN):', m);
+                    return false;
+                }
+                return true;
+            })
             .map(m => ({
                 ...m,
                 time: this.parseTime(m.time),
-            }));
+            }))
+            .sort((a, b) => a.time - b.time);  // Zamana göre sırala (KRİTİK!)
 
-        this.candleSeries.setMarkers(validMarkers);
+        console.log(`[ChartRenderer] ${validMarkers.length} marker eklendi`);
+        
+        try {
+            this.candleSeries.setMarkers(validMarkers);
+        } catch (error) {
+            console.error('[ChartRenderer] Markers eklenirken hata:', error);
+            console.error('[ChartRenderer] Problemli markers:', validMarkers);
+        }
     }
 
     /**
      * Parse timestamp to TV time
+     * Backend saniye cinsinden gönderir, bu yüzden bölme işlemi YOK
      */
     parseTime(timestamp) {
         if (typeof timestamp === 'number') {
-            // Unix timestamp (seconds or milliseconds)
-            return timestamp > 10000000000 ? Math.floor(timestamp / 1000) : timestamp;
+            // Backend saniye cinsinden gönderir (örn: 1773142200)
+            // Lightweight Charts saniye kabul eder, DÖNÜŞÜM YOK
+            return timestamp;
         }
         if (typeof timestamp === 'string') {
-            // ISO string
+            // ISO string ise çevir
             return Math.floor(new Date(timestamp).getTime() / 1000);
         }
         return timestamp;

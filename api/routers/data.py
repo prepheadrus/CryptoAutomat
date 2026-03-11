@@ -106,6 +106,51 @@ async def get_symbols_with_data() -> Dict[str, Any]:
     return await data_service.get_symbols_with_data()
 
 
+@router.get("/data-count")
+async def get_data_count(symbol: str, timeframe: str = "1m") -> Dict[str, Any]:
+    """
+    Belirli sembol/timeframe için mevcut mum sayısını döner.
+    
+    Args:
+        symbol: Sembol (örn: BTC/USDT)
+        timeframe: Zaman dilimi
+    
+    Returns:
+        {
+            "status": "success",
+            "symbol": "BTC/USDT",
+            "timeframe": "1m",
+            "count": 50000,
+            "min_date": "2024-01-01",
+            "max_date": "2026-03-10"
+        }
+    """
+    try:
+        from data.database import db_manager
+        
+        count = await db_manager.get_klines_count(symbol, timeframe)
+        
+        # Tarih aralığını al
+        date_range = await db_manager.get_candle_range(symbol, timeframe)
+        
+        return {
+            "status": "success",
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "count": count,
+            "min_date": date_range.get('start_date') if date_range else None,
+            "max_date": date_range.get('end_date') if date_range else None
+        }
+        
+    except Exception as e:
+        logger.error(f"Data count error: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "count": 0
+        }
+
+
 @router.get("/inventory")
 async def get_data_inventory() -> Dict[str, Any]:
     """

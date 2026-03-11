@@ -13,6 +13,17 @@ from core.logger import logger
 from core.config import CONFIG
 from core.paper import paper_engine
 from core.exchange import exchange_manager
+from api.schemas.config import (
+    RiskConfigRequest,
+    RiskConfigResponse,
+    AdvancedConfigRequest,
+    AdvancedConfigResponse,
+    BotConfigRequest,
+    BotConfigResponse,
+    ApiKeyRequest,
+    ApiKeyTestResponse,
+    ApiKeySaveResponse,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["System"])
 
@@ -540,7 +551,7 @@ async def update_advanced_config(request: dict) -> Dict[str, Any]:
                 "htf": config.get('htf', {})
             }
         }
-    
+
     except Exception as e:
         logger.error(f"❌ Advanced config güncelleme hatası: {e}")
         return {
@@ -548,3 +559,105 @@ async def update_advanced_config(request: dict) -> Dict[str, Any]:
             "message": f"Advanced config güncelleme hatası: {str(e)}",
             "data": {}
         }
+
+
+# ============================================================================
+# BOT CONFIG ENDPOINTS
+# ============================================================================
+
+@router.get("/config/bot")
+async def get_bot_config() -> BotConfigResponse:
+    """
+    Bot yapılandırmasını döner.
+    
+    Returns:
+        exchange: Borsa adı
+        environment: Ortam (development/production)
+        log_level: Log seviyesi
+    """
+    try:
+        from core.config import CONFIG
+        
+        bot_config = CONFIG.get('bot', {})
+        
+        return BotConfigResponse(
+            status="success",
+            message="Bot config okundu",
+            data={
+                "exchange": bot_config.get('exchange', 'binance'),
+                "environment": bot_config.get('environment', 'development'),
+                "log_level": bot_config.get('log_level', 'DEBUG')
+            }
+        )
+    except Exception as e:
+        logger.error(f"❌ Bot config okuma hatası: {e}")
+        return BotConfigResponse(
+            status="error",
+            message=f"Bot config okuma hatası: {str(e)}",
+            data={}
+        )
+
+
+@router.post("/config/bot", response_model=BotConfigResponse)
+async def update_bot_config(request: BotConfigRequest) -> BotConfigResponse:
+    """
+    Bot yapılandırmasını günceller.
+    
+    Request Body:
+        exchange: Borsa adı (binance, binance_spot)
+        environment: Ortam (development, production)
+        log_level: Log seviyesi (DEBUG, INFO, WARNING, ERROR)
+    
+    Returns:
+        status: success/error
+        message: İşlem sonucu
+        data: Güncellenen ayarlar
+    """
+    try:
+        import yaml
+        from core.config import CONFIG
+        
+        logger.info(f"🤖 Bot yapılandırması güncelleniyor...")
+        logger.info(f"   - Exchange: {request.exchange}")
+        logger.info(f"   - Environment: {request.environment}")
+        logger.info(f"   - Log Level: {request.log_level}")
+        
+        # config.yaml'ı yükle
+        with open('config.yaml', 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+        
+        # Bot ayarlarını güncelle
+        config['bot']['exchange'] = request.exchange
+        config['bot']['environment'] = request.environment.value
+        config['bot']['log_level'] = request.log_level.value
+        
+        # config.yaml'a yaz
+        with open('config.yaml', 'w', encoding='utf-8') as f:
+            yaml.safe_dump(config, f, default_flow_style=False, allow_unicode=True)
+        
+        logger.info(f"✅ config.yaml güncellendi")
+        
+        # RAM'deki CONFIG'i güncelle (hot-reload)
+        CONFIG['bot']['exchange'] = request.exchange
+        CONFIG['bot']['environment'] = request.environment.value
+        CONFIG['bot']['log_level'] = request.log_level.value
+        
+        logger.info(f"✅ RAM'deki CONFIG güncellendi (hot-reload)")
+        
+        return BotConfigResponse(
+            status="success",
+            message="Bot yapılandırması güncellendi",
+            data={
+                "exchange": request.exchange,
+                "environment": request.environment.value,
+                "log_level": request.log_level.value
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Bot config güncelleme hatası: {e}")
+        return BotConfigResponse(
+            status="error",
+            message=f"Bot config güncelleme hatası: {str(e)}",
+            data={}
+        )

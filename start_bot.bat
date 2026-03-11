@@ -76,6 +76,8 @@ echo   Architecture     : Event-Driven (Modular)
 echo ================================================================
 echo.
 echo   OZELLIKLER:
+echo   - Modern Dashboard UI (Glassmorphism Cards)
+echo   - Sistem Ayarlari Sayfasi (Risk, WFO, ML, API)
 echo   - Multi-Timeframe Analysis (HTF Altin Oran)
 echo   - Event-Driven Architecture
 echo   - Position Manager + Risk Engine
@@ -85,6 +87,8 @@ echo   - Auto-Grid Generator
 echo   - Bayesian Optimization (Optuna)
 echo   - 1-to-N Multi-Bot Architecture
 echo   - Smart Hybrid Architecture
+echo   - No-Code Strategy Builder
+echo   - Fernet API Key Encryption
 echo ================================================================
 echo.
 echo   BOT CALISIYOR - Pencereyi kapatabilirsiniz
