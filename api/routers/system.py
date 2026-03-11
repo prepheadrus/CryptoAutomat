@@ -69,6 +69,7 @@ async def get_dashboard_metrics() -> Dict[str, Any]:
             "total_trades": stats.get('total_trades', 0),
             "win_rate": stats.get('win_rate', 0.0),
             "total_commission": stats.get('total_commission', 0.0),
+            "total_notional": stats.get('total_notional', 0.0),
         }
         
         # Aktif pozisyonlar

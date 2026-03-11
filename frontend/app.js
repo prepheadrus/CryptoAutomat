@@ -1354,7 +1354,7 @@ function updatePortfolioCards(portfolio) {
         const usageElements = {
             'usage-used-margin': portfolio.used_margin,
             'usage-free-margin': portfolio.free_margin,
-            'usage-notional': (portfolio.used_margin * 10) // Varsayılan 10x
+            'usage-notional': portfolio.total_notional || 0
         };
 
         Object.entries(usageElements).forEach(([id, value]) => {
@@ -1363,6 +1363,15 @@ function updatePortfolioCards(portfolio) {
                 el.textContent = `$${value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             }
         });
+
+        // Ortalama Kaldıraç hesapla ve güncelle
+        const leverageEl = document.getElementById('usage-leverage');
+        if (leverageEl && portfolio.used_margin > 0 && portfolio.total_notional > 0) {
+            const avgLeverage = portfolio.total_notional / portfolio.used_margin;
+            leverageEl.textContent = `${avgLeverage.toFixed(1)}x`;
+        } else if (leverageEl) {
+            leverageEl.textContent = `1x`;
+        }
 
     } catch (error) {
         console.error('❌ updatePortfolioCards hatası:', error);

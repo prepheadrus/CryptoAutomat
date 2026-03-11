@@ -192,8 +192,8 @@ class RiskEngine:
         ratio = (confidence_score - 0.50) / 0.50  # 0.0 - 1.0 arası
         calculated = base + (ratio * (maximum - base))
         
-        # Min/max sınırları
-        leverage = min(maximum, max(base, calculated))
+        # Min/max sınırları (Borsalar genelde tam sayı kaldıraç destekler)
+        leverage = int(round(min(maximum, max(base, calculated))))
         
         logger.debug(
             f"Dinamik kaldıraç: Confidence={confidence_score:.2%}, "

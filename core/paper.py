@@ -355,11 +355,14 @@ class PaperTrader:
             
             # 1. Önce Kaldıraç hesapla (Dinamik)
             if self.ml_enabled and ml_confirmed:
-                rec_str = ml_rec_norm
-                if ml_confidence >= 0.85:
-                    rec_str = f"STRONG_{ml_rec_norm}"
-                
-                leverage = self.risk_engine.calculate_leverage_from_ml_recommendation(rec_str)
+                # ML Güven Skoruna Göre Dinamik Kaldıraç Hesapla
+                base_lev = CONFIG['risk_management'].get('default_leverage', 1.0)
+                max_lev = CONFIG['risk_management'].get('max_leverage', 10.0) # Varsayılan max
+                leverage = self.risk_engine.calculate_dynamic_leverage(
+                    confidence_score=ml_confidence, 
+                    base_leverage=base_lev, 
+                    max_leverage=max_lev
+                )
             else:
                 leverage = CONFIG['risk_management'].get('default_leverage', 1.0)
                 
@@ -553,12 +556,19 @@ class PaperTrader:
         Returns:
             Dict with all stats
         """
-        # Toplam unrealized PnL ve kullanılan marjin
+        # Toplam unrealized PnL, kullanılan marjin ve pozisyon değeri
         unrealized_pnl = 0.0
         used_margin = 0.0
+        total_notional = 0.0
+        
         for pos in self.position_manager.legacy_positions:
             unrealized_pnl += pos.get('unrealized_usd', 0.0)
             used_margin += pos.get('margin', 0.0)
+            
+            # Notional = Size * Current Price (veya Entry Price)
+            current_price = pos.get('current_price', pos.get('entry_price', 0.0))
+            size = pos.get('size', 0.0)
+            total_notional += (size * current_price)
             
         equity = self.balance + unrealized_pnl
         free_margin = self.balance - used_margin
@@ -578,6 +588,7 @@ class PaperTrader:
             'win_rate': self.position_manager.total_wins / max(1, self.position_manager.total_trades),
             'total_pnl': self.position_manager.total_pnl,
             'total_commission': self.position_manager.total_commission,
+            'total_notional': total_notional,
             'bot_stats': self.bot_manager.get_stats(),
             'risk_stats': self.risk_engine.get_stats(),
             'position_stats': self.position_manager.get_stats()
