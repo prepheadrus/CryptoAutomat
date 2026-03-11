@@ -1,15 +1,22 @@
 import sqlite3
 import pandas as pd
 
-def check():
-    conn = sqlite3.connect("cryptobot.db")
+def check_db(db_path):
+    print(f"Checking {db_path}...")
     try:
-        df = pd.read_sql_query("SELECT symbol, timeframe, MIN(timestamp) as min_ts, MAX(timestamp) as max_ts, COUNT(*) as count FROM klines GROUP BY symbol, timeframe", conn)
-        print(df)
-    except Exception as e:
-        print(f"Hata: {e}")
-    finally:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT DISTINCT symbol FROM klines;")
+        symbols = cursor.fetchall()
+        print(f"Symbols in {db_path}: {symbols}")
+        
+        cursor.execute("SELECT symbol, timeframe, COUNT(*) FROM klines GROUP BY symbol, timeframe;")
+        counts = cursor.fetchall()
+        print(f"Counts in {db_path}: {counts}")
+        
         conn.close()
+    except Exception as e:
+        print(f"Error checking {db_path}: {e}")
 
-if __name__ == "__main__":
-    check()
+check_db('f:/Crypto Bot/cryptobot.db')
+check_db('f:/Crypto Bot/data/database.db')

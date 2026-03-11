@@ -21,6 +21,7 @@ Usage:
 
 import pandas as pd
 import numpy as np
+from core.logger import logger
 
 # Import all sub-modules
 from data.indicators.trend import TrendIndicators
@@ -219,6 +220,7 @@ class StrategyIndicators:
         
         # --- MOMENTUM (Manuel) ---
         df['RSI_14'] = MomentumIndicators.rsi(df['close'], 14)
+        df['ROC_10'] = MomentumIndicators.roc(df['close'], 10)
         
         # MACD (Manuel Unpack)
         macd_line, signal_line, hist = MomentumIndicators.macd(df['close'], fast=12, slow=26, signal=9)
@@ -285,7 +287,17 @@ class StrategyIndicators:
             df['PSAR_DIR'] = direction
         except Exception as e:
             logger.warning(f"⚠️ [IND] PSAR hesaplama hatası: {e}")
-        
+
+        # --- SMC / LIKIDITE ---
+        try:
+            smc = AdvancedIndicators.liquidity_zones(df['high'], df['low'], df['close'], lookback=10)
+            df['SWING_HIGH'] = smc['swing_high']
+            df['SWING_LOW'] = smc['swing_low']
+            df['SWEEP_BULLISH'] = smc['sweep_bullish']
+            df['SWEEP_BEARISH'] = smc['sweep_bearish']
+        except Exception as e:
+            logger.warning(f"⚠️ [IND] SMC hesaplama hatası: {e}")
+
         # Veri Integrity: NaN/Inf Temizliği (SKILL.md)
         df.replace([np.inf, -np.inf], np.nan, inplace=True)
         df.fillna(0, inplace=True)

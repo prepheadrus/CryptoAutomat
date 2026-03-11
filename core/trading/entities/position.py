@@ -299,6 +299,7 @@ class Position:
             opened_at=self.opened_at,
             closed_at=datetime.utcnow(),
             reason=reason,
+            strategy_id=self.metadata.get('strategy'),
             metadata=self.metadata
         )
         

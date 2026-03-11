@@ -92,6 +92,7 @@ class Trade:
     pnl_percent: float
     opened_at: datetime
     closed_at: datetime
+    strategy_id: Optional[str] = None
     
     # Optional fields
     commission: float = 0.0
@@ -387,9 +388,10 @@ class Trade:
             'size': self.size,
             'leverage': self.leverage,
             'pnl': self.pnl,
-            'pnl_percent': self.pnl_percent,
-            'commission': self.commission,
-            'opened_at': self.opened_at.isoformat(),
+            "pnl_percent": self.pnl_percent,
+            "commission": self.commission,
+            "strategy_id": self.strategy_id,
+            "opened_at": self.opened_at.isoformat(),
             'closed_at': self.closed_at.isoformat(),
             'duration_seconds': self.duration_seconds,
             'reason': self.reason,

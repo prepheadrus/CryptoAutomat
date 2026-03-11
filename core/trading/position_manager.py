@@ -34,6 +34,7 @@ Usage:
 
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
+from shared.events.event_bus import event_bus, Event
 from decimal import Decimal
 import asyncio
 
@@ -325,6 +326,27 @@ class PositionManager:
                 f"PnL: ${trade.pnl:.2f} ({trade.pnl_percent:.2%}) | "
                 f"Neden: {reason}"
             )
+            
+            # Event yayınla
+            asyncio.create_task(event_bus.publish(Event(
+                type="position.closed",
+                payload={
+                    "bot_id": bot_id,
+                    "symbol": trade.symbol,
+                    "pnl": trade.pnl,
+                    "pnl_percent": trade.pnl_percent,
+                    "reason": reason,
+                    "exit_price": trade.exit_price,
+                    "entry_price": trade.entry_price,
+                    "size": trade.size,
+                    "leverage": trade.leverage,
+                    "direction": trade.direction.value,
+                    "trade_id": trade.id,
+                    "strategy_id": trade.strategy_id,
+                    "closed_at": trade.closed_at.isoformat()
+                },
+                source="position_manager"
+            )))
             
             return trade
             

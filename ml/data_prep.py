@@ -186,6 +186,8 @@ def engineer_features(
             'VWAP', 'OBV', 'OBV_EMA',
             'ADX_14', 'STOCH_K_14_3_3', 'STOCH_D_14_3_3',
             'PVI', 'NVI', 'PVIM', 'NVIM',
+            'KONKORDE_AZUL', 'KONKORDE_VERDE', 'KONKORDE_MARRON',
+            'SWEEP_BULLISH', 'SWEEP_BEARISH', 'SWING_HIGH', 'SWING_LOW',
             'volatility_ema'
         ]
         # Sadece DataFrame'de olan kolonları al

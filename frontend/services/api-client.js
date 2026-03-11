@@ -238,8 +238,16 @@ class ApiClient {
     // TRADES & POSITIONS
     // ========================================================================
 
-    getTradeHistory() {
-        return this.get('/api/v1/trade-history');
+    getTradeHistory(params = {}) {
+        return this.get('/api/v1/trades/history', params);
+    }
+
+    clearTradeHistory() {
+        return this.delete('/api/v1/trades/clear');
+    }
+
+    getTradeStats() {
+        return this.get('/api/v1/trades/stats');
     }
 
     getPositions() {

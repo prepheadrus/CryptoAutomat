@@ -458,20 +458,88 @@
 
             <!-- SEKME 4: GEÇMİŞ -->
             <div id="tab-history" class="tab-content" style="display: none;">
+                <div class="header-row" style="margin-bottom: 20px;">
+                    <div>
+                        <h2>📜 İşlem Geçmişi</h2>
+                        <p style="color:var(--text-muted);">Veritabanına kaydedilen tüm geçmiş işlemler ve detaylı performans analizi.</p>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn btn-primary" onclick="loadTradeHistory()">🔄 Yenile</button>
+                        <button class="btn btn-danger" onclick="clearTradeHistory()" style="background:rgba(255, 107, 107, 0.2); border-color:var(--neon-red); color:var(--neon-red);">🗑️ Geçmişi Temizle</button>
+                    </div>
+                </div>
+
+                <!-- İşlem Özet Kartları -->
+                <div class="grid-content" style="grid-template-columns: repeat(5, 1fr); margin-bottom: 20px;">
+                    <div class="card glass-panel">
+                        <div class="card-info">
+                            <h3>📊 Toplam İşlem</h3>
+                            <h1 id="hist-total-trades">0</h1>
+                            <p style="font-size:0.75rem; color:var(--text-muted); margin-top:5px;">Gerçekleşen Emirler</p>
+                        </div>
+                    </div>
+                    <div class="card glass-panel">
+                        <div class="card-info">
+                            <h3>🎯 Win Rate</h3>
+                            <h1 id="hist-win-rate">0%</h1>
+                            <p style="font-size:0.75rem; color:var(--text-muted); margin-top:5px;">Başarı Oranı</p>
+                        </div>
+                    </div>
+                    <div class="card glass-panel">
+                        <div class="card-info">
+                            <h3>💰 Toplam Kâr/Zarar</h3>
+                            <h1 id="hist-total-pnl">$0.00</h1>
+                            <p style="font-size:0.75rem; color:var(--text-muted); margin-top:5px;">Net Kazanç</p>
+                        </div>
+                    </div>
+                    <div class="card glass-panel">
+                        <div class="card-info">
+                            <h3>📈 Ortalama İşlem</h3>
+                            <h1 id="hist-avg-pnl">$0.00</h1>
+                            <p style="font-size:0.75rem; color:var(--text-muted); margin-top:5px;">İşlem Başı PnL</p>
+                        </div>
+                    </div>
+                    <div class="card glass-panel">
+                        <div class="card-info" style="border-left: 2px solid var(--neon-purple);">
+                            <h3>🏆 En İyi Strateji</h3>
+                            <h1 id="hist-best-strategy" style="font-size: 1.2rem; color:var(--neon-purple); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">N/A</h1>
+                            <p style="font-size:0.75rem; color:var(--text-muted); margin-top:5px;">Performans Lideri</p>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card glass-panel chart-span">
-                    <h3>📜 İşlem Geçmişi (Hafızadan)</h3>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                        <h3>📋 Detaylı İşlem Listesi</h3>
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <input type="text" id="hist-filter-symbol" placeholder="🔍 Sembol Ara..." 
+                                   style="padding:8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff;"
+                                   oninput="filterHistoryTable()">
+                        </div>
+                    </div>
                     <div class="table-container">
-                        <table class="positions-table">
+                        <table class="positions-table" id="history-table">
                             <thead>
                                 <tr>
                                     <th>Tarih</th>
-                                    <th>Varlık</th>
-                                    <th>Giriş/Çıkış</th>
-                                    <th>PnL</th>
+                                    <th>Parite</th>
+                                    <th>Strateji</th>
+                                    <th>Yön</th>
+                                    <th>Giriş Fiyatı</th>
+                                    <th>Çıkış Fiyatı</th>
+                                    <th>Miktar / Kaldıraç</th>
+                                    <th>PnL ($)</th>
+                                    <th>Kâr (%)</th>
                                     <th>Neden</th>
                                 </tr>
                             </thead>
-                            <tbody id="history-body"></tbody>
+                            <tbody id="history-body">
+                                <tr>
+                                    <td colspan="10" style="text-align:center; padding:40px; color:var(--text-muted);">
+                                        Henüz işlem geçmişi yok veya yükleniyor...
+                                    </td>
+                                </tr>
+                            </tbody>
                         </table>
                     </div>
                 </div>

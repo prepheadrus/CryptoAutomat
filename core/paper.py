@@ -351,8 +351,21 @@ class PaperTrader:
                 direction=direction,
                 atr=atr,
                 multiplier=atr_multiplier,
-                risk_reward_ratio=rr_ratio   # ← Artık strateji RR oranını kullanıyor
+                risk_reward_ratio=rr_ratio
             )
+
+            # --- SMC SNIPER STOP-LOSS OVERRIDE ---
+            if direction == "LONG" and indicators.get('SWEEP_BULLISH', 0) == 1:
+                swing_low = indicators.get('SWING_LOW')
+                if swing_low and swing_low > 0:
+                    stop_loss = swing_low * 0.999 # %0.1 margin below dipten likidite alımı
+                    logger.info(f"🎯 [SMC SNIPER] Bullish Sweep tespit edildi! Stop-Loss Swing Low altına çekildi: {stop_loss:.2f}")
+            
+            elif direction == "SHORT" and indicators.get('SWEEP_BEARISH', 0) == 1:
+                swing_high = indicators.get('SWING_HIGH')
+                if swing_high and swing_high > 0:
+                    stop_loss = swing_high * 1.001 # %0.1 margin above tepeden likidite alımı
+                    logger.info(f"🎯 [SMC SNIPER] Bearish Sweep tespit edildi! Stop-Loss Swing High üstüne çekildi: {stop_loss:.2f}")
             
             # 1. Önce Kaldıraç hesapla (Dinamik)
             if self.ml_enabled and ml_confirmed:
@@ -443,6 +456,26 @@ class PaperTrader:
         
         # Bot state güncelle
         self.bot_manager.record_bot_trade(bot_id, pnl)
+        
+        # Legacy positions güncelle (UI senkronizasyonu için kritik)
+        self.open_positions = self.position_manager.legacy_positions
+        
+        # Database'e kaydet (Kalıcı hafıza)
+        from data.database import db_manager
+        trade_data = {
+            "symbol": payload.get('symbol'),
+            "direction": payload.get('direction'),
+            "entry_price": payload.get('entry_price'),
+            "exit_price": payload.get('exit_price'),
+            "size": payload.get('size'),
+            "leverage": payload.get('leverage'),
+            "pnl_usd": pnl,
+            "pnl_percent": payload.get('pnl_percent', 0.0) * 100,
+            "reason": payload.get('reason'),
+            "strategy_id": payload.get('strategy_id'),
+            "closed_at": payload.get('closed_at')
+        }
+        asyncio.create_task(db_manager.save_trade(trade_data))
         
         # Kill switch kontrolü
         if self.risk_engine.kill_switch_active:
@@ -822,11 +855,8 @@ class PaperTrader:
                 reason=reason
             )
             if trade:
-                self.balance += trade.pnl
-                self.free_margin = self.balance
-                self.open_positions = self.position_manager.legacy_positions
-                self.risk_engine.record_trade_result(trade.pnl)
-                self.bot_manager.record_bot_trade(bot_id, trade.pnl)
+                # Durum güncellemeleri artık on_position_closed event handler'ında yapılıyor (EDA)
+                # Buraya sadece nihai loglamayı bırakıyoruz
                 if trade.pnl > 0:
                     logger.info(f"✅ {reason}: +${trade.pnl:.2f} ({trade.pnl_percent:.2%}) KAR")
                 else:

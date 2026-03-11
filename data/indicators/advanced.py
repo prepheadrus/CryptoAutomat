@@ -73,18 +73,22 @@ class AdvancedIndicators:
         return oscp
     
     @staticmethod
-    def koncorde_marron(rsi: pd.Series, mfi: pd.Series) -> pd.Series:
+    def koncorde_marron(
+        rsi: pd.Series, 
+        mfi: pd.Series, 
+        stoch: pd.Series, 
+        bb_osc: pd.Series
+    ) -> pd.Series:
         """
-        Koncorde Marron (Trend Ortalama)
+        Koncorde Marron (Trend Ortalama - Kahverengi Alan)
+        Orijinal PineScript mantığına daha yakın: RSI, MFI, Stoch ve BB Osilatörü ortalaması.
         
-        Args:
-            rsi: RSI serisi
-            mfi: MFI serisi
-        
-        Returns:
-            Marron serisi
+        Formula: (RSI + MFI + BB_Osc + (Stoch/3)) / 2
         """
-        return (rsi + mfi) / 2
+        # Stoch (21,7,3) için /3 ölçeklendirmesi orijinal formülün bir parçası olabilir
+        # BB_Osc genelde 0-100 arasına çekilir
+        marron = (rsi + mfi + bb_osc + (stoch / 3)) / 2
+        return marron.fillna(50)
     
     @staticmethod
     def calculate_koncorde(
@@ -95,37 +99,50 @@ class AdvancedIndicators:
         period: int = 15
     ) -> dict:
         """
-        Koncorde tüm bileşenlerini hesapla
-        
-        Args:
-            close: Kapanış fiyatları
-            high: Yüksek fiyatlar
-            low: Düşük fiyatlar
-            volume: Hacim
-            period: MA periyodu
-        
-        Returns:
-            {azul, verde, marron, pvi, nvi, pvim, nvim} dict
+        Koncorde tüm bileşenlerini hesapla (Genişletilmiş PineScript Uyumu)
         """
         from data.indicators.volume import VolumeIndicators
         from data.indicators.momentum import MomentumIndicators
+        from data.indicators.volatility import VolatilityIndicators
         
-        # PVI/NVI hesapla
+        # 1. PVI/NVI ve Hareketli Ortalamalar
         pvi = VolumeIndicators.pvi(close, volume)
         nvi = VolumeIndicators.nvi(close, volume)
-        
-        # MA'ları hesapla
         pvim = pvi.ewm(span=period, adjust=False).mean()
         nvim = nvi.ewm(span=period, adjust=False).mean()
         
-        # RSI ve MFI
+        # 2. Temel Osilatörler
         rsi = MomentumIndicators.rsi(close, 14)
         mfi = VolumeIndicators.mfi(high, low, close, volume, 14)
         
-        # Koncorde bileşenleri
+        # 3. Marron için Ek Bileşenler
+        # Stochastic (21, 7, 3) - Smooth k periyodu
+        stoch_k, stoch_d = MomentumIndicators.stochastic(high, low, close, k=21, d=7, smooth_k=3)
+        
+        # Bollinger Bands Oscillator (25, 2.0)
+        # BB_Osc = (Close - Lower) / (Upper - Lower) * 100
+        upper, mid, lower = VolatilityIndicators.bollinger_bands(close, length=25, std=2.0)
+        bb_range = (upper - lower).replace(0, 0.000001)
+        bb_osc = (close - lower) * 100 / bb_range
+        
+        # 4. Azul (Akıllı Para) & Verde (Retail) - OSCP (Hacim Osilatörü)
+        # Azul: NVI farkı
         azul = AdvancedIndicators.koncorde_azul(nvi, nvim)
-        verde = AdvancedIndicators.koncorde_verde(pvi, pvim)
-        marron = AdvancedIndicators.koncorde_marron(rsi, mfi)
+        
+        # Hacim Osilatörü (OSCP)
+        # Orijinal Verde mantığında (PVI - PVIM) etkisi
+        oscp = (pvi - pvim) * 100 / (pvi.rolling(90).max() - pvi.rolling(90).min()).replace(0, 1)
+        
+        # Marron (Trend Alanı)
+        marron = AdvancedIndicators.koncorde_marron(rsi, mfi, stoch_k, bb_osc)
+        
+        # Verde = Marron + OSCP
+        verde = marron + oscp
+        
+        # Temizlik
+        azul = azul.replace([np.inf, -np.inf], 0).fillna(0)
+        verde = verde.replace([np.inf, -np.inf], 0).fillna(0)
+        marron = marron.replace([np.inf, -np.inf], 50).fillna(50)
         
         return {
             'azul': azul,
@@ -136,7 +153,9 @@ class AdvancedIndicators:
             'pvim': pvim,
             'nvim': nvim,
             'rsi': rsi,
-            'mfi': mfi
+            'mfi': mfi,
+            'stoch': stoch_k,
+            'bb_osc': bb_osc
         }
     
     @staticmethod
@@ -144,35 +163,37 @@ class AdvancedIndicators:
         high: pd.Series,
         low: pd.Series,
         close: pd.Series,
-        lookback: int = 50
+        lookback: int = 10
     ) -> dict:
         """
-        SMC (Smart Money Concepts) - Likidite Bölgeleri
-        
-        NOT: Bu bir yer tutucu (placeholder) fonksiyondur.
-        Gelecekte daha gelişmiş SMC hesaplamaları eklenecek.
+        SMC (Smart Money Concepts) - Likidite Bölgeleri ve Sweep Tespiti.
+        Az önce market_structure ile bulduğumuz çizgileri kullanarak "Stop-Loss Avı" 
+        (Liquidity Sweep) anlarını tespit eder.
         
         Args:
-            high: Yüksek fiyatlar
-            low: Düşük fiyatlar
-            close: Kapanış fiyatları
-            lookback: Lookback periyodu
-        
+            high, low, close: Fiyat serileri
+            lookback: Swing seviyeleri için bakılacak pencere boyutu
+            
         Returns:
-            {support, resistance, order_blocks} dict
+            {swing_high, swing_low, sweep_bullish, sweep_bearish} dict
         """
-        # Basit destek/direnç (gelecekte SMC ile değiştirilecek)
-        resistance = high.rolling(lookback).max()
-        support = low.rolling(lookback).min()
+        # 1. Market structure seviyelerini (çizgilerini) al
+        ms = AdvancedIndicators.market_structure(high, low, close, swing_length=lookback)
+        sh = ms['swing_high']
+        sl = ms['swing_low']
         
-        # Order block placeholder
-        order_blocks = pd.Series(index=close.index)
+        # 2. SWEEP_BULLISH (Sell-Side Sweep): Low < SL ve Close > SL
+        sweep_bullish = np.where((low < sl) & (close > sl), 1, 0)
+        
+        # 3. SWEEP_BEARISH (Buy-Side Sweep): High > SH ve Close < SH
+        sweep_bearish = np.where((high > sh) & (close < sh), 1, 0)
         
         return {
-            'resistance': resistance,
-            'support': support,
-            'order_blocks': order_blocks,
-            'is_smc_ready': False  # Gelecekte True olacak
+            'swing_high': sh,
+            'swing_low': sl,
+            'sweep_bullish': pd.Series(sweep_bullish, index=close.index).fillna(0),
+            'sweep_bearish': pd.Series(sweep_bearish, index=close.index).fillna(0),
+            'is_smc_ready': True
         }
     
     @staticmethod
@@ -219,40 +240,31 @@ class AdvancedIndicators:
         high: pd.Series,
         low: pd.Series,
         close: pd.Series,
-        swing_length: int = 5
+        swing_length: int = 10
     ) -> dict:
         """
-        Market Structure (HH/HL/LH/LL) tespiti
+        Market Structure (Swing Levels) tespiti.
+        No Lookahead Bias: Makine öğrenimi modelini bozmamak için gelecekten veri sızdırmaz.
         
         Args:
-            high: Yüksek fiyatlar
-            low: Düşük fiyatlar
-            close: Kapanış fiyatları
-            swing_length: Swing detection length
-        
+            high, low: Fiyat serileri
+            swing_length: Periyot (varsayılan 10)
+            
         Returns:
-            {swing_highs, swing_lows, structure} dict
+            {swing_high, swing_low} dict
         """
-        # Swing highs/lows
-        swing_highs = high.rolling(window=swing_length*2+1, center=True).max()
-        swing_lows = low.rolling(window=swing_length*2+1, center=True).min()
+        # 1. SWING_HIGH: Son N mumun zirvesini bul ve bir sonraki muma kaydır (Looking forward bias engeli)
+        # rolling(...).max() o anki mumu da kapsar, bu yüzden .shift(1) ile "kapanmış" pencereye bakıyoruz.
+        swing_high = high.rolling(window=swing_length).max().shift(1)
         
-        # Structure detection (basit)
-        structure = pd.Series('NEUTRAL', index=close.index)
+        # 2. SWING_LOW: Son N mumun dibini bul ve kaydır
+        swing_low = low.rolling(window=swing_length).min().shift(1)
         
-        # HH (Higher High) ve HL (Higher Low) tespiti
-        for i in range(swing_length*2, len(close)):
-            if high.iloc[i] > swing_highs.iloc[i-swing_length]:
-                structure.iloc[i] = 'HH'
-            elif low.iloc[i] > swing_lows.iloc[i-swing_length]:
-                structure.iloc[i] = 'HL'
-            elif high.iloc[i] < swing_highs.iloc[i-swing_length]:
-                structure.iloc[i] = 'LH'
-            elif low.iloc[i] < swing_lows.iloc[i-swing_length]:
-                structure.iloc[i] = 'LL'
+        # 3. Seviyeleri ileriye taşı (ffill) - Yeni bir uç değer gelene kadar çizgi uzasın
+        swing_high = swing_high.ffill()
+        swing_low = swing_low.ffill()
         
         return {
-            'swing_highs': swing_highs,
-            'swing_lows': swing_lows,
-            'structure': structure
+            'swing_high': swing_high,
+            'swing_low': swing_low
         }

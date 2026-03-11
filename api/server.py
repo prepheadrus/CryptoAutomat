@@ -29,6 +29,7 @@ from api.routers.data import router as data_router
 from api.routers.system import router as system_router
 from api.routers.strategy_builder import router as strategy_builder_router
 from api.routers.backtest import router as backtest_router
+from api.routers.trades import router as trades_router
 
 
 # ============================================================================
@@ -135,6 +136,10 @@ logger.info("✅ Strategy Builder router eklendi")
 # Backtest
 app.include_router(backtest_router)
 logger.info("✅ Backtest router eklendi")
+
+# Trades
+app.include_router(trades_router)
+logger.info("✅ Trades router eklendi")
 
 # ============================================================================
 # STATIC FILES (Frontend)

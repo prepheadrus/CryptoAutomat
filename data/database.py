@@ -191,7 +191,9 @@ class DatabaseManager:
             CREATE TABLE IF NOT EXISTS trades (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp DATETIME DEFAULT (datetime('now','localtime')),
+                closed_at TEXT, -- ISO format (for frontend)
                 symbol TEXT NOT NULL,
+                strategy_id TEXT, -- Hangi strateji?
                 direction TEXT NOT NULL,
                 entry_price REAL NOT NULL,
                 exit_price REAL,
@@ -216,6 +218,15 @@ class DatabaseManager:
             await self.sqlite_conn.execute(kline_sql)
             await self.sqlite_conn.execute(tasks_sql)
             await self.sqlite_conn.execute(trades_sql)
+            
+            # Migration: strategy_id column if not exists
+            try:
+                await self.sqlite_conn.execute("ALTER TABLE trades ADD COLUMN strategy_id TEXT")
+                await self.sqlite_conn.execute("ALTER TABLE trades ADD COLUMN closed_at TEXT")
+                logger.info("✅ trades tablosuna yeni sütunlar eklendi (migration).")
+            except:
+                pass # Sütun zaten var
+                
             await self.sqlite_conn.commit()
 
     async def _execute_with_lock(self, func, *args, **kwargs):
@@ -273,7 +284,20 @@ class DatabaseManager:
         sql = "SELECT MIN(timestamp) as start_ts, MAX(timestamp) as end_ts FROM klines WHERE symbol = ? AND timeframe = ?"
         
         # Her varyasyonu dene
+        found_any_tf = []
         for sym_variant in symbol_variants:
+            # Önce bu varyantın HERHANGİ bir timeframe'de olup olmadığını kontrol et (Sadece ilk döngüde bir kez yeterli olabilir ama varyant bazlı gitmek daha garanti)
+            if not found_any_tf:
+                check_sql = "SELECT DISTINCT timeframe FROM klines WHERE symbol = ?"
+                if self.engine_type == "postgres":
+                    async with self.db_pool.acquire() as conn:
+                        tf_rows = await conn.fetch(check_sql.replace('?', '$1'), sym_variant)
+                        found_any_tf = [r['timeframe'] for r in tf_rows]
+                else:
+                    async with self.sqlite_conn.execute(check_sql, (sym_variant,)) as cursor:
+                        tf_rows = await cursor.fetchall()
+                        found_any_tf = [r[0] for r in tf_rows]
+
             if self.engine_type == "postgres":
                 sql_pg = "SELECT MIN(timestamp) as start_ts, MAX(timestamp) as end_ts FROM klines WHERE symbol = $1 AND timeframe = $2"
                 async with self.db_pool.acquire() as conn:
@@ -303,7 +327,10 @@ class DatabaseManager:
                 }
         
         # Hiçbir varyant bulunamadı
-        logger.debug(f"⚠️ DB'de sembol bulunamadı: {symbol}")
+        if found_any_tf:
+            logger.warning(f"⚠️ [DB] {symbol} bulundu ancak {timeframe} verisi yok. Mevcut timeframe'ler: {found_any_tf}")
+        else:
+            logger.debug(f"⚠️ DB'de sembol bulunamadı: {symbol}")
         return None
 
     async def get_klines(self, symbol: str, timeframe: str = '1m', limit: int = 1000) -> list:
@@ -646,18 +673,19 @@ class DatabaseManager:
     async def save_trade(self, trade_info: dict):
         """Kapatılan bir işlemi kalıcı hafızaya yazar."""
         sql = """
-            INSERT INTO trades (symbol, direction, entry_price, exit_price, size, leverage, pnl_usd, pnl_percent, reason)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO trades (symbol, strategy_id, direction, entry_price, exit_price, size, leverage, pnl_usd, pnl_percent, reason, closed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
-        params = (trade_info['symbol'], trade_info['direction'], trade_info['entry_price'], 
+        params = (trade_info['symbol'], trade_info.get('strategy_id'), trade_info['direction'], trade_info['entry_price'], 
                   trade_info.get('exit_price'), trade_info['size'], trade_info['leverage'],
-                  trade_info.get('pnl_usd'), trade_info.get('pnl_percent'), trade_info.get('reason'))
+                  trade_info.get('pnl_usd'), trade_info.get('pnl_percent'), trade_info.get('reason'),
+                  trade_info.get('closed_at'))
 
         if self.engine_type == "postgres":
             async with self.db_pool.acquire() as conn:
                 await conn.execute("""
-                    INSERT INTO trades (symbol, direction, entry_price, exit_price, size, leverage, pnl_usd, pnl_percent, reason)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    INSERT INTO trades (symbol, strategy_id, direction, entry_price, exit_price, size, leverage, pnl_usd, pnl_percent, reason, closed_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                 """, *params)
         else:
             await self.sqlite_conn.execute(sql, params)
@@ -673,9 +701,26 @@ class DatabaseManager:
             async with self.db_pool.acquire() as conn:
                 return [dict(row) for row in await conn.fetch(sql, limit)]
         else:
+            # SQLite - En son işlemleri getir
             async with self.sqlite_conn.execute(sql, (limit,)) as cursor:
                 rows = await cursor.fetchall()
-                return [dict(row) for row in rows]
+                results = []
+                for row in rows:
+                    d = dict(row)
+                    # timestamp parse edilemiyorsa closed_at'i kullan (frontend için)
+                    results.append(d)
+                return results
+
+    async def clear_trade_history(self):
+        """Tüm işlem geçmişini temizler."""
+        sql = "DELETE FROM trades"
+        if self.engine_type == "postgres":
+            async with self.db_pool.acquire() as conn:
+                await conn.execute(sql)
+        else:
+            await self.sqlite_conn.execute(sql)
+            await self.sqlite_conn.commit()
+        logger.info("🗑️ Tüm işlem geçmişi temizlendi.")
 
     async def save_download_task(self, task: dict):
         """İndirme görevini veritabanına kaydeder veya günceller."""

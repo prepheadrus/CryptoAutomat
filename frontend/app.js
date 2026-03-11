@@ -289,12 +289,84 @@ async function updateSystemStatus() {
 
 async function loadTradeHistory() {
     try {
-        const data = await api.getTradeHistory();
+        console.log('[INFO] 🔄 İşlem geçmişi yükleniyor...');
+        
+        // 1. İstatistikleri yükle
+        await loadTradeStats();
+        
+        // 2. İşlem listesini yükle
+        const symbol = document.getElementById('hist-filter-symbol')?.value || '';
+        const data = await api.getTradeHistory({ symbol, limit: 100 });
+        
+        console.log(`[INFO] ✅ ${data.trades?.length || 0} işlem yüklendi`);
+        
         store.setState('trades', { history: data.trades || [] });
         renderTradeHistory(data.trades || []);
     } catch (error) {
-        console.error('Trade history error:', error);
+        console.error('❌ Trade history error:', error);
+        showToast('❌ İşlem geçmişi yüklenemedi', 'error');
     }
+}
+
+async function loadTradeStats() {
+    try {
+        const data = await api.getTradeStats();
+        if (data.status === 'success' && data.stats) {
+            const stats = data.stats;
+            
+            // DOM güncelle
+            const elements = {
+                'hist-total-trades': stats.total_trades,
+                'hist-win-rate': `${stats.win_rate}%`,
+                'hist-total-pnl': `$${stats.total_pnl.toLocaleString(undefined, {minimumFractionDigits: 2})}`,
+                'hist-avg-pnl': `$${stats.avg_pnl.toLocaleString(undefined, {minimumFractionDigits: 2})}`,
+                'hist-best-strategy': stats.best_strategy || 'N/A'
+            };
+            
+            Object.entries(elements).forEach(([id, val]) => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.textContent = val;
+                    if (id === 'hist-total-pnl' || id === 'hist-avg-pnl') {
+                        el.style.color = stats.total_pnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+                    }
+                }
+            });
+        }
+    } catch (error) {
+        console.error('❌ Trade stats error:', error);
+    }
+}
+
+async function clearTradeHistory() {
+    if (!confirm('Tüm işlem geçmişini temizlemek istediğinizden emin misiniz? Bu işlem geri alınamaz!')) {
+        return;
+    }
+
+    try {
+        const result = await api.clearTradeHistory();
+        if (result.status === 'success') {
+            showToast('✅ İşlem geçmişi temizlendi', 'success');
+            loadTradeHistory();
+        } else {
+            showToast('❌ İşlem geçmişi temizlenemedi', 'error');
+        }
+    } catch (error) {
+        showToast('❌ Hata: ' + error.message, 'error');
+    }
+}
+
+function filterHistoryTable() {
+    const symbol = document.getElementById('hist-filter-symbol')?.value.toUpperCase() || '';
+    const trades = store.getState('trades')?.history || [];
+    
+    if (symbol === '') {
+        renderTradeHistory(trades);
+        return;
+    }
+    
+    const filtered = trades.filter(t => t.symbol.toUpperCase().includes(symbol));
+    renderTradeHistory(filtered);
 }
 
 async function loadMLSymbols() {
@@ -1597,23 +1669,56 @@ function renderTradeHistory(trades) {
         }
 
         if (!trades || trades.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px;">İşlem geçmişi yok</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:40px; color:var(--text-muted);">📭 Henüz işlem geçmişi yok.</td></tr>';
             return;
         }
 
-        tbody.innerHTML = trades.slice(0, 50).map(trade => `
-            <tr>
-                <td>${new Date(trade.closed_at).toLocaleDateString()}</td>
-                <td>${trade.symbol || 'Unknown'}</td>
-                <td><span class="badge ${trade.direction === 'LONG' ? 'success' : 'danger'}">${trade.direction || 'UNKNOWN'}</span></td>
-                <td class="${(trade.pnl_usd || 0) >= 0 ? 'success-text' : 'danger-text'}">$${(trade.pnl_usd || 0).toFixed(2)}</td>
-                <td>${(trade.pnl_percent || 0).toFixed(2)}%</td>
-                <td>${trade.reason || 'Manual'}</td>
-            </tr>
-        `).join('');
+        tbody.innerHTML = trades.map(trade => {
+            const pnl = trade.pnl_usd || 0;
+            const pnlPercent = trade.pnl_percent || 0;
+            const pnlColor = pnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+            const directionClass = trade.direction === 'LONG' ? 'badge-success' : 'badge-danger';
+            
+            // Tarih işlemleri - Fallback mekanizması
+            let dateStr = 'Invalid Date';
+            try {
+                // Öncelik ISO formatlı closed_at'te
+                const rawDate = trade.closed_at || trade.timestamp;
+                if (rawDate) {
+                    const dateObj = new Date(rawDate);
+                    if (!isNaN(dateObj.getTime())) {
+                        dateStr = dateObj.toLocaleString('tr-TR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                    }
+                }
+            } catch (e) {
+                console.error('Date parse error:', e);
+            }
+
+            return `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <td style="font-size: 0.75rem; color: var(--text-muted);">${dateStr}</td>
+                    <td style="font-weight:bold; color:var(--text-bright);">${trade.symbol || 'Unknown'}</td>
+                    <td style="font-size: 0.75rem; color: var(--neon-purple);">${trade.strategy_id || 'N/A'}</td>
+                    <td><span class="badge ${directionClass}" style="font-size:0.6rem;">${trade.direction || 'UNKNOWN'}</span></td>
+                    <td>$${(trade.entry_price || 0).toLocaleString()}</td>
+                    <td>$${(trade.exit_price || 0).toLocaleString()}</td>
+                    <td>
+                        <div style="font-size:0.8rem;">${(trade.size || 0).toFixed(4)}</div>
+                        <div style="font-size:0.65rem; color:var(--text-muted);">${trade.leverage || 1}x</div>
+                    </td>
+                    <td style="color:${pnlColor}; font-weight:bold;">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</td>
+                    <td style="color:${pnlColor}; font-weight:bold;">${pnlPercent >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%</td>
+                    <td style="font-size: 0.75rem; color: var(--text-muted);">${trade.reason || 'Manual'}</td>
+                </tr>
+            `;
+        }).join('');
     } catch (error) {
         console.error('❌ renderTradeHistory hatası:', error);
-        console.error('Stack trace:', error.stack);
     }
 }
 
@@ -1826,6 +1931,11 @@ function setupGlobalFunctions() {
 
     // Bot manager functions are already exposed
     window.botManager = botManager;
+
+    // YENİ: Trade history functions
+    window.loadTradeHistory = loadTradeHistory;
+    window.clearTradeHistory = clearTradeHistory;
+    window.filterHistoryTable = filterHistoryTable;
 }
 
 /**
