@@ -346,8 +346,16 @@ class PaperTrader:
                 risk_percentage=risk_percent
             )
             
-            # Kaldıraç (ML yoksa varsayılan)
-            leverage = CONFIG['risk_management'].get('default_leverage', 1.0)
+            # Kaldıraç hesapla (Dinamik)
+            if self.ml_enabled and ml_confirmed:
+                # ML güvenine göre öneri belirle
+                rec_str = ml_rec
+                if ml_confidence >= 0.85:
+                    rec_str = f"STRONG_{ml_rec}"
+                
+                leverage = self.risk_engine.calculate_leverage_from_ml_recommendation(rec_str)
+            else:
+                leverage = CONFIG['risk_management'].get('default_leverage', 1.0)
             
             # Pozisyon aç
             position = self.position_manager.open_position(
@@ -693,8 +701,9 @@ class PaperTrader:
                 )
                 
                 # PnL hesapla
-                _, pnl_usd = self.position_manager.get_unrealized_pnl_legacy(pos, current_price)
+                roe, pnl_usd = self.position_manager.get_unrealized_pnl_legacy(pos, current_price)
                 pos['unrealized_usd'] = pnl_usd
+                pos['pnl_percent'] = roe
     
     @property
     def timeframe(self):

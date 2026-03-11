@@ -75,16 +75,19 @@ async def get_dashboard_metrics() -> Dict[str, Any]:
         positions = []
         for pos in paper_engine.open_positions:
             positions.append({
+                "bot_id": pos.get('bot_id', 'N/A'),
                 "symbol": pos.get('symbol', ''),
                 "direction": pos.get('direction', ''),
                 "entry_price": pos.get('entry_price', 0.0),
                 "current_price": pos.get('current_price', 0.0),
                 "size": pos.get('size', 0.0),
                 "leverage": pos.get('leverage', 1.0),
+                "margin": pos.get('margin', 0.0),
                 "unrealized_usd": pos.get('unrealized_usd', 0.0),
                 "pnl_percent": pos.get('pnl_percent', 0.0),
                 "stop_loss": pos.get('stop_loss'),
                 "take_profit": pos.get('take_profit'),
+                "liquidation_price": pos.get('liquidation_price', 0.0),
             })
         
         # Son kararlar (latest decisions)
