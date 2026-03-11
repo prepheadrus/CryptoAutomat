@@ -389,21 +389,21 @@ class ModelTrainer:
         Returns:
             str: İşlem önerisi
         """
-        if prediction == 1:  # LONG
+        if prediction == 1:  # LONG (class_mapping: 1='LONG')
             if confidence >= 0.80:
                 return "STRONG_LONG"
             elif confidence >= 0.65:
                 return "LONG"
             else:
                 return "WEAK_LONG"
-        elif prediction == 2:  # SHORT
+        elif prediction == 0:  # SHORT (class_mapping: 0='SHORT')
             if confidence >= 0.80:
                 return "STRONG_SHORT"
             elif confidence >= 0.65:
                 return "SHORT"
             else:
                 return "WEAK_SHORT"
-        else:  # NEUTRAL
+        else:  # NEUTRAL (class_mapping: 2='NEUTRAL')
             return "HOLD"
 
     def save_model(self, model_path: str = "artifacts/models/xgb_model.json", timeframe: str = "1h") -> str:
