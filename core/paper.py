@@ -166,7 +166,9 @@ class PaperTrader:
             features = []
             for feat in trainer.feature_names:
                 # Modelin beklediği özelliği bul, yoksa 0.0 ver
-                val = indicators.get(feat, 0.0)
+                val = indicators.get(feat, None)
+                if val is None:
+                    val = 0.0
                 features.append(float(val))
             
             # Tahmin yap
@@ -176,7 +178,7 @@ class PaperTrader:
             return prediction
             
         except Exception as e:
-            logger.error(f"❌ ML Onay hatası ({symbol}): {e}")
+            logger.warning(f"⚠️ [ML] {symbol}: Model feature uyumsuzluğu - sadece teknik sinyaller kullanılıyor")
             return None
 
     # ========================================================================
