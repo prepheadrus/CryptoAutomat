@@ -299,7 +299,7 @@ class Position:
             opened_at=self.opened_at,
             closed_at=datetime.utcnow(),
             reason=reason,
-            strategy_id=self.metadata.get('strategy'),
+            strategy_id=self.metadata.get('strategy_id'),
             metadata=self.metadata
         )
         
@@ -312,7 +312,7 @@ class Position:
     def to_dict(self) -> Dict[str, Any]:
         """
         Dict'e çevir (serialization).
-        
+
         Returns:
             Dict representation
         """
@@ -326,7 +326,10 @@ class Position:
             'margin': self.margin,
             'stop_loss': self.stop_loss,
             'take_profit': self.take_profit,
+            'liquidation_price': self.liquidation_price,
             'commission': self.commission,
+            'unrealized_usd': self.unrealized_pnl,
+            'pnl_percent': self.pnl_percent,
             'opened_at': self.opened_at.isoformat(),
             'metadata': self.metadata
         }

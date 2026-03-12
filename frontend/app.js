@@ -24,6 +24,10 @@ let refreshIntervals = {
     dashboard: null,
 };
 
+// Strategy visualization drawer state
+let strategyDrawerChart = null;
+let currentDrawerStrategyId = null;
+
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
@@ -119,7 +123,7 @@ function setupTabs() {
 
             const targetId = btn.getAttribute('data-target');
             tabs.forEach(tab => { tab.style.display = 'none'; });
-            
+
             const targetTab = document.getElementById(targetId);
             if (targetTab) {
                 targetTab.style.display = 'block';
@@ -265,7 +269,7 @@ async function updateSystemStatus() {
             if (envStatusEl) {
                 const env = data.environment || 'DEVELOPMENT';
                 envStatusEl.textContent = env.toUpperCase();
-                
+
                 // Color coding
                 if (env.toLowerCase() === 'production') {
                     envStatusEl.style.color = 'var(--neon-red)';
@@ -290,16 +294,16 @@ async function updateSystemStatus() {
 async function loadTradeHistory() {
     try {
         console.log('[INFO] 🔄 İşlem geçmişi yükleniyor...');
-        
+
         // 1. İstatistikleri yükle
         await loadTradeStats();
-        
+
         // 2. İşlem listesini yükle
         const symbol = document.getElementById('hist-filter-symbol')?.value || '';
         const data = await api.getTradeHistory({ symbol, limit: 100 });
-        
+
         console.log(`[INFO] ✅ ${data.trades?.length || 0} işlem yüklendi`);
-        
+
         store.setState('trades', { history: data.trades || [] });
         renderTradeHistory(data.trades || []);
     } catch (error) {
@@ -313,16 +317,16 @@ async function loadTradeStats() {
         const data = await api.getTradeStats();
         if (data.status === 'success' && data.stats) {
             const stats = data.stats;
-            
+
             // DOM güncelle
             const elements = {
                 'hist-total-trades': stats.total_trades,
                 'hist-win-rate': `${stats.win_rate}%`,
-                'hist-total-pnl': `$${stats.total_pnl.toLocaleString(undefined, {minimumFractionDigits: 2})}`,
-                'hist-avg-pnl': `$${stats.avg_pnl.toLocaleString(undefined, {minimumFractionDigits: 2})}`,
+                'hist-total-pnl': `$${stats.total_pnl.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+                'hist-avg-pnl': `$${stats.avg_pnl.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
                 'hist-best-strategy': stats.best_strategy || 'N/A'
             };
-            
+
             Object.entries(elements).forEach(([id, val]) => {
                 const el = document.getElementById(id);
                 if (el) {
@@ -359,12 +363,12 @@ async function clearTradeHistory() {
 function filterHistoryTable() {
     const symbol = document.getElementById('hist-filter-symbol')?.value.toUpperCase() || '';
     const trades = store.getState('trades')?.history || [];
-    
+
     if (symbol === '') {
         renderTradeHistory(trades);
         return;
     }
-    
+
     const filtered = trades.filter(t => t.symbol.toUpperCase().includes(symbol));
     renderTradeHistory(filtered);
 }
@@ -387,7 +391,7 @@ function populateMLSymbolSelect(symbols) {
         if (mlSymbolSelect) {
             // Önce temizle
             mlSymbolSelect.innerHTML = '';
-            
+
             if (symbols && symbols.length > 0) {
                 // Her sembol için option ekle
                 symbols.forEach(symbol => {
@@ -455,38 +459,38 @@ function renderTrainingHistory(history) {
             </thead>
             <tbody>
                 ${history.map(item => {
-                    const metrics = item.metrics || {};
-                    const xgbAcc = metrics.xgb_accuracy || metrics.accuracy || 0;
-                    const rfAcc = metrics.rf_accuracy || metrics.accuracy || 0;
-                    const ensAcc = metrics.ensemble_accuracy || metrics.accuracy || 0;
-                    
-                    const getAccColor = (acc) => {
-                        if (acc >= 0.5) return 'var(--neon-green)';
-                        if (acc >= 0.3) return '#ffc107';
-                        return 'var(--neon-red)';
-                    };
-                    
-                    const formatDate = (dateStr) => {
-                        if (!dateStr) return 'Invalid Date';
-                        try {
-                            const date = new Date(dateStr);
-                            if (isNaN(date.getTime())) return 'Invalid Date';
-                            return date.toLocaleString('tr-TR', { 
-                                day: '2-digit', 
-                                month: '2-digit', 
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                            });
-                        } catch (e) {
-                            return 'Invalid Date';
-                        }
-                    };
-                    
-                    const date = formatDate(item.completed_at || item.started_at);
-                    const duration = item.duration_seconds ? `${Math.round(item.duration_seconds)}s` : '-';
-                    
-                    return `
+        const metrics = item.metrics || {};
+        const xgbAcc = metrics.xgb_accuracy || metrics.accuracy || 0;
+        const rfAcc = metrics.rf_accuracy || metrics.accuracy || 0;
+        const ensAcc = metrics.ensemble_accuracy || metrics.accuracy || 0;
+
+        const getAccColor = (acc) => {
+            if (acc >= 0.5) return 'var(--neon-green)';
+            if (acc >= 0.3) return '#ffc107';
+            return 'var(--neon-red)';
+        };
+
+        const formatDate = (dateStr) => {
+            if (!dateStr) return 'Invalid Date';
+            try {
+                const date = new Date(dateStr);
+                if (isNaN(date.getTime())) return 'Invalid Date';
+                return date.toLocaleString('tr-TR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch (e) {
+                return 'Invalid Date';
+            }
+        };
+
+        const date = formatDate(item.completed_at || item.started_at);
+        const duration = item.duration_seconds ? `${Math.round(item.duration_seconds)}s` : '-';
+
+        return `
                         <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
                             <td style="padding:12px; color:var(--text-main); white-space:nowrap;">${date}</td>
                             <td style="padding:12px; color:var(--neon-blue); font-weight:600;">${item.symbol}</td>
@@ -506,7 +510,7 @@ function renderTrainingHistory(history) {
                             </td>
                         </tr>
                     `;
-                }).join('')}
+    }).join('')}
             </tbody>
         </table>
     `;
@@ -550,7 +554,7 @@ async function loadDataSymbols() {
 
         // Not: Dropdown güncelleme loadDropdownData tarafından yapılıyor
         // populateBotFormDropdowns(symbols); // ❌ Kaldırıldı (çakışma önleme)
-        
+
     } catch (error) {
         console.error('❌ Data symbols error:', error);
         console.error('Stack trace:', error.stack);
@@ -705,6 +709,7 @@ async function saveRiskSettings() {
         const maxLeverage = parseInt(document.getElementById('risk-max-leverage').value);
         const maxPositions = parseInt(document.getElementById('risk-max-positions').value);
         const maxLosses = parseInt(document.getElementById('risk-max-losses').value);
+        const killSwitchEnabled = document.getElementById('risk-kill-switch-enabled').checked;
 
         // Frontend validasyonu
         if (maxRisk < 0.1 || maxRisk > 5.0) {
@@ -725,8 +730,8 @@ async function saveRiskSettings() {
             return;
         }
 
-        if (maxLosses < 1 || maxLosses > 10) {
-            showToast('⚠️ Maksimum ardışık kayıp 1 ile 10 arasında olmalı', 'error');
+        if (maxLosses < 0 || maxLosses > 50) {
+            showToast('⚠️ Maksimum ardışık kayıp 0 ile 50 arasında olmalı (0 = sınırsız)', 'error');
             document.getElementById('risk-max-losses').focus();
             return;
         }
@@ -736,12 +741,13 @@ async function saveRiskSettings() {
         // Backend API çağrısı (JSON body)
         const response = await fetch('/api/v1/config/risk', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 max_risk_per_trade_percent: maxRisk,
                 max_leverage: maxLeverage,
                 max_open_positions: maxPositions,
-                max_consecutive_losses: maxLosses
+                max_consecutive_losses: maxLosses,
+                kill_switch_enabled: killSwitchEnabled
             })
         });
 
@@ -785,7 +791,13 @@ async function loadRiskSettings() {
             document.getElementById('risk-max-risk').value = result.data.max_risk_per_trade_percent || 0.2;
             document.getElementById('risk-max-leverage').value = result.data.max_leverage || 10;
             document.getElementById('risk-max-positions').value = result.data.max_open_positions || 5;
-            document.getElementById('risk-max-losses').value = result.data.max_consecutive_losses || 5;
+            document.getElementById('risk-max-losses').value = result.data.max_consecutive_losses || 10;
+
+            // Kill Switch checkbox
+            const killSwitchEnabled = result.data.kill_switch_enabled !== undefined
+                ? result.data.kill_switch_enabled
+                : true;
+            document.getElementById('risk-kill-switch-enabled').checked = killSwitchEnabled;
 
             // Store'a kaydet
             store.setState('settings', {
@@ -809,7 +821,7 @@ async function loadAdvancedSettings() {
         const result = await response.json();
 
         if (result.status === 'success' && result.data) {
-            const {wfo, ml, htf} = result.data;
+            const { wfo, ml, htf } = result.data;
 
             // WFO ayarları
             if (wfo) {
@@ -834,7 +846,7 @@ async function loadAdvancedSettings() {
             // Store'a kaydet
             store.setState('settings', {
                 ...store.getState('settings'),
-                advanced: {wfo, ml, htf}
+                advanced: { wfo, ml, htf }
             });
 
             console.log('[INFO] Gelişmiş ayarlar yüklendi:', result.data);
@@ -853,7 +865,7 @@ async function loadBotConfig() {
         const result = await response.json();
 
         if (result.status === 'success' && result.data) {
-            const {exchange, environment, log_level} = result.data;
+            const { exchange, environment, log_level } = result.data;
 
             if (exchange) {
                 document.getElementById('bot-config-exchange').value = exchange;
@@ -883,13 +895,13 @@ async function loadBotConfig() {
  */
 async function loadAllSettings() {
     console.log('[INFO] 🔄 Tüm sistem ayarları yükleniyor...');
-    
+
     await Promise.all([
         loadRiskSettings(),
         loadAdvancedSettings(),
         loadBotConfig()
     ]);
-    
+
     console.log('[INFO] ✅ Tüm ayarlar yüklendi');
 }
 
@@ -907,7 +919,7 @@ async function saveBotConfig() {
         // Backend API çağrısı
         const response = await fetch('/api/v1/config/bot', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 exchange,
                 environment,
@@ -919,11 +931,11 @@ async function saveBotConfig() {
 
         if (result.status === 'success') {
             showToast('✅ ' + result.message, 'success');
-            
+
             // Store'a kaydet
             store.setState('settings', {
                 ...store.getState('settings'),
-                bot: {exchange, environment, log_level: logLevel}
+                bot: { exchange, environment, log_level: logLevel }
             });
         } else {
             showToast('❌ ' + result.message, 'error');
@@ -978,7 +990,7 @@ async function saveAdvancedSettings() {
         // Backend API çağrısı (JSON body)
         const response = await fetch('/api/v1/config/advanced', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 wfo: wfoData,
                 ml: mlData,
@@ -1018,8 +1030,8 @@ async function testApiKeys() {
         // Backend API çağrısı (JSON body)
         const response = await fetch('/api/v1/config/test-api-keys', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({api_key: apiKey, api_secret: apiSecret})
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ api_key: apiKey, api_secret: apiSecret })
         });
 
         const result = await response.json();
@@ -1072,8 +1084,8 @@ async function saveApiKeys() {
         // Backend API çağrısı (JSON body)
         const response = await fetch('/api/v1/config/api-keys', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({api_key: apiKey, api_secret: apiSecret})
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ api_key: apiKey, api_secret: apiSecret })
         });
 
         const result = await response.json();
@@ -1125,7 +1137,7 @@ async function loadDataStats() {
         if (statsSummaryEl) {
             const millions = (totalCandles / 1000000).toFixed(2);
             const thousands = (totalCandles / 1000).toFixed(0);
-            
+
             // Büyük sayılar için farklı gösterim
             let totalDisplay;
             if (totalCandles >= 1000000) {
@@ -1135,7 +1147,7 @@ async function loadDataStats() {
             } else {
                 totalDisplay = `<span style="font-size:1.3rem; font-weight:700; color:var(--neon-blue);">📊 Toplam: ${totalCandles.toLocaleString('tr-TR')}</span>`;
             }
-            
+
             statsSummaryEl.innerHTML = `
                 ${totalDisplay}
                 <div style="display:flex; gap:20px; margin-top:8px;">
@@ -1148,12 +1160,12 @@ async function loadDataStats() {
 
         // Verileri grupla (sembol + market type bazında)
         const grouped = {};
-        
+
         inventory.forEach(item => {
             // Sembol adını ve market type'ı çıkar
             let symbolName = item.symbol;
             let marketType = 'spot'; // Varsayılan
-            
+
             if (item.symbol.includes('_future') || item.symbol.includes(':USDT')) {
                 marketType = 'future';
                 symbolName = item.symbol.replace('_future', '').replace(':USDT', '');
@@ -1161,7 +1173,7 @@ async function loadDataStats() {
                 marketType = 'spot';
                 symbolName = item.symbol.replace('_spot', '');
             }
-            
+
             const key = `${symbolName}_${marketType}`;
             if (!grouped[key]) {
                 grouped[key] = {
@@ -1175,7 +1187,7 @@ async function loadDataStats() {
                     maxTimestamp: item.max_timestamp
                 };
             }
-            
+
             grouped[key].timeframes.push({
                 tf: item.timeframe,
                 count: item.count
@@ -1188,7 +1200,7 @@ async function loadDataStats() {
         if (statsTableEl && Object.keys(grouped).length > 0) {
             // Grupları sırala (toplam mum sayısına göre)
             const sorted = Object.values(grouped).sort((a, b) => b.totalCandles - a.totalCandles);
-            
+
             const rows = sorted.map(group => {
                 const countFormatted = group.totalCandles.toLocaleString('tr-TR');
                 // Büyük sayılar için K/M/B kısaltması
@@ -1201,19 +1213,19 @@ async function loadDataStats() {
                     countShort = `${(group.totalCandles / 1000).toFixed(0)}K`;
                     countColor = 'var(--neon-green)';
                 }
-                
+
                 // Market type badge
                 const marketTypeDisplay = group.marketType === 'future' ? '💹 Vadeli' : '💰 Spot';
                 const badgeBg = group.marketType === 'future' ? 'rgba(88, 166, 255, 0.2)' : 'rgba(46, 220, 135, 0.2)';
                 const badgeColor = group.marketType === 'future' ? 'var(--neon-blue)' : 'var(--neon-green)';
-                
+
                 // Timeframe özeti
                 const tfSummary = group.timeframes.map(tf => tf.tf).join(', ');
-                
+
                 // Tarih formatlaması - daha belirgin
                 const startDate = group.minDate !== 'N/A' ? group.minDate : '—';
                 const endDate = group.maxDate !== 'N/A' ? group.maxDate : '—';
-                
+
                 return `
                     <tr style="border-bottom:1px solid rgba(255,255,255,0.05); transition: background 0.2s;"
                         onmouseover="this.style.background='rgba(255,255,255,0.03)'" 
@@ -1245,7 +1257,7 @@ async function loadDataStats() {
                     </tr>
                 `;
             }).join('');
-            
+
             statsTableEl.innerHTML = `
                 <table style="width:100%; border-collapse:collapse;">
                     <thead>
@@ -1388,7 +1400,7 @@ function updatePortfolioCards(portfolio) {
             'perf-equity': portfolio.equity || portfolio.balance,
             'perf-winrate': portfolio.win_rate * 100,
             'perf-count': portfolio.total_trades,
-            'perf-total-trades': portfolio.total_trades, 
+            'perf-total-trades': portfolio.total_trades,
             'perf-total-pnl': portfolio.total_pnl,
             'perf-total-fees': portfolio.total_commission || 0
         };
@@ -1397,7 +1409,7 @@ function updatePortfolioCards(portfolio) {
         Object.entries(mainElements).forEach(([id, value]) => {
             const el = document.getElementById(id);
             if (el && value !== undefined) {
-                el.textContent = `$${value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                el.textContent = `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                 if (id === 'total-pnl-val') {
                     el.className = value >= 0 ? 'success-text' : 'danger-text';
                     el.textContent = (value >= 0 ? '+' : '') + el.textContent;
@@ -1414,7 +1426,7 @@ function updatePortfolioCards(portfolio) {
                 } else if (id === 'perf-count' || id === 'perf-total-trades') {
                     el.textContent = value;
                 } else {
-                    el.textContent = `$${value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    el.textContent = `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                     if (id === 'perf-total-pnl') {
                         el.style.color = value >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
                     }
@@ -1432,7 +1444,7 @@ function updatePortfolioCards(portfolio) {
         Object.entries(usageElements).forEach(([id, value]) => {
             const el = document.getElementById(id);
             if (el && value !== undefined) {
-                el.textContent = `$${value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                el.textContent = `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
             }
         });
 
@@ -1519,11 +1531,11 @@ function updatePositionsTable(positions) {
             const pnlColor = (pos.unrealized_usd || 0) >= 0 ? 'success-text' : 'danger-text';
             const directionClass = pos.direction === 'LONG' ? 'badge-success' : 'badge-danger';
             const notional = (pos.size || 0) * (pos.current_price || pos.entry_price || 0);
-            
+
             return `
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                     <td style="font-size: 0.65rem; color: var(--text-muted); font-family: monospace;">
-                        ${pos.bot_id ? pos.bot_id.split('_')[1] || pos.bot_id.substring(0,8) : 'N/A'}
+                        ${pos.bot_id ? pos.bot_id.split('_')[1] || pos.bot_id.substring(0, 8) : 'N/A'}
                     </td>
                     <td>
                         <div style="display:flex; flex-direction:column;">
@@ -1541,13 +1553,13 @@ function updatePositionsTable(positions) {
                     </td>
                     <td>
                         <div style="display:flex; flex-direction:column;">
-                            <span style="color:var(--text-bright);">$${(pos.entry_price || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                            <span style="font-size:0.7rem; color:var(--text-muted); font-weight:bold;">$${notional.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                            <span style="color:var(--text-bright);">$${(pos.entry_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            <span style="font-size:0.7rem; color:var(--text-muted); font-weight:bold;">$${notional.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                     </td>
                     <td>
                         <div style="display:flex; flex-direction:column;">
-                            <span style="color:var(--text-bright);">$${(pos.current_price || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                            <span style="color:var(--text-bright);">$${(pos.current_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             <span class="${pnlColor}" style="font-weight:bold;">
                                 ${(pos.unrealized_usd || 0) >= 0 ? '+' : ''}$${(pos.unrealized_usd || 0).toFixed(2)}
                             </span>
@@ -1561,11 +1573,17 @@ function updatePositionsTable(positions) {
                             <span style="color: var(--neon-red);">SL: ${pos.stop_loss ? pos.stop_loss.toLocaleString() : '-'}</span>
                             <span style="color: var(--neon-green);">TP: ${pos.take_profit ? pos.take_profit.toLocaleString() : '-'}</span>
                             <span style="color: ${getColorForLiq(pos.liquidation_price, pos.current_price || pos.entry_price, pos.direction)}; font-weight:bold;">
-                                Liq: ${pos.liquidation_price && pos.liquidation_price > 0 ? pos.liquidation_price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-'}
+                                Liq: ${pos.liquidation_price && pos.liquidation_price > 0 ? pos.liquidation_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
                             </span>
                         </div>
                     </td>
-                    <td>
+                    <td style="display: flex; flex-direction: column; gap: 4px;">
+                        <button class="btn btn-sm btn-select" 
+                                onclick="window.openStrategyDrawer({ botId: '${pos.bot_id || ''}', strategyName: '${pos.strategy || 'Unknown'}' })"
+                                style="font-size: 0.65rem; padding: 4px 8px; border-radius: 4px; background: rgba(88, 166, 255, 0.1); border-color: var(--neon-blue); color: var(--neon-blue);"
+                                ${!pos.bot_id ? 'disabled' : ''} title="${!pos.bot_id ? 'Bu pozisyon için bot kimliği bulunamadı' : 'Strateji grafiğini görüntüle'}">
+                            📊 GRAFİK
+                        </button>
                         <button class="btn btn-sm btn-danger btn-close-pos" 
                                 onclick="closePosition('${pos.symbol || ''}')"
                                 style="font-size: 0.65rem; padding: 4px 8px; border-radius: 4px;">
@@ -1602,12 +1620,12 @@ function renderStrategyLibrary(strategies) {
 
         container.innerHTML = strategies.map(s => {
             if (!s) return '';
-            
+
             const isBuiltin = s.type === 'builtin';
             const badgeText = isBuiltin ? '📦 Built-in' : '🎨 Custom';
             const badgeClass = isBuiltin ? 'builtin' : 'custom';
             const isActive = activeStrategyIds.includes(s.id);
-            
+
             return `
                 <div class="strategy-card">
                     <div class="strategy-card-header">
@@ -1615,10 +1633,17 @@ function renderStrategyLibrary(strategies) {
                         <span class="strategy-badge ${badgeClass}">${badgeText}</span>
                     </div>
                     <p class="strategy-card-description">${s.description || 'Açıklama yok'}</p>
-                    <div class="strategy-card-footer">
+                    <div class="strategy-card-footer" style="display: flex; gap: 8px;">
                         <button class="strategy-select-btn ${isActive ? 'active' : ''}" 
+                                style="flex: 1;"
                                 onclick="onStrategySelect('${s.id}', '${s.name.replace(/'/g, "\\'")}')">
-                            ${isActive ? '✅ Aktif' : '🚀 Seç / Aktif Et'}
+                            ${isActive ? '✅ Aktif' : '🚀 Seç'}
+                        </button>
+                        <button class="btn btn-select"
+                                style="padding: 8px; background: rgba(88, 166, 255, 0.1); border-color: var(--neon-blue); color: var(--neon-blue);"
+                                onclick="openStrategyDrawer({ strategyId: '${s.id}', strategyName: '${s.name.replace(/'/g, "\\'")}' })"
+                                title="İşlemleri Grafikte Gör">
+                            📊
                         </button>
                     </div>
                 </div>
@@ -1637,10 +1662,10 @@ function renderStrategyLibrary(strategies) {
  */
 function onStrategySelect(strategyId, strategyName) {
     console.log(`[INFO] 🎯 Strateji seçildi: ${strategyName} (${strategyId})`);
-    
+
     // Modal veya prompt ile onay al
     const confirmed = confirm(`"${strategyName}" stratejisini aktif etmek istediğiniz sembolü seçin.\n\nTamam'a basarak devam edin.`);
-    
+
     if (confirmed) {
         // Bot oluşturma modal'ını aç veya doğrudan bot başlatma akışına yönlendir
         // Şimdilik basitçe bot formuna scroll yap ve stratejiyi seç
@@ -1649,13 +1674,13 @@ function onStrategySelect(strategyId, strategyName) {
             strategySelect.value = strategyId;
             strategySelect.dispatchEvent(new Event('change', { bubbles: true }));
         }
-        
+
         // Bot sekmesine git (tab-settings içerisindedir)
         const botTab = document.querySelector('[data-target="tab-settings"]');
         if (botTab) {
             botTab.click();
         }
-        
+
         showToast(`✅ "${strategyName}" seçildi. Lütfen sembol seçin ve botu başlatın.`, 'success');
     }
 }
@@ -1678,7 +1703,7 @@ function renderTradeHistory(trades) {
             const pnlPercent = trade.pnl_percent || 0;
             const pnlColor = pnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
             const directionClass = trade.direction === 'LONG' ? 'badge-success' : 'badge-danger';
-            
+
             // Tarih işlemleri - Fallback mekanizması
             let dateStr = 'Invalid Date';
             try {
@@ -1783,7 +1808,7 @@ async function updateActiveTasks() {
                     const progress = task.progress || 100;
                     const status = task.status || 'completed';
                     const speed = task.speed || 0;
-                    
+
                     // Sembol ve market type ayır
                     let symbolName = symbolKey;
                     let marketType = task.market_type || 'future';
@@ -1796,12 +1821,12 @@ async function updateActiveTasks() {
 
                     // Status class ve text
                     const statusClass = status === 'running' ? 'running' :
-                                       status === 'completed' ? 'completed' :
-                                       status === 'paused' ? 'paused' : 'stopped';
-                    
+                        status === 'completed' ? 'completed' :
+                            status === 'paused' ? 'paused' : 'stopped';
+
                     const statusDisplay = status === 'running' ? '🔄 İndiriliyor' :
-                                         status === 'completed' ? '✅ Tamamlandı' :
-                                         status === 'paused' ? '⏸️ Duraklatıldı' : '⏹️ Durduruldu';
+                        status === 'completed' ? '✅ Tamamlandı' :
+                            status === 'paused' ? '⏸️ Duraklatıldı' : '⏹️ Durduruldu';
 
                     // Tarih bilgileri
                     let startDate = task.start_date || '...';
@@ -1822,12 +1847,12 @@ async function updateActiveTasks() {
 
                     // Silme butonu - STOPPED, COMPLETED, PAUSED için
                     const isInvalidSymbol = symbolKey.includes('-- SEÇİNİZ --') ||
-                                           symbolKey.includes('SEÇİNİZ') ||
-                                           symbolKey === '_future' ||
-                                           symbolKey === '_spot';
-                    
+                        symbolKey.includes('SEÇİNİZ') ||
+                        symbolKey === '_future' ||
+                        symbolKey === '_spot';
+
                     const showDeleteButton = (status !== 'running' || isInvalidSymbol);
-                    
+
                     const deleteButton = showDeleteButton ? `
                         <button class="task-btn task-btn-delete" onclick="deleteDownloadTask('${symbolKey}', '${marketType}')" title="Görevi Sil">
                             🗑️
@@ -1936,6 +1961,10 @@ function setupGlobalFunctions() {
     window.loadTradeHistory = loadTradeHistory;
     window.clearTradeHistory = clearTradeHistory;
     window.filterHistoryTable = filterHistoryTable;
+
+    // YENİ: Strategy Drawer functions
+    window.openStrategyDrawer = openStrategyDrawer;
+    window.closeStrategyDrawer = closeStrategyDrawer;
 }
 
 /**
@@ -1951,7 +1980,7 @@ async function handleBotSubmit(event) {
     const market = document.getElementById('bot-market').value;
     const marginType = document.getElementById('bot-margin-type')?.value || 'isolated';
 
-    console.log('[INFO] Bot başlatılıyor:', {symbol, strategy, timeframe, market, marginType});
+    console.log('[INFO] Bot başlatılıyor:', { symbol, strategy, timeframe, market, marginType });
 
     // VALIDASYON: Sembol ve strateji seçilmiş mi?
     if (!symbol || symbol === '') {
@@ -1999,7 +2028,7 @@ function selectMarket(symbol, type) {
             showToast('⚠️ Lütfen geçerli bir sembol seçin', 'warning');
             return;
         }
-        
+
         display.innerText = symbol;
         display.dataset.type = type;
         display.style.color = 'var(--neon-green)';
@@ -2010,14 +2039,14 @@ function selectMarket(symbol, type) {
 function toggleMarketSymbol(symbol, checked) {
     const state = store.getState();
     const tracked = [...state.markets.tracked];
-    
+
     if (checked) {
         if (!tracked.includes(symbol)) tracked.push(symbol);
     } else {
         const index = tracked.indexOf(symbol);
         if (index > -1) tracked.splice(index, 1);
     }
-    
+
     store.setState('markets', { tracked });
 }
 
@@ -2072,12 +2101,12 @@ async function startDownload() {
     const symbol = document.getElementById('selected-symbol-val')?.innerText;
     const timeframe = document.getElementById('download-timeframe')?.value || '1m';
     const startDate = document.getElementById('download-start-date')?.value || '2024-01-01';
-    
+
     if (!symbol) {
         showToast('❌ Lütfen bir sembol seçin', 'error');
         return;
     }
-    
+
     try {
         const result = await api.startDownload(symbol, timeframe, startDate);
         showToast(result.message, result.status === 'started' ? 'success' : 'info');
@@ -2139,7 +2168,7 @@ async function togglePause(symbol, action = 'pause') {
 
 async function closePosition(symbol) {
     if (!confirm(`${symbol} pozisyonu kapatılsın mı?`)) return;
-    
+
     try {
         await api.closePosition(symbol);
         showToast('✅ Pozisyon kapatıldı', 'success');
@@ -2168,19 +2197,19 @@ async function startMLTraining() {
         const dataCountResponse = await fetch(`/api/v1/data/data-count?symbol=${encodeURIComponent(symbol)}&timeframe=${timeframe}`);
         const dataCountData = await dataCountResponse.json();
         const availableCount = dataCountData.count || 0;
-        
+
         if (availableCount < 100) {
             showToast(`❌ Yetersiz veri: ${availableCount} mum (min 100 gerekli)`, 'error');
             return;
         }
-        
+
         if (limit > availableCount) {
             showToast(`⚠️ DB'de sadece ${availableCount.toLocaleString()} mum var. Limit ${availableCount.toLocaleString()} olarak ayarlanıyor.`, 'warning');
         }
-        
+
         // Limit'i DB'deki veriye göre ayarla (kullanıcı az girdiyse onu kullan)
         const actualLimit = Math.min(limit, availableCount);
-        
+
         console.log('[ML Training] Starting training:', { symbol, timeframe, limit: actualLimit, tp, sl, available: availableCount, userRequested: limit });
 
         store.setState('ml', { training: { isTraining: true, progress: 5, message: 'Başlatılıyor...', current_step: 'DB bağlantısı' } });
@@ -2195,7 +2224,7 @@ async function startMLTraining() {
     } catch (error) {
         store.setState('ml', { training: { isTraining: false } });
         console.error('[ML Training] Error:', error);
-        
+
         // 422 Validation Error detayını göster
         let errorMessage = error.message;
         if (error.response) {
@@ -2204,9 +2233,9 @@ async function startMLTraining() {
                 if (data.detail) {
                     errorMessage = data.detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join(', ');
                 }
-            }).catch(() => {});
+            }).catch(() => { });
         }
-        
+
         showToast('❌ Eğitim hatası: ' + errorMessage, 'error');
     }
 }
@@ -2221,23 +2250,23 @@ function validateMumCount() {
     const warningSpan = document.getElementById('ml-limit-warning');
     const rangeSpan = document.getElementById('ml-db-range');
     const dbCountSpan = document.getElementById('ml-db-count');
-    
+
     if (!symbol || !timeframe || !limitInput) return;
-    
+
     const limit = parseInt(limitInput.value) || 0;
-    
+
     // Mevcut veri sayısını al
     fetch(`/api/v1/data/data-count?symbol=${encodeURIComponent(symbol)}&timeframe=${timeframe}`)
         .then(r => r.json())
         .then(data => {
             const availableCount = data.count || 0;
-            
+
             if (availableCount > 0) {
                 // Tarih aralığını göster
                 if (data.min_date && data.max_date) {
                     rangeSpan.textContent = `${data.min_date} → ${data.max_date}`;
                 }
-                
+
                 // Limit kontrolü
                 if (limit > availableCount) {
                     // Kullanıcı DB'den fazla girdi → UYARI
@@ -2259,7 +2288,7 @@ function validateMumCount() {
                     // Normal → Yüzde göster
                     warningSpan.style.display = 'none';
                     limitInput.style.borderColor = 'rgba(255,255,255,0.1)';
-                    
+
                     const percentage = ((limit / availableCount) * 100).toFixed(1);
                     dbCountSpan.textContent = `DB: ${availableCount.toLocaleString()} mum → Kullanılan: ${limit.toLocaleString()} (${percentage}%)`;
                     dbCountSpan.style.color = percentage >= 50 ? 'var(--neon-green)' : 'var(--neon-blue)';
@@ -2286,7 +2315,7 @@ async function pollTrainingStatus() {
     const poll = async () => {
         const state = store.getState();
         if (!state.ml.training.isTraining) return;
-        
+
         try {
             const status = await api.getMLStatus();
             store.setState('ml', {
@@ -2296,7 +2325,7 @@ async function pollTrainingStatus() {
                     message: status.message,
                 }
             });
-            
+
             if (!status.is_training) {
                 showToast('✅ ML eğitimi tamamlandı', 'success');
                 loadMLTrainingHistory();
@@ -2307,7 +2336,7 @@ async function pollTrainingStatus() {
             console.error('Training status poll error:', error);
         }
     };
-    
+
     poll();
 }
 
@@ -2327,14 +2356,14 @@ async function runMLVisualAnalysis() {
         // Loading state göster
         const chartContainer = document.getElementById('ml-analysis-chart');
         const featureContainer = document.getElementById('feature-importance-chart');
-        
+
         if (chartContainer) {
             chartContainer.innerHTML = '<div style="position:absolute; top:0; left:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.3);"><div class="loading-spinner"></div><p style="color:white; margin-left:15px;">📊 Analiz ediliyor...</p></div>';
         }
 
         const limit = parseInt(document.getElementById('ml-train-limit')?.value) || 1000;
         console.log('[ML Visual Analysis] Requesting data range:', limit);
-        
+
         const data = await api.runVisualAnalysis(symbol, strategy, timeframe, limit);
 
         console.log('[ML Visual Analysis] Response:', data);
@@ -2355,7 +2384,7 @@ async function runMLVisualAnalysis() {
                 try {
                     // [PROTECTION] Zaman Sıralama Kalkanı: LWC kronolojik veri bekler (Eski -> Yeni)
                     data.candles.sort((a, b) => a.time - b.time);
-                    
+
                     if (data.markers && data.markers.length > 0) {
                         data.markers.sort((a, b) => a.time - b.time);
                     }
@@ -2363,13 +2392,13 @@ async function runMLVisualAnalysis() {
                     // [PROTECTION] Görünürlük ve Yükseklik Kontrolü
                     chartContainer.innerHTML = '';
                     chartContainer.style.height = '450px'; // Kesin yükseklik garantisi
-                    
+
                     const chart = new ChartRenderer('ml-analysis-chart');
                     chart.init();
                     chart.setCandlestickData(data.candles);
 
                     console.log('[ML Visual Analysis] Chart initialized with sorted data:', data.candles.length);
-                    
+
                     if (data.markers && data.markers.length > 0) {
                         console.log('[ML Visual Analysis] Adding sorted markers:', data.markers.length);
                         chart.addMarkers(data.markers);
@@ -2422,17 +2451,17 @@ function renderFeatureImportance(featureImportance) {
 
     // Bar chart HTML
     const maxVal = Math.max(...featureImportance.map(f => f.importance || f.value || 0));
-    
+
     container.innerHTML = `
         <div style="padding:20px;">
             <h4 style="color:var(--neon-blue); margin-bottom:15px;">🧬 Model Ağırlık Analizi</h4>
             <div style="display:flex; flex-direction:column; gap:10px;">
                 ${featureImportance.map((feature, idx) => {
-                    const importance = feature.importance || feature.value || 0;
-                    const percentage = maxVal > 0 ? (importance / maxVal * 100) : 0;
-                    const color = percentage >= 80 ? 'var(--neon-blue)' : percentage >= 50 ? 'var(--neon-purple)' : 'var(--text-muted)';
-                    
-                    return `
+        const importance = feature.importance || feature.value || 0;
+        const percentage = maxVal > 0 ? (importance / maxVal * 100) : 0;
+        const color = percentage >= 80 ? 'var(--neon-blue)' : percentage >= 50 ? 'var(--neon-purple)' : 'var(--text-muted)';
+
+        return `
                         <div style="display:flex; align-items:center; gap:10px;">
                             <div style="width:150px; font-size:0.85rem; color:var(--text-main); text-align:right; font-weight:600;">
                                 ${feature.feature || feature.name || `Feature ${idx}`}
@@ -2445,7 +2474,7 @@ function renderFeatureImportance(featureImportance) {
                             </div>
                         </div>
                     `;
-                }).join('')}
+    }).join('')}
             </div>
             <p style="font-size:0.75rem; color:var(--text-muted); margin-top:15px; text-align:center;">
                 💡 Modelin karar verirken en çok hangi indikatörleri dikkate aldığını (yüzdelik etki) gösterir.
@@ -2519,6 +2548,301 @@ window.renderTrainingHistory = renderTrainingHistory;
 window.clearTrainingHistory = clearTrainingHistory;
 window.loadMLTrainingHistory = loadMLTrainingHistory;
 window.runMLVisualAnalysis = runMLVisualAnalysis;
+window.openStrategyDrawer = openStrategyDrawer;
+window.closeStrategyDrawer = closeStrategyDrawer;
+
+// ============================================================================
+// STRATEGY DRAWER LOGIC
+// ============================================================================
+
+/**
+ * Strateji detay çekmecesini açar
+ * @param {Object} params - Parametreler
+ * @param {string} params.botId - Bot ID (benzersiz)
+ * @param {string} params.strategyId - Strateji ID
+ * @param {string} params.strategyName - Strateji adı
+ * @param {string} params.symbol - Opsiyonel sembol
+ */
+async function openStrategyDrawer({ botId, strategyId, strategyName, symbol }) {
+    // botId veya strategyId gerekli
+    if ((!botId || botId === 'unknown' || botId === '') && (!strategyId || strategyId === '')) {
+        console.warn('[StrategyDrawer] Geçersiz Bot ID ve Strateji ID:', { botId, strategyId });
+        showToast('Bot veya strateji kimliği bulunamadı.', 'warning');
+        return;
+    }
+
+    console.log(`[INFO] 📂 Strateji çekmecesi açılıyor: ${strategyName || 'Bilinmeyen'} (botId: ${botId || 'N/A'}, strategyId: ${strategyId || 'N/A'})`);
+
+    currentDrawerStrategyId = botId || strategyId;
+
+    // UI elementlerini hazırla
+    const drawer = document.getElementById('strategy-drawer');
+    const overlay = document.getElementById('drawer-overlay');
+    const titleEl = document.getElementById('drawer-strategy-id');
+
+    if (drawer && overlay) {
+        drawer.classList.add('open');
+        overlay.classList.add('visible');
+    }
+
+    if (titleEl) titleEl.textContent = strategyName || botId || strategyId;
+
+    // Verileri çek ve grafiği çiz
+    await fetchAndRenderStrategyChart({ botId, strategyId, symbol });
+}
+
+/**
+ * Strateji çekmecesini kapatır
+ */
+function closeStrategyDrawer() {
+    const drawer = document.getElementById('strategy-drawer');
+    const overlay = document.getElementById('drawer-overlay');
+
+    if (drawer && overlay) {
+        drawer.classList.remove('open');
+        overlay.classList.remove('visible');
+    }
+
+    // Grafiği temizle
+    if (strategyDrawerChart) {
+        strategyDrawerChart.destroy();
+        strategyDrawerChart = null;
+    }
+
+    currentDrawerStrategyId = null;
+}
+
+/**
+ * Strateji verilerini çeker ve grafiği oluşturur
+ */
+async function fetchAndRenderStrategyChart({ botId, strategyId, symbol }) {
+    try {
+        const chartContainer = document.getElementById('strategy-detail-chart');
+        if (!chartContainer) return;
+
+        // Loader göster
+        chartContainer.innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--text-muted);">📊 Veriler hazırlanıyor...</div>';
+
+        // API çağrısı - botId veya strategyId kullan
+        console.log('[Chart] API çağrısı:', { botId, strategyId, symbol });
+        const data = await api.getStrategyChartData({ botId, strategyId, symbol });
+        console.log('[Chart] API response:', data);
+
+        if (data.status === 'error') {
+            chartContainer.innerHTML = `<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--neon-red);">❌ ${data.message}</div>`;
+            return;
+        }
+
+        // Sembol badge güncelle
+        const badge = document.getElementById('drawer-symbol-badge');
+        if (badge) badge.textContent = data.symbol || '--/--';
+
+        // Grafiği temizle (varsa)
+        if (strategyDrawerChart) {
+            strategyDrawerChart.destroy();
+        }
+
+        // 1. Chart Renderer başlat
+        chartContainer.innerHTML = '';
+        strategyDrawerChart = new ChartRenderer('strategy-detail-chart');
+        strategyDrawerChart.init(); // 🐞 BUG FIX: Chart'ı başlat
+
+        // 2. Mumları ekle (Veri yoksa boş array gönder)
+        const candles = data.candles || [];
+        strategyDrawerChart.setCandlestickData(candles);
+
+        // 3. İşlemleri (Markers) hazırla
+        const markers = [];
+        const trades = data.trades || [];
+
+        // 🐞 BUG FIX: Zaman damgası (timestamp) ayrıştırma fonksiyonu
+        const parseTimestamp = (datetime) => {
+            if (typeof datetime === 'number') return datetime; // Zaten Unix timestamp
+            if (typeof datetime === 'string') {
+                const parsed = Date.parse(datetime);
+                return isNaN(parsed) ? null : parsed / 1000; // ISO string'i ayrıştır
+            }
+            return null;
+        };
+
+        trades.forEach(t => {
+            const openTime = parseTimestamp(t.opened_at);
+            const closeTime = parseTimestamp(t.closed_at);
+
+            // Giriş Marker
+            if (openTime) {
+                markers.push({
+                    time: openTime,
+                    position: t.direction === 'LONG' ? 'belowBar' : 'aboveBar',
+                    color: t.direction === 'LONG' ? '#00ccff' : '#ffcc00',
+                    shape: 'arrowUp',
+                    text: `${t.direction} Giriş`,
+                    size: 1.5,
+                    tooltip: `
+                        <div style="color:#00ccff;font-weight:bold;">${t.direction} GİRİŞ</div>
+                        <div>Fiyat: $${t.entry_price.toLocaleString()}</div>
+                        <div>Tarih: ${new Date(openTime * 1000).toLocaleString()}</div>
+                    `
+                });
+            }
+            // Çıkış Marker
+            if (closeTime) {
+                markers.push({
+                    time: closeTime,
+                    position: t.direction === 'LONG' ? 'aboveBar' : 'belowBar',
+                    color: t.pnl >= 0 ? '#2ea043' : '#f85149',
+                    shape: 'arrowDown',
+                    text: `Kapatıldı`,
+                    size: 1.5,
+                    tooltip: `
+                        <div style="color:${t.pnl >= 0 ? '#2ea043' : '#f85149'};font-weight:bold;">İŞLEM KAPATILDI</div>
+                        <div>Çıkış: $${t.exit_price.toLocaleString()}</div>
+                        <div>PnL: <span style="color:${t.pnl >= 0 ? '#2ea043' : '#f85149'}">$${t.pnl.toFixed(2)} (${t.pnl_percent.toFixed(2)}%)</span></div>
+                        <div>Tarih: ${new Date(closeTime * 1000).toLocaleString()}</div>
+                        <div>Neden: ${t.reason || 'Bilinmiyor'}</div>
+                    `
+                });
+            }
+        });
+
+        // 4. Aktif pozisyonu ekle ve SL/TP/Liq çizgilerini çiz
+        const open_positions = data.open_positions || [];
+        open_positions.forEach(p => {
+            const openTime = parseTimestamp(p.opened_at);
+            if (openTime) {
+                // Şık tooltip HTML'i oluştur
+                const tooltipHtml = `
+                    <div style="font-size: 14px; width: 250px; line-height: 1.6;">
+                        <div style="font-weight: bold; font-size: 16px; color: #bc8cff; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px;">
+                            AKTİF ${p.direction} POZİSYON
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--text-muted);">Giriş Fiyatı:</span>
+                            <span>$${p.entry_price.toLocaleString()}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--text-muted);">Mevcut Fiyat:</span>
+                            <span>$${(p.current_price || p.entry_price).toLocaleString()}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--text-muted);">PnL:</span>
+                            <span style="color: ${(p.unrealized_usd || 0) >= 0 ? '#2ea043' : '#f85149'};">
+                                $${(p.unrealized_usd || 0).toFixed(2)} (%${(p.pnl_percent || 0).toFixed(2)})
+                            </span>
+                        </div>
+                        <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <div style="color: var(--neon-red); font-size: 12px;">🛑 SL: ${p.stop_loss ? '$' + p.stop_loss.toLocaleString() : '-'}</div>
+                            <div style="color: var(--neon-green); font-size: 12px;">🎯 TP: ${p.take_profit ? '$' + p.take_profit.toLocaleString() : '-'}</div>
+                            <div style="color: #ff9900; font-size: 12px;">⚠️ Liq: ${p.liquidation_price ? '$' + p.liquidation_price.toLocaleString() : '-'}</div>
+                        </div>
+                    </div>
+                `;
+
+                // Aktif pozisyon marker (yanıp sönen efekt için farklı shape)
+                markers.push({
+                    time: openTime,
+                    position: p.direction === 'LONG' ? 'belowBar' : 'aboveBar',
+                    color: p.direction === 'LONG' ? '#bc8cff' : '#ff3366',
+                    shape: 'icon',
+                    text: `${p.direction}`,
+                    size: 2.0,
+                    tooltip: tooltipHtml
+                });
+
+                // Stop Loss çizgisi (SHORT için üstte, LONG için altta)
+                if (p.stop_loss) {
+                    const slColor = p.direction === 'LONG' ? '#f85149' : '#f85149';
+                    strategyDrawerChart.addPriceLine(p.stop_loss, `SL: ${p.stop_loss.toFixed(2)}`, slColor, 2, 'dashed');
+                }
+                // Take Profit çizgisi
+                if (p.take_profit) {
+                    const tpColor = p.direction === 'LONG' ? '#2ea043' : '#2ea043';
+                    strategyDrawerChart.addPriceLine(p.take_profit, `TP: ${p.take_profit.toFixed(2)}`, tpColor, 2, 'dashed');
+                }
+                // Liquidation çizgisi (her zaman fiyatın üstünde)
+                if (p.liquidation_price && p.liquidation_price > 0) {
+                    strategyDrawerChart.addPriceLine(p.liquidation_price, `Liq: ${p.liquidation_price.toFixed(2)}`, '#ff9900', 2, 'dotted');
+                }
+            }
+        });
+
+        // 5. Markers ekle
+        strategyDrawerChart.addMarkers(markers);
+
+        // 6. Tooltip (Popup) için Crosshair Move Event Listener'ı ekle
+        const tooltipElement = document.getElementById('strategy-chart-tooltip');
+        const chart = strategyDrawerChart.chart;
+        const candleSeries = strategyDrawerChart.candleSeries;
+
+        if (chart && candleSeries && tooltipElement) {
+            chart.subscribeCrosshairMove(param => {
+                // İmleç grafik dışında ise veya üzerinde bir mum yoksa tooltip'i gizle
+                if (!param.time || param.point === undefined || !param.seriesData || !param.seriesData.size) {
+                    tooltipElement.style.display = 'none';
+                    return;
+                }
+
+                // İmlecin üzerindeki zamana ait bir marker (emir oku) var mı kontrol et
+                const markerData = markers.find(m => m.time === param.time);
+
+                // Eğer bir marker bulunduysa ve marker'ın bir tooltip içeriği varsa, göster
+                if (markerData && markerData.tooltip) {
+                    tooltipElement.style.display = 'block';
+                    tooltipElement.innerHTML = markerData.tooltip;
+
+                    // Tooltip'i imlecin yanına konumlandır
+                    const container = document.getElementById('strategy-detail-chart-container');
+                    const containerRect = container.getBoundingClientRect();
+                    const tooltipRect = tooltipElement.getBoundingClientRect();
+
+                    let left = param.point.x + 20;
+                    let top = param.point.y + 20;
+
+                    if (left + tooltipRect.width > containerRect.width) left = param.point.x - tooltipRect.width - 20;
+                    if (top + tooltipRect.height > containerRect.height) top = param.point.y - tooltipRect.height - 20;
+                    if (left < 0) left = 5;
+                    if (top < 0) top = 5;
+
+                    tooltipElement.style.left = left + 'px';
+                    tooltipElement.style.top = top + 'px';
+                } else {
+                    tooltipElement.style.display = 'none';
+                }
+            });
+        }
+
+        // 7. İstatistikleri doldur
+        document.getElementById('drawer-total-trades').textContent = data.trades ? data.trades.length : 0;
+        const wins = (data.trades || []).filter(t => t.pnl > 0).length;
+        const winRate = data.trades && data.trades.length > 0 ? (wins / data.trades.length * 100).toFixed(1) : '0';
+        document.getElementById('drawer-win-rate').textContent = `%${winRate}`;
+        const totalPnl = (data.trades || []).reduce((acc, t) => acc + (t.pnl || 0), 0);
+        const pnlEl = document.getElementById('drawer-total-pnl');
+        pnlEl.textContent = `$${totalPnl.toFixed(2)}`;
+        pnlEl.className = 'value ' + (totalPnl >= 0 ? 'success-text' : 'danger-text');
+
+        // 8. Tabloyu doldur
+        const tableBody = document.getElementById('drawer-trades-body');
+        if (tableBody) {
+            tableBody.innerHTML = (data.trades || []).slice(0, 50).map(t => {
+                const date = t.closed_at ? new Date(t.closed_at * 1000).toLocaleDateString() : '--/--';
+                const pnlClass = t.pnl >= 0 ? 'success-text' : 'danger-text';
+                return `
+                    <tr>
+                        <td style="color:var(--text-muted);">${date}</td>
+                        <td style="color:${t.direction === 'LONG' ? 'var(--neon-blue)' : 'var(--neon-red)'}">${t.direction}</td>
+                        <td>$${(t.entry_price || 0).toLocaleString()} / $${(t.exit_price || 0).toLocaleString()}</td>
+                        <td class="${pnlClass}">${((t.pnl_percent || 0) * 100).toFixed(2)}%</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+    } catch (error) {
+        console.error('Drawer chart error:', error);
+        showToast('❌ Grafik yükleme hatası', 'error');
+    }
+}
 
 // ============================================================================
 // APP LIFECYCLE

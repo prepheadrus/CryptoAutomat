@@ -271,15 +271,27 @@ class DatabaseManager:
         4. İlk bulunan pozitif sonucu döner
         """
         # Sembol varyasyonları oluştur (Fallback sırası)
-        symbol_variants = [
-            symbol,  # 1. Orijinal sembol
-            f"{symbol}_future",  # 2. _future ekli
-        ]
+        symbol_variants = [symbol]
         
-        # 3. Temizlenmiş + _future (örn: BTCUSDT_future)
-        symbol_clean = symbol.replace('/', '').replace(':', '').replace('-', '')
-        if symbol_clean != symbol:
+        if not symbol.endswith('_future'):
+            symbol_variants.append(f"{symbol}_future")
+        
+        # Özel durum: CCXT formatı (BTC/USDT:USDT)
+        if ':' in symbol:
+            base_part = symbol.split(':')[0]
+            clean_base = base_part.replace('/', '').replace('-', '')
+            symbol_variants.append(clean_base)
+            symbol_variants.append(f"{clean_base}_future")
+            
+        # Genel temizlik
+        symbol_clean = symbol.replace('/', '').replace(':', '').replace('-', '').replace('_', '')
+        if symbol_clean not in symbol_variants:
+            symbol_variants.append(symbol_clean)
             symbol_variants.append(f"{symbol_clean}_future")
+            
+        # Tekrar edenleri temizle
+        seen = set()
+        symbol_variants = [x for x in symbol_variants if not (x in seen or seen.add(x))]
         
         sql = "SELECT MIN(timestamp) as start_ts, MAX(timestamp) as end_ts FROM klines WHERE symbol = ? AND timeframe = ?"
         
@@ -353,15 +365,27 @@ class DatabaseManager:
             list: OHLCV verileri [(timestamp, open, high, low, close, volume), ...]
         """
         # Sembol varyasyonları oluştur (Fallback sırası)
-        symbol_variants = [
-            symbol,  # 1. Orijinal sembol
-            f"{symbol}_future",  # 2. _future ekli
-        ]
-
-        # 3. Temizlenmiş + _future (örn: BTCUSDT_future)
-        symbol_clean = symbol.replace('/', '').replace(':', '').replace('-', '')
-        if symbol_clean != symbol:
+        symbol_variants = [symbol]
+        
+        if not symbol.endswith('_future'):
+            symbol_variants.append(f"{symbol}_future")
+        
+        # Özel durum: CCXT formatı (BTC/USDT:USDT)
+        if ':' in symbol:
+            base_part = symbol.split(':')[0] # BTC/USDT
+            clean_base = base_part.replace('/', '').replace('-', '') # BTCUSDT
+            symbol_variants.append(clean_base)
+            symbol_variants.append(f"{clean_base}_future")
+            
+        # Genel temizlik
+        symbol_clean = symbol.replace('/', '').replace(':', '').replace('-', '').replace('_', '')
+        if symbol_clean not in symbol_variants:
+            symbol_variants.append(symbol_clean)
             symbol_variants.append(f"{symbol_clean}_future")
+            
+        # Tekrar edenleri temizle ama sırayı koru
+        seen = set()
+        symbol_variants = [x for x in symbol_variants if not (x in seen or seen.add(x))]
 
         # Her varyasyonu dene
         for sym_variant in symbol_variants:
@@ -681,35 +705,47 @@ class DatabaseManager:
                   trade_info.get('pnl_usd'), trade_info.get('pnl_percent'), trade_info.get('reason'),
                   trade_info.get('closed_at'))
 
+        try:
+            if self.engine_type == "postgres":
+                async with self.db_pool.acquire() as conn:
+                    await conn.execute("""
+                        INSERT INTO trades (symbol, strategy_id, direction, entry_price, exit_price, size, leverage, pnl_usd, pnl_percent, reason, closed_at)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                    """, *params)
+            else:
+                await self.sqlite_conn.execute(sql, params)
+                await self.sqlite_conn.commit()
+                
+            logger.info(f"✅ İşlem Hafızaya ({self.engine_type}) Kaydedildi: {trade_info['symbol']} | PnL: {trade_info.get('pnl_usd', 0):.2f}")
+        except Exception as e:
+            logger.error(f"❌ İşlem kaydedilirken hata oluştu ({trade_info['symbol']}): {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+
+
+    async def get_trades_by_strategy(self, strategy_id: str, limit=100):
+        """Belirli bir stratejiye ait son tamamlanmış işlemleri getirir."""
+        sql = "SELECT * FROM trades WHERE strategy_id = ? ORDER BY closed_at DESC LIMIT ?"
         if self.engine_type == "postgres":
+            sql = "SELECT * FROM trades WHERE strategy_id = $1 ORDER BY closed_at DESC LIMIT $2"
             async with self.db_pool.acquire() as conn:
-                await conn.execute("""
-                    INSERT INTO trades (symbol, strategy_id, direction, entry_price, exit_price, size, leverage, pnl_usd, pnl_percent, reason, closed_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-                """, *params)
+                return [dict(row) for row in await conn.fetch(sql, strategy_id, limit)]
         else:
-            await self.sqlite_conn.execute(sql, params)
-            await self.sqlite_conn.commit()
-            
-        logger.info(f"İşlem Hafızaya ({self.engine_type}) Kaydedildi: {trade_info['symbol']}")
+            async with self.sqlite_conn.execute(sql, (strategy_id, limit)) as cursor:
+                rows = await cursor.fetchall()
+                return [dict(row) for row in rows]
 
     async def get_recent_trades(self, limit=50):
         """Veritabanındaki son tamamlanmış işlemleri getirir."""
-        sql = "SELECT * FROM trades ORDER BY timestamp DESC LIMIT ?"
+        sql = "SELECT * FROM trades ORDER BY closed_at DESC LIMIT ?"
         if self.engine_type == "postgres":
-            sql = "SELECT * FROM trades ORDER BY timestamp DESC LIMIT $1"
+            sql = "SELECT * FROM trades ORDER BY closed_at DESC LIMIT $1"
             async with self.db_pool.acquire() as conn:
                 return [dict(row) for row in await conn.fetch(sql, limit)]
         else:
-            # SQLite - En son işlemleri getir
             async with self.sqlite_conn.execute(sql, (limit,)) as cursor:
                 rows = await cursor.fetchall()
-                results = []
-                for row in rows:
-                    d = dict(row)
-                    # timestamp parse edilemiyorsa closed_at'i kullan (frontend için)
-                    results.append(d)
-                return results
+                return [dict(row) for row in rows]
 
     async def clear_trade_history(self):
         """Tüm işlem geçmişini temizler."""

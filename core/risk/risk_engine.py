@@ -44,15 +44,16 @@ from core.logger import logger
 class RiskConfig:
     """
     Risk yapılandırması.
-    
+
     Attributes:
         max_risk_per_trade: İşlem başına maksimum risk (% olarak,örn: 0.01 = %1)
         max_open_positions: Maksimum açık pozisyon sayısı
         default_leverage: Varsayılan kaldıraç
         max_leverage: Maksimum kaldıraç
-        max_consecutive_losses: Maksimum ardışık kayıp (kill switch)
+        max_consecutive_losses: Maksimum ardışık kayıp (kill switch, 0 = sınırsız)
         max_daily_loss: Maksimum günlük kayıp (% olarak)
         max_drawdown: Maksimum drawdown (% olarak)
+        kill_switch_enabled: Kill Switch aktif/pasif
     """
     max_risk_per_trade: float = 0.01  # %1
     max_open_positions: int = 5
@@ -61,6 +62,7 @@ class RiskConfig:
     max_consecutive_losses: int = 5
     max_daily_loss: float = 0.05  # %5
     max_drawdown: float = 0.20  # %20
+    kill_switch_enabled: bool = True
 
 
 class RiskEngine:
@@ -335,23 +337,30 @@ class RiskEngine:
     def check_kill_switch(self) -> bool:
         """
         Kill switch aktif mi kontrol et.
-        
+
         Koşullar:
-        - Ardışık kayıp >= max_consecutive_losses
+        - Kill switch enabled olmalı
+        - Ardışık kayıp >= max_consecutive_losses (ve limit > 0)
         - Günlük kayıp >= max_daily_loss
-        
+
         Returns:
             True ise kill switch aktif
         """
-        # Ardışık kayıp kontrolü
-        if self.consecutive_losses >= self.config.max_consecutive_losses:
-            logger.critical(
+        # Kill switch devre dışı ise kontrol etme
+        if not self.config.kill_switch_enabled:
+            self.kill_switch_active = False
+            return False
+
+        # Ardışık kayıp kontrolü (limit 0 ise sınırsız)
+        if self.config.max_consecutive_losses > 0 and \
+           self.consecutive_losses >= self.config.max_consecutive_losses:
+            logger.warning(
                 f"🚨 KILL SWITCH: {self.consecutive_losses} ardışık kayıp "
                 f"(limit: {self.config.max_consecutive_losses})"
             )
             self.kill_switch_active = True
             return True
-        
+
         # Günlük kayıp kontrolü
         if self.daily_pnl <= -self.config.max_daily_loss:
             logger.critical(
@@ -360,7 +369,7 @@ class RiskEngine:
             )
             self.kill_switch_active = True
             return True
-        
+
         return False
     
     def can_open_position(self, current_positions: int) -> bool:

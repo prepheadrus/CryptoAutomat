@@ -79,3 +79,11 @@ async def get_strategy_performance_report() -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Strateji rapor hatası: {e}")
         return {"status": "error", "message": str(e), "report": []}
+
+
+@router.get("/strategy/{strategy_id}/chart-data")
+async def get_strategy_chart_data(strategy_id: str, symbol: Optional[str] = None):
+    """
+    Strateji görselleştirme için gerekli tüm verileri döner.
+    """
+    return await strategy_service.get_strategy_chart_data(strategy_id, symbol)

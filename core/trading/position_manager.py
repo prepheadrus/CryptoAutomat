@@ -94,8 +94,9 @@ class PositionManager:
         take_profit: Optional[float] = None,
         margin_type: str = "isolated",
         atr: float = 0.0,
-        atr_multiplier: float = 3.0,
+        atr_multiplier: float = 2.0,
         strategy_name: str = "Unknown",
+        strategy_id: str = "unknown",
         timeframe: str = "1m"
     ) -> Optional[Position]:
         """
@@ -111,9 +112,9 @@ class PositionManager:
             stop_loss: Stop loss fiyatı
             take_profit: Take profit fiyatı
             margin_type: Marjin tipi (isolated/cross)
-            atr: ATR değeri (trailing stop için)
             atr_multiplier: ATR çarpanı
             strategy_name: Strateji adı
+            strategy_id: Strateji ID
             timeframe: Timeframe
         
         Returns:
@@ -162,6 +163,7 @@ class PositionManager:
                     'highest_seen': execution_price if direction == "LONG" else execution_price,
                     'lowest_seen': execution_price if direction == "SHORT" else execution_price,
                     'strategy': strategy_name,
+                    'strategy_id': strategy_id,
                     'timeframe': timeframe,
                     'margin_type': margin_type,
                     'liquidation_price': liq_price,
@@ -256,6 +258,7 @@ class PositionManager:
             'highest_seen': position.metadata.get('highest_seen', position.entry_price),
             'lowest_seen': position.metadata.get('lowest_seen', position.entry_price),
             'strategy': position.metadata.get('strategy', 'Unknown'),
+            'strategy_id': position.metadata.get('strategy_id', 'unknown'),
             'timeframe': position.metadata.get('timeframe', '1m'),
             'is_closing': False,
             'bot_id': position.bot_id

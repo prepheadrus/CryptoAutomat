@@ -704,14 +704,37 @@ class PaperTrader:
             logger.critical(f"🚨 KILL SWITCH AKTİF! Yeni işlem açma engellendi: {symbol}")
             return
 
+        # ============================================
+        # YENİ: Strateji Bilgilerini Al (Bot ID veya Sembol Bazlı)
+        # ============================================
+        from strategy.manager import StrategyManager
+        strategy_name = "Bilinmiyor"
+        strategy_id = None
+        strategy_instance = None
+        timeframe = self.active_timeframes.get(symbol, '1m') # Fallback
+
+        if bot_id and bot_id in self.active_bots:
+            # 1-to-N mimarisi: Bot ID'den bilgileri al
+            bot_info = self.active_bots[bot_id]
+            strategy_id = bot_info.get('strategy_id')
+            timeframe = bot_info.get('timeframe')
+            strategy_instance = StrategyManager.get_strategy(strategy_id)
+            if strategy_instance:
+                strategy_name = strategy_instance.name()
+        else:
+            # Geriye dönük uyumluluk: Sembol bazlı bilgileri al
+            strategy_id = self.active_strategies.get(symbol)
+            strategy_instance = self.strategies.get(symbol)
+            if strategy_instance:
+                strategy_name = strategy_instance.name()
+
         # Risk hesaplama parametreleri (Config'den oku)
         risk_percent = CONFIG['risk_management'].get('max_risk_per_trade_percent', 0.2)
 
         atr = latest_candle.get('ATR_14', price * 0.01) # Eğer ATR yoksa %1 varsay
 
         # --- DİNAMİK RİSK HESAPLAMA (Seçili Botun Parametrelerine Göre) ---
-        strategy = self.strategies.get(symbol)
-        stop_params = strategy.get_stop_params()
+        stop_params = strategy_instance.get_stop_params() if strategy_instance else {"atr_multiplier": 3.0}
         multiplier = stop_params.get("atr_multiplier", 3.0)
 
         stop_loss, take_profit = RiskManagement.calculate_dynamic_stops(
@@ -759,10 +782,9 @@ class PaperTrader:
         # ============================================
         # RENKLİ AI KARARI LOGU (İşlem açılıyor)
         # ============================================
-        strategy = self.strategies.get(symbol)
         log_ai_decision(
             symbol=symbol,
-            strategy_name=strategy.name() if strategy else "Unknown",
+            strategy_name=strategy_name,
             strategy_signal=2 if direction == "LONG" else 0,
             ml_recommendation=ml_recommendation,
             ml_confidence_pct=ml_confidence_pct,
@@ -818,8 +840,10 @@ class PaperTrader:
             'lowest_seen': execution_price,  # SHORT için: Fiyatın ulaştığı en düşük nokta
 
             # Raporlama için ek meta veriler
-            'strategy': strategy.name(),
-            'timeframe': self.active_timeframes.get(symbol, '1m'),
+            'bot_id': bot_id,
+            'strategy_id': strategy_id,
+            'strategy': strategy_name,
+            'timeframe': timeframe,
             
             # Çift Kapanış (Double Close) sorununu önlemek için kilit
             'is_closing': False
@@ -1057,7 +1081,9 @@ class PaperTrader:
             'pnl_percent': pos['pnl_percent'],
             'reason': reason,
             'strategy': pos.get('strategy', 'Bilinmiyor'),
-            'timeframe': pos.get('timeframe', '1m')
+            'timeframe': pos.get('timeframe', '1m'),
+            'bot_id': pos.get('bot_id'),
+            'strategy_id': pos.get('strategy_id')
         }
 
         # --- VERİTABANI KAYIT ---
@@ -1185,7 +1211,9 @@ class PaperTrader:
             'pnl_percent': pos['pnl_percent'],
             'reason': reason,
             'strategy': pos.get('strategy', 'Bilinmiyor'),
-            'timeframe': pos.get('timeframe', '1m')
+            'timeframe': pos.get('timeframe', '1m'),
+            'bot_id': pos.get('bot_id'),
+            'strategy_id': pos.get('strategy_id')
         }
         
         # --- VERİTABANI KAYIT ---

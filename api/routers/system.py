@@ -89,6 +89,8 @@ async def get_dashboard_metrics() -> Dict[str, Any]:
                 "stop_loss": pos.get('stop_loss'),
                 "take_profit": pos.get('take_profit'),
                 "liquidation_price": pos.get('liquidation_price', 0.0),
+                "strategy": pos.get('strategy', 'Unknown'),
+                "strategy_id": pos.get('strategy_id', 'unknown')
             })
         
         # Son kararlar (latest decisions)
@@ -318,25 +320,28 @@ async def test_api_keys(request: dict) -> Dict[str, Any]:
 async def get_risk_config() -> Dict[str, Any]:
     """
     Mevcut risk ayarlarını döner.
-    
+
     Returns:
         max_risk_per_trade_percent: float
         max_leverage: int
         max_open_positions: int
         max_consecutive_losses: int
+        kill_switch_enabled: bool
     """
     try:
         from core.config import CONFIG
-        
+
         risk_config = CONFIG.get('risk_management', {})
-        
+        kill_switch_config = risk_config.get('kill_switch', {})
+
         return {
             "status": "success",
             "data": {
                 "max_risk_per_trade_percent": risk_config.get('max_risk_per_trade_percent', 0.2),
                 "max_leverage": risk_config.get('max_leverage', 10),
                 "max_open_positions": risk_config.get('max_open_positions', 5),
-                "max_consecutive_losses": risk_config.get('max_consecutive_losses', 5)
+                "max_consecutive_losses": risk_config.get('max_consecutive_losses', 10),
+                "kill_switch_enabled": kill_switch_config.get('enabled', True)
             }
         }
     except Exception as e:
@@ -352,13 +357,14 @@ async def get_risk_config() -> Dict[str, Any]:
 async def update_risk_config(request: dict) -> Dict[str, Any]:
     """
     Risk ayarlarını günceller.
-    
+
     Request Body:
         max_risk_per_trade_percent: float (0.1 - 5.0)
         max_leverage: int (1 - 50)
         max_open_positions: int (1 - 20)
-        max_consecutive_losses: int (1 - 10)
-    
+        max_consecutive_losses: int (0 - 50, 0 = sınırsız)
+        kill_switch_enabled: bool
+
     Returns:
         status: success/error
         message: İşlem sonucu
@@ -367,56 +373,67 @@ async def update_risk_config(request: dict) -> Dict[str, Any]:
     try:
         import yaml
         from core.config import CONFIG
-        
+
         # Request verilerini al
         max_risk = float(request.get('max_risk_per_trade_percent', 0.2))
         max_leverage = int(request.get('max_leverage', 10))
         max_positions = int(request.get('max_open_positions', 5))
-        max_losses = int(request.get('max_consecutive_losses', 5))
-        
+        max_losses = int(request.get('max_consecutive_losses', 10))
+        kill_switch_enabled = request.get('kill_switch_enabled', True)
+
         # Frontend validasyonu (ekstra güvenlik)
         if max_risk < 0.1 or max_risk > 5.0:
             raise ValueError(f"Risk %0.1 ile %5.0 arasında olmalı (girdiğiniz: %{max_risk})")
-        
+
         if max_leverage < 1 or max_leverage > 50:
             raise ValueError(f"Kaldıraç 1x ile 50x arasında olmalı (girdiğiniz: {max_leverage}x)")
-        
+
         if max_positions < 1 or max_positions > 20:
             raise ValueError(f"Pozisyon 1 ile 20 arasında olmalı (girdiğiniz: {max_positions})")
-        
-        if max_losses < 1 or max_losses > 10:
-            raise ValueError(f"Ardışık kayıp 1 ile 10 arasında olmalı (girdiğiniz: {max_losses})")
-        
+
+        if max_losses < 0 or max_losses > 50:
+            raise ValueError(f"Ardışık kayıp 0 ile 50 arasında olmalı (girdiğiniz: {max_losses}, 0 = sınırsız)")
+
         logger.info(f"📊 Risk ayarları güncelleniyor...")
         logger.info(f"   - Max Risk: %{max_risk}")
         logger.info(f"   - Max Leverage: {max_leverage}x")
         logger.info(f"   - Max Positions: {max_positions}")
-        logger.info(f"   - Max Consecutive Losses: {max_losses}")
-        
+        logger.info(f"   - Max Consecutive Losses: {max_losses} {'(sınırsız)' if max_losses == 0 else ''}")
+        logger.info(f"   - Kill Switch Enabled: {kill_switch_enabled}")
+
         # config.yaml'ı yükle
         with open('config.yaml', 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f)
-        
+
         # Risk ayarlarını güncelle
         config['risk_management']['max_risk_per_trade_percent'] = max_risk
         config['risk_management']['max_leverage'] = max_leverage
         config['risk_management']['max_open_positions'] = max_positions
         config['risk_management']['max_consecutive_losses'] = max_losses
-        
+
+        # Kill Switch nested config
+        if 'kill_switch' not in config['risk_management']:
+            config['risk_management']['kill_switch'] = {}
+        config['risk_management']['kill_switch']['enabled'] = kill_switch_enabled
+        config['risk_management']['kill_switch']['max_consecutive_losses'] = max_losses
+
         # config.yaml'a yaz (güvenli dump)
         with open('config.yaml', 'w', encoding='utf-8') as f:
             yaml.safe_dump(config, f, default_flow_style=False, allow_unicode=True)
-        
+
         logger.info(f"✅ config.yaml güncellendi")
-        
+
         # RAM'deki CONFIG'i güncelle (hot-reload)
         CONFIG['risk_management']['max_risk_per_trade_percent'] = max_risk
         CONFIG['risk_management']['max_leverage'] = max_leverage
         CONFIG['risk_management']['max_open_positions'] = max_positions
         CONFIG['risk_management']['max_consecutive_losses'] = max_losses
-        
+        if 'kill_switch' not in CONFIG['risk_management']:
+            CONFIG['risk_management']['kill_switch'] = {}
+        CONFIG['risk_management']['kill_switch']['enabled'] = kill_switch_enabled
+
         logger.info(f"✅ RAM'deki CONFIG güncellendi (hot-reload)")
-        
+
         # RiskEngine'i re-initialize et (yeni ayarlarla)
         from core.paper import paper_engine
         if hasattr(paper_engine, 'risk_engine'):
@@ -424,8 +441,9 @@ async def update_risk_config(request: dict) -> Dict[str, Any]:
             paper_engine.risk_engine.config.max_leverage = max_leverage
             paper_engine.risk_engine.config.max_open_positions = max_positions
             paper_engine.risk_engine.config.max_consecutive_losses = max_losses
+            paper_engine.risk_engine.config.kill_switch_enabled = kill_switch_enabled
             logger.info(f"✅ RiskEngine ve PaperTrader ayarları güncellendi (Hot-Reload)")
-        
+
         return {
             "status": "success",
             "message": "Risk ayarları güncellendi",
@@ -433,10 +451,11 @@ async def update_risk_config(request: dict) -> Dict[str, Any]:
                 "max_risk_per_trade_percent": max_risk,
                 "max_leverage": max_leverage,
                 "max_open_positions": max_positions,
-                "max_consecutive_losses": max_losses
+                "max_consecutive_losses": max_losses,
+                "kill_switch_enabled": kill_switch_enabled
             }
         }
-    
+
     except ValueError as ve:
         logger.error(f"❌ Validasyon hatası: {ve}")
         return {

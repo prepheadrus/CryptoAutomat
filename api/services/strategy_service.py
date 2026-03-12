@@ -4,7 +4,8 @@ Strategy Service
 Business logic for strategy operations.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+import pandas as pd
 
 from core.logger import logger
 from strategy.manager import StrategyManager
@@ -82,7 +83,7 @@ class StrategyService:
             "margin_type": margin_type
         }
     
-    def stop_strategy(self, symbol: str) -> Dict[str, Any]:
+    async def stop_strategy(self, symbol: str) -> Dict[str, Any]:
         """
         Strateji durdur.
         
@@ -105,3 +106,146 @@ class StrategyService:
             "symbol": symbol,
             "active_id": None
         }
+
+    async def get_strategy_chart_data(self, strategy_id: str, symbol: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Strateji görselleştirme için gerekli tüm verileri (mumlar + işlemler) birleştirir.
+        """
+        try:
+            from core.paper import paper_engine
+            from data.database import db_manager
+            
+            # 1. Stratejiye ait geçmiş işlemleri çek (DB + Memory)
+            db_trades = await db_manager.get_trades_by_strategy(strategy_id, limit=500)
+            
+            # Memory'den çek (Mevcut oturum verileri)
+            memory_trades = []
+            if hasattr(paper_engine.position_manager, 'trade_history'):
+                # Strateji bazlı filtrele
+                mem_raw = paper_engine.position_manager.trade_history.trades
+                for t in mem_raw:
+                    # Strateji ID veya Bot ID içindeki strateji ismi ile eşleşme
+                    if t.strategy_id == strategy_id or (t.metadata and t.metadata.get('strategy_id') == strategy_id) or strategy_id in t.bot_id:
+                        trade_dict = t.to_dict()
+                        memory_trades.append({
+                            "id": trade_dict.get('id'),
+                            "symbol": trade_dict.get('symbol'),
+                            "direction": trade_dict.get('direction'),
+                            "entry_price": trade_dict.get('entry_price'),
+                            "exit_price": trade_dict.get('exit_price'),
+                            "pnl_usd": trade_dict.get('pnl'),
+                            "pnl_percent": trade_dict.get('pnl_percent', 0.0) * 100,
+                            "closed_at": trade_dict.get('closed_at'),
+                            "strategy_id": trade_dict.get('strategy_id')
+                        })
+            
+            # Merge
+            seen_ids = {t['id'] for t in db_trades if 'id' in t}
+            closed_trades = db_trades + [t for t in memory_trades if t['id'] not in seen_ids]
+            closed_trades.sort(key=lambda x: str(x.get('closed_at', '')), reverse=True)
+            
+            # 2. Eğer sembol belirtilmemişse, en son işlem yapılan sembolü seç
+            if not symbol:
+                if closed_trades:
+                    symbol = closed_trades[0]['symbol']
+                else:
+                    # Alternatif: Şu an bu stratejiyi çalıştıran ilk botu bul
+                    for b_id, b_meta in paper_engine.active_bots.items():
+                        if b_meta.get('strategy_id') == strategy_id:
+                            symbol = b_meta.get('symbol')
+                            break
+            
+            if not symbol:
+                return {"status": "error", "message": "Bu stratejiye ait işlem veya aktif bot bulunamadı."}
+            
+            # 3. Aktif pozisyonları çek
+            open_positions = []
+            for pos in paper_engine.position_manager.get_all_positions():
+                # Position objesi içindeki strategy_id veya bot_id üzerinden eşleşme
+                # Bot ID formatı: {symbol}_{strategy_id}_{timeframe}_{counter}
+                is_match = (
+                    pos.metadata.get('strategy') == strategy_id or 
+                    strategy_id in pos.bot_id or
+                    pos.metadata.get('strategy_id') == strategy_id
+                )
+                
+                if is_match and pos.symbol == symbol:
+                    open_positions.append({
+                        **pos.to_dict(),
+                        'current_price': pos.entry_price # Initial, will be updated by UI
+                    })
+
+            # 4. Mum verilerini çek (Timeframe tahmini)
+            timeframe = "1h" # Varsayılan
+            
+            # Eğer aktif pozisyon varsa onun timeframe'ini kullan
+            if open_positions:
+                timeframe = open_positions[0].get('metadata', {}).get('timeframe') or \
+                           open_positions[0].get('timeframe') or "1h"
+            elif closed_trades:
+                timeframe = closed_trades[0].get('timeframe') or \
+                           closed_trades[0].get('metadata', {}).get('timeframe') or "1h"
+            
+            klines = await db_manager.get_klines(symbol, timeframe, limit=1000)
+            
+            # Eğer seçilen timeframe boşsa (örn: default 1h ama veri sadece 1m ise), 1m dene
+            if not klines and timeframe != "1m":
+                logger.info(f"ℹ️ {timeframe} için veri bulunamadı, 1m deneniyor: {symbol}")
+                timeframe = "1m"
+                klines = await db_manager.get_klines(symbol, timeframe, limit=1000)
+
+            
+            # Lightweight Charts yükselen zaman sırası (ascending) bekler. 
+            # DB'den DESC (azalan) geldiği için ters çeviriyoruz.
+            klines.reverse()
+            
+            # Format klines for Lightweight Charts (Saniye cinsinden timestamp zorunlu)
+            formatted_candles = []
+            for k in klines:
+                ts = k[0]
+                if isinstance(ts, (int, float)):
+                    # Eğer mili saniye ise saniyeye çevir (> 10^10 kuralı)
+                    if ts > 10000000000:
+                        ts = int(ts / 1000)
+                else:
+                    # ISO string veya datetime ise
+                    ts = int(pd.to_datetime(ts).timestamp())
+                    
+                formatted_candles.append({
+                    "time": ts,
+                    "open": k[1], "high": k[2], "low": k[3], "close": k[4], "volume": k[5]
+                })
+
+            # 5. Zaman damgalarını saniye (Unix) formatına çevir (LW Charts uyumluluğu için)
+            def normalize_ts(ts):
+                if isinstance(ts, str):
+                    return int(pd.to_datetime(ts).timestamp())
+                if isinstance(ts, (int, float)) and ts > 10000000000:
+                    return int(ts / 1000)
+                return ts
+
+            for t in closed_trades:
+                if 'opened_at' in t:
+                    t['opened_at'] = normalize_ts(t['opened_at'])
+                if 'closed_at' in t:
+                    t['closed_at'] = normalize_ts(t['closed_at'])
+                    
+            for p in open_positions:
+                if 'opened_at' in p:
+                    p['opened_at'] = normalize_ts(p['opened_at'])
+
+            return {
+                "status": "success",
+                "strategy_id": strategy_id,
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "candles": formatted_candles,
+                "trades": closed_trades,
+                "open_positions": open_positions
+            }
+            
+        except Exception as e:
+            logger.error(f"Strategy chart data error: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {"status": "error", "message": str(e)}

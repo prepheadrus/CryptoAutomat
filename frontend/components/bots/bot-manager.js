@@ -139,6 +139,11 @@ export const botManager = {
                                     <td><span class="uptime-text">${uptime}</span></td>
                                     <td style="text-align: center;">
                                         <div class="bot-actions">
+                                            <button class="btn-icon btn-view"
+                                                    onclick="window.openStrategyDrawer({ botId: '${botId}', strategyName: '${bot.strategy_name || bot.strategy_id || 'Unknown'}', symbol: '${bot.symbol || ''}' })"
+                                                    title="Grafiği Gör">
+                                                📊
+                                            </button>
                                             ${isRunning ? `
                                                 <button class="btn-icon btn-stop" onclick="botManager.stopBot('${botId}')" title="Durdur">
                                                     ⏹️
@@ -220,9 +225,17 @@ export const botManager = {
                 <div class="system-status-card" data-bot-id="${botId}">
                     <div class="status-card-header-compact">
                         <span class="status-symbol">${sym.replace('/USDT', '')} <small style="opacity:0.6;">${timeframe}</small></span>
-                        <span class="status-signal" style="background:${signalColor}; color:white;">
-                            ${signalText} ${mlConf}
-                        </span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button class="btn-icon-mini"
+                                    onclick="window.openStrategyDrawer({ botId: '${botId}', strategyName: '${bot.strategy_name || strategyId || 'Unknown'}', symbol: '${sym || ''}' })"
+                                    style="background: rgba(88, 166, 255, 0.1); border: 1px solid rgba(88, 166, 255, 0.2); border-radius: 4px; padding: 2px 4px; cursor: pointer; font-size: 0.8rem;"
+                                    title="İşlemleri Gör">
+                                📊
+                            </button>
+                            <span class="status-signal" style="background:${signalColor}; color:white;">
+                                ${signalText} ${mlConf}
+                            </span>
+                        </div>
                     </div>
                     <div class="status-card-body-compact">
                         <div class="status-row-compact">

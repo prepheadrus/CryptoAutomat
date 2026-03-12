@@ -181,16 +181,98 @@ class ChartRenderer {
                 ...m,
                 time: this.parseTime(m.time),
             }))
-            .sort((a, b) => a.time - b.time);  // Zamana göre sırala (KRİTİK!)
+            .sort((a, b) => a.time - b.time);
 
         console.log(`[ChartRenderer] ${validMarkers.length} marker eklendi`);
         
         try {
             this.candleSeries.setMarkers(validMarkers);
+            
+            // Eğer markerlar içinde tooltip verisi varsa crosshair takibini başlat
+            if (validMarkers.some(m => m.tooltip)) {
+                this.subscribeCrosshairHover(validMarkers);
+            }
         } catch (error) {
             console.error('[ChartRenderer] Markers eklenirken hata:', error);
-            console.error('[ChartRenderer] Problemli markers:', validMarkers);
         }
+    }
+
+    /**
+     * Entry çizgisi ekle
+     */
+    addPriceLine(price, label = 'ENTRY', color = '#bc8cff') {
+        if (!this.candleSeries) return null;
+        return this.candleSeries.createPriceLine({
+            price: price,
+            color: color,
+            lineWidth: 2,
+            lineStyle: LightweightCharts.LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: label,
+        });
+    }
+
+    /**
+     * Trailing Stop (Basamak) serisi ekle
+     */
+    addTrailingStopSeries(data, color = '#ff3366') {
+        if (!this.chart) return null;
+        const stepSeries = this.chart.addLineSeries({
+            color: color,
+            lineWidth: 2,
+            lineType: LightweightCharts.LineType.Step,
+            lineStyle: LightweightCharts.LineStyle.Solid,
+            title: 'Trailing Stop',
+        });
+        stepSeries.setData(data.map(d => ({
+            time: this.parseTime(d.time),
+            value: d.value
+        })));
+        return stepSeries;
+    }
+
+    /**
+     * Kâr/Zarar alanı (Trade Area) ekle
+     */
+    addTradeArea(data, isProfit = true) {
+        if (!this.chart) return null;
+        const color = isProfit ? 'rgba(46, 160, 67, 0.4)' : 'rgba(248, 81, 73, 0.4)';
+        const areaSeries = this.chart.addAreaSeries({
+            topColor: color,
+            bottomColor: 'rgba(0, 0, 0, 0)',
+            lineColor: 'transparent',
+            lineWidth: 0,
+        });
+        areaSeries.setData(data.map(d => ({
+            time: this.parseTime(d.time),
+            value: d.value
+        })));
+        return areaSeries;
+    }
+
+    /**
+     * Crosshair takip event'i (Marker Tooltip için)
+     */
+    subscribeCrosshairHover(markers) {
+        const container = document.getElementById(this.containerId);
+        this.chart.subscribeCrosshairMove(param => {
+            if (
+                param.point === undefined || !param.time ||
+                param.point.x < 0 || param.point.x > container.clientWidth ||
+                param.point.y < 0 || param.point.y > container.clientHeight
+            ) {
+                this.hideTooltip();
+                return;
+            }
+
+            // Bu zamana ait marker var mı?
+            const marker = markers.find(m => m.time === param.time);
+            if (marker && marker.tooltip) {
+                this.updateTooltip(param.point.x, param.point.y, marker.tooltip);
+            } else {
+                this.hideTooltip();
+            }
+        });
     }
 
     /**

@@ -144,6 +144,29 @@ class ApiClient {
         return this.get('/api/v1/strategy-report');
     }
 
+    /**
+     * Strateji görselleştirme (chart) verilerini al
+     * @param {Object} params - Parametreler
+     * @param {string} params.botId - Bot ID (benzersiz,örn: BTC/USDT_golden_combo_1h_1)
+     * @param {string} params.strategyId - Strateji ID (örn: golden_combo)
+     * @param {string} params.symbol - Opsiyonel sembol
+     */
+    getStrategyChartData(params = {}) {
+        const { botId, strategyId, symbol } = params;
+
+        if (!botId && !strategyId) {
+            console.error('[API] getStrategyChartData: botId veya strategyId gereklidir');
+            return Promise.reject(new Error('botId veya strategyId gereklidir'));
+        }
+
+        const queryParams = {};
+        if (botId) queryParams.bot_id = botId;
+        if (strategyId) queryParams.strategy_id = strategyId;
+        if (symbol) queryParams.symbol = symbol;
+
+        return this.get('/api/v1/strategy-chart-data', queryParams);
+    }
+
     // ========================================================================
     // MARKET & DATA
     // ========================================================================

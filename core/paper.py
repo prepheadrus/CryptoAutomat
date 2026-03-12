@@ -9,16 +9,17 @@ Yeni yapı:
 
 Usage:
     from core.paper import PaperTrader
-    
+
     pt = PaperTrader()
-    
+
     # Event handler'ları başlat
     await pt.start_event_handlers()
-    
+
     # Eski API hala çalışır (delegation)
     pt.start_bot(symbol, strategy_id, timeframe)
 """
 
+import asyncio
 import pandas as pd
 import numpy as np
 import os
@@ -75,7 +76,8 @@ class PaperTrader:
             max_risk_per_trade=CONFIG['risk_management'].get('max_risk_per_trade_percent', 0.01),
             max_leverage=CONFIG['risk_management'].get('max_leverage', 10),
             max_open_positions=CONFIG['risk_management'].get('max_open_positions', 5),
-            max_consecutive_losses=CONFIG['risk_management'].get('max_consecutive_losses', 5)
+            max_consecutive_losses=CONFIG['risk_management'].get('kill_switch', {}).get('max_consecutive_losses', 5),
+            kill_switch_enabled=CONFIG['risk_management'].get('kill_switch', {}).get('enabled', True)
         )
         
         self.position_manager = PositionManager(
@@ -392,6 +394,7 @@ class PaperTrader:
             )
             
             # Pozisyon aç
+            strategy_id = self.active_strategies.get(symbol, "unknown")
             position = self.position_manager.open_position(
                 bot_id=bot_id,
                 symbol=symbol,
@@ -404,6 +407,7 @@ class PaperTrader:
                 atr=atr,
                 atr_multiplier=atr_multiplier,
                 strategy_name=strategy.name(),
+                strategy_id=strategy_id,
                 timeframe=timeframe
             )
             
@@ -587,6 +591,43 @@ class PaperTrader:
         
         return True
     
+    # ========================================================================
+    # LEGACY COMPATIBILITY (Eski Metodlar - Delegate)
+    # ========================================================================
+    
+    def set_market_type(self, symbol: str, market_type: str):
+        """Legacy compatibility: set market type for symbol"""
+        self.market_types[symbol] = market_type
+        logger.debug(f"Piyasa tipi ayarlandı: {symbol} -> {market_type}")
+
+    def set_margin_type(self, symbol: str, margin_type: str):
+        """Legacy compatibility: set margin type for symbol"""
+        self.margin_types[symbol] = margin_type
+        logger.debug(f"Marjin tipi ayarlandı: {symbol} -> {margin_type}")
+
+    def set_strategy(self, strategy_id: str, symbol: str = None, timeframe: str = "1m"):
+        """
+        Strateji ayarla (Legacy API).
+        
+        Args:
+            strategy_id: Strateji ID
+            symbol: Sembol
+            timeframe: Zaman dilimi
+        """
+        if symbol:
+            self.active_strategies[symbol] = strategy_id
+            self.active_timeframes[symbol] = timeframe
+            
+            # Strateji instance al ve sakla
+            try:
+                strategy = StrategyManager.get_strategy(strategy_id)
+                self.strategies[symbol] = strategy
+                logger.info(f"✅ Strateji atandı: {symbol} -> {strategy_id} ({timeframe})")
+            except Exception as e:
+                logger.error(f"Strateji atama hatası: {e}")
+        else:
+            logger.warning("set_strategy: Sembol belirtilmedi")
+
     def get_stats(self) -> Dict[str, Any]:
         """
         İstatistikler (tüm manager'lardan).

@@ -2332,3 +2332,161 @@ select option {
     color: #e6edf3;
     padding: 10px;
 }
+
+/* Strategy Detail Drawer */
+.drawer-panel {
+    position: fixed;
+    top: 0;
+    right: -800px; /* Hidden by default */
+    width: 800px;
+    height: 100vh;
+    background: #0d1117;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
+    z-index: 2000;
+    transition: right 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.drawer-panel.open {
+    right: 0;
+}
+
+.drawer-header {
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.drawer-title-box {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.drawer-title-box h2 {
+    font-size: 1.2rem;
+    color: var(--text-main);
+    margin: 0;
+}
+
+.btn-close-drawer {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 2rem;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.btn-close-drawer:hover {
+    color: white;
+}
+
+.drawer-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.drawer-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+    z-index: 1999;
+    display: none;
+}
+
+.drawer-overlay.visible {
+    display: block;
+}
+
+.drawer-stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+}
+
+.stat-mini-card {
+    background: rgba(255, 255, 255, 0.03);
+    padding: 15px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-mini-card .label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stat-mini-card .value {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: var(--neon-blue);
+    margin-top: 5px;
+}
+
+.drawer-trades-section h3 {
+    font-size: 1rem;
+    margin-bottom: 15px;
+    color: var(--text-main);
+}
+
+.drawer-table-container {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.drawer-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.drawer-table th {
+    text-align: left;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.02);
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.drawer-table td {
+    padding: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: bold;
+}
+
+.badge-success { background: rgba(46, 160, 67, 0.2); color: #2ea043; }
+.badge-danger { background: rgba(248, 81, 73, 0.2); color: #f85149; }
+
+/* Responsive adjustments */
+@media (max-width: 900px) {
+    .drawer-panel {
+        width: 100%;
+        right: -100%;
+    }
+}
