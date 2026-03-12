@@ -420,8 +420,9 @@ class PositionManager:
         """Legacy positions'dan sil (güvenli yöntem - remove ile)"""
         for pos in list(self.legacy_positions):  # list() kopyasını al (iteration hatası önleme)
             if pos.get('bot_id') == bot_id:
-                self.legacy_positions.remove(pos)  # index değil, obje ile sil
-                logger.debug(f"✅ Legacy pozisyon silindi: {bot_id}")
+                if pos in self.legacy_positions:  # Double check (race condition önleme)
+                    self.legacy_positions.remove(pos)  # index değil, obje ile sil
+                    logger.debug(f"✅ Legacy pozisyon silindi: {bot_id}")
                 break
 
     def _remove_legacy_position_safe(self, bot_id: str):
@@ -437,8 +438,9 @@ class PositionManager:
         try:
             for pos in list(self.legacy_positions):
                 if pos.get('bot_id') == bot_id:
-                    self.legacy_positions.remove(pos)
-                    logger.debug(f"✅ Legacy pozisyon güvenli silindi: {bot_id}")
+                    if pos in self.legacy_positions:  # Güvenlik kontrolü (ValueError önleme)
+                        self.legacy_positions.remove(pos)
+                        logger.debug(f"✅ Legacy pozisyon güvenli silindi: {bot_id}")
                     return True
 
             logger.warning(f"⚠️ Legacy pozisyon bulunamadı: {bot_id}")

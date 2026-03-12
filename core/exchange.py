@@ -199,11 +199,22 @@ class ExchangeManager:
                 # update_live_prices() içinde:
                 #   1. update_trailing_stop() - Trailing stop güncelleme
                 #   2. check_exit_condition() - Stop patlama kontrolü
-                if symbol in [pos['symbol'] for pos in paper_engine.open_positions]:
-                    # Sadece açık pozisyon varsa güncelle (performans optimizasyonu)
-                    await paper_engine.update_live_prices(symbol, current_price)
-                    # Not: current_price hem high hem low olarak kullanılıyor
-                    # Gelecek iyileştirme: 1m mum high/low kullanmak için fetch_ohlcv gerekebilir
+
+                # WebSocket ZIRHI: update_live_prices hatası tüm loop'u çökertmesin
+                try:
+                    if symbol in [pos['symbol'] for pos in paper_engine.open_positions]:
+                        # Sadece açık pozisyon varsa güncelle (performans optimizasyonu)
+                        await paper_engine.update_live_prices(symbol, current_price)
+                        # Not: current_price hem high hem low olarak kullanılıyor
+                        # Gelecek iyileştirme: 1m mum high/low kullanmak için fetch_ohlcv gerekebilir
+                except Exception as e:
+                    # KRİTİK: Hata logla AMA continue ile devam et (WebSocket akışı kırılmasın!)
+                    logger.error(f"❌ [WEBSOCKET ZIRHI] {symbol} update_live_prices hatası: {e}")
+                    logger.error(f"   Hata türü: {type(e).__name__}")
+                    import traceback
+                    logger.debug(traceback.format_exc())
+                    # Continue ile bir sonraki ticker'a devam et
+                    continue
 
                 # Terminal kirletilmemesi için artık debug'a basmıyoruz
                 # logger.debug(f"[WS] {symbol} Fiyat: {current_price}, Hacim: {ticker['baseVolume']}")
@@ -678,12 +689,19 @@ class ExchangeManager:
                 if last_processed_ts is not None and current_candle_dt == last_processed_ts:
                     # Bu mum zaten işlendi, sadece fiyat güncellemesi yap (trailing stop + SL/TP için)
                     last_ohlcv = live_ohlcv[-1]  # [ts, open, high, low, close, volume]
-                    await paper_engine.update_live_prices(
-                        symbol,
-                        current_price=float(last_ohlcv[4]),   # close
-                        current_high=float(last_ohlcv[2]),    # high
-                        current_low=float(last_ohlcv[3])      # low
-                    )
+
+                    # WebSocket ZIRHI: update_live_prices hatası loop'u çökertmesin
+                    try:
+                        await paper_engine.update_live_prices(
+                            symbol,
+                            current_price=float(last_ohlcv[4]),   # close
+                            current_high=float(last_ohlcv[2]),    # high
+                            current_low=float(last_ohlcv[3])      # low
+                        )
+                    except Exception as e:
+                        logger.error(f"❌ [WEBSOCKET ZIRHI] {symbol} update_live_prices hatası (same candle): {e}")
+                        # Continue ile devam et
+
                     continue  # ⚠️ DEVAM ET - yeni mum gelene kadar bekle
 
                 # YENİ MUM GELDİ! Kilidi güncelle
@@ -835,7 +853,13 @@ class ExchangeManager:
 
                     if (strategy is None or active_strat_id == "") and not active_bot_ids:
                         # Strateji durdurulmuş VE aktif bot yok, sadece fiyat güncellemesi yap
-                        await paper_engine.update_live_prices(symbol, current_price)
+
+                        # WebSocket ZIRHI
+                        try:
+                            await paper_engine.update_live_prices(symbol, current_price)
+                        except Exception as e:
+                            logger.error(f"❌ [WEBSOCKET ZIRHI] {symbol} update_live_prices hatası (no strategy): {e}")
+
                         logger.debug(f"⏸️ {symbol} için strateji durduruldu ve aktif bot yok, sadece fiyat güncelleniyor.")
                         continue
 
