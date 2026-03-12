@@ -288,59 +288,63 @@ class PositionManager:
     ) -> Optional[Trade]:
         """
         Pozisyon kapat.
-        
+
         Args:
             bot_id: Bot ID
             exit_price: Çıkış fiyatı
             reason: Kapatma nedeni
             commission: Komisyon (None ise hesaplanır)
-        
+
         Returns:
             Trade object veya None
         """
         if bot_id not in self.positions:
             logger.warning(f"Pozisyon bulunamadı: {bot_id}")
             return None
-        
+
         position = self.positions[bot_id]
-        
+
         # Double close kilidi
         if position.metadata.get('is_closing', False):
             logger.warning(f"Pozisyon zaten kapanıyor: {bot_id}")
             return None
-        
+
         # Kilit set et
         position.metadata['is_closing'] = True
-        
+
+        close_success = False  # Kapatma başarılı mı?
+
         try:
             # Komisyon hesapla
             if commission is None:
                 is_spot = position.metadata.get('margin_type', 'isolated') == 'spot'
                 fee_rate = self.fee_rate_spot if is_spot else self.fee_rate_futures
                 commission = position.size * exit_price * fee_rate
-            
+
             # Trade oluştur (Position.close() metodu)
             trade = position.close(exit_price, reason, commission)
-            
+
             # Trade history'ye ekle
             self.trade_history.add(trade)
-            
+
             # İstatistikleri güncelle
             self._update_statistics(trade)
-            
-            # Position'ı sil
+
+            # Position'ı sil (güvenli yöntem - dict'ten)
             if bot_id in self.positions:
                 del self.positions[bot_id]
-            
-            # Legacy positions'dan sil
-            self._remove_legacy_position(bot_id)
-            
+
+            # Legacy positions'dan sil (güvenli yöntem - remove ile)
+            self._remove_legacy_position_safe(bot_id)
+
             logger.info(
                 f"❌ Pozisyon kapatıldı: {bot_id} | "
                 f"PnL: ${trade.pnl:.2f} ({trade.pnl_percent:.2%}) | "
                 f"Neden: {reason}"
             )
-            
+
+            close_success = True  # Başarılı
+
             # Event yayınla
             from shared.events import event_bus
             asyncio.create_task(event_bus.publish(Event(
@@ -382,23 +386,67 @@ class PositionManager:
             asyncio.create_task(db_manager.save_trade(trade_data))
 
             return trade
-            
+
         except Exception as e:
             logger.error(f"❌ Pozisyon kapatma hatası ({bot_id}): {e}")
             import traceback
             logger.error(traceback.format_exc())
-            
-            # Hata durumunda kilidi aç (tekrar denenebilir olsun)
+
+            # Hata durumunda kilidi AÇ (tekrar denenebilir olsun)
             if bot_id in self.positions:
                 self.positions[bot_id].metadata['is_closing'] = False
+
+            # Legacy position kilidini de aç
+            for legacy_pos in self.legacy_positions:
+                if legacy_pos.get('bot_id') == bot_id:
+                    legacy_pos['is_closing'] = False
+                    break
+
             return None
+
+        finally:
+            # Eğer kapatma başarısız olduysa, kilidi sıfırla (zombie önleme)
+            if not close_success and bot_id in self.positions:
+                logger.warning(f"⚠️ [ZOMBIE KORUMA] {bot_id} kapatma başarısız, kilit sıfırlanıyor.")
+                self.positions[bot_id].metadata['is_closing'] = False
+
+                # Legacy position kilidini de sıfırla
+                for legacy_pos in self.legacy_positions:
+                    if legacy_pos.get('bot_id') == bot_id:
+                        legacy_pos['is_closing'] = False
+                        break
     
     def _remove_legacy_position(self, bot_id: str):
-        """Legacy positions'dan sil"""
-        for i, pos in enumerate(self.legacy_positions):
+        """Legacy positions'dan sil (güvenli yöntem - remove ile)"""
+        for pos in list(self.legacy_positions):  # list() kopyasını al (iteration hatası önleme)
             if pos.get('bot_id') == bot_id:
-                del self.legacy_positions[i]
+                self.legacy_positions.remove(pos)  # index değil, obje ile sil
+                logger.debug(f"✅ Legacy pozisyon silindi: {bot_id}")
                 break
+
+    def _remove_legacy_position_safe(self, bot_id: str):
+        """
+        Legacy positions'dan güvenli şekilde sil (zombie önleme).
+
+        Args:
+            bot_id: Silinecek pozisyonun bot ID'si
+
+        Returns:
+            bool: Silme başarılıysa True, yoksa False
+        """
+        try:
+            for pos in list(self.legacy_positions):
+                if pos.get('bot_id') == bot_id:
+                    self.legacy_positions.remove(pos)
+                    logger.debug(f"✅ Legacy pozisyon güvenli silindi: {bot_id}")
+                    return True
+
+            logger.warning(f"⚠️ Legacy pozisyon bulunamadı: {bot_id}")
+            return False
+
+        except Exception as e:
+            logger.error(f"❌ Legacy pozisyon silme hatası ({bot_id}): {e}")
+            return False
     
     def _update_statistics(self, trade: Trade):
         """
