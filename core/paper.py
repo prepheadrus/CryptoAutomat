@@ -882,6 +882,21 @@ class PaperTrader:
         
         # Kapatılacak pozisyonları işle
         for bot_id, exit_price, reason in positions_to_close:
+            # DOUBLE-CLOSE KİLİDİ: Pozisyon zaten kapanıyor mu kontrol et
+            position = self.position_manager.get_position(bot_id)
+            if position and position.metadata.get('is_closing', False):
+                logger.debug(f"⚠️ [DOUBLE-CLOSE KORUMA] {bot_id} zaten kapanıyor, atlanıyor.")
+                continue
+
+            # Kilit set et (race condition önleme)
+            if position:
+                position.metadata['is_closing'] = True
+                # Legacy pozisyona da yansıt
+                for legacy_pos in self.position_manager.legacy_positions:
+                    if legacy_pos.get('bot_id') == bot_id:
+                        legacy_pos['is_closing'] = True
+                        break
+
             logger.info(f"🔴 [{reason}] {symbol} @ {exit_price:.4f} | Bot: {bot_id}")
             trade = await self.position_manager.close_position(
                 bot_id=bot_id,
