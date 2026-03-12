@@ -173,16 +173,27 @@ class PositionManager:
             
             # Position'ı kaydet
             self.positions[bot_id] = position
-            
+
             # Legacy positions (core/paper.py uyumluluğu)
             legacy_pos = self._position_to_legacy(position, fee)
             self.legacy_positions.append(legacy_pos)
-            
+
+            # Initial trailing stop seviyelerini set et (açılışta)
+            if direction.upper() == "LONG":
+                legacy_pos['highest_seen'] = execution_price
+                if stop_loss and stop_loss < execution_price:
+                    legacy_pos['stop_loss'] = stop_loss
+            else:  # SHORT
+                legacy_pos['lowest_seen'] = execution_price
+                if stop_loss and stop_loss > execution_price:
+                    legacy_pos['stop_loss'] = stop_loss
+
             logger.info(
                 f"📊 Pozisyon açıldı: {bot_id} | {direction} | "
-                f"{symbol} @ {execution_price:.2f} | Lev: {leverage}x"
+                f"{symbol} @ {execution_price:.2f} | Lev: {leverage}x | "
+                f"SL: {stop_loss:.2f} | TP: {take_profit:.2f}"
             )
-            
+
             return position
             
         except Exception as e:
