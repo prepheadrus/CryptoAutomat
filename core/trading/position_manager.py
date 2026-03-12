@@ -331,6 +331,7 @@ class PositionManager:
             )
             
             # Event yayınla
+            from shared.events import event_bus
             asyncio.create_task(event_bus.publish(Event(
                 type="position.closed",
                 payload={
@@ -350,7 +351,25 @@ class PositionManager:
                 },
                 source="position_manager"
             )))
-            
+
+            # Database'e kaydet (SADECE BURADA - duplicate önleme)
+            from data.database import db_manager
+            trade_data = {
+                "symbol": trade.symbol,
+                "direction": trade.direction.value,
+                "entry_price": trade.entry_price,
+                "exit_price": trade.exit_price,
+                "size": trade.size,
+                "leverage": trade.leverage,
+                "pnl_usd": trade.pnl,
+                "pnl_percent": trade.pnl_percent * 100,
+                "reason": reason,
+                "strategy_id": trade.strategy_id,
+                "bot_id": bot_id,
+                "closed_at": trade.closed_at.isoformat()
+            }
+            asyncio.create_task(db_manager.save_trade(trade_data))
+
             return trade
             
         except Exception as e:
@@ -471,34 +490,62 @@ class PositionManager:
         self,
         pos: Dict,
         current_high: float,
-        current_low: float
+        current_low: float,
+        current_price: float = None
     ):
         """
         Legacy trailing stop güncelleme (dict için).
         core/paper.py uyumluluğu.
-        
+
+        TRAILING STOP MANTIĞI:
+        - LONG: Fiyat yükseldiğinde SL yukarı taşı, asla aşağı taşıma
+        - SHORT: Fiyat düştüğünde SL aşağı taşı, asla yukarı taşıma
+        - Break-even: Kar PnL'ye geçince SL'yi giriş seviyesine taşı
+
         Args:
             pos: Position dict (legacy format)
             current_high: Mum high
             current_low: Mum low
+            current_price: Mevcut fiyat (break-even kontrolü için)
         """
+        entry_price = pos['entry_price']
+        # current_price verilmezse high/low ortalaması kullan
+        if current_price is None:
+            current_price = (current_high + current_low) / 2
+
         if pos['direction'] == "LONG":
+            # LONG: Yeni zirve kontrolü
             if current_high > pos['highest_seen']:
                 pos['highest_seen'] = current_high
                 new_stop = current_high - (pos['atr'] * pos['atr_multiplier'])
-                
+
+                # Sadece yukarı taşı (trailing stop mantığı)
                 if new_stop > pos['stop_loss']:
                     pos['stop_loss'] = new_stop
                     logger.debug(f"[TRAILING STOP] {pos['symbol']} LONG stop yukarı: {pos['stop_loss']:.2f}")
-        
+
+            # Break-even: Kar PnL'ye geçince SL'yi giriş seviyesine taşı
+            if pos['stop_loss'] < entry_price and current_price > entry_price:
+                old_sl = pos['stop_loss']
+                pos['stop_loss'] = entry_price
+                logger.debug(f"[BREAK-EVEN] {pos['symbol']} LONG SL giriş seviyesine taşındı: {old_sl:.2f} → {pos['stop_loss']:.2f}")
+
         else:  # SHORT
+            # SHORT: Yeni dip kontrolü
             if current_low < pos['lowest_seen']:
                 pos['lowest_seen'] = current_low
                 new_stop = current_low + (pos['atr'] * pos['atr_multiplier'])
-                
+
+                # Sadece aşağı taşı (trailing stop mantığı)
                 if new_stop < pos['stop_loss']:
                     pos['stop_loss'] = new_stop
                     logger.debug(f"[TRAILING STOP] {pos['symbol']} SHORT stop aşağı: {pos['stop_loss']:.2f}")
+
+            # Break-even: Kar PnL'ye geçince SL'yi giriş seviyesine taşı
+            if pos['stop_loss'] > entry_price and current_price < entry_price:
+                old_sl = pos['stop_loss']
+                pos['stop_loss'] = entry_price
+                logger.debug(f"[BREAK-EVEN] {pos['symbol']} SHORT SL giriş seviyesine taşındı: {old_sl:.2f} → {pos['stop_loss']:.2f}")
     
     # ========================================================================
     # PnL HESAPLAMA

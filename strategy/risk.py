@@ -42,19 +42,29 @@ class RiskManagement:
         return min(max_leverage, max(base_leverage, int(round(calculated))))
 
     @staticmethod
-    def calculate_dynamic_stops(price: float, direction: str, atr: float, multiplier: float = 1.5):
+    def calculate_dynamic_stops(price: float, direction: str, atr: float, multiplier: float = 3.0):
         """
         ATR (Average True Range) tabanlı dinamik Stop Loss ve Take Profit seviyeleri hesaplar.
         Oynaklık arttıkça stop mesafesi açılır, sakin piyasada daralır.
+
+        Args:
+            price: Mevcut fiyat
+            direction: LONG veya SHORT
+            atr: Average True Range değeri
+            multiplier: ATR çarpanı (varsayılan 3.0 - daha geniş stop için)
+
+        Returns:
+            (stop_loss, take_profit) tuple
         """
         # Standart Sapma x Oynaklık (Volatilite) çarpanı
+        # multiplier=3.0 ile %0.5-1.5 arası stop mesafesi (sembol volatilitesine göre)
         stop_distance = atr * multiplier
-        
+
         if direction == "LONG":
             sl = price - stop_distance
             tp = price + (stop_distance * 2.0) # 1:2 Risk/Ödül Oranı
         else: # SHORT
             sl = price + stop_distance
             tp = price - (stop_distance * 2.0)
-            
+
         return sl, tp

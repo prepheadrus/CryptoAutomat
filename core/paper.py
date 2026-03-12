@@ -460,27 +460,18 @@ class PaperTrader:
         
         # Bot state güncelle
         self.bot_manager.record_bot_trade(bot_id, pnl)
-        
+
         # Legacy positions güncelle (UI senkronizasyonu için kritik)
         self.open_positions = self.position_manager.legacy_positions
-        
-        # Database'e kaydet (Kalıcı hafıza)
-        from data.database import db_manager
-        trade_data = {
-            "symbol": payload.get('symbol'),
-            "direction": payload.get('direction'),
-            "entry_price": payload.get('entry_price'),
-            "exit_price": payload.get('exit_price'),
-            "size": payload.get('size'),
-            "leverage": payload.get('leverage'),
-            "pnl_usd": pnl,
-            "pnl_percent": payload.get('pnl_percent', 0.0) * 100,
-            "reason": payload.get('reason'),
-            "strategy_id": payload.get('strategy_id'),
-            "closed_at": payload.get('closed_at')
-        }
-        asyncio.create_task(db_manager.save_trade(trade_data))
-        
+
+        # Trade history position_manager'dan alınır (duplicate önleme)
+        # self.trade_history artık ayrı tutulmuyor, position_manager.trade_history kullanılıyor
+        self.trade_history = self.position_manager.trade_history.trades
+
+        # Database'e kaydet (Kalıcı hafıza) - SADECE position_manager'dan
+        # Not: trade_data burada oluşturuluyor ama save_trade çağrısı position_manager'da yapılıyor
+        # Bu yüzden buradaki asyncio.create_task kaldırıldı (duplicate kayıt önleme)
+
         # Kill switch kontrolü
         if self.risk_engine.kill_switch_active:
             self.kill_switch_activated = True
@@ -858,7 +849,7 @@ class PaperTrader:
             
             # 1. Trailing stop güncelle (doğru HIGH/LOW ile)
             self.position_manager.update_trailing_stop_legacy(
-                pos, candle_high, candle_low
+                pos, candle_high, candle_low, current_price
             )
             
             # 2. PnL hesapla

@@ -1,43 +1,82 @@
+"""
+Trade History'den Duplicate Kayıtları Temizle
+
+Kullanım:
+    python fix_trades_db.py
+"""
+
 import sqlite3
-import os
+from datetime import datetime
 
-db_path = r"f:\Crypto Bot\cryptobot.db"
-conn = sqlite3.connect(db_path)
-cursor = conn.cursor()
+DB_PATH = "cryptobot.db"
 
-print("Bakım moduna giriliyor: 'trades' tablosu sıfırlanıyor...")
+def fix_duplicate_trades():
+    """Veritabanından duplicate trade kayıtlarını temizle"""
 
-try:
-    # Eski tabloyu yedekle (varsa)
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='trades'")
-    if cursor.fetchone():
-        print("Mevcut 'trades' tablosu siliniyor...")
-        cursor.execute("DROP TABLE trades")
-    
-    # Yeni tabloyu temiz bir şema ile oluştur
-    # (database.py'deki en güncel şema ile uyumlu)
+    print("Trade history duplicate temizligi baslatiliyor...")
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    # Tüm trade'leri çek
     cursor.execute("""
-        CREATE TABLE trades (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp DATETIME DEFAULT (datetime('now','localtime')),
-            closed_at TEXT,
-            symbol TEXT NOT NULL,
-            strategy_id TEXT,
-            direction TEXT NOT NULL,
-            entry_price REAL NOT NULL,
-            exit_price REAL,
-            size REAL NOT NULL,
-            leverage INTEGER,
-            pnl_usd REAL,
-            pnl_percent REAL,
-            reason TEXT
-        )
+        SELECT id, timestamp, closed_at, symbol, strategy_id, direction,
+               entry_price, exit_price, size, leverage, pnl_usd, pnl_percent, reason
+        FROM trades
+        ORDER BY closed_at DESC, id DESC
     """)
-    conn.commit()
-    print("✅ 'trades' tablosu başarıyla yeniden oluşturuldu.")
-    
-except Exception as e:
-    print(f"❌ Hata: {e}")
-    conn.rollback()
+    trades = cursor.fetchall()
 
-conn.close()
+    print(f"Toplam trade sayisi: {len(trades)}")
+
+    # Duplicate tespiti
+    seen = set()
+    duplicates = []
+
+    for trade in trades:
+        # Unique key: (symbol, strategy_id, entry_price, exit_price, closed_at, pnl_usd)
+        symbol = trade[3]     # symbol
+        strategy_id = trade[8]  # strategy_id
+        entry = trade[6]      # entry_price
+        exit_p = trade[7]     # exit_price
+        closed_at = trade[2]  # closed_at
+        pnl_usd = trade[10]   # pnl_usd
+
+        key = (symbol, strategy_id, entry, exit_p, closed_at, pnl_usd)
+
+        if key in seen:
+            duplicates.append(trade[0])  # id
+            print(f"  Duplicate bulundu: ID={trade[0]}, Symbol={symbol}, PnL=${trade[10]:.2f}")
+        else:
+            seen.add(key)
+
+    if not duplicates:
+        print("Duplicate bulunamadi!")
+        conn.close()
+        return
+
+    print(f"\n{len(duplicates)} duplicate kayıt silinecek...")
+    confirm = input("Devam etmek istiyor musunuz? (yes/no): ")
+
+    if confirm.lower() != 'yes':
+        print("Islem iptal edildi.")
+        conn.close()
+        return
+
+    # Duplicate'lari sil
+    for dup_id in duplicates:
+        cursor.execute("DELETE FROM trades WHERE id = ?", (dup_id,))
+
+    conn.commit()
+
+    # Kalan trade sayisini kontrol et
+    cursor.execute("SELECT COUNT(*) FROM trades")
+    count = cursor.fetchone()
+    print(f"\nTemizlik tamamlandi!")
+    print(f"Kalan trade sayisi: {count[0]}")
+    print(f"Silinen duplicate sayisi: {len(duplicates)}")
+
+    conn.close()
+
+if __name__ == "__main__":
+    fix_duplicate_trades()
