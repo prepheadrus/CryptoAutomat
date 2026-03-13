@@ -188,11 +188,23 @@ class PositionManager:
                 if stop_loss and stop_loss > execution_price:
                     legacy_pos['stop_loss'] = stop_loss
 
+            # SL/TP güvenli formatlama (None olabilir)
+            sl_str = f"{stop_loss:.2f}" if stop_loss is not None else "Yok"
+            tp_str = f"{take_profit:.2f}" if take_profit is not None else "Yok"
+
             logger.info(
                 f"📊 Pozisyon açıldı: {bot_id} | {direction} | "
                 f"{symbol} @ {execution_price:.2f} | Lev: {leverage}x | "
-                f"SL: {stop_loss:.2f} | TP: {take_profit:.2f}"
+                f"SL: {sl_str} | TP: {tp_str}"
             )
+
+            # paper_engine.open_positions güncelle (UI sync için kritik!)
+            try:
+                from core.paper import paper_engine
+                if hasattr(paper_engine, 'open_positions'):
+                    paper_engine.open_positions = list(self.legacy_positions)
+            except:
+                pass  # paper_engine henüz initialize edilmemiş olabilir
 
             return position
             
@@ -581,12 +593,13 @@ class PositionManager:
                 new_stop = current_high - (pos['atr'] * pos['atr_multiplier'])
 
                 # Sadece yukarı taşı (trailing stop mantığı)
-                if new_stop > pos['stop_loss']:
+                # stop_loss None ise direkt set et
+                if pos['stop_loss'] is None or new_stop > pos['stop_loss']:
                     pos['stop_loss'] = new_stop
                     logger.debug(f"[TRAILING STOP] {pos['symbol']} LONG stop yukarı: {pos['stop_loss']:.2f}")
 
             # Break-even: Kar PnL'ye geçince SL'yi giriş seviyesine taşı
-            if pos['stop_loss'] < entry_price and current_price > entry_price:
+            if pos['stop_loss'] is not None and pos['stop_loss'] < entry_price and current_price > entry_price:
                 old_sl = pos['stop_loss']
                 pos['stop_loss'] = entry_price
                 logger.debug(f"[BREAK-EVEN] {pos['symbol']} LONG SL giriş seviyesine taşındı: {old_sl:.2f} → {pos['stop_loss']:.2f}")
@@ -598,12 +611,13 @@ class PositionManager:
                 new_stop = current_low + (pos['atr'] * pos['atr_multiplier'])
 
                 # Sadece aşağı taşı (trailing stop mantığı)
-                if new_stop < pos['stop_loss']:
+                # stop_loss None ise direkt set et
+                if pos['stop_loss'] is None or new_stop < pos['stop_loss']:
                     pos['stop_loss'] = new_stop
                     logger.debug(f"[TRAILING STOP] {pos['symbol']} SHORT stop aşağı: {pos['stop_loss']:.2f}")
 
             # Break-even: Kar PnL'ye geçince SL'yi giriş seviyesine taşı
-            if pos['stop_loss'] > entry_price and current_price < entry_price:
+            if pos['stop_loss'] is not None and pos['stop_loss'] > entry_price and current_price < entry_price:
                 old_sl = pos['stop_loss']
                 pos['stop_loss'] = entry_price
                 logger.debug(f"[BREAK-EVEN] {pos['symbol']} SHORT SL giriş seviyesine taşındı: {old_sl:.2f} → {pos['stop_loss']:.2f}")

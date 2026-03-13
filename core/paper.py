@@ -632,22 +632,37 @@ class PaperTrader:
         unrealized_pnl = 0.0
         used_margin = 0.0
         total_notional = 0.0
-        
+
         for pos in self.position_manager.legacy_positions:
             unrealized_pnl += pos.get('unrealized_usd', 0.0)
             used_margin += pos.get('margin', 0.0)
-            
+
             # Notional = Size * Current Price (veya Entry Price)
             current_price = pos.get('current_price', pos.get('entry_price', 0.0))
             size = pos.get('size', 0.0)
             total_notional += (size * current_price)
-            
+
         equity = self.balance + unrealized_pnl
         free_margin = self.balance - used_margin
-        
+
         # Legacy değişkenleri güncelle (UI için değil, iç mantık için gerekebilir)
         self.used_margin = used_margin
         self.free_margin = free_margin
+
+        # KRİTİK DÜZELTME: total_trades'i trade_history'den al (senkronizasyon!)
+        # position_manager.total_trades sadece bir sayaç, trade_history gerçek kaynak!
+        # NOT: self.trade_history bir liste (position_manager.trade_history.trades)
+        total_trades = len(self.trade_history) if isinstance(self.trade_history, list) else len(self.trade_history.trades)
+        
+        # Kazanan trade'leri say
+        if isinstance(self.trade_history, list):
+            winning_trades = len([t for t in self.trade_history if hasattr(t, 'pnl') and t.pnl > 0])
+            total_pnl = sum(t.pnl for t in self.trade_history if hasattr(t, 'pnl'))
+            total_commission = sum(t.commission for t in self.trade_history if hasattr(t, 'commission'))
+        else:
+            winning_trades = len([t for t in self.trade_history.trades if t.pnl > 0])
+            total_pnl = sum(t.pnl for t in self.trade_history.trades)
+            total_commission = sum(t.commission for t in self.trade_history.trades)
         
         return {
             'balance': self.balance,
@@ -655,11 +670,11 @@ class PaperTrader:
             'used_margin': used_margin,
             'equity': equity,
             'unrealized_pnl': unrealized_pnl,
-            'total_trades': self.position_manager.total_trades,
-            'total_wins': self.position_manager.total_wins,
-            'win_rate': self.position_manager.total_wins / max(1, self.position_manager.total_trades),
-            'total_pnl': self.position_manager.total_pnl,
-            'total_commission': self.position_manager.total_commission,
+            'total_trades': total_trades,  # trade_history'den
+            'total_wins': winning_trades,  # trade_history'den
+            'win_rate': winning_trades / max(1, total_trades),
+            'total_pnl': total_pnl,  # trade_history'den
+            'total_commission': total_commission,  # trade_history'den
             'total_notional': total_notional,
             'bot_stats': self.bot_manager.get_stats(),
             'risk_stats': self.risk_engine.get_stats(),

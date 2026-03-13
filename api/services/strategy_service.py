@@ -27,19 +27,34 @@ class StrategyService:
     def get_strategies(self) -> Dict[str, Any]:
         """
         Tüm stratejileri al.
-        
+
         Returns:
             Strateji listesi
         """
         try:
             # Her istekte dinamik stratejileri yükle
             self.strategy_manager.load_dynamic_strategies()
+
+            # YENİ METOD: get_all_strategies() kullan
+            all_strategies = self.strategy_manager.get_all_strategies()
             
-            strategies = self.strategy_manager.list_all_strategies()
-            return {"status": "success", "strategies": strategies}
+            # List formatına çevir (frontend uyumlu)
+            strategies_list = []
+            for strategy_id, data in all_strategies.items():
+                strategies_list.append({
+                    'id': strategy_id,
+                    'name': data.get('name', strategy_id),
+                    'description': data.get('description', ''),
+                    'timeframe': data.get('timeframe', '1m'),
+                    'type': data.get('type', 'builtin')
+                })
             
+            return {"status": "success", "strategies": strategies_list}
+
         except Exception as e:
             logger.error(f"Strateji listesi hatası: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return {"status": "error", "message": str(e)}
     
     def select_strategy(

@@ -1,36 +1,32 @@
 """
-Strategy Manager - Strateji Yönetim Sistemi
+Strategy Manager - Strateji Yönetim Sistemi (OTO-KEŞİF)
 
-Sabit stratejiler (TrendMaster, ScalperNinja, vb.) ve
-kullanıcı tarafından oluşturulan JSON stratejileri yönetir.
+Yeni mimari: Plug-and-Play oto-keşif sistemi.
+- strategy/ klasöründeki .py dosyalarını otomatik tarar
+- strategy/custom/ klasöründeki kullanıcı stratejilerini bulur
+- BaseStrategy'den türetilen tüm sınıfları otomatik yükler
+- Hatalı dosyaları atlar (sistem çökmez)
 """
 
-from strategy.trend_master import TrendMasterPro
-from strategy.scalper_ninja import ScalperNinja
-from strategy.adaptive_koncorde import AdaptiveKoncordeX
-from strategy.golden_combo import GoldenCombo
-from strategy.divergence_hunter import DivergenceHunter
-from strategy.knn_quant import KNNQuantATRShield
+from strategy.base import BaseStrategy
 from strategy.builder.executor import StrategyExecutor
 from core.logger import logger
 from pathlib import Path
 import json
+import importlib
+import inspect
+import pkgutil
 
 
 class StrategyManager:
     """
     Sistemdeki tüm bot (strateji) setlerini bu yönetici üzerinden çağırırız.
-    Sabit stratejiler + Kullanıcı JSON stratejileri.
+    Oto-keşif ile sabit stratejiler + kullanıcı stratejileri.
     """
 
-    # Sabit stratejiler
+    # Sabit stratejiler (manuel import - backward compatibility)
     FIXED_STRATEGIES = {
-        "trend_master": TrendMasterPro(),
-        "scalper_ninja": ScalperNinja(),
-        "adaptive_koncorde": AdaptiveKoncordeX(),
-        "golden_combo": GoldenCombo(),
-        "divergence_hunter": DivergenceHunter(),
-        "knn_quant_atr": KNNQuantATRShield()
+        # Not: Bunlar hala manuel import, oto-keşif bunların ÜSTÜNE ekler
     }
 
     # Dinamik JSON stratejiler (runtime yüklenir)
@@ -39,34 +35,148 @@ class StrategyManager:
     # StrategyExecutor instances (canlı sinyal üretimi için)
     STRATEGY_EXECUTORS = {}
 
-    # Strateji klasörü
-    STRATEGIES_DIR = Path("artifacts/strategies")
+    # Strateji klasörleri
+    STRATEGY_DIR = Path("strategy")
+    CUSTOM_STRATEGY_DIR = Path("strategy/custom")
+    JSON_STRATEGIES_DIR = Path("artifacts/strategies")
 
+    # Manuel import edilen stratejiler (backward compatibility)
+    MANUALLY_IMPORTED = {}
+
+    @classmethod
+    def _import_manual_strategies(cls):
+        """
+        Manuel import edilen stratejileri yükle (backward compatibility).
+        Bu fonksiyon sadece ilk başlatmada çalışır.
+        """
+        if cls.MANUALLY_IMPORTED:
+            return  # Zaten yüklendi
+        
+        try:
+            # Manuel import edilen stratejiler (eski sistem)
+            from strategy.trend_master import TrendMasterPro
+            from strategy.scalper_ninja import ScalperNinja
+            from strategy.adaptive_koncorde import AdaptiveKoncordeX
+            from strategy.golden_combo import GoldenCombo
+            from strategy.divergence_hunter import DivergenceHunter
+            from strategy.knn_quant import KNNQuantATRShield
+            
+            cls.MANUALLY_IMPORTED = {
+                "trend_master": TrendMasterPro(),
+                "scalper_ninja": ScalperNinja(),
+                "adaptive_koncorde": AdaptiveKoncordeX(),
+                "golden_combo": GoldenCombo(),
+                "divergence_hunter": DivergenceHunter(),
+                "knn_quant_atr": KNNQuantATRShield()
+            }
+            
+            logger.info(f"✅ {len(cls.MANUALLY_IMPORTED)} manuel strateji yüklendi (backward compatibility)")
+            
+        except Exception as e:
+            logger.error(f"❌ Manuel strateji yükleme hatası: {e}")
+            cls.MANUALLY_IMPORTED = {}
+
+    @classmethod
+    def _discover_strategies_in_folder(cls, folder: Path, prefix: str = "") -> dict:
+        """
+        Bir klasördeki tüm .py dosyalarını tara ve BaseStrategy'den türetilen sınıfları bul.
+        
+        Args:
+            folder: Tara nacak klasör
+            prefix: Modül ön eki (örn: "strategy.custom.")
+            
+        Returns:
+            dict: {strategy_id: strategy_instance}
+        """
+        discovered = {}
+        
+        if not folder.exists():
+            logger.debug(f"📁 Klasör bulunamadı: {folder}")
+            return discovered
+        
+        logger.info(f"🔍 {folder} klasöründe strateji aranıyor...")
+        
+        # .py dosyalarını bul
+        py_files = list(folder.glob("*.py"))
+        
+        for py_file in py_files:
+            # base.py ve manager.py'yi atla
+            if py_file.stem in ["base", "manager", "__init__"]:
+                continue
+            
+            try:
+                # Modül adını oluştur
+                if prefix:
+                    module_name = f"{prefix}{py_file.stem}"
+                else:
+                    module_name = py_file.stem
+                
+                # Modülü import et
+                spec = importlib.util.spec_from_file_location(module_name, py_file)
+                if spec is None or spec.loader is None:
+                    logger.warning(f"⚠️ Modül yüklenemedi: {py_file.name}")
+                    continue
+                
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                
+                # Modüldeki tüm sınıfları kontrol et
+                for name, obj in inspect.getmembers(module, inspect.isclass):
+                    # BaseStrategy'den türetilmiş mi?
+                    if issubclass(obj, BaseStrategy) and obj != BaseStrategy:
+                        # MANUEL STRATEJİLERİ ATLA (duplicate önleme)
+                        # Eğer bu sınıf MANUALLY_IMPORTED'da varsa atla
+                        manual_ids = [cls.MANUALLY_IMPORTED[sid].__class__.__name__ for sid in cls.MANUALLY_IMPORTED]
+                        if name in manual_ids:
+                            logger.debug(f"⏭️ Manuel strateji atlandı: {name} (zaten yüklü)")
+                            continue
+                        
+                        # Sınıf adını strategy_id olarak kullan (küçük harf, alt çizgi)
+                        strategy_id = name.lower().replace("strategy", "").strip("_")
+                        
+                        # Eğer custom klasöründeyse prefix ekle
+                        if str(folder) == str(cls.CUSTOM_STRATEGY_DIR):
+                            strategy_id = f"custom_{strategy_id}"
+                        
+                        # Instance oluştur
+                        try:
+                            instance = obj()
+                            discovered[strategy_id] = instance
+                            logger.info(f"✅ Strateji bulundu: {strategy_id} ({name})")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Strateji instance oluşturulamadı: {name} - {e}")
+                
+            except Exception as e:
+                # Hatalı dosyayı atla, sistemi çökertme
+                logger.warning(f"⚠️ Strateji dosyası hatası: {py_file.name} - {e}")
+                logger.debug(f"Traceback: {e}", exc_info=True)
+                continue
+        
+        return discovered
 
     @classmethod
     def load_dynamic_strategies(cls):
         """
         artifacts/strategies/ klasöründen JSON stratejileri yükle.
-
         Her JSON dosyası için StrategyExecutor instance oluşturur.
         """
         cls.DYNAMIC_STRATEGIES.clear()
         cls.STRATEGY_EXECUTORS.clear()
 
         # Klasör yoksa oluştur
-        if not cls.STRATEGIES_DIR.exists():
-            cls.STRATEGIES_DIR.mkdir(parents=True, exist_ok=True)
+        if not cls.JSON_STRATEGIES_DIR.exists():
+            cls.JSON_STRATEGIES_DIR.mkdir(parents=True, exist_ok=True)
             logger.info("📁 Strateji klasörü oluşturuldu: artifacts/strategies/")
             return
 
         # JSON dosyalarını tara
-        json_files = list(cls.STRATEGIES_DIR.glob("*.json"))
+        json_files = list(cls.JSON_STRATEGIES_DIR.glob("*.json"))
 
         if not json_files:
             logger.info("📭 Kaydedilmiş strateji bulunamadı")
             return
 
-        logger.info(f"📚 {len(json_files)} strateji yükleniyor...")
+        logger.info(f"📚 {len(json_files)} JSON strateji yükleniyor...")
 
         for filepath in json_files:
             try:
@@ -91,186 +201,139 @@ class StrategyManager:
 
                 cls.STRATEGY_EXECUTORS[strategy_id] = executor
 
-                logger.info(f"✅ Strateji yüklendi: {strategy_name} ({filepath.name})")
+                logger.info(f"✅ JSON strateji yüklendi: {strategy_name} ({filepath.name})")
 
             except Exception as e:
-                logger.error(f"❌ Strateji yüklenemedi: {filepath.name} - {e}")
+                logger.error(f"❌ JSON strateji yüklenemedi: {filepath.name} - {e}")
 
-        logger.info(f"✅ {len(cls.DYNAMIC_STRATEGIES)} dinamik strateji yüklendi")
+        logger.info(f"✅ {len(cls.DYNAMIC_STRATEGIES)} JSON strateji yüklendi")
 
+    @classmethod
+    def get_all_strategies(cls) -> dict:
+        """
+        TÜM stratejileri döndür (manuel + oto-keşif + JSON).
+        
+        Returns:
+            dict: {strategy_id: strategy_dict}
+        """
+        # 1. Manuel import edilen stratejileri yükle (backward compatibility)
+        cls._import_manual_strategies()
+        
+        # 2. Oto-keşif ile strategy/ klasöründeki stratejileri bul
+        auto_discovered = cls._discover_strategies_in_folder(cls.STRATEGY_DIR)
+        
+        # 3. Oto-keşif ile strategy/custom/ klasöründeki stratejileri bul
+        custom_discovered = cls._discover_strategies_in_folder(cls.CUSTOM_STRATEGY_DIR, prefix="custom.")
+        
+        # 4. Tüm stratejileri birleştir
+        all_strategies = {}
+        
+        # Manuel stratejiler
+        for strategy_id, instance in cls.MANUALLY_IMPORTED.items():
+            # timeframe'i al (method veya attribute olabilir)
+            timeframe = instance.timeframe() if callable(getattr(instance, 'timeframe', None)) else getattr(instance, 'timeframe', '1m')
+            # name'i al (method veya attribute olabilir)
+            name = instance.name() if callable(getattr(instance, 'name', None)) else getattr(instance, 'name', strategy_id)
+            # description'ı al (method veya attribute olabilir)
+            description = instance.description() if callable(getattr(instance, 'description', None)) else getattr(instance, 'description', '')
+            
+            all_strategies[strategy_id] = {
+                'id': strategy_id,
+                'name': name,
+                'description': description,
+                'timeframe': timeframe,
+                'type': 'builtin',
+                'instance': instance
+            }
+        
+        # Oto-keşif edilen stratejiler
+        for strategy_id, instance in auto_discovered.items():
+            # Manuel stratejilerin üzerine yazma (backward compatibility)
+            if strategy_id not in all_strategies:
+                # timeframe'i al (method veya attribute olabilir)
+                timeframe = instance.timeframe() if callable(getattr(instance, 'timeframe', None)) else getattr(instance, 'timeframe', '1m')
+                # name'i al (method veya attribute olabilir)
+                name = instance.name() if callable(getattr(instance, 'name', None)) else getattr(instance, 'name', strategy_id)
+                # description'ı al (method veya attribute olabilir)
+                description = instance.description() if callable(getattr(instance, 'description', None)) else getattr(instance, 'description', '')
+                
+                all_strategies[strategy_id] = {
+                    'id': strategy_id,
+                    'name': name,
+                    'description': description,
+                    'timeframe': timeframe,
+                    'type': 'auto_discovered',
+                    'instance': instance
+                }
+                logger.info(f"🆕 Oto-keşif strateji eklendi: {strategy_id}")
+        
+        # Custom stratejiler
+        for strategy_id, instance in custom_discovered.items():
+            # timeframe'i al (method veya attribute olabilir)
+            timeframe = instance.timeframe() if callable(getattr(instance, 'timeframe', None)) else getattr(instance, 'timeframe', '1m')
+            # name'i al (method veya attribute olabilir)
+            name = instance.name() if callable(getattr(instance, 'name', None)) else getattr(instance, 'name', strategy_id)
+            # description'ı al (method veya attribute olabilir)
+            description = instance.description() if callable(getattr(instance, 'description', None)) else getattr(instance, 'description', '')
+            
+            all_strategies[strategy_id] = {
+                'id': strategy_id,
+                'name': name,
+                'description': description,
+                'timeframe': timeframe,
+                'type': 'custom',
+                'instance': instance
+            }
+            logger.info(f"🎨 Custom strateji eklendi: {strategy_id}")
+        
+        # JSON stratejiler
+        for strategy_id, data in cls.DYNAMIC_STRATEGIES.items():
+            all_strategies[strategy_id] = {
+                'id': strategy_id,
+                'name': data['name'],
+                'description': data['description'],
+                'timeframe': data['data'].get('timeframe', '1m'),
+                'type': 'json',
+                'executor': data['executor']
+            }
+        
+        logger.info(f"📊 Toplam {len(all_strategies)} strateji bulundu")
+        
+        return all_strategies
 
     @classmethod
     def get_strategy(cls, strategy_id: str):
         """
-        Kimliği (id) verilen stratejiyi getirir.
-
-        Önce sabit stratejilere bakar, yoksa dinamiklere bakar.
-        Varsayılan: trend_master.
-        """
-        # Sabit stratejiler
-        if strategy_id in cls.FIXED_STRATEGIES:
-            return cls.FIXED_STRATEGIES.get(strategy_id)
-
-        # Dinamik stratejiler (StrategyExecutor)
-        if strategy_id in cls.STRATEGY_EXECUTORS:
-            return cls.STRATEGY_EXECUTORS[strategy_id]
-
-        # Varsayılan
-        logger.warning(f"⚠️ Strateji bulunamadı: {strategy_id}. Varsayılan: trend_master")
-        return cls.FIXED_STRATEGIES["trend_master"]
-
-
-    @classmethod
-    def get_executor(cls, strategy_id: str):
-        """
-        StrategyExecutor instance al (canlı sinyal üretimi için).
-
-        Args:
-            strategy_id: Strateji ID (dynamic_...)
-
-        Returns:
-            StrategyExecutor veya None
-        """
-        return cls.STRATEGY_EXECUTORS.get(strategy_id)
-
-
-    @classmethod
-    def list_all_strategies(cls):
-        """
-        Arayüzde gösterilecek tüm bot isim ve açıklamalarını döner.
-        Sabit (builtin) + Dinamik (custom) stratejiler.
-
-        Returns:
-            list: [
-                {
-                    "id": "trend_master",
-                    "name": "TrendMaster Pro",
-                    "description": "...",
-                    "type": "builtin",  # builtin veya custom
-                    "source": "python"   # python veya json
-                },
-                ...
-            ]
-        """
-        strategies = []
-
-        # Sabit stratejiler (BUILTIN)
-        for key, val in cls.FIXED_STRATEGIES.items():
-            strategies.append({
-                "id": key,
-                "name": val.name(),
-                "description": val.description(),
-                "type": "builtin",
-                "source": "python"
-            })
-
-        # Dinamik stratejiler (CUSTOM)
-        for key, val in cls.DYNAMIC_STRATEGIES.items():
-            strategies.append({
-                "id": key,
-                "name": val['name'],
-                "description": val.get('description') or "Kullanıcı stratejisi",
-                "type": "custom",
-                "source": "json",
-                "filename": val['filename']
-            })
-
-        return strategies
-
-
-    @classmethod
-    def generate_signals(cls, df, symbol: str = None):
-        """
-        Tüm stratejiler için sinyal üret.
-
-        Args:
-            df: İndikatörler eklenmiş DataFrame
-            symbol: Sembol adı (opsiyonel)
-
-        Returns:
-            dict: {
-                "trend_master": 1,  # 0=SAT, 1=BEKLE, 2=AL
-                "scalper_ninja": 2,
-                "dynamic_rsi_macd": 0,
-                ...
-            }
-        """
-        signals = {}
-
-        # DataFrame'in son satırını al (Series olarak)
-        current_row = df.iloc[-1] if not df.empty else None
-
-        # Sabit stratejiler
-        for strategy_id, strategy in cls.FIXED_STRATEGIES.items():
-            try:
-                if hasattr(strategy, 'generate_signal'):
-                    signal = strategy.generate_signal(current_row)
-                    signals[strategy_id] = signal
-            except Exception as e:
-                logger.error(f"❌ {strategy_id} sinyal hatası: {e}")
-                signals[strategy_id] = 1  # BEKLE
-
-        # Dinamik stratejiler (StrategyExecutor)
-        for strategy_id, executor in cls.STRATEGY_EXECUTORS.items():
-            try:
-                # Veriyi hazırla (indikatörleri hesapla)
-                prepared_df = executor.prepare_data(df.copy())
-
-                # Sinyal üret
-                signal = executor.generate_signal(prepared_df)
-                signals[strategy_id] = signal
-
-            except Exception as e:
-                logger.error(f"❌ {strategy_id} sinyal hatası: {e}")
-                signals[strategy_id] = 1  # BEKLE
-
-        return signals
-
-
-    @classmethod
-    def reload_strategies(cls):
-        """
-        Stratejileri yeniden yükle (hot reload).
-
-        Kullanıcı yeni strateji kaydettiğinde veya sildiğinde çağrılır.
-        """
-        logger.info("🔄 Stratejiler yeniden yükleniyor...")
-        cls.load_dynamic_strategies()
-        logger.info("✅ Stratejiler yenilendi")
-
-
-    @classmethod
-    def get_strategy_info(cls, strategy_id: str):
-        """
-        Strateji detaylı bilgilerini al.
-
+        Belirli bir stratejiyi al.
+        
         Args:
             strategy_id: Strateji ID
-
+            
         Returns:
-            dict: Strateji bilgileri veya None
+            Strategy instance veya None
         """
-        # Sabit stratejiler
-        if strategy_id in cls.FIXED_STRATEGIES:
-            strategy = cls.FIXED_STRATEGIES[strategy_id]
-            return {
-                "id": strategy_id,
-                "name": strategy.name(),
-                "description": strategy.description(),
-                "type": "fixed"
-            }
-
-        # Dinamik stratejiler
+        # Manuel stratejilerde ara
+        if strategy_id in cls.MANUALLY_IMPORTED:
+            return cls.MANUALLY_IMPORTED[strategy_id]
+        
+        # Oto-keşif edilen stratejilerde ara
+        all_strategies = cls.get_all_strategies()
+        if strategy_id in all_strategies:
+            return all_strategies[strategy_id].get('instance')
+        
+        # JSON stratejilerde ara
         if strategy_id in cls.DYNAMIC_STRATEGIES:
-            strategy = cls.DYNAMIC_STRATEGIES[strategy_id]
-            return {
-                "id": strategy_id,
-                "name": strategy['name'],
-                "description": strategy['description'],
-                "type": "dynamic",
-                "filename": strategy['filename'],
-                "indicators": strategy['data'].get('indicators', []),
-                "risk": strategy['data'].get('risk', {})
-            }
-
+            return cls.DYNAMIC_STRATEGIES[strategy_id].get('executor')
+        
         return None
+
+    @classmethod
+    def reload(cls):
+        """
+        Tüm stratejileri yeniden yükle (hot-reload).
+        """
+        logger.info("🔄 Stratejiler yeniden yükleniyor...")
+        cls.DYNAMIC_STRATEGIES.clear()
+        cls.STRATEGY_EXECUTORS.clear()
+        cls.load_dynamic_strategies()
+        logger.info("✅ Stratejiler yeniden yüklendi")
