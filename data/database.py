@@ -256,7 +256,6 @@ class DatabaseManager:
                     )
                 """)
 
-                # Eski veriyi yeni tabloya kopyala
                 await self.sqlite_conn.execute("""
                     INSERT OR IGNORE INTO trades_new
                     SELECT id, timestamp, closed_at, symbol, strategy_id, direction,
@@ -264,14 +263,12 @@ class DatabaseManager:
                     FROM trades
                 """)
 
-                # Eski tabloyu sil ve yeni tabloyu rename et
                 await self.sqlite_conn.execute("DROP TABLE IF EXISTS trades")
                 await self.sqlite_conn.execute("ALTER TABLE trades_new RENAME TO trades")
 
-                logger.info("✅ trades tablosu leverage REAL olarak güncellendi (migration).")
+                logger.info("✅ trades tablosu leverage REAL olarak güncellendi")
             except Exception as e:
-                logger.debug(f"⚠️ Leverage migration atlandı (tablo zaten güncel olabilir): {e}")
-                # Eski tabloyu temizle
+                logger.debug(f"Leverage migration atlandi: {e}")
                 await self.sqlite_conn.execute("DROP TABLE IF EXISTS trades_new")
 
             await self.sqlite_conn.commit()
