@@ -178,56 +178,92 @@ class RiskEngine:
         self,
         confidence_score: float,
         base_leverage: Optional[float] = None,
-        max_leverage: Optional[float] = None
+        max_leverage: Optional[float] = None,
+        timeframe: str = "1h"  # YENİ: Timeframe bilgisi
     ) -> float:
         """
         Güven skoruna göre dinamik kaldıraç.
-        
+
         ML confidence skoruna göre:
         - < 50%: Base leverage (1x)
         - 50-65%: Orta kaldıraç (2-3x)
         - 65-80%: Yüksek kaldıraç (3-5x)
         - > 80%: Maksimum kaldıraç (5-10x)
-        
+
+        TIMEFRAME AWARE:
+        - 1m, 3m: Yüksek gürültü (noise) nedeniyle max 5x-10x ile sınırlandırılır
+        - 5m, 10m, 15m: Orta gürültü, max 15x-20x
+        - 1h+: Normal yüksek kaldıraç kullanılabilir
+
         Args:
             confidence_score: Güven skoru (0.0 - 1.0)
             base_leverage: Baz kaldıraç (None ise config.default_leverage)
             max_leverage: Maksimum kaldıraç (None ise config.max_leverage)
-        
+            timeframe: Zaman dilimi (örn: "1m", "15m", "1h")
+
         Returns:
             Dinamik kaldıraç
         """
         base = base_leverage or self.config.default_leverage
         maximum = max_leverage or self.config.max_leverage
-        
+
+        # ============================================
+        # TIMEFRAME-AWARE KALDIRAÇ SINIRLANDIRMASI
+        # ============================================
+        # 1m ve 3m gibi düşük zaman dilimlerinde piyasa gürültüsü (noise) çok yüksek
+        # ve komisyon oranları karlılığı ciddi şekilde düşürür.
+        # Bu nedenle kaldıraç otomatik olarak sınırlandırılır.
+
+        timeframe_lower = timeframe.lower()
+
+        # 1m, 3m: Çok yüksek gürültü - Max 5x-10x
+        if timeframe_lower in ["1m", "3m"]:
+            maximum = min(maximum, 10)  # Absolute max 10x
+            logger.info(
+                f"⚠️ [TIMEFRAME-AWARE] {timeframe} için kaldıraç sınırlandırıldı: "
+                f"Max {maximum}x (Noise ve komisyon koruması)"
+            )
+
+        # 5m, 10m, 15m: Orta gürültü - Max 15x-20x
+        elif timeframe_lower in ["5m", "10m", "15m", "20m", "30m"]:
+            maximum = min(maximum, 20)  # Absolute max 20x
+            logger.debug(
+                f"📊 [TIMEFRAME-AWARE] {timeframe} için kaldıraç sınırlandırıldı: "
+                f"Max {maximum}x (Orta gürültü)"
+            )
+
+        # 1h ve üzeri: Normal yüksek kaldıraç kullanılabilir
+        else:
+            logger.debug(f"✅ [TIMEFRAME-AWARE] {timeframe} için normal kaldıraç: Max {maximum}x")
+
         # Güven skoru çok düşükse base leverage
         if confidence_score < 0.50:
             return base
-        
+
         # Confidence bazlı hesaplama (Güçlü bir rampa için karekök/power curve)
-        # 50% confidence = threshold. 
+        # 50% confidence = threshold.
         # Hemen 1x'den kurtulmak için küçük bir 'floor ratio' ekleyelim (0.1)
         # Bu, 50% güvende bile (eğer limit 50x ise) ~5x-10x arası bir başlangıç sağlar.
-        
+
         raw_ratio = (confidence_score - 0.50) / 0.50
-        
+
         # Power curve: Güven arttıkça kaldıraç daha hızlı artar
         # Ancak başlangıçta (50% eşiğinde) doğrudan 'base' (1x) yerine küçük bir sıçrama yapalım
         if raw_ratio == 0:
             boosted_ratio = 0.05 # %5 başlangıç payı
         else:
             boosted_ratio = 0.05 + (0.95 * (raw_ratio ** 0.7))
-            
+
         calculated = base + (boosted_ratio * (maximum - base))
-        
+
         # Kaldıracı sınırla ve tam sayı yap
         final_leverage = int(round(min(maximum, max(base, calculated))))
-        
+
         logger.debug(
             f"🚀 Dinamik kaldıraç: Confidence={confidence_score:.2%}, "
-            f"Leverage={final_leverage}x (Base={base}x, Max={maximum}x)"
+            f"Leverage={final_leverage}x (Base={base}x, Max={maximum}x, TF={timeframe})"
         )
-        
+
         return float(final_leverage)
     
     def calculate_leverage_from_ml_recommendation(

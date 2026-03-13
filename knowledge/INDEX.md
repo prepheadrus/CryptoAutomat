@@ -40,7 +40,9 @@ knowledge/
 │   ├── ATR_TRAILING_STOP_SYSTEM.md  # ATR Trailing Stop Sistemi
 │   ├── walk_forward_optimization.md  # WFO (Walk-Forward Optimization)
 │   ├── auto_grid_generator.md        # Auto-Grid Generator
-│   └── bayesian_optimization.md      # Bayesian Optimization (Optuna)
+│   ├── bayesian_optimization.md      # Bayesian Optimization (Optuna)
+│   ├── ml_model_naming_convention.md # ML Model İsimlendirme (YENİ!)
+│   └── htf_golden_ratio.md           # HTF Altın Oran
 │
 └── documentation/        # Genel dokümantasyon
     ├── session_history.md  # Geliştirme oturum geçmişi
@@ -48,6 +50,16 @@ knowledge/
     ├── technical_improvements.md  # Teknik iyileştirmeler
     ├── RECENT_IMPROVEMENTS.md  # Son iyileştirmeler (Mart 2026)
     └── MARCH_2026_FINAL_FIXES.md  # Mart 2026 Son Düzeltmeler (YENİ!)
+```
+
+---
+
+## 📁 Stratejiler
+
+```
+strategies/
+├── concept_and_implementation.md  # Strateji konseptleri ve tasarım
+└── smart_money_strategy.md        # Smart Money Stratejisi (YENİ!)
 ```
 
 ---
@@ -63,6 +75,42 @@ knowledge/security/         # Güvenlik dokümantasyonu (YENİ!)
 ---
 
 ## 🆕 Yeni Eklenenler (Mart 2026 - Son Güncellemeler)
+
+### **Faz 8: WFO Tam Sistem Entegrasyonu (2026-03-13)**
+- **Dosyalar:** `features/walk_forward_optimization.md`, `features/ml_model_naming_convention.md`
+- **Sorunlar:**
+  - WFO background task başlatılmıyordu
+  - `update_strategy_params()` metodu yoktu
+  - Smart Money stratejisi WFO-uyumsuzdu
+- **Çözümler:**
+  - `api/server.py` lifespan event'ine WFO başlatıcı eklendi
+  - `core/paper.py`'ye `update_strategy_params()` metodu eklendi
+  - `strategy/custom/smart_money.py` WFO-uyumlu hale getirildi
+  - `core/wfo_engine.py`'ye default data fetcher eklendi
+  - ML model naming convention standardize edildi (`get_model_paths()`)
+- **Sonuç:**
+  - ✅ Production-ready otonom optimizasyon
+  - ✅ Server başlangıcında otomatik WFO task
+  - ✅ Canlı parametre güncelleme
+  - ✅ Ensemble model (XGBoost + RF + Metadata) tam uyumlu
+
+### **ML Model İsimlendirme Standardı**
+- **Dosya:** `features/ml_model_naming_convention.md` (YENİ!)
+- **Özellikler:**
+  - Merkezi `get_model_paths()` fonksiyonu
+  - Standart sembol temizleme (`_clean_symbol()`)
+  - Ensemble model (XGBoost + RF + Metadata) uyumlu
+  - Dosya yolu uyuşmazlığı çözüldü
+- **Dosyalar:** `ml/model_training.py`, `api/services/ml_service.py`, `core/paper.py`
+
+### **Smart Money Stratejisi WFO Uyumlu Hale Getirildi**
+- **Dosya:** `strategies/smart_money_strategy.md` (YENİ!)
+- **Özellikler:**
+  - `DEFAULT_PARAMS` sözlüğü eklendi
+  - `update_params()` metodu implemente edildi
+  - Auto-Grid ile otomatik optimizasyon
+  - WFO arka plan görevi ile canlı güncelleme
+- **Dosya:** `strategy/custom/smart_money.py`
 
 ### **SignalGeneratedEvent Düzeltmesi**
 - **Dosya:** `documentation/MARCH_2026_FINAL_FIXES.md`
@@ -238,6 +286,7 @@ knowledge/security/         # Güvenlik dokümantasyonu (YENİ!)
 | **WFO** | `features/walk_forward_optimization.md` |
 | **Auto-Grid** | `features/auto_grid_generator.md` |
 | **Bayesian Opt.** | `features/bayesian_optimization.md` |
+| **ML Model Naming** | `features/ml_model_naming_convention.md` |
 | **HTF Altın Oran** | `features/htf_golden_ratio.md` |
 | **Position Manager** | `features/position_manager.md` |
 | **Risk Engine** | `features/risk_engine.md` |
@@ -245,6 +294,7 @@ knowledge/security/         # Güvenlik dokümantasyonu (YENİ!)
 | No-Code Strateji | `features/no_code_strategy_builder.md` |
 | Strateji Oluşturucu | `features/strategy_builder_guide.md` |
 | ATR Trailing Stop | `features/ATR_TRAILING_STOP_SYSTEM.md` |
+| **Smart Money** | `strategies/smart_money_strategy.md` |
 | Son Geliştirmeler | `documentation/RECENT_IMPROVEMENTS.md` |
 | Oturum Geçmişi | `documentation/session_history.md` |
 | AI Skill | `documentation/ai_skill.md` |
@@ -407,5 +457,5 @@ python main.py
 
 ---
 
-*Son Güncelleme: Mart 2026*  
+*Son Güncelleme: Mart 2026 (Faz 8 - 2026-03-13)*
 *CryptoAlgoBot Documentation Team*

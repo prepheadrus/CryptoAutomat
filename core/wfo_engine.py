@@ -720,6 +720,12 @@ async def start_wfo_background_task(
 
     logger.info(f"🔄 [WFO] Arka plan görevi başlatıldı: {symbol} ({timeframe})")
 
+    # ============================================
+    # WFO DURUM KONTROLÜ (LOGGING)
+    # Kullanıcı arka planda WFO'nun çalıştığını bilmeli
+    # ============================================
+    logger.info(f"⏳ [WFO-STATUS] Arka plan otonom optimizasyon motoru şu an devrede ve {symbol} ({timeframe}) için veri işliyor...")
+
     while True:
         try:
             # Yeniden optimizasyon zamanı geldi mi?
@@ -772,6 +778,9 @@ async def start_wfo_background_task(
 
             # 1 saat bekle
             await asyncio.sleep(3600)
+
+            # Döngü devam ediyor - durum kontrolü
+            logger.debug(f"⏳ [WFO-STATUS] {symbol} için otonom optimizasyon izleniyor... (sonraki kontrol 1 saat)")
 
         except asyncio.CancelledError:
             logger.info(f"🛑 [WFO] {symbol} arka plan görevi durduruldu.")

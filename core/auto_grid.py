@@ -49,8 +49,9 @@ class AutoGridGenerator:
         'sma_period': {'min': 10, 'max': 100, 'step_type': 'int'},
         
         # ATR (Average True Range)
+        # 1m grafiklerde whipsaw (testere) hareketlerinden korunmak için geniş aralık
         'atr': {'min': 1.0, 'max': 5.0, 'step_type': 'float'},
-        'atr_multiplier': {'min': 1.5, 'max': 4.0, 'step_type': 'float'},
+        'atr_multiplier': {'min': 2.0, 'max': 6.0, 'step_type': 'float'},  # GENİŞLETİLDİ: 1m için 4.5-6.0'a kadar
         
         # Bollinger Bands
         'bb': {'min': 1.5, 'max': 3.0, 'step_type': 'float'},
@@ -95,9 +96,10 @@ class AutoGridGenerator:
     
     # Varsayılan aralık (bilinmeyen parametreler için)
     DEFAULT_RANGE = {'min': 1, 'max': 100, 'step_type': 'int'}
-    
-    # Esnetme oranı (%30)
-    FLEX_RATIO = 0.30
+
+    # Esnetme oranı (%30 → %50 genişletildi - 1m grafik whipsaw koruması için)
+    # 1m gibi düşük zaman dilimlerinde WFO'nun daha geniş arama yapması için
+    FLEX_RATIO = 0.50  # %50 esnetme (örn: 3.0 → [1.5, 3.0, 4.5])
     
     def __init__(self):
         """Auto-Grid Generator'ı başlatır."""

@@ -380,12 +380,14 @@ class PaperTrader:
             # 1. Önce Kaldıraç hesapla (Dinamik)
             if self.ml_enabled and ml_confirmed:
                 # ML Güven Skoruna Göre Dinamik Kaldıraç Hesapla
+                # TIMEFRAME-AWARE: 1m/3m gibi düşük TF'lerde kaldıraç otomatik sınırlandırılır
                 base_lev = CONFIG['risk_management'].get('default_leverage', 1.0)
                 max_lev = CONFIG['risk_management'].get('max_leverage', 10.0) # Varsayılan max
                 leverage = self.risk_engine.calculate_dynamic_leverage(
-                    confidence_score=ml_confidence, 
-                    base_leverage=base_lev, 
-                    max_leverage=max_lev
+                    confidence_score=ml_confidence,
+                    base_leverage=base_lev,
+                    max_leverage=max_lev,
+                    timeframe=timeframe  # YENİ: Timeframe bilgisi geçirildi
                 )
             else:
                 leverage = CONFIG['risk_management'].get('default_leverage', 1.0)

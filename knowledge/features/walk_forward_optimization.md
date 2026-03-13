@@ -47,6 +47,13 @@ Walk-Forward Optimization (WFO), strateji parametrelerini piyasa koşulları de�
 - ✅ Tam otonom akış
 - ✅ Sıfır manuel müdahale
 
+### Faz 8: Tam Sistem Entegrasyonu (2026-03-13)
+- ✅ WFO background task server başlangıcında otomatik başlıyor
+- ✅ `update_strategy_params()` metodu `core/paper.py`'e eklendi
+- ✅ Smart Money stratejisi WFO-uyumlu hale getirildi
+- ✅ Default data fetcher DB'den otomatik veri çekiyor
+- ✅ Production-ready otonom optimizasyon
+
 ---
 
 ## Mimari
@@ -59,32 +66,41 @@ Walk-Forward Optimization (WFO), strateji parametrelerini piyasa koşulları de�
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 2. WFO Arka Plan Görevi Başlar                              │
-│    - param_grid=None (ZERO-TOUCH)                           │
-│    - Auto-Grid otomatik devreye girer                       │
+│ 2. Server Başlangıcı (api/server.py lifespan)               │
+│    - CONFIG['wfo']['enabled'] kontrolü                      │
+│    - Her sembol için WFO task başlat                        │
+│    - asyncio.create_task(start_wfo_background_task(...))    │
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 3. Auto-Grid DEFAULT_PARAMS'i Okur                          │
+│ 3. WFO Arka Plan Görevi Başlar                              │
+│    - param_grid=None (ZERO-TOUCH)                           │
+│    - Auto-Grid otomatik devreye girer                       │
+│    - default_data_fetcher DB'den veri çeker                 │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 4. Auto-Grid DEFAULT_PARAMS'i Okur                          │
 │    - 7 parametre → %30 esnetme                              │
 │    - 3^7 = 2187 kombinasyonluk arama uzayı                  │
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 4. Bayesian Optimization (Optuna)                           │
+│ 5. Bayesian Optimization (Optuna)                           │
 │    - TPE algoritması                                        │
 │    - Sadece 50 deneme                                       │
 │    - 2187 kombinasyonu 50'de bul                            │
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 5. Out-of-Sample Test                                       │
+│ 6. Out-of-Sample Test                                       │
 │    - Son 7 gün verisi                                       │
 │    - Sharpe/PnL doğrulama                                   │
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 6. Strateji Canlı Güncellenir                               │
+│ 7. Strateji Canlı Güncellenir                               │
+│    - paper_engine.update_strategy_params()                  │
 │    - Bot durmaz                                             │
 │    - Parametreler anında uygulanır                          │
 │    - [ZERO-TOUCH WFO] log                                   │
@@ -98,15 +114,22 @@ Walk-Forward Optimization (WFO), strateji parametrelerini piyasa koşulları de�
 ### Core Modüller
 - `core/wfo_engine.py` - Ana WFO motoru
 - `core/auto_grid.py` - Otomatik parametre ızgarası
-- `core/paper.py` - PaperTrader entegrasyonu
+- `core/paper.py` - PaperTrader entegrasyonu + `update_strategy_params()`
 - `core/exchange.py` - Exchange entegrasyonu
+- `api/server.py` - WFO background task başlatıcı (lifespan)
 
 ### Stratejiler
 - `strategy/trend_master.py` - DEFAULT_PARAMS ile
 - `strategy/scalper_ninja.py` - DEFAULT_PARAMS ile
+- `strategy/custom/smart_money.py` - DEFAULT_PARAMS + update_params (Faz 8)
 
 ### API
-- `api/server.py` - Model kontrol endpoint'i
+- `api/services/ml_service.py` - get_model_paths() ile model kaydetme
+- `api/routers/system.py` - WFO config endpoint'leri
+
+### ML
+- `ml/model_training.py` - get_model_paths() + ModelTrainer
+- `ml/data_prep.py` - Veri hazırlama
 
 ---
 
@@ -125,6 +148,7 @@ Walk-Forward Optimization (WFO), strateji parametrelerini piyasa koşulları de�
 4. "▶ Uygula" butonuna bas
 
 # Arka planda:
+✅ Server başlangıcında WFO task otomatik başlar
 ✅ Auto-Grid parametre ızgarası oluşturur
 ✅ Bayesian Optimization en iyi parametreleri bulur
 ✅ Strateji otomatik güncellenir
@@ -189,11 +213,14 @@ curl "http://localhost:8000/api/v1/ml/check-model?symbol=BTCUSDT&timeframe=15m"
 {
     "status": "success",
     "model_exists": true,
-    "metadata_exists": true,
-    "timeframe_match": true,
-    "trained_timeframe": "15m",
-    "requested_timeframe": "15m",
-    "error": null
+    "model_path": "artifacts/models/xgb_model_btcusdt_15m.json",
+    "message": "Model bulundu",
+    "ensemble_status": {
+        "xgboost": true,
+        "random_forest": true,
+        "metadata": true,
+        "full_ensemble": true
+    }
 }
 ```
 
@@ -202,7 +229,13 @@ curl "http://localhost:8000/api/v1/ml/check-model?symbol=BTCUSDT&timeframe=15m"
 {
     "status": "success",
     "model_exists": false,
-    "error": "Zaman dilimi uyumsuzluğu! Seçili zaman dilimi (1h) için eğitilmiş bir yapay zeka modeli bulunamadı."
+    "message": "Model bulunamadı",
+    "ensemble_status": {
+        "xgboost": false,
+        "random_forest": false,
+        "metadata": false,
+        "full_ensemble": false
+    }
 }
 ```
 
@@ -385,9 +418,29 @@ class MyStrategy(BaseStrategy):
 | 3.0 | 2026-03-08 | Auto-Grid (Faz 5) |
 | 4.0 | 2026-03-08 | Bayesian Optimization (Faz 6) |
 | 5.0 | 2026-03-08 | Zero-Touch (Faz 7) |
+| **6.0** | **2026-03-13** | **Tam Sistem Entegrasyonu (Faz 8)** |
+
+### Faz 8 Detayları (2026-03-13)
+
+**Sorunlar:**
+- WFO background task hiçbir yerde başlatılmıyordu
+- `update_strategy_params()` metodu `core/paper.py`'de yoktu
+- Smart Money stratejisi WFO-uyumsuzdu
+
+**Çözümler:**
+1. `api/server.py` lifespan event'ine WFO başlatıcı eklendi
+2. `core/paper.py`'ye `update_strategy_params()` metodu eklendi
+3. `strategy/custom/smart_money.py`'ye DEFAULT_PARAMS ve update_params eklendi
+4. `core/wfo_engine.py`'ye default data fetcher eklendi
+
+**Sonuç:**
+- ✅ Production-ready otonom optimizasyon
+- ✅ Server başlangıcında otomatik WFO task başlatma
+- ✅ Canlı parametre güncelleme
+- ✅ Smart Money WFO uyumlu
 
 ---
 
-**Son Güncelleme:** 2026-03-08  
-**Yazar:** CryptoAlgoBot Team  
-**Durum:** ✅ Production Ready
+**Son Güncelleme:** 2026-03-13
+**Yazar:** CryptoAlgoBot Team
+**Durum:** ✅ Production Ready (Faz 8)
