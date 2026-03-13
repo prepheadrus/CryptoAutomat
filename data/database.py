@@ -198,7 +198,7 @@ class DatabaseManager:
                 entry_price REAL NOT NULL,
                 exit_price REAL,
                 size REAL NOT NULL,
-                leverage INTEGER,
+                leverage REAL,  # INTEGER → REAL (1.5x, 2.5x gibi ondalık kaldıraçlar için)
                 pnl_usd REAL,
                 pnl_percent REAL,
                 reason TEXT
@@ -234,6 +234,45 @@ class DatabaseManager:
                 logger.info("✅ trades tablosuna bot_id sütunu eklendi (migration).")
             except:
                 pass  # Sütun zaten var
+
+            # Migration: leverage INTEGER → REAL (ondalık kaldıraçlar için)
+            try:
+                await self.sqlite_conn.execute("""
+                    CREATE TABLE IF NOT EXISTS trades_new (
+                        id TEXT PRIMARY KEY,
+                        timestamp DATETIME DEFAULT (datetime('now','localtime')),
+                        closed_at TEXT,
+                        symbol TEXT NOT NULL,
+                        strategy_id TEXT,
+                        direction TEXT NOT NULL,
+                        entry_price REAL NOT NULL,
+                        exit_price REAL,
+                        size REAL NOT NULL,
+                        leverage REAL,
+                        pnl_usd REAL,
+                        pnl_percent REAL,
+                        reason TEXT,
+                        bot_id TEXT
+                    )
+                """)
+
+                # Eski veriyi yeni tabloya kopyala
+                await self.sqlite_conn.execute("""
+                    INSERT OR IGNORE INTO trades_new
+                    SELECT id, timestamp, closed_at, symbol, strategy_id, direction,
+                           entry_price, exit_price, size, leverage, pnl_usd, pnl_percent, reason, bot_id
+                    FROM trades
+                """)
+
+                # Eski tabloyu sil ve yeni tabloyu rename et
+                await self.sqlite_conn.execute("DROP TABLE IF EXISTS trades")
+                await self.sqlite_conn.execute("ALTER TABLE trades_new RENAME TO trades")
+
+                logger.info("✅ trades tablosu leverage REAL olarak güncellendi (migration).")
+            except Exception as e:
+                logger.debug(f"⚠️ Leverage migration atlandı (tablo zaten güncel olabilir): {e}")
+                # Eski tabloyu temizle
+                await self.sqlite_conn.execute("DROP TABLE IF EXISTS trades_new")
 
             await self.sqlite_conn.commit()
 

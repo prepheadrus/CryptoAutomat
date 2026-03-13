@@ -499,12 +499,12 @@ class PaperTrader:
             "id": payload.get('trade_id'),  # UNIQUE ID (microsecond hassasiyeti)
             "symbol": payload.get('symbol'),
             "direction": payload.get('direction'),
-            "entry_price": payload.get('entry_price'),
-            "exit_price": payload.get('exit_price'),
-            "size": payload.get('size'),
-            "leverage": payload.get('leverage'),
-            "pnl_usd": payload.get('pnl'),
-            "pnl_percent": payload.get('pnl_percent', 0.0) * 100,  # 0-1 → 0-100
+            "entry_price": float(payload.get('entry_price', 0)),
+            "exit_price": float(payload.get('exit_price', 0)),
+            "size": float(payload.get('size', 0)),
+            "leverage": int(payload.get('leverage', 1)),  # INTEGER kolon için int'e çevir
+            "pnl_usd": float(payload.get('pnl', 0)),
+            "pnl_percent": float(payload.get('pnl_percent', 0.0)) * 100,  # 0-1 → 0-100
             "reason": payload.get('reason'),
             "strategy_id": payload.get('strategy_id'),
             "bot_id": bot_id,
