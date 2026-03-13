@@ -189,20 +189,20 @@ class DatabaseManager:
         # İşlem Geçmişi
         trades_sql = """
             CREATE TABLE IF NOT EXISTS trades (
-                id TEXT PRIMARY KEY, -- UNIQUE trade ID (microsecond hassasiyeti)
+                id TEXT PRIMARY KEY,
                 timestamp DATETIME DEFAULT (datetime('now','localtime')),
-                closed_at TEXT, -- ISO format (for frontend)
+                closed_at TEXT,
                 symbol TEXT NOT NULL,
-                strategy_id TEXT, -- Hangi strateji?
+                strategy_id TEXT,
                 direction TEXT NOT NULL,
                 entry_price REAL NOT NULL,
                 exit_price REAL,
                 size REAL NOT NULL,
-                leverage REAL,  # INTEGER → REAL (1.5x, 2.5x gibi ondalık kaldıraçlar için)
+                leverage REAL,
                 pnl_usd REAL,
                 pnl_percent REAL,
-                reason TEXT
-                -- bot_id TEXT -- Migration ile eklenecek (backward compatibility)
+                reason TEXT,
+                bot_id TEXT
             );
         """
         # Postgres için trade tablosu SERIAL farklılığı
