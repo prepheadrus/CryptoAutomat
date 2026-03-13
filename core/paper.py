@@ -295,32 +295,36 @@ class PaperTrader:
             ml_rec = "HOLD"
             ml_rec_norm = "HOLD"
 
+            # ML confidence threshold'u config'den al
+            from core.config import CONFIG
+            ml_threshold = CONFIG.get('ml', {}).get('confidence_threshold', 0.65)
+
             if self.ml_enabled:
                 ml_data = await self._get_ml_confirmation(symbol, timeframe, indicators)
                 if ml_data:
                     ml_rec = ml_data.get('recommendation', 'HOLD')
                     ml_confidence = ml_data.get('confidence', 0.5)
-                    
+
                     # ML Önerisini Normalize Et (TR -> EN)
                     ml_rec_norm = str(ml_rec).upper()
                     if "AL" in ml_rec_norm or "BUY" in ml_rec_norm: ml_rec_norm = "LONG"
                     elif "SAT" in ml_rec_norm or "SELL" in ml_rec_norm: ml_rec_norm = "SHORT"
-                    
+
                     # Filtreleme Mantığı (Conflict Resolution)
                     if signal == 2 and ml_rec_norm == "SHORT":  # Direction: LONG
                         logger.info(f"🛡️ [ML FILTER] {symbol} LONG reddedildi: ML zıt yön gösteriyor ({ml_rec_norm}) | Conf: {ml_confidence:.2f}")
                         ml_confirmed = False
-                    
+
                     elif signal == 0 and ml_rec_norm == "LONG": # Direction: SHORT
                         logger.info(f"🛡️ [ML FILTER] {symbol} SHORT reddedildi: ML zıt yön gösteriyor ({ml_rec_norm}) | Conf: {ml_confidence:.2f}")
                         ml_confirmed = False
-                    
-                    # Nötr (Hold) durumu konfigürasyona bağlı olarak engellenebilir
-                    elif ml_rec == "HOLD" and ml_confidence < 0.40:
-                        logger.info(f"🛡️ [ML FILTER] {symbol} reddedildi: ML belirsiz (HOLD) | Conf: {ml_confidence:.2f}")
+
+                    # Nötr (Hold) durumu - threshold'dan düşükse reddet
+                    elif ml_confidence < ml_threshold:
+                        logger.info(f"🛡️ [ML FILTER] {symbol} reddedildi: ML confidence {ml_confidence:.2f} < threshold {ml_threshold:.2f}")
                         ml_confirmed = False
                     else:
-                        logger.info(f"🧠 [ML CONFIRMED] {symbol} | Rec: {ml_rec} | Conf: {ml_confidence:.2f}")
+                        logger.info(f"🧠 [ML CONFIRMED] {symbol} | Rec: {ml_rec} | Conf: {ml_confidence:.2f} (threshold: {ml_threshold:.2f})")
                 else:
                     logger.debug(f"ℹ️ {symbol} için aktif ML modeli bulunamadı, sadece teknik sinyal ile gidiliyor.")
 

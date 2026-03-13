@@ -218,7 +218,13 @@ export const botManager = {
                 : '#8b949e';
             
             const mlConf = decision && decision.ml_confidence 
-                ? `<span style="font-size:0.7rem; opacity:0.8; margin-left:4px;">(%${(decision.ml_confidence * 100).toFixed(0)})</span>` 
+                ? (() => {
+                    // ML confidence 0-1 arası mı yoksa 0-100 arası mı kontrol et
+                    const confValue = decision.ml_confidence > 1 
+                        ? decision.ml_confidence  // Zaten 0-100 aralığında (örn: 50)
+                        : decision.ml_confidence * 100;  // 0-1 aralığında (örn: 0.5)
+                    return `<span style="font-size:0.7rem; opacity:0.8; margin-left:4px;">(%${confValue.toFixed(0)})</span>`;
+                })()
                 : '';
 
             return `

@@ -49,11 +49,29 @@ async def get_trade_history(
                     "strategy_id": trade_dict.get('strategy_id'),
                     "closed_at": trade_dict.get('closed_at')
                 })
+
+        # 3. Merge - DUPLICATE ÖNLEME (KRİTİK!)
+        # DB'deki tüm ID'leri topla (normalize edilmiş)
+        seen_ids = set()
+        for t in db_trades:
+            trade_id = t.get('id') or t.get('trade_id')
+            if trade_id:
+                # ID'yi normalize et (string'e çevir, boşlukları temizle)
+                seen_ids.add(str(trade_id).strip())
         
-        # 3. Merge (ID bazlı tekleştir)
-        seen_ids = {t['id'] for t in db_trades if 'id' in t}
-        all_trades = db_trades + [t for t in memory_trades if t['id'] not in seen_ids]
+        # Memory trade'leri ekle (eğer DB'de yoksa)
+        all_trades = list(db_trades)  # DB trade'leri ile başla
         
+        for t in memory_trades:
+            trade_id = t.get('id') or t.get('trade_id')
+            if trade_id:
+                # ID'yi normalize et
+                normalized_id = str(trade_id).strip()
+                # Eğer DB'de yoksa ekle
+                if normalized_id not in seen_ids:
+                    all_trades.append(t)
+                    seen_ids.add(normalized_id)  # Eklenenleri de işaretle
+
         # 4. Filtreleme
         if symbol:
             all_trades = [t for t in all_trades if t['symbol'] == symbol]
@@ -128,9 +146,27 @@ async def get_trade_stats() -> Dict[str, Any]:
                     "strategy_id": trade_dict.get('strategy_id')
                 })
         
-        # 3. Merge
-        seen_ids = {t['id'] for t in db_trades if 'id' in t}
-        all_trades = db_trades + [t for t in memory_trades if t['id'] not in seen_ids]
+        # 3. Merge - DUPLICATE ÖNLEME (KRİTİK!)
+        # DB'deki tüm ID'leri topla (normalize edilmiş)
+        seen_ids = set()
+        for t in db_trades:
+            trade_id = t.get('id') or t.get('trade_id')
+            if trade_id:
+                # ID'yi normalize et (string'e çevir, boşlukları temizle)
+                seen_ids.add(str(trade_id).strip())
+        
+        # Memory trade'leri ekle (eğer DB'de yoksa)
+        all_trades = list(db_trades)  # DB trade'leri ile başla
+        
+        for t in memory_trades:
+            trade_id = t.get('id') or t.get('trade_id')
+            if trade_id:
+                # ID'yi normalize et
+                normalized_id = str(trade_id).strip()
+                # Eğer DB'de yoksa ekle
+                if normalized_id not in seen_ids:
+                    all_trades.append(t)
+                    seen_ids.add(normalized_id)  # Eklenenleri de işaretle
         
         if not all_trades:
             return {
