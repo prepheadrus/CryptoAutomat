@@ -676,10 +676,30 @@ async def start_wfo_background_task(
         timeframe: Zaman dilimi
         strategy_class: Strateji sınıfı
         param_grid: Parametre aralıkları (None ise otomatik oluşturulur - ZERO-TOUCH)
-        data_fetcher: Veri çekme fonksiyonu (async)
+        data_fetcher: Veri çekme fonksiyonu (async) - None ise varsayılan DB fetcher kullanılır
         optimization_metric: Optimizasyon metriği
         n_trials: Maksimum deneme sayısı (Bayesian için)
     """
+    # Varsayılan veri çekici: DB'den Klines verisi
+    if data_fetcher is None:
+        async def default_data_fetcher(sym: str, tf: str):
+            from data.database import db_manager
+            try:
+                await db_manager.connect()
+                klines = await db_manager.get_klines(sym, timeframe=tf, limit=1000)
+                if klines:
+                    import pandas as pd
+                    df = pd.DataFrame(klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                    df['timestamp'] = pd.to_numeric(df['timestamp'], errors='coerce')
+                    df = df.sort_values('timestamp').reset_index(drop=True)
+                    return df
+                return None
+            except Exception as e:
+                logger.error(f"❌ [WFO] Veri çekme hatası: {e}")
+                return None
+
+        data_fetcher = default_data_fetcher
+
     wfo = get_wfo_engine(symbol)
 
     # FAZ 3: TAM OTONOM AKIŞ

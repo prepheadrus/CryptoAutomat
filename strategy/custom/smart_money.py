@@ -24,10 +24,24 @@ import pandas as pd
 class SmartMoneyStrategy(BaseStrategy):
     """
     Smart Money (Akıllı Para) Stratejisi
-    
+
     Kurumsal yatırımcıların hareketlerini takip eder.
     Hacim onaylı trend takibi yapar.
+
+    WFO (Walk-Forward Optimization) Destekli:
+    - Auto-Grid ile otomatik parametre ızgarası
+    - Bayesian Optimization ile hızlı optimizasyon
+    - Otonom parametre adaptasyonu
     """
+
+    # Varsayılan parametreler (Auto-Grid bu değerlerden %30 esnetme yapar)
+    DEFAULT_PARAMS = {
+        'rsi_period': 14,
+        'macd_fast': 12,
+        'macd_slow': 26,
+        'macd_signal': 9,
+        'obv_period': 14
+    }
 
     def __init__(self):
         """Smart Money stratejisi başlatıcı"""
@@ -35,10 +49,11 @@ class SmartMoneyStrategy(BaseStrategy):
         self.name = "Smart Money"
         self.description = "RSI + MACD + OBV konfluansı ile akıllı para girişlerini tespit eder"
         self.timeframe = "1m"
-        self.rsi_period = 14
-        self.macd_fast = 12
-        self.macd_slow = 26
-        self.macd_signal = 9
+        self.params = self.DEFAULT_PARAMS.copy()
+        self.rsi_period = self.params.get('rsi_period', 14)
+        self.macd_fast = self.params.get('macd_fast', 12)
+        self.macd_slow = self.params.get('macd_slow', 26)
+        self.macd_signal = self.params.get('macd_signal', 9)
 
     def name(self) -> str:
         """Strateji adı"""
@@ -55,9 +70,9 @@ class SmartMoneyStrategy(BaseStrategy):
     def get_stop_params(self) -> dict:
         """
         Stop Loss ve Take Profit parametreleri.
-        
+
         RRR = 3.0 (Take Profit = 3x Stop Loss mesafesi)
-        
+
         Returns:
             dict: {
                 'atr_multiplier': float,
@@ -68,6 +83,25 @@ class SmartMoneyStrategy(BaseStrategy):
             'atr_multiplier': 2.0,  # Stop Loss = ATR × 2
             'risk_reward_ratio': 3.0  # Take Profit = 3x Stop Loss
         }
+
+    def update_params(self, new_params: dict):
+        """
+        WFO tarafından bulunan yeni parametreleri uygular.
+
+        Args:
+            new_params: Yeni parametre sözlüğü
+        """
+        for key, value in new_params.items():
+            if key in self.params:
+                self.params[key] = value
+
+        # Parametreleri instance değişkenlerine de yansıt
+        self.rsi_period = self.params.get('rsi_period', 14)
+        self.macd_fast = self.params.get('macd_fast', 12)
+        self.macd_slow = self.params.get('macd_slow', 26)
+        self.macd_signal = self.params.get('macd_signal', 9)
+
+        return self.params
 
     def generate_signal(self, df: pd.DataFrame) -> int:
         """

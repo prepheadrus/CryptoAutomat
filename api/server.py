@@ -46,41 +46,86 @@ async def lifespan(app: FastAPI):
     """
     # ===== STARTUP =====
     logger.info("🚀 FastAPI Sunucusu başlatılıyor...")
-    
+
     # 1. Event Bus Başlat (Pub/Sub Motoru)
     from shared.events import event_bus
     await event_bus.start(num_workers=5)
 
     # 2. PaperTrader Handler'ları Kaydet
     await paper_engine.start_event_handlers()
-    
+
     # Veritabanı bağlantısı
     await db_manager.connect()
-    
+
     # Yarım kalan indirme görevlerini geri yükle
     await exchange_manager.load_tasks_from_db()
-    
+
     # Bot task'larını başlat
     tasks = []
     for symbol in CONFIG['trading']['symbols']:
         tasks.append(asyncio.create_task(exchange_manager.watch_ticker_loop(symbol)))
         tasks.append(asyncio.create_task(exchange_manager.run_strategy_poller(symbol)))
-    
+
     logger.info(f"✅ {len(tasks)} bot task'ı ve Event Engine başlatıldı")
-    
+
+    # ===== WFO (Walk-Forward Optimization) Başlat =====
+    # Config'de wfo.enabled == True ise arka plan optimizasyon görevlerini başlat
+    if CONFIG.get('wfo', {}).get('enabled', False):
+        logger.info("🧠 [WFO] Otonom optimizasyon sistemi başlatılıyor...")
+
+        try:
+            from core.wfo_engine import start_wfo_background_task
+            from strategy.manager import StrategyManager
+
+            # Her aktif sembol için WFO görevi başlat
+            wfo_tasks = []
+            for symbol in CONFIG['trading']['symbols']:
+                # Sembol için aktif stratejiyi bul
+                strategy_id = paper_engine.active_strategies.get(symbol)
+                if strategy_id:
+                    strategy_instance = StrategyManager.get_strategy(strategy_id)
+                    if strategy_instance:
+                        timeframe = paper_engine.active_timeframes.get(symbol, '1m')
+
+                        # WFO background task başlat (param_grid=None → Auto-Grid)
+                        wfo_task = asyncio.create_task(
+                            start_wfo_background_task(
+                                symbol=symbol,
+                                timeframe=timeframe,
+                                strategy_class=strategy_instance.__class__,
+                                param_grid=None,  # ZERO-TOUCH: Auto-Grid otomatik oluşturur
+                                data_fetcher=None,  # Varsayılan veri çekici kullanılacak
+                                optimization_metric=CONFIG['wfo'].get('optimization_metric', 'sharpe'),
+                                n_trials=50
+                            )
+                        )
+                        wfo_tasks.append(wfo_task)
+                        logger.info(f"✅ [WFO] {symbol} ({timeframe}) için otonom optimizasyon görevi başlatıldı")
+
+            if wfo_tasks:
+                logger.info(f"🎯 [WFO] {len(wfo_tasks)} sembol için otonom optimizasyon aktif")
+            else:
+                logger.warning("⚠️ [WFO] Aktif strateji bulunamadı, optimizasyon görevleri başlatılmadı")
+
+        except Exception as e:
+            logger.error(f"❌ [WFO] Başlatma hatası: {e}")
+            logger.debug(f"Traceback: {e}", exc_info=True)
+    else:
+        logger.info("ℹ️ [WFO] Otonom optimizasyon devre dışı (config.yaml: wfo.enabled)")
+
     yield
-    
+
     # ===== SHUTDOWN =====
     logger.info("🛑 FastAPI Sunucusu kapatılıyor...")
-    
+
     # Event Bus Durdur
     from shared.events import event_bus
     await event_bus.stop()
-    
+
     # Borsa bağlantısını kapat
     await exchange_manager.close()
     logger.info("✅ Borsa bağlantısı kapatıldı")
-    
+
     # Veritabanı bağlantısını kapat
     await db_manager.close()
     logger.info("✅ Veritabanı bağlantısı kapatıldı")
