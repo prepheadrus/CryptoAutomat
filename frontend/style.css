@@ -695,6 +695,61 @@ body {
     padding: 2px 6px;
     border-radius: 4px;
     background: rgba(255, 255, 255, 0.1);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.3s ease;
+}
+
+/* Sinyal Durumları - Nefes Animasyonu */
+.status-signal.signal-long {
+    background: linear-gradient(135deg, rgba(46, 160, 67, 0.3) 0%, rgba(46, 160, 67, 0.5) 100%);
+    color: #2ea043;
+    box-shadow: 0 0 10px rgba(46, 160, 67, 0.5);
+    animation: signalBreathe 2s ease-in-out infinite;
+}
+
+.status-signal.signal-short {
+    background: linear-gradient(135deg, rgba(248, 81, 73, 0.3) 0%, rgba(248, 81, 73, 0.5) 100%);
+    color: #f85149;
+    box-shadow: 0 0 10px rgba(248, 81, 73, 0.5);
+    animation: signalBreathe 2s ease-in-out infinite;
+}
+
+.status-signal.signal-hold {
+    background: rgba(139, 148, 158, 0.2);
+    color: var(--text-muted);
+    box-shadow: none;
+    animation: none;
+}
+
+/* Nefes Animasyonu (AL/SAT için) */
+@keyframes signalBreathe {
+    0%, 100% {
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+        transform: scale(1);
+        opacity: 0.9;
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(255, 255, 255, 0.6);
+        transform: scale(1.05);
+        opacity: 1;
+    }
+}
+
+/* Pozisyon Açık/Kapalı Durumu */
+.status-signal.position-open {
+    border: 2px solid currentColor;
+    animation: signalBreathe 1.5s ease-in-out infinite, positionPulse 3s ease-in-out infinite;
+}
+
+@keyframes positionPulse {
+    0%, 100% {
+        border-color: rgba(255, 255, 255, 0.3);
+    }
+    50% {
+        border-color: rgba(255, 255, 255, 0.8);
+    }
 }
 
 .status-card-body-compact {
@@ -719,6 +774,101 @@ body {
     font-size: 0.75rem;
     color: var(--text-main);
     font-weight: 600;
+}
+
+/* ============================================================================
+   WFO PARAMETER BADGES (Canlı Parametre Telemetrisi)
+   Zero-Touch Architecture: Dinamik, future-proof, responsive
+   ============================================================================ */
+
+/* Rozet container (flex-wrap ile taşkın koruması) */
+.wfo-params-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+/* Individual badge */
+.wfo-param-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    background: linear-gradient(135deg, rgba(88, 166, 255, 0.15) 0%, rgba(188, 140, 255, 0.15) 100%);
+    border: 1px solid rgba(88, 166, 255, 0.4);
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--neon-blue);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 2px 8px rgba(88, 166, 255, 0.2);
+    transition: all 0.3s ease;
+    animation: wfoPulse 2s ease-in-out infinite;
+    white-space: nowrap;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.wfo-param-badge:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(88, 166, 255, 0.4);
+    border-color: rgba(88, 166, 255, 0.8);
+    background: linear-gradient(135deg, rgba(88, 166, 255, 0.25) 0%, rgba(188, 140, 255, 0.25) 100%);
+    z-index: 10;
+}
+
+/* "+X daha" badge (farklı stil) */
+.wfo-param-badge.wfo-more {
+    background: linear-gradient(135deg, rgba(139, 148, 158, 0.2) 0%, rgba(139, 148, 158, 0.2) 100%);
+    border-color: rgba(139, 148, 158, 0.5);
+    color: var(--text-muted);
+    animation: none;
+    cursor: default;
+}
+
+.wfo-param-badge.wfo-more:hover {
+    transform: none;
+    box-shadow: 0 2px 8px rgba(139, 148, 158, 0.3);
+}
+
+/* Pulse animasyonu (sürekli) */
+@keyframes wfoPulse {
+    0%, 100% {
+        box-shadow: 0 2px 8px rgba(88, 166, 255, 0.2);
+    }
+    50% {
+        box-shadow: 0 2px 12px rgba(88, 166, 255, 0.35);
+    }
+}
+
+/* WFO güncelleme animasyonu (flash efekti) */
+@keyframes wfoUpdateFlash {
+    0% {
+        background: rgba(88, 166, 255, 0.15);
+        transform: scale(1);
+    }
+    50% {
+        background: rgba(88, 166, 255, 0.4);
+        transform: scale(1.08);
+        border-color: rgba(88, 166, 255, 1);
+    }
+    100% {
+        background: rgba(88, 166, 255, 0.15);
+        transform: scale(1);
+    }
+}
+
+.wfo-param-badge.updated {
+    animation: wfoUpdateFlash 1s ease-out;
+}
+
+/* Responsive: Küçük ekranlarda daha az rozet */
+@media (max-width: 768px) {
+    .wfo-param-badge {
+        font-size: 0.65rem;
+        padding: 2px 6px;
+        max-width: 100px;
+    }
 }
 
 /* ============================================================================

@@ -339,7 +339,8 @@ class PaperTrader:
                 'ml_rec': ml_rec_norm, # Normalize edilmiş halini kaydet
                 'ml_confidence': ml_confidence,
                 'ml_confirmed': ml_confirmed,
-                'htf_trend': htf_trend
+                'htf_trend': htf_trend,
+                'has_position': False  # Varsayılan: Pozisyon yok
             }
 
             # ML onayı yoksa dur
@@ -424,7 +425,11 @@ class PaperTrader:
             if position:
                 # Legacy positions güncelle
                 self.open_positions = self.position_manager.legacy_positions
-                
+
+                # Latest decisions'da has_position'u güncelle
+                if symbol in self.latest_decisions:
+                    self.latest_decisions[symbol]['has_position'] = True
+
                 logger.info(f"✅ Pozisyon açıldı: {bot_id} {direction} @ {price:.2f}")
             
         except Exception as e:
@@ -456,6 +461,7 @@ class PaperTrader:
         payload = event.payload
         bot_id = payload.get('bot_id')
         pnl = payload.get('pnl', 0.0)
+        symbol = payload.get('symbol')
 
         logger.info(f"❌ Pozisyon kapatıldı: {bot_id} PnL=${pnl:.2f}")
 
@@ -476,6 +482,14 @@ class PaperTrader:
 
         # Trade history'yi senkronize et (position_manager'dan al)
         self.trade_history = self.position_manager.trade_history.trades
+
+        # ============================================
+        # POZİSYON KAPANDI → has_position = False
+        # ============================================
+        if symbol and symbol in self.latest_decisions:
+            self.latest_decisions[symbol]['has_position'] = False
+            self.latest_decisions[symbol]['position_closed_at'] = datetime.utcnow().isoformat()
+            logger.debug(f"📊 [SİNYAL] {symbol}: Pozisyon kapandı, HOLD moduna geçildi")
 
         # DATABASE'E KAYDET (TEK KAYNAK - SINGLE SOURCE OF TRUTH)
         # Bu handler DB'ye kaydeder, position_manager'da save_trade YOK
@@ -690,6 +704,7 @@ class PaperTrader:
                 if symbol in self.latest_decisions:
                     self.latest_decisions[symbol]['wfo_updated'] = True
                     self.latest_decisions[symbol]['wfo_params'] = new_params
+                    self.latest_decisions[symbol]['updated_at'] = datetime.now().isoformat()  # YENİ: Timestamp
 
                 return True
             else:
@@ -841,17 +856,37 @@ class PaperTrader:
     def get_all_bots(self) -> List[Dict[str, Any]]:
         """
         Tüm botları listele. BotManager'dan güncel verileri (PnL, İşlem Sayısı vb.) çeker.
+        YENİ: WFO aktif parametreleri de eklendi.
 
         Returns:
-            Bot listesi (detaylı metriklerle birlikte)
+            Bot listesi (detaylı metriklerle birlikte + WFO parametreleri)
         """
         bots = []
         for bot_id, bot in self.bot_manager.bots.items():
             state = bot.state
             config = bot.config
-            
+
             # PnL yüzde hesapla (Bakiye bazlı basit oran)
             pnl_percent = (state.pnl / self.initial_balance * 100) if self.initial_balance > 0 else 0.0
+
+            # ============================================
+            # WFO AKTİF PARAMETRELERİ (YENİ!)
+            # ============================================
+            active_params = {}
+            last_wfo_optimization = None
+
+            # Sembol için aktif stratejiyi bul ve parametrelerini al
+            symbol = config.symbol
+            if symbol in self.strategies and self.strategies[symbol] is not None:
+                strategy = self.strategies[symbol]
+                if hasattr(strategy, 'params'):
+                    active_params = strategy.params.copy()
+
+            # latest_decisions'dan WFO bilgilerini al
+            if symbol in self.latest_decisions:
+                decision = self.latest_decisions[symbol]
+                if decision.get('wfo_updated'):
+                    last_wfo_optimization = decision.get('updated_at', decision.get('time'))
 
             bots.append({
                 'bot_id': bot_id,
@@ -867,23 +902,46 @@ class PaperTrader:
                 'trades': state.trades,
                 'wins': state.wins,
                 'started_at': bot.started_at.isoformat(),
-                'last_signal_at': state.last_signal_at.isoformat() if state.last_signal_at else None
+                'last_signal_at': state.last_signal_at.isoformat() if state.last_signal_at else None,
+                # WFO Telemetri (YENİ!)
+                'active_params': active_params,
+                'last_wfo_optimization': last_wfo_optimization
             })
         return bots
 
     def get_bot_status(self, bot_id: str) -> Optional[Dict[str, Any]]:
         """
         Tek bir botun durumunu al.
+        YENİ: WFO aktif parametreleri de eklendi.
         """
         bot = self.bot_manager.get_bot(bot_id)
         if not bot:
             return None
-            
+
         state = bot.state
         config = bot.config
-        
+
         pnl_percent = (state.pnl / self.initial_balance * 100) if self.initial_balance > 0 else 0.0
-        
+
+        # ============================================
+        # WFO AKTİF PARAMETRELERİ (YENİ!)
+        # ============================================
+        active_params = {}
+        last_wfo_optimization = None
+
+        # Sembol için aktif stratejiyi bul ve parametrelerini al
+        symbol = config.symbol
+        if symbol in self.strategies and self.strategies[symbol] is not None:
+            strategy = self.strategies[symbol]
+            if hasattr(strategy, 'params'):
+                active_params = strategy.params.copy()
+
+        # latest_decisions'dan WFO bilgilerini al
+        if symbol in self.latest_decisions:
+            decision = self.latest_decisions[symbol]
+            if decision.get('wfo_updated'):
+                last_wfo_optimization = decision.get('updated_at', decision.get('time'))
+
         return {
             'bot_id': bot_id,
             'symbol': config.symbol,
@@ -898,7 +956,10 @@ class PaperTrader:
             'trades': state.trades,
             'wins': state.wins,
             'started_at': bot.started_at.isoformat(),
-            'last_signal_at': state.last_signal_at.isoformat() if state.last_signal_at else None
+            'last_signal_at': state.last_signal_at.isoformat() if state.last_signal_at else None,
+            # WFO Telemetri (YENİ!)
+            'active_params': active_params,
+            'last_wfo_optimization': last_wfo_optimization
         }
 
     # ========================================================================

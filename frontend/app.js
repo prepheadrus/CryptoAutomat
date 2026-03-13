@@ -1037,6 +1037,12 @@ async function saveAdvancedSettings() {
         if (result.status === 'success') {
             showToast('✅ ' + result.message, 'success');
             console.log('[INFO] Gelişmiş ayarlar güncellendi:', result.data);
+
+            // WFO re-optimizasyon aralığı değiştiyse refresh'i güncelle
+            if (wfoData.reoptimize_interval) {
+                console.log(`[WFO] Re-opt aralığı değişti: ${wfoData.reoptimize_interval} saat`);
+                startWfoRefresh();  // Dinamik refresh'i yeniden başlat
+            }
         } else {
             showToast('❌ ' + result.message, 'error');
         }
@@ -1808,11 +1814,61 @@ function renderTradeHistory(trades) {
 // AUTO REFRESH
 // ============================================================================
 
+// WFO dinamik refresh için global değişken
+let wfoRefreshInterval = null;
+
+/**
+ * WFO re-optimizasyon aralığına göre dinamik refresh hesapla
+ * Formül: refresh = (reoptimizeInterval / 168) * 1 saat
+ *
+ * @returns {number} - Refresh aralığı (ms)
+ */
+function calculateWfoRefreshInterval() {
+    // Settings'ten WFO re-optimizasyon aralığını al
+    const wfoIntervalHours = parseInt(document.getElementById('wfo-interval')?.value || '168');
+
+    // Formül: (reoptimizeInterval / 168) * 1 saat
+    // Mantık: WFO ne kadar sık çalışıyorsa, refresh de o kadar sık olsun
+    const refreshMs = (wfoIntervalHours / 168) * 3600000;
+
+    // Min: 1 dakika, Max: 6 saat
+    const minRefresh = 60000;   // 1 dakika
+    const maxRefresh = 21600000; // 6 saat
+
+    const safeRefresh = Math.max(minRefresh, Math.min(maxRefresh, refreshMs));
+
+    console.log(`[WFO Refresh] Re-opt: ${wfoIntervalHours}saat → Refresh: ${(safeRefresh/60000).toFixed(1)}dk`);
+
+    return safeRefresh;
+}
+
+/**
+ * WFO parametreleri için dinamik refresh başlat
+ */
+function startWfoRefresh() {
+    // Eski interval'ı temizle
+    if (wfoRefreshInterval) {
+        clearInterval(wfoRefreshInterval);
+        console.log('[WFO Refresh] Eski refresh durduruldu');
+    }
+
+    // Yeni refresh aralığını hesapla
+    const refreshMs = calculateWfoRefreshInterval();
+
+    // WFO parametreleri için ayrı refresh
+    wfoRefreshInterval = setInterval(() => {
+        console.log('[WFO Refresh] Parametreler güncelleniyor...');
+        botManager.loadBots();  // WFO parametreleri dahil tüm bot verisi
+    }, refreshMs);
+
+    console.log(`[WFO Refresh] Dinamik refresh başlatıldı: ${(refreshMs/60000).toFixed(1)} dakikada bir`);
+}
+
 function startAutoRefresh() {
     // Dashboard metrics - every 3 seconds
     refreshIntervals.dashboard = setInterval(loadDashboardMetrics, 3000);
 
-    // Bots - every 5 seconds
+    // Bots - every 5 seconds (PnL, sinyal, trades - hızlı değişen veriler)
     refreshIntervals.bots = setInterval(() => botManager.loadBots(), 5000);
 
     // Active downloads - every 2 seconds
@@ -1822,14 +1878,24 @@ function startAutoRefresh() {
     // YORUMA ALINDI: Veri Laboratuvarı sayfasında sembol seçimi otomatik yenilenmesin
     // refreshIntervals.dataSymbols = setInterval(loadDataSymbols, 5000);
 
-    console.log('[INFO] Auto-refresh başlatıldı');
+    // WFO parametreleri - Dinamik (re-optimizasyon aralığına göre)
+    startWfoRefresh();
+
+    console.log('[INFO] Auto-refresh başlatıldı (WFO dinamik)');
 }
 
 function stopAutoRefresh() {
     Object.values(refreshIntervals).forEach(interval => {
         if (interval) clearInterval(interval);
     });
-    console.log('[INFO] Auto-refresh durduruldu');
+
+    // WFO dinamik refresh'i de durdur
+    if (wfoRefreshInterval) {
+        clearInterval(wfoRefreshInterval);
+        wfoRefreshInterval = null;
+    }
+
+    console.log('[INFO] Auto-refresh durduruldu (WFO dahil)');
 }
 
 async function updateActiveTasks() {
