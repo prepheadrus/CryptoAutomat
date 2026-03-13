@@ -41,15 +41,17 @@ knowledge/
 │   ├── walk_forward_optimization.md  # WFO (Walk-Forward Optimization)
 │   ├── auto_grid_generator.md        # Auto-Grid Generator
 │   ├── bayesian_optimization.md      # Bayesian Optimization (Optuna)
-│   ├── ml_model_naming_convention.md # ML Model İsimlendirme (YENİ!)
+│   ├── ml_model_naming_convention.md # ML Model İsimlendirme
+│   ├── wfo_zero_touch_telemetry.md   # WFO Canlı Parametre Telemetrisi
+│   ├── wfo_dynamic_refresh.md        # Dinamik WFO Refresh
+│   ├── dynamic_signal_breathing.md   # Dinamik Sinyal Gösterimi
 │   └── htf_golden_ratio.md           # HTF Altın Oran
 │
 └── documentation/        # Genel dokümantasyon
     ├── session_history.md  # Geliştirme oturum geçmişi
     ├── ai_skill.md         # AI asistan yetenek tanımlaması
     ├── technical_improvements.md  # Teknik iyileştirmeler
-    ├── RECENT_IMPROVEMENTS.md  # Son iyileştirmeler (Mart 2026)
-    └── MARCH_2026_FINAL_FIXES.md  # Mart 2026 Son Düzeltmeler (YENİ!)
+    └── RECENT_IMPROVEMENTS.md  # Son iyileştirmeler
 ```
 
 ---
@@ -59,7 +61,7 @@ knowledge/
 ```
 strategies/
 ├── concept_and_implementation.md  # Strateji konseptleri ve tasarım
-└── smart_money_strategy.md        # Smart Money Stratejisi (YENİ!)
+└── smart_money_strategy.md        # Smart Money Stratejisi
 ```
 
 ---
@@ -74,82 +76,41 @@ knowledge/security/         # Güvenlik dokümantasyonu (YENİ!)
 
 ---
 
-## 🆕 Yeni Eklenenler (Mart 2026 - Son Güncellemeler)
+## 🆕 Yeni Eklenen Dökümanlar
 
-### **Faz 8: WFO Tam Sistem Entegrasyonu (2026-03-13)**
-- **Dosyalar:** `features/walk_forward_optimization.md`, `features/ml_model_naming_convention.md`
-- **Sorunlar:**
-  - WFO background task başlatılmıyordu
-  - `update_strategy_params()` metodu yoktu
-  - Smart Money stratejisi WFO-uyumsuzdu
-- **Çözümler:**
-  - `api/server.py` lifespan event'ine WFO başlatıcı eklendi
-  - `core/paper.py`'ye `update_strategy_params()` metodu eklendi
-  - `strategy/custom/smart_money.py` WFO-uyumlu hale getirildi
-  - `core/wfo_engine.py`'ye default data fetcher eklendi
-  - ML model naming convention standardize edildi (`get_model_paths()`)
-- **Sonuç:**
-  - ✅ Production-ready otonom optimizasyon
-  - ✅ Server başlangıcında otomatik WFO task
-  - ✅ Canlı parametre güncelleme
-  - ✅ Ensemble model (XGBoost + RF + Metadata) tam uyumlu
+### **WFO Canlı Parametre Telemetrisi**
+- **Dosya:** `features/wfo_zero_touch_telemetry.md`
+- **Özellikler:** Backend'den frontend'e aktif parametreler, son güncelleme zamanı
+- **Dosyalar:** `core/paper.py`, `frontend/components/bots/bot-manager.js`
 
-### **ML Model İsimlendirme Standardı**
-- **Dosya:** `features/ml_model_naming_convention.md` (YENİ!)
-- **Özellikler:**
-  - Merkezi `get_model_paths()` fonksiyonu
-  - Standart sembol temizleme (`_clean_symbol()`)
-  - Ensemble model (XGBoost + RF + Metadata) uyumlu
-  - Dosya yolu uyuşmazlığı çözüldü
+### **Zero-Touch Dinamik Render**
+- **Dosya:** `features/wfo_zero_touch_telemetry.md`
+- **Özellikler:** Smart Parameter Formatter, 20+ kısaltma, max 6 rozet
+- **Dosyalar:** `frontend/components/bots/bot-manager.js`, `frontend/style.css`
+
+### **Dinamik WFO Refresh**
+- **Dosya:** `features/wfo_dynamic_refresh.md`
+- **Özellikler:** Re-opt aralığına göre otomatik refresh, API yükü %99.86 azaldı
+- **Dosyalar:** `frontend/app.js`
+
+### **Nefes Animasyonu + Otomatik HOLD**
+- **Dosya:** `features/dynamic_signal_breathing.md`
+- **Özellikler:** AL/SAT nefes alıyor, pozisyon kapandıktan sonra otomatik HOLD
+- **Dosyalar:** `frontend/style.css`, `frontend/components/bots/bot-manager.js`, `core/paper.py`
+
+### **ML Model İsimlendirme**
+- **Dosya:** `features/ml_model_naming_convention.md`
+- **Özellikler:** Merkezi `get_model_paths()`, standart sembol temizleme
 - **Dosyalar:** `ml/model_training.py`, `api/services/ml_service.py`, `core/paper.py`
 
-### **Smart Money Stratejisi WFO Uyumlu Hale Getirildi**
-- **Dosya:** `strategies/smart_money_strategy.md` (YENİ!)
-- **Özellikler:**
-  - `DEFAULT_PARAMS` sözlüğü eklendi
-  - `update_params()` metodu implemente edildi
-  - Auto-Grid ile otomatik optimizasyon
-  - WFO arka plan görevi ile canlı güncelleme
+### **Smart Money Stratejisi**
+- **Dosya:** `strategies/smart_money_strategy.md`
+- **Özellikler:** DEFAULT_PARAMS, update_params(), WFO uyumlu
 - **Dosya:** `strategy/custom/smart_money.py`
 
-### **SignalGeneratedEvent Düzeltmesi**
-- **Dosya:** `documentation/MARCH_2026_FINAL_FIXES.md`
-- **Sorun:** `'int' object has no attribute 'value'` hatası
-- **Çözüm:** `signal: SignalType` → `signal: int`
-- **Dosyalar:** `shared/events/events.py`, `core/paper.py`
+---
 
-### **Dropdown Validasyon ve Çakışma Önleme**
-- **Dosya:** `documentation/MARCH_2026_FINAL_FIXES.md`
-- **Sorun:** Dropdown'lar boş kalıyor, sürekli yenileniyor
-- **Çözüm:** Store subscription kaldırıldı, `loadDropdownData()` tek sorumlu
-- **Dosyalar:** `frontend/app.js`, `frontend/index.html`
-
-### **API Key Şifreleme Sistemi**
-- **Dosya:** `security/api_key_encryption.md`
-- **Özellikler:**
-  - AES-128-CBC şifreleme
-  - Fernet symmetric encryption
-  - .key dosyası 0o600 permission
-  - Yedekleme (`.key.backup.*`)
-- **Dosyalar:** `core/security.py`, `api/routers/system.py`
-
-### **Bot Başlatma Validasyonu**
-- **Dosya:** `documentation/MARCH_2026_FINAL_FIXES.md`
-- **Özellikler:**
-  - Frontend validasyon (sembol/strateji)
-  - Form submit handler
-  - Toast bildirimleri
-- **Dosyalar:** `frontend/app.js`, `frontend/index.html`
-
-### **start_bot.bat Güncellemeleri**
-- **Dosya:** `documentation/MARCH_2026_FINAL_FIXES.md`
-- **Özellikler:**
-  - Browser ayrı process (kapanmıyor)
-  - main.py üzerinden başlatma (Event Tracer aktif)
-  - Cleanup düzeltildi
-- **Dosya:** `start_bot.bat`
-
-## 🆕 Yeni Eklenenler (Mart 2026)
+## 📊 Hızlı Erişim
 
 ### **HTF Altın Oran (Multi-Timeframe Analysis)**
 - **Dosya:** `features/htf_golden_ratio.md`
@@ -287,6 +248,10 @@ knowledge/security/         # Güvenlik dokümantasyonu (YENİ!)
 | **Auto-Grid** | `features/auto_grid_generator.md` |
 | **Bayesian Opt.** | `features/bayesian_optimization.md` |
 | **ML Model Naming** | `features/ml_model_naming_convention.md` |
+| **WFO Telemetri** | `features/wfo_zero_touch_telemetry.md` |
+| **WFO Dinamik Refresh** | `features/wfo_dynamic_refresh.md` |
+| **Sinyal Animasyonu** | `features/dynamic_signal_breathing.md` |
+| **Mart 2026 Özet** | `features/MARCH_2026_ZERO_TOUCH_SUMMARY.md` |
 | **HTF Altın Oran** | `features/htf_golden_ratio.md` |
 | **Position Manager** | `features/position_manager.md` |
 | **Risk Engine** | `features/risk_engine.md` |
