@@ -24,10 +24,11 @@ class LogLevelType(str, Enum):
 # ============================================================================
 
 class RiskConfigRequest(BaseModel):
-    max_risk_per_trade_percent: float = Field(..., ge=0.1, le=5.0)
-    max_leverage: int = Field(..., ge=1, le=50)
-    max_open_positions: int = Field(..., ge=1, le=20)
-    max_consecutive_losses: int = Field(..., ge=1, le=10)
+    max_risk_per_trade_percent: float = Field(..., ge=0.1, le=5.0, description="İşlem başına maksimum risk (%)")
+    max_leverage: int = Field(..., ge=1, le=50, description="Maksimum kaldıraç (1-50x)")
+    max_open_positions: int = Field(..., ge=1, le=20, description="Maksimum açık pozisyon sayısı")
+    max_consecutive_losses: int = Field(..., ge=0, le=50, description="Maksimum ardışık kayıp (0 = sınırsız)")
+    kill_switch_enabled: bool = Field(default=True, description="Kill Switch aktif/pasif")
 
 
 class RiskConfigResponse(BaseModel):

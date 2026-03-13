@@ -710,3 +710,354 @@ async def update_bot_config(request: BotConfigRequest) -> BotConfigResponse:
             message=f"Bot config güncelleme hatası: {str(e)}",
             data={}
         )
+
+
+# ============================================================================
+# YENİ: CONFIG HOT-RELOAD ENDPOINT'LERİ
+# ============================================================================
+
+@router.get("/config/risk", response_model=RiskConfigResponse)
+async def get_risk_config() -> RiskConfigResponse:
+    """
+    Mevcut risk ayarlarını döner (RAM'deki CONFIG'den).
+    """
+    try:
+        risk_config = CONFIG.get('risk_management', {})
+        
+        return RiskConfigResponse(
+            status="success",
+            message="Risk ayarları yüklendi",
+            data={
+                "max_risk_per_trade_percent": risk_config.get('max_risk_per_trade_percent', 0.2),
+                "max_leverage": risk_config.get('max_leverage', 10),
+                "max_open_positions": risk_config.get('max_open_positions', 5),
+                "max_consecutive_losses": risk_config.get('kill_switch', {}).get('max_consecutive_losses', 10),
+                "kill_switch_enabled": risk_config.get('kill_switch', {}).get('enabled', True)
+            }
+        )
+    except Exception as e:
+        logger.error(f"❌ Risk config okuma hatası: {e}")
+        return RiskConfigResponse(
+            status="error",
+            message=f"Risk config okuma hatası: {str(e)}",
+            data={}
+        )
+
+
+@router.post("/config/risk", response_model=RiskConfigResponse)
+async def update_risk_config(request: RiskConfigRequest) -> RiskConfigResponse:
+    """
+    Risk ayarlarını günceller (HOT-RELOAD).
+    
+    - config.yaml'a yazar
+    - RAM'deki CONFIG'i günceller
+    - RiskEngine config'ini canlı olarak günceller
+    """
+    try:
+        import yaml
+        from core.config import CONFIG
+
+        logger.info(f"🛡️ Risk ayarları güncelleniyor...")
+        logger.info(f"   - Max Risk: %{request.max_risk_per_trade_percent}")
+        logger.info(f"   - Max Leverage: {request.max_leverage}x")
+        logger.info(f"   - Max Positions: {request.max_open_positions}")
+        logger.info(f"   - Max Consecutive Losses: {request.max_consecutive_losses}")
+        logger.info(f"   - Kill Switch Enabled: {request.kill_switch_enabled}")
+
+        # config.yaml'ı yükle
+        with open('config.yaml', 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+
+        # Risk ayarlarını güncelle
+        if 'risk_management' not in config:
+            config['risk_management'] = {}
+        
+        config['risk_management']['max_risk_per_trade_percent'] = request.max_risk_per_trade_percent
+        config['risk_management']['max_leverage'] = request.max_leverage
+        config['risk_management']['max_open_positions'] = request.max_open_positions
+        
+        # Kill Switch nested config
+        if 'kill_switch' not in config['risk_management']:
+            config['risk_management']['kill_switch'] = {}
+        
+        config['risk_management']['kill_switch']['enabled'] = request.kill_switch_enabled
+        config['risk_management']['kill_switch']['max_consecutive_losses'] = request.max_consecutive_losses
+
+        # config.yaml'a yaz
+        with open('config.yaml', 'w', encoding='utf-8') as f:
+            yaml.safe_dump(config, f, default_flow_style=False, allow_unicode=True)
+
+        logger.info(f"✅ config.yaml güncellendi")
+
+        # RAM'deki CONFIG'i güncelle (HOT-RELOAD)
+        CONFIG['risk_management']['max_risk_per_trade_percent'] = request.max_risk_per_trade_percent
+        CONFIG['risk_management']['max_leverage'] = request.max_leverage
+        CONFIG['risk_management']['max_open_positions'] = request.max_open_positions
+        CONFIG['risk_management']['max_consecutive_losses'] = request.max_consecutive_losses
+        
+        if 'kill_switch' not in CONFIG['risk_management']:
+            CONFIG['risk_management']['kill_switch'] = {}
+        
+        CONFIG['risk_management']['kill_switch']['enabled'] = request.kill_switch_enabled
+        CONFIG['risk_management']['kill_switch']['max_consecutive_losses'] = request.max_consecutive_losses
+
+        # RiskEngine config'ini canlı olarak güncelle (HOT-RELOAD!)
+        if hasattr(paper_engine, 'risk_engine') and hasattr(paper_engine.risk_engine, 'config'):
+            paper_engine.risk_engine.config.max_risk_per_trade = request.max_risk_per_trade_percent / 100.0
+            logger.info(f"✅ RiskEngine config güncellendi (HOT-RELOAD)")
+
+        logger.info(f"✅ RAM'deki CONFIG güncellendi (HOT-RELOAD)")
+
+        return RiskConfigResponse(
+            status="success",
+            message="Risk ayarları güncellendi (BOT RESTART GEREKMEZ!)",
+            data={
+                "max_risk_per_trade_percent": request.max_risk_per_trade_percent,
+                "max_leverage": request.max_leverage,
+                "max_open_positions": request.max_open_positions,
+                "max_consecutive_losses": request.max_consecutive_losses,
+                "kill_switch_enabled": request.kill_switch_enabled
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"❌ Risk config güncelleme hatası: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return RiskConfigResponse(
+            status="error",
+            message=f"Risk config güncelleme hatası: {str(e)}",
+            data={}
+        )
+
+
+@router.get("/config/advanced", response_model=AdvancedConfigResponse)
+async def get_advanced_config() -> AdvancedConfigResponse:
+    """
+    Mevcut gelişmiş ayarları döner (WFO, ML, HTF).
+    """
+    try:
+        wfo_config = CONFIG.get('wfo', {})
+        ml_config = CONFIG.get('ml', {})
+        htf_config = CONFIG.get('htf', {})
+        
+        return AdvancedConfigResponse(
+            status="success",
+            message="Gelişmiş ayarlar yüklendi",
+            data={
+                "wfo": {
+                    "enabled": wfo_config.get('enabled', True),
+                    "train_days": wfo_config.get('train_days', 90),
+                    "test_days": wfo_config.get('test_days', 30),
+                    "reoptimize_interval": wfo_config.get('reoptimize_interval', 168)
+                },
+                "ml": {
+                    "enabled": ml_config.get('enabled', True),
+                    "confidence_threshold": ml_config.get('confidence_threshold', 0.65)
+                },
+                "htf": {
+                    "enabled": htf_config.get('enabled', True),
+                    "trend_method": htf_config.get('trend_method', 'ema_stack')
+                }
+            }
+        )
+    except Exception as e:
+        logger.error(f"❌ Advanced config okuma hatası: {e}")
+        return AdvancedConfigResponse(
+            status="error",
+            message=f"Advanced config okuma hatası: {str(e)}",
+            data={}
+        )
+
+
+@router.post("/config/advanced", response_model=AdvancedConfigResponse)
+async def update_advanced_config(request: AdvancedConfigRequest) -> AdvancedConfigResponse:
+    """
+    Gelişmiş ayarları günceller (HOT-RELOAD).
+    
+    - config.yaml'a yazar
+    - RAM'deki CONFIG'i günceller
+    - ML Engine'i canlı olarak günceller
+    """
+    try:
+        import yaml
+        from core.config import CONFIG
+
+        logger.info(f"🤖 Gelişmiş ayarlar güncelleniyor...")
+        
+        # WFO ayarları
+        if request.wfo:
+            logger.info(f"   - WFO Enabled: {request.wfo.enabled}")
+            logger.info(f"   - WFO Train Days: {request.wfo.train_days}")
+            logger.info(f"   - WFO Test Days: {request.wfo.test_days}")
+            logger.info(f"   - WFO Re-Optimize Interval: {request.wfo.reoptimize_interval}h")
+        
+        # ML ayarları
+        if request.ml:
+            logger.info(f"   - ML Enabled: {request.ml.enabled}")
+            logger.info(f"   - ML Confidence Threshold: {request.ml.confidence_threshold}")
+        
+        # HTF ayarları
+        if request.htf:
+            logger.info(f"   - HTF Enabled: {request.htf.enabled}")
+            logger.info(f"   - HTF Trend Method: {request.htf.trend_method}")
+
+        # config.yaml'ı yükle
+        with open('config.yaml', 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+
+        # WFO ayarlarını güncelle
+        if request.wfo:
+            if 'wfo' not in config:
+                config['wfo'] = {}
+            config['wfo']['enabled'] = request.wfo.enabled
+            config['wfo']['train_days'] = request.wfo.train_days
+            config['wfo']['test_days'] = request.wfo.test_days
+            config['wfo']['reoptimize_interval'] = request.wfo.reoptimize_interval
+        
+        # ML ayarlarını güncelle
+        if request.ml:
+            if 'ml' not in config:
+                config['ml'] = {}
+            config['ml']['enabled'] = request.ml.enabled
+            config['ml']['confidence_threshold'] = request.ml.confidence_threshold
+        
+        # HTF ayarlarını güncelle
+        if request.htf:
+            if 'htf' not in config:
+                config['htf'] = {}
+            config['htf']['enabled'] = request.htf.enabled
+            config['htf']['trend_method'] = request.htf.trend_method
+
+        # config.yaml'a yaz
+        with open('config.yaml', 'w', encoding='utf-8') as f:
+            yaml.safe_dump(config, f, default_flow_style=False, allow_unicode=True)
+
+        logger.info(f"✅ config.yaml güncellendi")
+
+        # RAM'deki CONFIG'i güncelle (HOT-RELOAD)
+        if request.wfo:
+            CONFIG['wfo']['enabled'] = request.wfo.enabled
+            CONFIG['wfo']['train_days'] = request.wfo.train_days
+            CONFIG['wfo']['test_days'] = request.wfo.test_days
+            CONFIG['wfo']['reoptimize_interval'] = request.wfo.reoptimize_interval
+        
+        if request.ml:
+            CONFIG['ml']['enabled'] = request.ml.enabled
+            CONFIG['ml']['confidence_threshold'] = request.ml.confidence_threshold
+            # PaperEngine ML enabled'ı güncelle
+            paper_engine.ml_enabled = request.ml.enabled
+            logger.info(f"✅ PaperEngine ML enabled güncellendi: {request.ml.enabled}")
+        
+        if request.htf:
+            CONFIG['htf']['enabled'] = request.htf.enabled
+            CONFIG['htf']['trend_method'] = request.htf.trend_method
+
+        logger.info(f"✅ RAM'deki CONFIG güncellendi (HOT-RELOAD)")
+
+        return AdvancedConfigResponse(
+            status="success",
+            message="Gelişmiş ayarlar güncellendi (BOT RESTART GEREKMEZ!)",
+            data={
+                "wfo": request.wfo.dict() if request.wfo else {},
+                "ml": request.ml.dict() if request.ml else {},
+                "htf": request.htf.dict() if request.htf else {}
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"❌ Advanced config güncelleme hatası: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return AdvancedConfigResponse(
+            status="error",
+            message=f"Advanced config güncelleme hatası: {str(e)}",
+            data={}
+        )
+
+
+@router.post("/config/api-keys", response_model=ApiKeySaveResponse)
+async def save_api_keys(request: ApiKeyRequest) -> ApiKeySaveResponse:
+    """
+    API anahtarlarını şifreleyip .env dosyasına kaydeder.
+    """
+    try:
+        from core.security import encrypt_api_key, update_env_file
+
+        logger.info(f"🔑 API anahtarları şifreleniyor...")
+
+        # API anahtarlarını şifrele
+        encrypted_key = encrypt_api_key(request.api_key)
+        encrypted_secret = encrypt_api_key(request.api_secret)
+
+        logger.info(f"✅ API anahtarları şifrelendi")
+
+        # .env dosyasına kaydet
+        update_env_file("BINANCE_API_KEY", encrypted_key)
+        update_env_file("BINANCE_API_SECRET", encrypted_secret)
+
+        logger.info(f"✅ API anahtarları .env dosyasına kaydedildi")
+
+        return ApiKeySaveResponse(
+            status="success",
+            message="API anahtarları şifrelenerek kaydedildi",
+            encrypted=True
+        )
+
+    except Exception as e:
+        logger.error(f"❌ API keys kaydetme hatası: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return ApiKeySaveResponse(
+            status="error",
+            message=f"API keys kaydetme hatası: {str(e)}",
+            encrypted=False
+        )
+
+
+@router.post("/config/test-api-keys", response_model=ApiKeyTestResponse)
+async def test_api_keys(request: ApiKeyRequest) -> ApiKeyTestResponse:
+    """
+    API anahtarlarını CCXT ile test eder (fetch_balance).
+    """
+    try:
+        import ccxt.async_support as ccxt
+
+        logger.info(f"🧪 API anahtarları test ediliyor...")
+
+        # CCXT exchange oluştur
+        exchange = ccxt.binance({
+            'apiKey': request.api_key,
+            'secret': request.api_secret,
+            'enableRateLimit': True,
+            'options': {
+                'defaultType': 'future',  # Futures hesabını test et
+            }
+        })
+
+        # Balance çek (test)
+        balance = await exchange.fetch_balance()
+        
+        # Exchange'i kapat
+        await exchange.close()
+
+        # USDT bakiyesini kontrol et
+        usdt_balance = balance.get('total', {}).get('USDT', 0)
+
+        logger.info(f"✅ API anahtarları geçerli! USDT Balance: {usdt_balance}")
+
+        return ApiKeyTestResponse(
+            status="success",
+            message=f"API anahtarları geçerli! USDT Balance: {usdt_balance}",
+            valid=True
+        )
+
+    except Exception as e:
+        logger.error(f"❌ API keys test hatası: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return ApiKeyTestResponse(
+            status="error",
+            message=f"API keys test hatası: {str(e)}",
+            valid=False
+        )

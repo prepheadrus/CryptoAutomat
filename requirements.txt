@@ -44,6 +44,9 @@ cryptography>=41.0.0     # API key encryption (Fernet)
 # File System Monitoring
 watchdog>=3.0.0          # File system events (config hot-reload)
 
+# Security
+cryptography>=41.0.0     # API key encryption (Fernet)
+
 # Visualization
 matplotlib>=3.7.0        # Plotting
 plotly>=5.17.0           # Interactive charts

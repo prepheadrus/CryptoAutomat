@@ -996,8 +996,57 @@
                         </div>
                     </div>
 
-                    <!-- CARD 4: WFO & ML AYARLARI -->
-                    <div class="settings-card wfo-card">
+                    <!-- CARD 6: BOT YAPILANDIRMASI (YENİ - RİSK'İN ALTINDA) -->
+                    <div class="settings-card bot-card">
+                        <div class="settings-card-header">
+                            <div>
+                                <h3 class="settings-card-title">🤖 Bot Yapılandırması</h3>
+                                <p class="settings-card-description">Borsa ve sistem ayarları</p>
+                            </div>
+                            <button class="settings-save-btn" onclick="saveBotConfig()">
+                                💾 Kaydet
+                            </button>
+                        </div>
+
+                        <div class="settings-card-body">
+                            <div class="settings-form-grid">
+                                <div class="settings-form-group">
+                                    <label class="settings-form-label">🏛️ Borsa</label>
+                                    <select id="bot-config-exchange" class="settings-form-input">
+                                        <option value="binance">Binance</option>
+                                        <option value="binance_testnet">Binance Testnet</option>
+                                    </select>
+                                </div>
+
+                                <div class="settings-form-group">
+                                    <label class="settings-form-label">🌍 Ortam</label>
+                                    <select id="bot-config-environment" class="settings-form-input">
+                                        <option value="development">Development</option>
+                                        <option value="production">Production</option>
+                                    </select>
+                                </div>
+
+                                <div class="settings-form-group">
+                                    <label class="settings-form-label">📝 Log Level</label>
+                                    <select id="bot-config-loglevel" class="settings-form-input">
+                                        <option value="DEBUG">DEBUG</option>
+                                        <option value="INFO">INFO</option>
+                                        <option value="WARNING">WARNING</option>
+                                        <option value="ERROR">ERROR</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="settings-info-box">
+                                <p class="settings-info-text">
+                                    <strong>ℹ️ Not:</strong> Bu ayarlar bot yeniden başlatıldığında uygulanır.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CARD 4: WFO & ML AYARLARI (SOL TARAFTA - GENİŞ) -->
+                    <div class="settings-card wfo-card" style="grid-column: 1 / -1; border-left: 4px solid var(--neon-purple);">
                         <div class="settings-card-header">
                             <div>
                                 <h3 class="settings-card-title">🧠 WFO & ML Ayarları</h3>
@@ -1096,8 +1145,8 @@
                         </div>
                     </div>
 
-                    <!-- CARD 5: API YÖNETİMİ -->
-                    <div class="settings-card api-card">
+                    <!-- CARD 5: API YÖNETİMİ (GÜNCELLENMİŞ) -->
+                    <div class="settings-card api-card" style="grid-column: 1 / -1; border-left: 4px solid var(--neon-purple);">
                         <div class="settings-card-header">
                             <div>
                                 <h3 class="settings-card-title">🔐 API Yönetimi</h3>
@@ -1106,95 +1155,56 @@
                         </div>
 
                         <div class="settings-card-body">
-                            <div class="settings-form-grid">
+                            <!-- API Key Input Section -->
+                            <div class="settings-form-grid" style="margin-bottom: 20px;">
                                 <div class="settings-form-group">
-                                    <label class="settings-form-label">🔑 API Key</label>
+                                    <label class="settings-form-label">
+                                        🔑 Binance API Key
+                                        <span class="range-hint">(Zorunlu)</span>
+                                    </label>
                                     <input type="password" id="api-key" class="settings-form-input"
-                                        placeholder="pk_live_..." title="Binance API Anahtarınız">
+                                        placeholder="pk_live_abc123xyz..." minlength="10" required
+                                        title="Binance API Anahtarınız (min 10 karakter)">
                                 </div>
 
                                 <div class="settings-form-group">
-                                    <label class="settings-form-label">🔒 API Secret</label>
+                                    <label class="settings-form-label">
+                                        🔒 Binance Secret Key
+                                        <span class="range-hint">(Zorunlu)</span>
+                                    </label>
                                     <input type="password" id="api-secret" class="settings-form-input"
-                                        placeholder="••••••••••••••••" title="Binance API Gizli Anahtarınız">
+                                        placeholder="sk_live_xyz789abc..." minlength="10" required
+                                        title="Binance API Gizli Anahtarınız (min 10 karakter)">
                                 </div>
                             </div>
 
-                            <div class="settings-button-group">
-                                <button class="settings-btn settings-btn-test" onclick="testApiKeys()">
-                                    🧪 Test Et
+                            <!-- Action Buttons -->
+                            <div class="settings-button-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+                                <button class="settings-btn settings-btn-primary" onclick="saveApiKeys()"
+                                    style="padding: 12px; font-size: 0.9rem; font-weight: 600;">
+                                    🔑 Şifrele ve Kaydet
                                 </button>
-                                <button class="settings-btn settings-btn-success" onclick="saveApiKeys()">
-                                    💾 Kaydet
+                                <button class="settings-btn settings-btn-test" onclick="testApiKeys()"
+                                    style="padding: 12px; font-size: 0.9rem; font-weight: 600;">
+                                    🔄 Bağlantıyı Test Et
                                 </button>
                             </div>
 
-                            <div class="settings-info-box">
-                                <p class="settings-info-text">
-                                    <strong>🔒 Fernet Şifreleme:</strong> API anahtarlarınız AES-128-CBC ile
-                                    şifrelenerek
-                                    <code>.env</code> dosyasında saklanır. <code>.secret.key</code> dosyası korumalıdır
-                                    (0o600).
-                                </p>
-                            </div>
-
-                            <div class="settings-warning-box">
-                                <p class="settings-warning-text">
-                                    <strong>⚠️ Güvenlik:</strong> API key'lerinize sadece <strong>Spot & Futures
-                                        Trading</strong>
-                                    izni verin. <strong>Withdrawal (Para Çekme)</strong> izni vermeyin!
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- CARD 6: BOT YAPILANDIRMASI -->
-                    <div class="settings-card bot-card">
-                        <div class="settings-card-header">
-                            <div>
-                                <h3 class="settings-card-title">🤖 Bot Yapılandırması</h3>
-                                <p class="settings-card-description">Borsa ve sistem ayarları</p>
-                            </div>
-                            <button class="settings-save-btn" onclick="saveBotConfig()">
-                                💾 Kaydet
-                            </button>
-                        </div>
-
-                        <div class="settings-card-body">
-                            <div class="settings-form-grid">
-                                <div class="settings-form-group">
-                                    <label class="settings-form-label">🏛️ Borsa Seçimi</label>
-                                    <select id="bot-config-exchange" class="settings-form-input">
-                                        <option value="binance">Binance (Futures)</option>
-                                        <option value="binance_spot">Binance (Spot)</option>
-                                    </select>
+                            <!-- Security Info Boxes -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                <div class="settings-info-box" style="background: rgba(0, 255, 136, 0.05); border: 1px solid rgba(0, 255, 136, 0.2);">
+                                    <p class="settings-info-text" style="color: var(--neon-green);">
+                                        <strong>🔒 Fernet Şifreleme:</strong> API anahtarlarınız AES-128-CBC ile
+                                        şifrelenerek <code>.env</code> dosyasında saklanır.
+                                    </p>
                                 </div>
 
-                                <div class="settings-form-group">
-                                    <label class="settings-form-label">🌍 Environment</label>
-                                    <select id="bot-config-environment" class="settings-form-input">
-                                        <option value="development">Development (Test)</option>
-                                        <option value="production">Production (Live)</option>
-                                    </select>
+                                <div class="settings-warning-box" style="background: rgba(255, 165, 0, 0.05); border: 1px solid rgba(255, 165, 0, 0.2);">
+                                    <p class="settings-warning-text" style="color: #ffa500;">
+                                        <strong>⚠️ API İzinleri:</strong> Sadece <strong>Spot & Futures Trading</strong>
+                                        izni verin. <strong>Withdrawal (Para Çekme)</strong> izni ASLA vermeyin!
+                                    </p>
                                 </div>
-
-                                <div class="settings-form-group">
-                                    <label class="settings-form-label">📝 Log Seviyesi</label>
-                                    <select id="bot-config-loglevel" class="settings-form-input">
-                                        <option value="DEBUG">DEBUG (Detaylı)</option>
-                                        <option value="INFO">INFO (Normal)</option>
-                                        <option value="WARNING">WARNING (Önemli)</option>
-                                        <option value="ERROR">ERROR (Sadece Hatalar)</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div class="settings-info-box">
-                                <p class="settings-info-text">
-                                    <strong>ℹ️ Environment:</strong> Development modunda tüm işlemler kağıt üzerinde
-                                    (paper trading)
-                                    yapılır. Production moduna geçmeden önce mutlaka test edin!
-                                </p>
                             </div>
                         </div>
                     </div>

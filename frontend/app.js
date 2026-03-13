@@ -153,6 +153,7 @@ function handleTabSwitch(tabId) {
                 loadBotFormOptions();  // Bot form dropdown'larını yükle
                 loadAllSettings();  // Tüm ayarları yükle (Risk, Advanced, Bot)
                 loadDropdownData();  // Dropdown'lara veri yükle (Sembol + Strateji)
+                loadSystemSettings();  // Sistem ayarlarını yükle (API Keys form hazır olsun)
             }, 300);  // 300ms delay (daha hızlı)
             break;
         case 'tab-strategies':
@@ -889,6 +890,37 @@ async function loadBotConfig() {
         }
     } catch (error) {
         console.error('❌ loadBotConfig hatası:', error);
+    }
+}
+
+/**
+ * Sistem Ayarlarını Yükle (Risk + Advanced + API Keys form hazırlığı)
+ * Settings sekmesi açıldığında otomatik çağrılır
+ */
+async function loadSystemSettings() {
+    try {
+        console.log('[INFO] 🛡️ Sistem ayarları yükleniyor...');
+
+        // Risk ayarlarını yükle
+        await loadRiskSettings();
+
+        // Gelişmiş ayarları yükle (WFO, ML, HTF)
+        await loadAdvancedSettings();
+
+        // Bot config yükle
+        await loadBotConfig();
+
+        // API Keys form'u temizle (güvenlik için her seferinde boş olsun)
+        const apiKeyInput = document.getElementById('api-key');
+        const apiSecretInput = document.getElementById('api-secret');
+        
+        if (apiKeyInput) apiKeyInput.value = '';
+        if (apiSecretInput) apiSecretInput.value = '';
+
+        console.log('[INFO] ✅ Sistem ayarları yüklendi');
+    } catch (error) {
+        console.error('❌ loadSystemSettings hatası:', error);
+        showToast('⚠️ Sistem ayarları yüklenirken hata oluştu', 'warning');
     }
 }
 
@@ -1969,6 +2001,7 @@ function setupGlobalFunctions() {
     // YENİ: Gelişmiş ayarlar (WFO, ML, HTF)
     window.saveAdvancedSettings = saveAdvancedSettings;
     window.loadAdvancedSettings = loadAdvancedSettings;
+    window.loadSystemSettings = loadSystemSettings;  // YENİ: Settings sekmesi için
 
     // YENİ: Bot config
     window.saveBotConfig = saveBotConfig;
