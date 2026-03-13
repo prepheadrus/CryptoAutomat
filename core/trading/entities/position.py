@@ -282,10 +282,14 @@ class Position:
         # PnL hesapla
         pnl = self.unrealized_pnl(exit_price) - commission
         pnl_percent = self.unrealized_pnl_percent(exit_price)
+
+        # Trade oluştur - UNIQUE ID (microsecond hassasiyeti!)
+        # Format: trade_{bot_id}_{timestamp_microseconds}
+        timestamp_us = int(datetime.utcnow().timestamp() * 1000000)  # Microseconds
+        trade_id = f"trade_{self.bot_id}_{timestamp_us}"
         
-        # Trade oluştur
         trade = Trade(
-            id=f"trade_{self.bot_id}_{datetime.utcnow().timestamp()}",
+            id=trade_id,
             bot_id=self.bot_id,
             symbol=self.symbol,
             direction=self.direction,

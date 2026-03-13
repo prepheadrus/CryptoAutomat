@@ -1700,7 +1700,29 @@ function renderTradeHistory(trades) {
             return;
         }
 
-        tbody.innerHTML = trades.map(trade => {
+        // DUPLICATE ÖNLEME (KRİTİK!)
+        // Aynı trade_id'ye sahip kayıtları filtrele (Set ile tekilleştir)
+        const seenTradeIds = new Set();
+        const uniqueTrades = [];
+        
+        for (const trade of trades) {
+            // Trade ID oluştur (eğer yoksa timestamp + symbol + direction kullan)
+            const tradeId = trade.id || trade.trade_id || `${trade.closed_at}_${trade.symbol}_${trade.direction}`;
+            
+            if (!seenTradeIds.has(tradeId)) {
+                seenTradeIds.add(tradeId);
+                uniqueTrades.push(trade);
+            } else {
+                console.debug(`⚠️ Duplicate trade atlandı: ${tradeId}`);
+            }
+        }
+        
+        console.log(`📊 ${trades.length} trade'den ${uniqueTrades.length} unique trade render ediliyor`);
+
+        // tbody'i temizle (her render'da sıfırdan başla)
+        tbody.innerHTML = '';
+
+        uniqueTrades.forEach(trade => {
             const pnl = trade.pnl_usd || 0;
             const pnlPercent = trade.pnl_percent || 0;
             const pnlColor = pnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
@@ -1726,24 +1748,25 @@ function renderTradeHistory(trades) {
                 console.error('Date parse error:', e);
             }
 
-            return `
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <td style="font-size: 0.75rem; color: var(--text-muted);">${dateStr}</td>
-                    <td style="font-weight:bold; color:var(--text-bright);">${trade.symbol || 'Unknown'}</td>
-                    <td style="font-size: 0.75rem; color: var(--neon-purple);">${trade.strategy_id || 'N/A'}</td>
-                    <td><span class="badge ${directionClass}" style="font-size:0.6rem;">${trade.direction || 'UNKNOWN'}</span></td>
-                    <td>$${(trade.entry_price || 0).toLocaleString()}</td>
-                    <td>$${(trade.exit_price || 0).toLocaleString()}</td>
-                    <td>
-                        <div style="font-size:0.8rem;">${(trade.size || 0).toFixed(4)}</div>
-                        <div style="font-size:0.65rem; color:var(--text-muted);">${trade.leverage || 1}x</div>
-                    </td>
-                    <td style="color:${pnlColor}; font-weight:bold;">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</td>
-                    <td style="color:${pnlColor}; font-weight:bold;">${pnlPercent >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%</td>
-                    <td style="font-size: 0.75rem; color: var(--text-muted);">${trade.reason || 'Manual'}</td>
-                </tr>
+            const row = document.createElement('tr');
+            row.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+            row.innerHTML = `
+                <td style="font-size: 0.75rem; color: var(--text-muted);">${dateStr}</td>
+                <td style="font-weight:bold; color:var(--text-bright);">${trade.symbol || 'Unknown'}</td>
+                <td style="font-size: 0.75rem; color: var(--neon-purple);">${trade.strategy_id || 'N/A'}</td>
+                <td><span class="badge ${directionClass}" style="font-size:0.6rem;">${trade.direction || 'UNKNOWN'}</span></td>
+                <td>$${(trade.entry_price || 0).toLocaleString()}</td>
+                <td>$${(trade.exit_price || 0).toLocaleString()}</td>
+                <td>
+                    <div style="font-size:0.8rem;">${(trade.size || 0).toFixed(4)}</div>
+                    <div style="font-size:0.65rem; color:var(--text-muted);">${trade.leverage || 1}x</div>
+                </td>
+                <td style="color:${pnlColor}; font-weight:bold;">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</td>
+                <td style="color:${pnlColor}; font-weight:bold;">${pnlPercent >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%</td>
+                <td style="font-size: 0.75rem; color: var(--text-muted);">${trade.reason || 'Manual'}</td>
             `;
-        }).join('');
+            tbody.appendChild(row);
+        });
     } catch (error) {
         console.error('❌ renderTradeHistory hatası:', error);
     }

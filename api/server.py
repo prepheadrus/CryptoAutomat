@@ -434,20 +434,6 @@ app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 logger.info("✅ Frontend static dosyaları mount edildi")
 
 # ============================================================================
-# HEALTH CHECK
-# ============================================================================
-
-@app.get("/api/v1/status")
-async def get_system_status():
-    """Sistem durumunu döner."""
-    return {
-        "status": "online",
-        "environment": CONFIG['bot']['environment'],
-        "exchange": CONFIG['trading']['exchange'],
-        "tracking_symbols": CONFIG['trading']['symbols']
-    }
-
-# ============================================================================
 # MAIN
 # ============================================================================
 

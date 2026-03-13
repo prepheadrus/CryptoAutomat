@@ -445,38 +445,56 @@ class PaperTrader:
     async def on_position_closed(self, event):
         """
         Position Closed Event Handler.
-        
+
         Args:
             event: PositionClosedEvent
         """
         payload = event.payload
         bot_id = payload.get('bot_id')
         pnl = payload.get('pnl', 0.0)
-        
+
         logger.info(f"❌ Pozisyon kapatıldı: {bot_id} PnL=${pnl:.2f}")
-        
+
         # Bakiyeyi güncelle
         self.balance += pnl
         # Free margin'i güncelle (Basit model)
         self.free_margin = self.balance
         self.used_margin = 0.0 # Bireysel botlara bakılacak
-        
+
         # Risk engine'e kaydet
         self.risk_engine.record_trade_result(pnl)
-        
+
         # Bot state güncelle
         self.bot_manager.record_bot_trade(bot_id, pnl)
 
         # Legacy positions güncelle (UI senkronizasyonu için kritik)
         self.open_positions = self.position_manager.legacy_positions
 
-        # Trade history position_manager'dan alınır (duplicate önleme)
-        # self.trade_history artık ayrı tutulmuyor, position_manager.trade_history kullanılıyor
+        # Trade history'yi senkronize et (position_manager'dan al)
         self.trade_history = self.position_manager.trade_history.trades
 
-        # Database'e kaydet (Kalıcı hafıza) - SADECE position_manager'dan
-        # Not: trade_data burada oluşturuluyor ama save_trade çağrısı position_manager'da yapılıyor
-        # Bu yüzden buradaki asyncio.create_task kaldırıldı (duplicate kayıt önleme)
+        # DATABASE'E KAYDET (TEK KAYNAK - SINGLE SOURCE OF TRUTH)
+        # Bu handler DB'ye kaydeder, position_manager'da save_trade YOK
+        from data.database import db_manager
+        
+        trade_data = {
+            "id": payload.get('trade_id'),  # UNIQUE ID (microsecond hassasiyeti)
+            "symbol": payload.get('symbol'),
+            "direction": payload.get('direction'),
+            "entry_price": payload.get('entry_price'),
+            "exit_price": payload.get('exit_price'),
+            "size": payload.get('size'),
+            "leverage": payload.get('leverage'),
+            "pnl_usd": payload.get('pnl'),
+            "pnl_percent": payload.get('pnl_percent', 0.0) * 100,  # 0-1 → 0-100
+            "reason": payload.get('reason'),
+            "strategy_id": payload.get('strategy_id'),
+            "bot_id": bot_id,
+            "closed_at": payload.get('closed_at')
+        }
+        
+        # DB'ye kaydet (duplicate önleme: aynı ID varsa INSERT edilmez)
+        await db_manager.save_trade(trade_data)
 
         # Kill switch kontrolü
         if self.risk_engine.kill_switch_active:

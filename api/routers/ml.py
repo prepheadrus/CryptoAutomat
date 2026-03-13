@@ -32,7 +32,7 @@ async def train_ml_model(request: MLTrainRequest) -> Dict[str, Any]:
     return result
 
 
-@router.get("/status")
+@router.get("/status", operation_id="get_ml_status")
 async def get_ml_status() -> Dict[str, Any]:
     """
     ML eğitim durumunu döner.

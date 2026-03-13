@@ -357,7 +357,7 @@ class PositionManager:
 
             close_success = True  # Başarılı
 
-            # Event yayınla
+            # Event yayınla (on_position_closed handler'ı DB'ye kaydedecek)
             from shared.events import event_bus
             asyncio.create_task(event_bus.publish(Event(
                 type="position.closed",
@@ -379,23 +379,8 @@ class PositionManager:
                 source="position_manager"
             )))
 
-            # Database'e kaydet (SADECE BURADA - duplicate önleme)
-            from data.database import db_manager
-            trade_data = {
-                "symbol": trade.symbol,
-                "direction": trade.direction.value,
-                "entry_price": trade.entry_price,
-                "exit_price": trade.exit_price,
-                "size": trade.size,
-                "leverage": trade.leverage,
-                "pnl_usd": trade.pnl,
-                "pnl_percent": trade.pnl_percent * 100,
-                "reason": reason,
-                "strategy_id": trade.strategy_id,
-                "bot_id": bot_id,
-                "closed_at": trade.closed_at.isoformat()
-            }
-            asyncio.create_task(db_manager.save_trade(trade_data))
+            # DB'ye kaydetme BURADA YAPILMIYOR (on_position_closed'da yapılacak)
+            # Duplicate kayıt önleme: SADECE EVENT ÜZERİNDEN
 
             return trade
 
@@ -713,26 +698,37 @@ class PositionManager:
     ) -> Tuple[bool, str, float]:
         """
         Çıkış koşulu kontrolü (stop loss / take profit).
-        
+
         Args:
             position: Position object
             current_price: Şu anki fiyat
-        
+
         Returns:
             (should_close: bool, reason: str, exit_price: float)
         """
+        # Slipaj oranı (%0.01 = 0.0001) - Standart slipaj
+        SLIPPAGE_RATE = 0.0001
+        
         if position.direction == PositionDirection.LONG:
             if position.stop_loss and current_price <= position.stop_loss:
-                return True, "STOP PATLADI (Long Stop-Loss)", position.stop_loss
+                # STOP PATLADI: Slipajlı çıkış fiyatı
+                exit_price = position.stop_loss * (1 - SLIPPAGE_RATE)
+                return True, "STOP PATLADI (Long Stop-Loss)", exit_price
             elif position.take_profit and current_price >= position.take_profit:
-                return True, "Take Profit (Kar-Al)", position.take_profit
-        
+                # TAKE PROFIT: Slipajlı çıkış fiyatı
+                exit_price = position.take_profit * (1 - SLIPPAGE_RATE)
+                return True, "Take Profit (Kar-Al)", exit_price
+
         else:  # SHORT
             if position.stop_loss and current_price >= position.stop_loss:
-                return True, "STOP PATLADI (Short Stop-Loss)", position.stop_loss
+                # STOP PATLADI: Slipajlı çıkış fiyatı
+                exit_price = position.stop_loss * (1 + SLIPPAGE_RATE)
+                return True, "STOP PATLADI (Short Stop-Loss)", exit_price
             elif position.take_profit and current_price <= position.take_profit:
-                return True, "Take Profit (Kar-Al)", position.take_profit
-        
+                # TAKE PROFIT: Slipajlı çıkış fiyatı
+                exit_price = position.take_profit * (1 + SLIPPAGE_RATE)
+                return True, "Take Profit (Kar-Al)", exit_price
+
         return False, "", current_price
     
     # ========================================================================

@@ -28,7 +28,7 @@ from api.schemas.config import (
 router = APIRouter(prefix="/api/v1", tags=["System"])
 
 
-@router.get("/status")
+@router.get("/status", operation_id="get_system_status")
 async def get_system_status() -> Dict[str, Any]:
     """
     Sistem durumunu döner.

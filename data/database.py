@@ -189,7 +189,7 @@ class DatabaseManager:
         # İşlem Geçmişi
         trades_sql = """
             CREATE TABLE IF NOT EXISTS trades (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id TEXT PRIMARY KEY, -- UNIQUE trade ID (microsecond hassasiyeti)
                 timestamp DATETIME DEFAULT (datetime('now','localtime')),
                 closed_at TEXT, -- ISO format (for frontend)
                 symbol TEXT NOT NULL,
@@ -202,6 +202,7 @@ class DatabaseManager:
                 pnl_usd REAL,
                 pnl_percent REAL,
                 reason TEXT
+                -- bot_id TEXT -- Migration ile eklenecek (backward compatibility)
             );
         """
         # Postgres için trade tablosu SERIAL farklılığı
@@ -218,15 +219,22 @@ class DatabaseManager:
             await self.sqlite_conn.execute(kline_sql)
             await self.sqlite_conn.execute(tasks_sql)
             await self.sqlite_conn.execute(trades_sql)
-            
+
             # Migration: strategy_id column if not exists
             try:
                 await self.sqlite_conn.execute("ALTER TABLE trades ADD COLUMN strategy_id TEXT")
                 await self.sqlite_conn.execute("ALTER TABLE trades ADD COLUMN closed_at TEXT")
-                logger.info("✅ trades tablosuna yeni sütunlar eklendi (migration).")
+                logger.info("✅ trades tablosuna strategy_id ve closed_at sütunları eklendi (migration).")
             except:
-                pass # Sütun zaten var
-                
+                pass  # Sütun zaten var
+            
+            # Migration: bot_id column if not exists (yeni duplicate önleme)
+            try:
+                await self.sqlite_conn.execute("ALTER TABLE trades ADD COLUMN bot_id TEXT")
+                logger.info("✅ trades tablosuna bot_id sütunu eklendi (migration).")
+            except:
+                pass  # Sütun zaten var
+
             await self.sqlite_conn.commit()
 
     async def _execute_with_lock(self, func, *args, **kwargs):
@@ -695,27 +703,40 @@ class DatabaseManager:
                 'error': str(e)
             }
     async def save_trade(self, trade_info: dict):
-        """Kapatılan bir işlemi kalıcı hafızaya yazar."""
+        """Kapatılan bir işlemi kalıcı hafızaya yazar (UNIQUE ID ile duplicate önleme)."""
+        # bot_id kolonu eski DB'lerde olmayabilir, opsiyonel yap
         sql = """
-            INSERT INTO trades (symbol, strategy_id, direction, entry_price, exit_price, size, leverage, pnl_usd, pnl_percent, reason, closed_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR IGNORE INTO trades (id, symbol, strategy_id, direction, entry_price, exit_price, size, leverage, pnl_usd, pnl_percent, reason, closed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
-        params = (trade_info['symbol'], trade_info.get('strategy_id'), trade_info['direction'], trade_info['entry_price'], 
-                  trade_info.get('exit_price'), trade_info['size'], trade_info['leverage'],
-                  trade_info.get('pnl_usd'), trade_info.get('pnl_percent'), trade_info.get('reason'),
-                  trade_info.get('closed_at'))
+        params = (
+            trade_info.get('id'),  # UNIQUE ID (microsecond)
+            trade_info['symbol'], 
+            trade_info.get('strategy_id'), 
+            trade_info['direction'], 
+            trade_info['entry_price'],
+            trade_info.get('exit_price'), 
+            trade_info['size'], 
+            trade_info['leverage'],
+            trade_info.get('pnl_usd'), 
+            trade_info.get('pnl_percent'), 
+            trade_info.get('reason'),
+            trade_info.get('closed_at')
+            # bot_id EKLENMEDİ - eski DB'lerde kolon yok!
+        )
 
         try:
             if self.engine_type == "postgres":
                 async with self.db_pool.acquire() as conn:
                     await conn.execute("""
-                        INSERT INTO trades (symbol, strategy_id, direction, entry_price, exit_price, size, leverage, pnl_usd, pnl_percent, reason, closed_at)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                        INSERT INTO trades (id, symbol, strategy_id, direction, entry_price, exit_price, size, leverage, pnl_usd, pnl_percent, reason, closed_at)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                        ON CONFLICT (id) DO NOTHING
                     """, *params)
             else:
                 await self.sqlite_conn.execute(sql, params)
                 await self.sqlite_conn.commit()
-                
+
             logger.info(f"✅ İşlem Hafızaya ({self.engine_type}) Kaydedildi: {trade_info['symbol']} | PnL: {trade_info.get('pnl_usd', 0):.2f}")
         except Exception as e:
             logger.error(f"❌ İşlem kaydedilirken hata oluştu ({trade_info['symbol']}): {e}")

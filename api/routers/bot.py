@@ -73,7 +73,7 @@ async def remove_bot(request: BotRemoveRequest) -> Dict[str, Any]:
     return result
 
 
-@router.get("/status")
+@router.get("/status", operation_id="get_bot_status")
 async def get_bot_status(bot_id: str) -> Dict[str, Any]:
     """
     Belirli bir botun durumunu döner.
