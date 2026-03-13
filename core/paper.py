@@ -129,26 +129,28 @@ class PaperTrader:
     async def _get_ml_confirmation(self, symbol: str, timeframe: str, indicators: Dict[str, float]) -> Optional[Dict[str, Any]]:
         """
         ML modelinden tahmin ve güven skoru alır.
-        
+
         Args:
             symbol: Sembol
             timeframe: Zaman dilimi
             indicators: Gelen indikatör verileri
-            
+
         Returns:
             Dict[str, Any] or None
         """
         try:
-            from ml.model_training import ModelTrainer
+            from ml.model_training import ModelTrainer, get_model_paths
             cache_key = f"{symbol}_{timeframe}"
-            
-            # Model dosya yolunu belirle
-            symbol_clean = symbol.replace('/', '').replace(':', '').replace('-', '').lower()
-            model_path = f"artifacts/models/xgb_model_{symbol_clean}_{timeframe}.json"
-            
+
+            # Merkezi path generator fonksiyonunu kullan
+            model_paths = get_model_paths(symbol, timeframe)
+            model_path = model_paths['xgboost_path']
+
+            # XGBoost modelini kontrol et
             if not os.path.exists(model_path):
+                logger.debug(f"🧠 [ML] XGBoost model bulunamadı: {model_path}")
                 return None
-            
+
             # Cache kontrolü
             if cache_key in self.ml_models:
                 trainer = self.ml_models[cache_key]
@@ -158,7 +160,7 @@ class PaperTrader:
                 trainer.load_model(model_path)
                 self.ml_models[cache_key] = trainer
                 logger.info(f"🧠 [ML] Model belleğe yüklendi: {model_path}")
-            
+
             if not trainer.is_trained or not trainer.feature_names:
                 return None
             

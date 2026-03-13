@@ -54,12 +54,14 @@ class MLService:
         # Arka plan görevi olarak başlat
         asyncio.create_task(self._run_training(request))
 
-        model_path = f"artifacts/models/xgb_model_{request.symbol.lower().replace('/', '').replace(':', '')}_{request.timeframe}.json"
+        # Merkezi path generator fonksiyonunu kullan
+        from ml.model_training import get_model_paths
+        model_paths = get_model_paths(request.symbol, request.timeframe)
 
         return {
             "status": "success",
             "message": f"ML modeli eğitimi başlatıldı ({request.symbol})...",
-            "model_path": model_path
+            "model_path": model_paths['xgboost_path']
         }
 
     async def _run_training(self, request: MLTrainRequest):
@@ -146,25 +148,33 @@ class MLService:
             self.training_state["progress"] = 85
             self.training_state["message"] = "Model kaydediliyor..."
             self.training_state["current_step"] = "Save model"
-            
-            symbol_clean = request.symbol.replace('/', '').replace(':', '').replace('-', '').lower()
-            model_dir = "artifacts/models"
-            os.makedirs(model_dir, exist_ok=True)
-            model_path = f"{model_dir}/xgb_model_{symbol_clean}_{request.timeframe}.json"
-            
-            # XGBoost modelini kaydet
-            trainer.xgb_model.save_model(model_path)
-            
-            logger.info(f"💾 [ML] Model kaydedildi: {model_path}")
+
+            # Merkezi path generator fonksiyonunu kullan
+            from ml.model_training import get_model_paths
+            model_paths = get_model_paths(request.symbol, request.timeframe)
+
+            # Model dizinini oluştur
+            os.makedirs("artifacts/models", exist_ok=True)
+
+            # Ensemble modelleri kaydet (XGBoost + RF + Metadata)
+            trainer.save_model(
+                model_path=model_paths['xgboost_path'],
+                timeframe=request.timeframe
+            )
+
+            logger.info(f"💾 [ML] Ensemble modeller kaydedildi:")
+            logger.info(f"   XGBoost: {model_paths['xgboost_path']}")
+            logger.info(f"   RF:      {model_paths['rf_path']}")
+            logger.info(f"   Meta:    {model_paths['metadata_path']}")
             
             # 7. Eğitim geçmişini güncelle
             self.training_state["progress"] = 95
             self.training_state["message"] = "Geçmiş güncelleniyor..."
             self.training_state["current_step"] = "Update history"
-            
+
             self._save_training_history(
-                request, 
-                model_path, 
+                request,
+                model_paths['xgboost_path'],  # XGBoost ana model yolunu kaydet
                 X_train.shape[0] + X_test.shape[0],  # Toplam örnek sayısı
                 X_train.shape[1],  # Feature sayısı
                 training_metrics  # Eğitim metrikleri
@@ -328,14 +338,24 @@ class MLService:
         Returns:
             Model kontrol yanıtı
         """
-        symbol_clean = symbol.replace('/', '').replace(':', '').replace('-', '').lower()
-        model_path = f"artifacts/models/xgb_model_{symbol_clean}_{timeframe}.json"
+        # Merkezi path generator fonksiyonunu kullan
+        from ml.model_training import get_model_paths
+        model_paths = get_model_paths(symbol, timeframe)
 
-        model_exists = os.path.exists(model_path)
+        # Tüm model dosyalarının varlığını kontrol et
+        xgb_exists = os.path.exists(model_paths['xgboost_path'])
+        rf_exists = os.path.exists(model_paths['rf_path'])
+        metadata_exists = os.path.exists(model_paths['metadata_path'])
 
         return {
             "status": "success",
-            "model_exists": model_exists,
-            "model_path": model_path if model_exists else None,
-            "message": "Model bulundu" if model_exists else "Model bulunamadı"
+            "model_exists": xgb_exists,
+            "model_path": model_paths['xgboost_path'] if xgb_exists else None,
+            "message": "Model bulundu" if xgb_exists else "Model bulunamadı",
+            "ensemble_status": {
+                "xgboost": xgb_exists,
+                "random_forest": rf_exists,
+                "metadata": metadata_exists,
+                "full_ensemble": xgb_exists and rf_exists and metadata_exists
+            }
         }
