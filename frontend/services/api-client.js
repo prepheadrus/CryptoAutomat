@@ -90,8 +90,9 @@ class ApiClient {
         return this.get('/api/v1/status');
     }
 
-    getDashboardMetrics() {
-        return this.get('/api/v1/dashboard-metrics');
+    getDashboardMetrics(params = {}) {
+        // Cache-busting için timestamp eklenebilir
+        return this.get('/api/v1/dashboard-metrics', params);
     }
 
     // ========================================================================

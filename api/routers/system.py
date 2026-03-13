@@ -45,7 +45,7 @@ async def get_system_status() -> Dict[str, Any]:
 async def get_dashboard_metrics() -> Dict[str, Any]:
     """
     Dashboard için tüm metrikleri döner.
-    
+
     Returns:
         {
             portfolio: {balance, free_margin, used_margin, total_pnl, ...},
@@ -54,6 +54,8 @@ async def get_dashboard_metrics() -> Dict[str, Any]:
             market_regime: str
         }
     """
+    from fastapi.responses import JSONResponse
+    
     try:
         # Paper engine'den stats al
         stats = paper_engine.get_stats()
@@ -98,22 +100,37 @@ async def get_dashboard_metrics() -> Dict[str, Any]:
         
         # Market regime
         market_regime = paper_engine.market_regime
-        
-        return {
-            "portfolio": portfolio,
-            "positions": positions,
-            "latest_decisions": latest_decisions,
-            "market_regime": market_regime,
-        }
-        
+
+        # No-cache headers ile response döndür (real-time veri için)
+        return JSONResponse(
+            content={
+                "portfolio": portfolio,
+                "positions": positions,
+                "latest_decisions": latest_decisions,
+                "market_regime": market_regime,
+            },
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
+
     except Exception as e:
         logger.error(f"Dashboard metrics error: {e}")
-        return {
-            "portfolio": {"balance": 0.0, "free_margin": 0.0, "used_margin": 0.0},
-            "positions": [],
-            "latest_decisions": {},
-            "market_regime": "UNKNOWN"
-        }
+        return JSONResponse(
+            content={
+                "portfolio": {"balance": 0.0, "free_margin": 0.0, "used_margin": 0.0},
+                "positions": [],
+                "latest_decisions": {},
+                "market_regime": "UNKNOWN"
+            },
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
 
 
 @router.get("/config/symbols")

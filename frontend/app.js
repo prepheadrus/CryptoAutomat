@@ -208,7 +208,9 @@ async function loadDashboardMetrics() {
         // Sistem durumunu güncelle (Environment: Production/Development)
         updateSystemStatus();
 
-        const metrics = await api.getDashboardMetrics();
+        // Cache-busting: Her çağrıda unique timestamp ekle
+        const timestamp = Date.now();
+        const metrics = await api.getDashboardMetrics({ _t: timestamp });
 
         console.log('[DEBUG] Metrics response:', metrics);
 

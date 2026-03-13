@@ -304,10 +304,10 @@ class PositionManager:
 
         position = self.positions[bot_id]
 
-        # Double close kilidi
+        # Double close kilidi - Sadece logla, bloke ETME (zaten positions_to_close listesinde)
         if position.metadata.get('is_closing', False):
-            logger.warning(f"Pozisyon zaten kapanıyor: {bot_id}")
-            return None
+            logger.warning(f"⚠️ Pozisyon zaten kapanıyor ama tekrar kapatma deneniyor: {bot_id}")
+            # Bloke etme, devam et - belki önceki kapatma başarısız oldu
 
         # Kilit set et
         position.metadata['is_closing'] = True

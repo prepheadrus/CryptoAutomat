@@ -834,41 +834,43 @@ class PaperTrader:
         
         # Legacy positions güncelle
         positions_to_close = []  # Kapatılacaklar (döngü içinde silme)
-        
+        positions_updated = False  # Güncelleme yapıldı mı?
+
         for pos in list(self.position_manager.legacy_positions):  # list() kopyasını al
             if pos['symbol'] != symbol:
                 continue
-            
+
             bot_id = pos.get('bot_id')
-            
+
             # Position objesine bak (asıl lock orada)
             position = self.position_manager.get_position(bot_id)
             if position and position.metadata.get('is_closing', False):
                 # Zaten kapanıyor, işlem yapma
                 continue
-            
+
             pos['current_price'] = current_price
-            
+            positions_updated = True
+
             # 1. Trailing stop güncelle (doğru HIGH/LOW ile)
             self.position_manager.update_trailing_stop_legacy(
                 pos, candle_high, candle_low, current_price
             )
-            
+
             # 2. PnL hesapla
             roe, pnl_usd = self.position_manager.get_unrealized_pnl_legacy(pos, current_price)
             pos['unrealized_usd'] = pnl_usd
             pos['pnl_percent'] = roe
-            
+
             # 3. Likidasyon kontrolü
             if self.position_manager.check_liquidation_legacy(pos, current_price):
                 positions_to_close.append((bot_id, current_price, 'LİKİDASYON'))
                 continue
-            
+
             # 4. Stop Loss / Take Profit kontrolü
             sl = pos.get('stop_loss')
             tp = pos.get('take_profit')
             direction = pos.get('direction', 'LONG')
-            
+
             if direction == 'LONG':
                 if sl and current_price <= sl:
                     positions_to_close.append((bot_id, sl, 'STOP LOSS'))
@@ -879,37 +881,62 @@ class PaperTrader:
                     positions_to_close.append((bot_id, sl, 'STOP LOSS'))
                 elif tp and current_price <= tp:
                     positions_to_close.append((bot_id, tp, 'TAKE PROFIT'))
+
+        # paper_engine.open_positions'u senkronize et (UI güncellemesi için kritik!)
+        if positions_updated:
+            self.open_positions = list(self.position_manager.legacy_positions)
         
         # Kapatılacak pozisyonları işle
+        closed_bot_ids = set()  # Bu tick'te kapatılan bot'lar (duplicate önleme)
+        
         for bot_id, exit_price, reason in positions_to_close:
-            # DOUBLE-CLOSE KİLİDİ: Pozisyon zaten kapanıyor mu kontrol et
-            position = self.position_manager.get_position(bot_id)
-            if position and position.metadata.get('is_closing', False):
-                logger.debug(f"⚠️ [DOUBLE-CLOSE KORUMA] {bot_id} zaten kapanıyor, atlanıyor.")
+            # Bu bot zaten bu tick'te kapatıldı mı? (duplicate önleme)
+            if bot_id in closed_bot_ids:
+                logger.debug(f"⚠️ {bot_id} bu tick'te zaten kapatıldı, atlanıyor.")
                 continue
-
-            # Kilit set et (race condition önleme)
-            if position:
-                position.metadata['is_closing'] = True
-                # Legacy pozisyona da yansıt
-                for legacy_pos in self.position_manager.legacy_positions:
-                    if legacy_pos.get('bot_id') == bot_id:
-                        legacy_pos['is_closing'] = True
-                        break
-
+            
+            # Position hala mevcut mu kontrol et (başka bir tick kapatmış olabilir)
+            if bot_id not in self.position_manager.positions:
+                logger.debug(f"⚠️ {bot_id} pozisyonu zaten kapatılmış, atlanıyor.")
+                continue
+            
+            # POZİSYONU KAPAT (is_closing kontrolü position_manager'da yapılacak)
             logger.info(f"🔴 [{reason}] {symbol} @ {exit_price:.4f} | Bot: {bot_id}")
-            trade = await self.position_manager.close_position(
-                bot_id=bot_id,
-                exit_price=exit_price,
-                reason=reason
-            )
-            if trade:
-                # Durum güncellemeleri artık on_position_closed event handler'ında yapılıyor (EDA)
-                # Buraya sadece nihai loglamayı bırakıyoruz
-                if trade.pnl > 0:
-                    logger.info(f"✅ {reason}: +${trade.pnl:.2f} ({trade.pnl_percent:.2%}) KAR")
+            
+            try:
+                trade = await self.position_manager.close_position(
+                    bot_id=bot_id,
+                    exit_price=exit_price,
+                    reason=reason
+                )
+                
+                if trade:
+                    # Bu bot'u kapatılanlar listesine ekle (duplicate önleme)
+                    closed_bot_ids.add(bot_id)
+                    
+                    # KRİTİK: Her kapatmadan SONRA hemen senkronize et (UI için)
+                    self.open_positions = list(self.position_manager.legacy_positions)
+                    logger.debug(f"✅ Pozisyon kapandı, UI senkronize: {len(self.open_positions)} pozisyon")
+                    
+                    # Durum güncellemeleri artık on_position_closed event handler'ında yapılıyor (EDA)
+                    # Buraya sadece nihai loglamayı bırakıyoruz
+                    if trade.pnl > 0:
+                        logger.info(f"✅ {reason}: +${trade.pnl:.2f} ({trade.pnl_percent:.2%}) KAR")
+                    else:
+                        logger.warning(f"⚠️ {reason}: ${trade.pnl:.2f} ({trade.pnl_percent:.2%}) ZARAR")
                 else:
-                    logger.warning(f"⚠️ {reason}: ${trade.pnl:.2f} ({trade.pnl_percent:.2%}) ZARAR")
+                    # close_position None döndürdü - muhtemelen zaten kapanıyor veya hata
+                    logger.warning(f"⚠️ Pozisyon kapatılamadı: {bot_id} (zaten kapanıyor olabilir)")
+                    
+            except Exception as e:
+                logger.error(f"❌ Pozisyon kapatma hatası ({bot_id}): {e}")
+                import traceback
+                logger.debug(traceback.format_exc())
+        
+        # POZİSYON KAPANDIKTAN SONRA SENKRONİZASYON (KRİTİK!)
+        # Close işleminden sonra open_positions'u güncelle
+        self.open_positions = list(self.position_manager.legacy_positions)
+        logger.debug(f"📊 Open positions senkronize edildi: {len(self.open_positions)} pozisyon")
     
     @property
     def timeframe(self):
