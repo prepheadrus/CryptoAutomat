@@ -140,29 +140,84 @@ class TrendIndicators:
         return adx, plus_di, minus_di
     
     @staticmethod
-    def kalman_filter(src: pd.Series, alpha: float = 0.015, beta: float = 0.12, period: int = 65) -> pd.Series:
+    def kalman_filter(
+        src: pd.Series,
+        high: pd.Series = None,
+        low: pd.Series = None,
+        close: pd.Series = None,
+        alpha: float = 0.015,
+        beta: float = 0.12,
+        period: int = 65,
+        use_dynamic_beta: bool = True
+    ) -> pd.Series:
         """
-        Kalman Filter (Gürültü temizleme)
-        
+        Logaritmik Sönümlemeli Dinamik Kalman Filter
+
+        Siyah Kuğu (Black Swan) anlarında filtrenin donup kalmasını (flatline)
+        engellemek için beta (R) parametresini ATR volatilitesine göre
+        logaritmik sönümleme ile dinamikleştirir.
+
+        Formül:
+            R_dynamic = R_base * max(1, math.log(ATR_current / ATR_mean))
+
         Args:
-            src: Kaynak seri
-            alpha: Alpha parametresi
-            beta: Beta parametresi
+            src: Kaynak seri (genellikle close fiyatları)
+            high: Yüksek fiyatlar (ATR hesaplaması için)
+            low: Düşük fiyatlar (ATR hesaplaması için)
+            close: Kapanış fiyatları (ATR hesaplaması için)
+            alpha: Alpha parametresi (sabit)
+            beta: Beta parametresi (baz değer)
             period: Periyot
-        
+            use_dynamic_beta: Dinamik beta kullanılsın mı?
+
         Returns:
             Kalman filtered seri
         """
+        import math
+
+        # Dinamik beta hesaplaması için ATR gerekli
+        if use_dynamic_beta and high is not None and low is not None and close is not None:
+            # ATR hesapla (14 periyot)
+            tr1 = high - low
+            tr2 = abs(high - close.shift(1))
+            tr3 = abs(low - close.shift(1))
+            tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+            atr = tr.ewm(span=14, adjust=False).mean()
+
+            # ATR_mean (son 65 periyodun hareketli ortalaması)
+            atr_mean = atr.rolling(window=period).mean()
+
+            # Logaritmik sönümleme
+            # ATR_current / ATR_mean > 1 ise (volatilite arttı) -> beta artar
+            # ATR_current / ATR_mean < 1 ise (volatilite düştü) -> beta sabit kalır
+            atr_ratio = atr / atr_mean
+            log_dampening = atr_ratio.apply(lambda x: max(1, math.log(x)) if x > 0 and not pd.isna(x) else 1)
+            dynamic_beta = beta * log_dampening
+        else:
+            # Statik beta (geleneksel Kalman)
+            dynamic_beta = pd.Series(beta, index=src.index)
+
+        # Kalman Filter uygulaması
         v1, v2 = src.iloc[0], 1.0
         v3 = alpha * period
         res = []
-        
-        for val in src:
+
+        for i, val in enumerate(src):
             v4 = v2 / (v2 + v3)
             v1 = v1 + v4 * (val - v1)
-            v2 = (1 - v4) * v2 + beta / period
+
+            # Dinamik beta kullan
+            if use_dynamic_beta and i < len(dynamic_beta):
+                current_beta = dynamic_beta.iloc[i]
+                if not pd.isna(current_beta):
+                    v2 = (1 - v4) * v2 + current_beta / period
+                else:
+                    v2 = (1 - v4) * v2 + beta / period
+            else:
+                v2 = (1 - v4) * v2 + beta / period
+
             res.append(v1)
-        
+
         return pd.Series(res, index=src.index)
     
     @staticmethod

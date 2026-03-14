@@ -354,7 +354,7 @@ def prepare_ml_data(
         # Sadece sayısal kolonları al
         all_numeric_cols = df_processed.select_dtypes(include=[np.number]).columns.tolist()
 
-        # X'ten çıkarılacak leakage kolonları (target dahil - çünkü y zaten ayrıldı)
+        # X'ten çıkarılacak leakage kolonları (geleceğe dair tüm geçici kolonlar)
         leakage_cols = [
             target_col,              # 'target' - y olarak ayrılacak, X'te olamaz
             'barrier_reason',        # Barrier bilgisi (gelecek)
@@ -379,6 +379,9 @@ def prepare_ml_data(
     # SONRA X'i oluştur (leakage kolonları olmadan)
     X_train = train_df[feature_cols].copy()
     X_test = test_df[feature_cols].copy()
+
+    # [ML] Dampened Kalman & Triple Barrier Hazır log mesajı
+    logger.info("[ML] Dampened Kalman & Triple Barrier Hazır")
 
     logger.info(f"ML veri hazırlığı tamamlandı:")
     logger.info(f"  X_train: {X_train.shape}, y_train: {y_train.shape}")

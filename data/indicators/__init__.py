@@ -262,7 +262,7 @@ class StrategyIndicators:
         df['EMA_200'] = TrendIndicators.ema(df['close'], 200)
 
         # ========================================================================
-        # KALMAN FİLTRESİ (Plug & Play)
+        # KALMAN FİLTRESİ (Plug & Play) - LOGARİTMİK SÖNÜMLEMELİ
         # ========================================================================
         if apply_kalman_from_config:
             try:
@@ -273,14 +273,20 @@ class StrategyIndicators:
                     process_noise = kalman_config.get('process_noise', 0.001)
                     measurement_noise = kalman_config.get('measurement_noise', 0.1)
 
-                    df['smoothed_close'] = StrategyIndicators.apply_kalman(
-                        df['close'],
-                        process_noise=process_noise,
-                        measurement_noise=measurement_noise
+                    # YENİ: Logaritmik sönümlemeli dinamik Kalman Filter
+                    # high, low, close ile ATR hesaplayarak dinamik beta
+                    df['smoothed_close'] = TrendIndicators.kalman_filter(
+                        src=df['close'],
+                        high=df['high'],
+                        low=df['low'],
+                        close=df['close'],
+                        alpha=process_noise,
+                        beta=measurement_noise,
+                        use_dynamic_beta=True  # ATR bazlı dinamik beta
                     )
 
                     # Log mesajı
-                    logger.info(f"[KALMAN] Plug & Play Filtre Aktif | Q={process_noise}, R={measurement_noise}")
+                    logger.info(f"[KALMAN] Dampened Kalman & Triple Barrier Hazır | Q={process_noise}, R={measurement_noise}")
 
                     # Stratejiler için close fiyatını smoothed_close olarak ayarla
                     # NOT: Orijinal 'close' korunur, stratejiler 'smoothed_close' kullanabilir
