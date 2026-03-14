@@ -497,6 +497,12 @@ class ExchangeManager:
                 # Son mumun kapanış zamanını kontrol et
                 if not df.empty:
                     last_candle_time = df.index[-1]
+
+                    # Timezone düzeltme: Her ikisini de UTC yap
+                    if last_candle_time.tzinfo is None:
+                        # tz-naive ise UTC yap
+                        last_candle_time = last_candle_time.tz_localize('UTC')
+
                     current_time = pd.Timestamp.now(tz='UTC')
 
                     # Mum kapanış süresini hesapla (timeframe'e göre)
@@ -508,7 +514,7 @@ class ExchangeManager:
                     else:
                         candle_duration_minutes = 1
 
-                    # Son mumun yaşı (saniye)
+                    # Son mumun yaşı (saniye) - artık timezone'lar uyumlu
                     candle_age_seconds = (current_time - last_candle_time).total_seconds()
 
                     # Mum kapanışına ne kadar kaldı?
