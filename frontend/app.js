@@ -829,7 +829,7 @@ async function loadAdvancedSettings() {
         const result = await response.json();
 
         if (result.status === 'success' && result.data) {
-            const { wfo, ml, htf } = result.data;
+            const { wfo, ml, htf, kalman_smoothing, candle_close_lock } = result.data;
 
             // WFO ayarları
             if (wfo) {
@@ -851,10 +851,23 @@ async function loadAdvancedSettings() {
                 document.getElementById('htf-method').value = htf.trend_method || 'ema_stack';
             }
 
+            // YENİ: Kalman Filtresi
+            if (kalman_smoothing) {
+                document.getElementById('kalman-enabled').checked = kalman_smoothing.enabled !== false;
+                document.getElementById('kalman-process-noise').value = kalman_smoothing.process_noise || 0.001;
+                document.getElementById('kalman-measurement-noise').value = kalman_smoothing.measurement_noise || 0.1;
+            }
+
+            // YENİ: Mum Kapanış Kilidi
+            if (candle_close_lock) {
+                document.getElementById('candle-lock-enabled').checked = candle_close_lock.enabled !== false;
+                document.getElementById('candle-lock-interval').value = candle_close_lock.check_interval || 5;
+            }
+
             // Store'a kaydet
             store.setState('settings', {
                 ...store.getState('settings'),
-                advanced: { wfo, ml, htf }
+                advanced: { wfo, ml, htf, kalman_smoothing, candle_close_lock }
             });
 
             console.log('[INFO] Gelişmiş ayarlar yüklendi:', result.data);
@@ -1008,6 +1021,19 @@ async function saveAdvancedSettings() {
             trend_method: document.getElementById('htf-method').value
         };
 
+        // YENİ: Kalman Filtresi
+        const kalmanData = {
+            enabled: document.getElementById('kalman-enabled').checked,
+            process_noise: parseFloat(document.getElementById('kalman-process-noise').value),
+            measurement_noise: parseFloat(document.getElementById('kalman-measurement-noise').value)
+        };
+
+        // YENİ: Mum Kapanış Kilidi
+        const candleLockData = {
+            enabled: document.getElementById('candle-lock-enabled').checked,
+            check_interval: parseInt(document.getElementById('candle-lock-interval').value)
+        };
+
         // Frontend validasyonu
         if (wfoData.train_days < 7 || wfoData.train_days > 90) {
             showToast('⚠️ WFO Eğitim günleri 7-90 arasında olmalı', 'error');
@@ -1024,6 +1050,21 @@ async function saveAdvancedSettings() {
             return;
         }
 
+        if (kalmanData.process_noise < 0.0001 || kalmanData.process_noise > 0.01) {
+            showToast('⚠️ Kalman Process Noise 0.0001-0.01 arasında olmalı', 'error');
+            return;
+        }
+
+        if (kalmanData.measurement_noise < 0.01 || kalmanData.measurement_noise > 1.0) {
+            showToast('⚠️ Kalman Measurement Noise 0.01-1.0 arasında olmalı', 'error');
+            return;
+        }
+
+        if (candleLockData.check_interval < 5 || candleLockData.check_interval > 60) {
+            showToast('⚠️ Mum Kapanış Kilidi 5-60 saniye arasında olmalı', 'error');
+            return;
+        }
+
         showToast('🔧 Gelişmiş ayarlar kaydediliyor...', 'info');
 
         // Backend API çağrısı (JSON body)
@@ -1033,7 +1074,9 @@ async function saveAdvancedSettings() {
             body: JSON.stringify({
                 wfo: wfoData,
                 ml: mlData,
-                htf: htfData
+                htf: htfData,
+                kalman_smoothing: kalmanData,  // YENİ
+                candle_close_lock: candleLockData  // YENİ
             })
         });
 

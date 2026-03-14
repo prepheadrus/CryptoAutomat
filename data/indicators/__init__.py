@@ -98,6 +98,58 @@ class StrategyIndicators:
     def uo(high: pd.Series, low: pd.Series, close: pd.Series, fast: int = 7, medium: int = 14, slow: int = 28) -> pd.Series:
         """Ultimate Oscillator"""
         return MomentumIndicators.uo(high, low, close, fast, medium, slow)
+
+    # ========================================================================
+    # KALMAN FİLTRESİ (Plug & Play Denoising)
+    # ========================================================================
+
+    @staticmethod
+    def apply_kalman(
+        prices: pd.Series,
+        process_noise: float = 0.001,
+        measurement_noise: float = 0.1
+    ) -> pd.Series:
+        """
+        Kalman Filtresi ile fiyat gürültüsünü azalt.
+
+        Plug & Play: Config'den okunan parametrelerle çalışır.
+        Tüm stratejiler bu filtreyi otomatik kullanabilir.
+
+        Args:
+            prices: Fiyat serisi (close fiyatları)
+            process_noise: Süreç gürültüsü (küçük = daha smooth)
+            measurement_noise: Ölçüm gürültüsü (büyük = daha agresif)
+
+        Returns:
+            Filtrelenmiş fiyat serisi
+        """
+        if len(prices) == 0:
+            return prices
+
+        # Kalman parametreleri
+        Q = process_noise  # Process noise covariance
+        R = measurement_noise  # Measurement noise covariance
+
+        # Initial states
+        x = prices.iloc[0]  # Initial estimate
+        P = 1.0  # Initial error covariance
+        K = 0.0  # Initial Kalman gain
+
+        filtered_prices = []
+
+        for price in prices:
+            # Prediction step
+            x_pred = x
+            P_pred = P + Q
+
+            # Update step
+            K = P_pred / (P_pred + R)
+            x = x_pred + K * (price - x_pred)
+            P = (1 - K) * P_pred
+
+            filtered_prices.append(x)
+
+        return pd.Series(filtered_prices, index=prices.index, name='smoothed_close')
     
     @staticmethod
     def psar(high: pd.Series, low: pd.Series, close: pd.Series = None, af0: float = 0.02, af: float = 0.02, max_af: float = 0.2) -> tuple:
@@ -169,46 +221,76 @@ class StrategyIndicators:
     # ========================================================================
     
     @staticmethod
-    def add_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
+    def add_all_indicators(df: pd.DataFrame, apply_kalman_from_config: bool = True) -> pd.DataFrame:
         """
         Tüm indikatörleri hesapla (SKILL.md / Faz 4 Manuel Hesaplama).
-        
+        YENİ: Plug & Play Kalman Filtresi desteği.
+
         Args:
             df: OHLCV DataFrame
-        
+            apply_kalman_from_config: Config'den Kalman ayarını oku
+
         Returns:
             DataFrame with all indicators
         """
         if df.empty or len(df) < 5:
             return df
-        
+
         # Veri kalitesini garanti altına al
         for col in ['open', 'high', 'low', 'close', 'volume']:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').astype(float)
-        
+
         # VWAP için DatetimeIndex şart
         if 'timestamp' in df.columns:
             if not pd.api.types.is_datetime64_any_dtype(df['timestamp']):
                 df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
             df.set_index('timestamp', inplace=True, drop=False)
-        
+
         # Null'ları temizle
         df.ffill(inplace=True)
         df.bfill(inplace=True)
-        
+
         if df['close'].isnull().any():
             df.fillna(0, inplace=True)
-        
+
         # --- TREND (Manuel) ---
         df['EMA_5'] = TrendIndicators.ema(df['close'], 5)
         df['EMA_13'] = TrendIndicators.ema(df['close'], 13)
         df['SMA_20'] = TrendIndicators.sma(df['close'], 20)
         df['EMA_50'] = TrendIndicators.ema(df['close'], 50)
         df['EMA_200'] = TrendIndicators.ema(df['close'], 200)
-        
-        # Kalman Filter
-        df['KALMAN'] = TrendIndicators.kalman_filter(df['close'])
+
+        # ========================================================================
+        # KALMAN FİLTRESİ (Plug & Play)
+        # ========================================================================
+        if apply_kalman_from_config:
+            try:
+                from core.config import CONFIG
+                kalman_config = CONFIG.get('kalman_smoothing', {})
+
+                if kalman_config.get('enabled', False):
+                    process_noise = kalman_config.get('process_noise', 0.001)
+                    measurement_noise = kalman_config.get('measurement_noise', 0.1)
+
+                    df['smoothed_close'] = StrategyIndicators.apply_kalman(
+                        df['close'],
+                        process_noise=process_noise,
+                        measurement_noise=measurement_noise
+                    )
+
+                    # Log mesajı
+                    logger.info(f"[KALMAN] Plug & Play Filtre Aktif | Q={process_noise}, R={measurement_noise}")
+
+                    # Stratejiler için close fiyatını smoothed_close olarak ayarla
+                    # NOT: Orijinal 'close' korunur, stratejiler 'smoothed_close' kullanabilir
+                else:
+                    logger.debug("[KALMAN] Filtre devre dışı (config'den)")
+            except Exception as e:
+                logger.warning(f"[KALMAN] Filtre uygulanamadı: {e}")
+                df['smoothed_close'] = df['close']  # Fallback
+        else:
+            df['smoothed_close'] = df['close']
         
         # Supertrend
         st, direction = TrendIndicators.supertrend(df['high'], df['low'], df['close'], 3.0, 10)

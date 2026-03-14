@@ -571,6 +571,21 @@ async def update_advanced_config(request: dict) -> Dict[str, Any]:
             config['htf']['enabled'] = bool(htf.get('enabled', True))
             config['htf']['trend_method'] = str(htf.get('trend_method', 'ema_stack'))
             logger.info(f"✅ HTF güncellendi: enabled={config['htf']['enabled']}")
+
+        # YENİ: Kalman Filtresi
+        if 'kalman_smoothing' in request:
+            kalman = request['kalman_smoothing']
+            config['kalman_smoothing']['enabled'] = bool(kalman.get('enabled', False))
+            config['kalman_smoothing']['process_noise'] = float(kalman.get('process_noise', 0.001))
+            config['kalman_smoothing']['measurement_noise'] = float(kalman.get('measurement_noise', 0.1))
+            logger.info(f"✅ Kalman güncellendi: enabled={config['kalman_smoothing']['enabled']}, Q={config['kalman_smoothing']['process_noise']}, R={config['kalman_smoothing']['measurement_noise']}")
+
+        # YENİ: Mum Kapanış Kilidi
+        if 'candle_close_lock' in request:
+            candle_lock = request['candle_close_lock']
+            config['candle_close_lock']['enabled'] = bool(candle_lock.get('enabled', True))
+            config['candle_close_lock']['check_interval'] = int(candle_lock.get('check_interval', 5))
+            logger.info(f"✅ Candle Lock güncellendi: enabled={config['candle_close_lock']['enabled']}, interval={config['candle_close_lock']['check_interval']}s")
         
         # config.yaml'a yaz
         with open('config.yaml', 'w', encoding='utf-8') as f:
@@ -583,22 +598,28 @@ async def update_advanced_config(request: dict) -> Dict[str, Any]:
             CONFIG['wfo'].update(config['wfo'])
         if 'ml' in request:
             CONFIG['ml'].update(config['ml'])
-            # PaperTrader instance'ındaki ml_enabled'ı da güncelle
+            # PaperTrader instance'ındaki ml_enabled'ı güncelle
             from core.paper import paper_engine
             paper_engine.ml_enabled = config['ml'].get('enabled', True)
             logger.info(f"✅ PaperTrader ML status: {paper_engine.ml_enabled}")
         if 'htf' in request:
             CONFIG['htf'].update(config['htf'])
-        
+        if 'kalman_smoothing' in request:
+            CONFIG['kalman_smoothing'].update(config['kalman_smoothing'])
+        if 'candle_close_lock' in request:
+            CONFIG['candle_close_lock'].update(config['candle_close_lock'])
+
         logger.info(f"✅ RAM'deki CONFIG güncellendi (hot-reload)")
-        
+
         return {
             "status": "success",
             "message": "Gelişmiş ayarlar güncellendi",
             "data": {
                 "wfo": config.get('wfo', {}),
                 "ml": config.get('ml', {}),
-                "htf": config.get('htf', {})
+                "htf": config.get('htf', {}),
+                "kalman_smoothing": config.get('kalman_smoothing', {}),
+                "candle_close_lock": config.get('candle_close_lock', {})
             }
         }
 

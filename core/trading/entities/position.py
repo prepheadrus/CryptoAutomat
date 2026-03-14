@@ -87,6 +87,10 @@ class Position:
     margin: float = 0.0
     commission: float = 0.0
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+    # YENİ: 3 Aşamalı Risk Yönetimi Bayrakları
+    partial_profit_taken: bool = False  # Aşama 1: Kısmi kâr alma (50% TP)
+    breakeven_activated: bool = False  # Aşama 2: Başa baş koruması aktif
     
     def __post_init__(self):
         """Validation (dataclass initialization sonrası)"""
@@ -236,7 +240,151 @@ class Position:
         
         # Yeni instance oluştur (frozen=True için replace pattern)
         return dataclasses.replace(self, stop_loss=new_stop)
-    
+
+    # ========================================================================
+    # 3 AŞAMALI RİSK YÖNETİMİ (Kâr Koruma Sistemi)
+    # ========================================================================
+
+    def should_take_partial_profit(self, current_price: float, atr: float = 0.0) -> bool:
+        """
+        Aşama 1: Kısmi Kâr Alma (50% TP).
+
+        Fiyat, TP hedefinin %50'sine ulaştıysa ve henüz partial_profit_taken=False ise
+        pozisyonun yarısını kapat.
+
+        Args:
+            current_price: Şu anki fiyat
+            atr: ATR değeri (opsiyonel)
+
+        Returns:
+            True ise kısmi kâr alma zamanı
+        """
+        if self.partial_profit_taken or self.take_profit is None:
+            return False
+
+        # TP mesafesinin %50'si
+        tp_distance = abs(self.take_profit - self.entry_price)
+        half_tp_distance = tp_distance * 0.5
+
+        if self.direction == PositionDirection.LONG:
+            profit_distance = current_price - self.entry_price
+            return profit_distance >= half_tp_distance
+        else:  # SHORT
+            profit_distance = self.entry_price - current_price
+            return profit_distance >= half_tp_distance
+
+    def should_activate_breakeven(self, current_price: float, atr: float) -> bool:
+        """
+        Aşama 2: Başa Baş (Breakeven) Koruması.
+
+        Fiyat, pozisyon yönünde en az 1.0x ATR kâra ulaştığında
+        stop-loss'u giriş fiyatının çok üzerine çek.
+
+        Args:
+            current_price: Şu anki fiyat
+            atr: ATR değeri (14 periyot)
+
+        Returns:
+            True ise breakeven aktivasyonu zamanı
+        """
+        if self.breakeven_activated:
+            return False
+
+        # Minimum 1.0x ATR kâr
+        min_profit_distance = atr * 1.0
+
+        if self.direction == PositionDirection.LONG:
+            profit_distance = current_price - self.entry_price
+            return profit_distance >= min_profit_distance
+        else:  # SHORT
+            profit_distance = self.entry_price - current_price
+            return profit_distance >= min_profit_distance
+
+    def activate_breakeven(self, commission_buffer: float = 0.001) -> 'Position':
+        """
+        Başa baş (breakeven) korumasını aktif et.
+
+        Stop-loss'u giriş fiyatının komisyonları kurtaracak kadar üzerine çek.
+
+        Args:
+            commission_buffer: Komisyon buffer'ı (örn: 0.001 = %0.1)
+
+        Returns:
+            Yeni Position instance (breakeven_activated=True)
+        """
+        # Komisyon buffer'ı ile breakeven fiyatı
+        if self.direction == PositionDirection.LONG:
+            breakeven_price = self.entry_price * (1 + commission_buffer)
+        else:  # SHORT
+            breakeven_price = self.entry_price * (1 - commission_buffer)
+
+        # Yeni position oluştur (immutable)
+        return dataclasses.replace(
+            self,
+            stop_loss=breakeven_price,
+            breakeven_activated=True
+        )
+
+    def update_trailing_stop_with_protection(
+        self,
+        current_price: float,
+        atr: float,
+        atr_multiplier: float = 2.0
+    ) -> 'Position':
+        """
+        Aşama 3: İz Süren Stop (Trailing) - Breakeven Korumalı.
+
+        Stop seviyesini dinamik olarak ATR çarpanı kadar geriden takip et.
+        Stop ASLA breakeven noktasının altına düşmemeli.
+
+        Args:
+            current_price: Şu anki fiyat
+            atr: ATR değeri
+            atr_multiplier: ATR çarpanı (örn: 2.0 = 2x ATR)
+
+        Returns:
+            Yeni Position instance (güncellenmiş stop_loss)
+        """
+        # Mevcut stop loss (None ise başlangıç SL'ı kullan)
+        current_stop = self.stop_loss if self.stop_loss else self.entry_price
+
+        # Trailing stop hesapla
+        if self.direction == PositionDirection.LONG:
+            # LONG: Fiyat yükseldikçe stop'u yukarı çek
+            trailing_stop = current_price - (atr * atr_multiplier)
+
+            # Stop asla giriş fiyatının altına düşmemeli (breakeven koruması)
+            if self.breakeven_activated:
+                min_stop = self.entry_price * 1.001  # Komisyon buffer
+            else:
+                min_stop = self.entry_price
+
+            # Yeni stop: daha yüksek olan (trailing veya min)
+            new_stop = max(trailing_stop, min_stop, current_stop)
+        else:  # SHORT
+            # SHORT: Fiyat düştükçe stop'u aşağı çek
+            trailing_stop = current_price + (atr * atr_multiplier)
+
+            # Stop asla giriş fiyatının üstüne çıkmamalı (breakeven koruması)
+            if self.breakeven_activated:
+                max_stop = self.entry_price * 0.999  # Komisyon buffer
+            else:
+                max_stop = self.entry_price
+
+            # Yeni stop: daha düşük olan (trailing veya max)
+            new_stop = min(trailing_stop, max_stop, current_stop)
+
+        # Sadece stop_loss iyileşmişse güncelle
+        if self.direction == PositionDirection.LONG:
+            if new_stop <= current_stop:
+                return self  # Değişiklik yok
+        else:  # SHORT
+            if new_stop >= current_stop:
+                return self  # Değişiklik yok
+
+        # Yeni position oluştur (immutable)
+        return dataclasses.replace(self, stop_loss=new_stop)
+
     def update_take_profit(self, new_tp: float) -> 'Position':
         """
         Take profit güncelle (immutable).

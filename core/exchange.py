@@ -179,6 +179,7 @@ class ExchangeManager:
     async def watch_ticker_loop(self, symbol):
         """
         WebSocket üzerinden gerçek zamanlı anlık fiyat dinleyicisi.
+        YENİ: CPU Darboğaz Koruması (Throttle) - Sadece açık pozisyonlar için ve max 1 saniyede bir
 
         ADIM 4 ENTEGRASYONU:
         - WebSocket'ten ticker alır
@@ -186,35 +187,65 @@ class ExchangeManager:
         - Bu metod içinde update_trailing_stop() ve check_exit_condition() çalışır
         """
         from core.paper import paper_engine # Loop delayı önlemek için içe aktarıldı
+        import time
 
         logger.info(f"{symbol} için WebSocket Ticker akışı başlatıldı.")
+
+        # Throttle (geciktirici) mekanizması - CPU koruması
+        last_update_time = {}  # {symbol: last_update_timestamp}
+        UPDATE_INTERVAL = 1.0  # Saniye (max 1 saniyede bir güncelle)
+        PRICE_CHANGE_THRESHOLD = 0.001  # %0.1 fiyat değişimi (anlamlı hareket)
+
         while True:
             try:
                 # Gerçek zamanlı itme (push) teknolojisi ile anlık veriyi çek
                 ticker = await self.exchange.watch_ticker(symbol)
                 current_price = ticker['last']
 
-                # === ADIM 4: TRAILING STOP ENTEGRASYONU ===
-                # Açık pozisyonları kontrol et ve trailing stop güncelle
-                # update_live_prices() içinde:
-                #   1. update_trailing_stop() - Trailing stop güncelleme
-                #   2. check_exit_condition() - Stop patlama kontrolü
+                # ========================================================================
+                # CPU DARBOĞAZ KORUMASI (Throttle)
+                # ========================================================================
+                # Sadece açık pozisyonu olan semboller için güncelle
+                # Ve en fazla 1 saniyede bir (veya fiyat anlamlı değiştiyse)
+                # ========================================================================
 
-                # WebSocket ZIRHI: update_live_prices hatası tüm loop'u çökertmesin
-                try:
+                current_time = time.time()
+                last_update = last_update_time.get(symbol, 0)
+                time_since_update = current_time - last_update
+
+                # Fiyat değişimi kontrolü
+                price_changed_significantly = False
+                if hasattr(self, '_last_prices') and symbol in self._last_prices:
+                    price_change_pct = abs(current_price - self._last_prices[symbol]) / self._last_prices[symbol]
+                    price_changed_significantly = price_change_pct >= PRICE_CHANGE_THRESHOLD
+
+                # Güncelleme gerekli mi? (1 saniye geçti VEYA fiyat anlamlı değişti)
+                should_update = (time_since_update >= UPDATE_INTERVAL) or price_changed_significantly
+
+                if should_update:
+                    # Açık pozisyonları kontrol et
                     if symbol in [pos['symbol'] for pos in paper_engine.open_positions]:
                         # Sadece açık pozisyon varsa güncelle (performans optimizasyonu)
-                        await paper_engine.update_live_prices(symbol, current_price)
-                        # Not: current_price hem high hem low olarak kullanılıyor
-                        # Gelecek iyileştirme: 1m mum high/low kullanmak için fetch_ohlcv gerekebilir
-                except Exception as e:
-                    # KRİTİK: Hata logla AMA continue ile devam et (WebSocket akışı kırılmasın!)
-                    logger.error(f"❌ [WEBSOCKET ZIRHI] {symbol} update_live_prices hatası: {e}")
-                    logger.error(f"   Hata türü: {type(e).__name__}")
-                    import traceback
-                    logger.debug(traceback.format_exc())
-                    # Continue ile bir sonraki ticker'a devam et
-                    continue
+                        try:
+                            await paper_engine.update_live_prices(symbol, current_price)
+                            last_update_time[symbol] = current_time
+
+                            # Son fiyatı kaydet (değişim kontrolü için)
+                            if not hasattr(self, '_last_prices'):
+                                self._last_prices = {}
+                            self._last_prices[symbol] = current_price
+
+                            logger.debug(f"[RISK] 3 Aşamalı Kâr Koruma ve Throttle Aktif: {symbol} @ ${current_price:.2f}")
+                        except Exception as e:
+                            # KRİTİK: Hata logla AMA continue ile devam et (WebSocket akışı kırılmasın!)
+                            logger.error(f"❌ [WEBSOCKET ZIRHI] {symbol} update_live_prices hatası: {e}")
+                            logger.error(f"   Hata türü: {type(e).__name__}")
+                            import traceback
+                            logger.debug(traceback.format_exc())
+                    else:
+                        # Açık pozisyon yok - throttle zamanını yine de güncelle
+                        last_update_time[symbol] = current_time
+                # else: Güncelleme gerek yok (throttle aktif) - CPU korunuyor
 
                 # Terminal kirletilmemesi için artık debug'a basmıyoruz
                 # logger.debug(f"[WS] {symbol} Fiyat: {current_price}, Hacim: {ticker['baseVolume']}")
@@ -436,6 +467,7 @@ class ExchangeManager:
         """
         Tek bir bot için sinyal işleme task'ı (async, izole, hata korumalı).
         EVENT-DRIVEN: Artık doğrudan fonksiyon çağrısı yerine Event Bus kullanıyor.
+        YENİ: Katı Mum Kapanış Kilidi (Strict Candle Close Lock)
 
         Args:
             paper_engine: PaperTrader instance (geriye dönük uyumluluk)
@@ -452,6 +484,44 @@ class ExchangeManager:
             symbol = bot_info.get('symbol', '')
             strategy_id = bot_info.get('strategy_id', '')
             timeframe = bot_info.get('timeframe', '1m')
+
+            # ========================================================================
+            # KATI MUM KAPANış KİLİDİ (Strict Candle Close Lock)
+            # ========================================================================
+            from core.config import CONFIG
+
+            candle_lock_config = CONFIG.get('candle_close_lock', {})
+            candle_lock_enabled = candle_lock_config.get('enabled', True)
+
+            if candle_lock_enabled:
+                # Son mumun kapanış zamanını kontrol et
+                if not df.empty:
+                    last_candle_time = df.index[-1]
+                    current_time = pd.Timestamp.now(tz='UTC')
+
+                    # Mum kapanış süresini hesapla (timeframe'e göre)
+                    tf_minutes = int(''.join(filter(str.isdigit, timeframe)))
+                    if 'm' in timeframe:
+                        candle_duration_minutes = tf_minutes
+                    elif 'h' in timeframe:
+                        candle_duration_minutes = tf_minutes * 60
+                    else:
+                        candle_duration_minutes = 1
+
+                    # Son mumun yaşı (saniye)
+                    candle_age_seconds = (current_time - last_candle_time).total_seconds()
+
+                    # Mum kapanışına ne kadar kaldı?
+                    candle_close_threshold = candle_duration_minutes * 60 * 0.95  # %95 kapanmış
+
+                    if candle_age_seconds < candle_close_threshold:
+                        # Mum henüz kapanmadı, sinyali atla
+                        remaining_seconds = (candle_duration_minutes * 60) - candle_age_seconds
+                        logger.debug(
+                            f"[TIMEFRAME] Katı Mum Kapanış Kilidi Devrede: {symbol} ({timeframe}) | "
+                            f"Kalan: {remaining_seconds:.0f}s"
+                        )
+                        return  # Sinyal üretme, mum kapanışını bekle
 
             # Strateji sinyali üret
             strategy = paper_engine.strategies.get(symbol)

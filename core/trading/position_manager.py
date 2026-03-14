@@ -465,7 +465,7 @@ class PositionManager:
     # ========================================================================
     # TRAILING STOP GÜNCELLEME
     # ========================================================================
-    
+
     def update_trailing_stop(
         self,
         position: Position,
@@ -473,76 +473,81 @@ class PositionManager:
         current_low: float
     ) -> Optional[Position]:
         """
-        Trailing stop güncelle (immutable - yeni instance döner).
-        
+        3 Aşamalı Dinamik Risk Yönetimi ile Trailing stop güncelle (immutable - yeni instance döner).
+
+        AŞAMA 1: Kısmi Kâr Alma (50% TP)
+        AŞAMA 2: Başa Baş (Breakeven) Koruması
+        AŞAMA 3: İz Süren Stop (Trailing) - Breakeven Korumalı
+
         LONG:
             - Yeni zirve kontrolü
             - Zirveden (ATR × Çarpan) çıkar
             - Sadece yukarı taşı
-        
+
         SHORT:
             - Yeni dip kontrolü
             - Dipten (ATR × Çarpan) ekle
             - Sadece aşağı taşı
-        
+
         Args:
             position: Position object
             current_high: Mum high fiyatı
             current_low: Mum low fiyatı
-        
+
         Returns:
             Güncellenmiş Position (yeni instance)
         """
-        if position.direction == PositionDirection.LONG:
-            # LONG için trailing stop
-            highest_seen = position.metadata.get('highest_seen', position.entry_price)
-            
-            if current_high > highest_seen:
-                # Yeni zirve
-                atr = position.metadata.get('atr', 0.0)
-                atr_multiplier = position.metadata.get('atr_multiplier', 3.0)
-                
-                new_stop = current_high - (atr * atr_multiplier)
-                
-                # Sadece yukarı taşı
-                if position.stop_loss and new_stop > position.stop_loss:
-                    # Metadata güncelle
-                    new_metadata = {**position.metadata, 'highest_seen': current_high}
-                    
-                    # Yeni position (immutable)
-                    import dataclasses
-                    return dataclasses.replace(
-                        position,
-                        stop_loss=new_stop,
-                        metadata=new_metadata
-                    )
-        
-        else:  # SHORT
-            # SHORT için trailing stop
-            lowest_seen = position.metadata.get('lowest_seen', position.entry_price)
-            
-            if current_low < lowest_seen:
-                # Yeni dip
-                atr = position.metadata.get('atr', 0.0)
-                atr_multiplier = position.metadata.get('atr_multiplier', 3.0)
-                
-                new_stop = current_low + (atr * atr_multiplier)
-                
-                # Sadece aşağı taşı
-                if position.stop_loss and new_stop < position.stop_loss:
-                    # Metadata güncelle
-                    new_metadata = {**position.metadata, 'lowest_seen': current_low}
-                    
-                    # Yeni position (immutable)
-                    import dataclasses
-                    return dataclasses.replace(
-                        position,
-                        stop_loss=new_stop,
-                        metadata=new_metadata
-                    )
-        
-        # Değişiklik yok
-        return position
+        import dataclasses
+        from core.logger import logger
+
+        # Mevcut fiyatı belirle (LONG için high, SHORT için low)
+        current_price = current_high if position.direction == PositionDirection.LONG else current_low
+
+        # ========================================================================
+        # AŞAMA 1: KISMI KÂR ALMA (50% TP)
+        # ========================================================================
+        if position.should_take_partial_profit(current_price):
+            logger.info(
+                f"[RISK] 3 Aşamalı Kâr Koruma ve Throttle Aktif - AŞAMA 1: "
+                f"{position.symbol} Kısmi kâr alma tetiklendi! "
+                f"Fiyat: ${current_price:.2f}, TP: ${position.take_profit:.2f}"
+            )
+            # Bayrağı güncelle (immutable)
+            position = dataclasses.replace(position, partial_profit_taken=True)
+            # TODO: PositionPartialClosedEvent fırlat (Event Bus entegrasyonu)
+
+        # ========================================================================
+        # AŞAMA 2: BAŞA BAŞ (BREAKEVEN) KORUMASI
+        # ========================================================================
+        atr = position.metadata.get('atr', 0.0)
+        if atr > 0 and position.should_activate_breakeven(current_price, atr):
+            logger.info(
+                f"[RISK] 3 Aşamalı Kâr Koruma ve Throttle Aktif - AŞAMA 2: "
+                f"{position.symbol} Breakeven koruması aktif edildi! "
+                f"Fiyat: ${current_price:.2f}, Entry: ${position.entry_price:.2f}"
+            )
+            # Breakeven aktif et (immutable)
+            position = position.activate_breakeven(commission_buffer=0.001)
+            # TODO: StopLossUpdatedEvent fırlat (Event Bus entegrasyonu)
+
+        # ========================================================================
+        # AŞAMA 3: İZ SÜREN STOP (TRAILING) - BREAKEVEN KORUMALI
+        # ========================================================================
+        atr_multiplier = position.metadata.get('atr_multiplier', 2.0)
+        updated_position = position.update_trailing_stop_with_protection(
+            current_price=current_price,
+            atr=atr,
+            atr_multiplier=atr_multiplier
+        )
+
+        # Stop loss güncellenmişse logla
+        if updated_position.stop_loss != position.stop_loss:
+            logger.debug(
+                f"[RISK] 3 Aşamalı Kâr Koruma - AŞAMA 3: "
+                f"{position.symbol} Trailing stop güncellendi: ${position.stop_loss:.2f} → ${updated_position.stop_loss:.2f}"
+            )
+
+        return updated_position
     
     def update_trailing_stop_legacy(
         self,

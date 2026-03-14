@@ -1145,6 +1145,103 @@
                         </div>
                     </div>
 
+                    <!-- CARD 4B: KALMAN FİLTRESİ (YENİ!) -->
+                    <div class="settings-card ml-card" style="grid-column: 1 / -1; border-left: 4px solid #9c27b0;">
+                        <div class="settings-card-header">
+                            <div>
+                                <h3 class="settings-card-title">🔮 Kalman Filtresi (Denoising)</h3>
+                                <p class="settings-card-description">Fiyat gürültüsünü azalt, false sinyalleri filtrele</p>
+                            </div>
+                        </div>
+
+                        <div class="settings-card-body">
+                            <label class="settings-checkbox-label" style="margin-bottom: 16px;">
+                                <input type="checkbox" id="kalman-enabled">
+                                <span>
+                                    <strong style="color: #9c27b0;">🔮 Kalman Filtresi Aktif</strong>
+                                    <br>
+                                    <span style="font-size: 0.85rem; color: var(--text-muted);">
+                                        Plug & Play: Tek tıkla TÜM stratejiler gürültüsüz veriyle çalışır
+                                    </span>
+                                </span>
+                            </label>
+
+                            <div class="settings-form-group">
+                                <label class="settings-form-label">
+                                    Process Noise (Q)
+                                    <span class="range-hint">(0.0001 - 0.01, Küçük = Daha Smooth)</span>
+                                </label>
+                                <input type="number" id="kalman-process-noise" class="settings-form-input"
+                                    value="0.001" min="0.0001" max="0.01" step="0.0001">
+                                <p class="settings-info-text" style="margin-top: 4px;">
+                                    💡 Küçük değer (0.001) = Daha smooth, büyük değer (0.01) = daha hızlı tepki
+                                </p>
+                            </div>
+
+                            <div class="settings-form-group">
+                                <label class="settings-form-label">
+                                    Measurement Noise (R)
+                                    <span class="range-hint">(0.01 - 1.0, Büyük = Daha Agresif)</span>
+                                </label>
+                                <input type="number" id="kalman-measurement-noise" class="settings-form-input"
+                                    value="0.1" min="0.01" max="1.0" step="0.01">
+                                <p class="settings-info-text" style="margin-top: 4px;">
+                                    💡 Büyük değer = Fiyat değişimlerine daha agresif tepki
+                                </p>
+                            </div>
+
+                            <div class="settings-warning-box" style="background: rgba(156, 39, 176, 0.05); border-color: rgba(156, 39, 176, 0.2);">
+                                <p class="settings-warning-text" style="color: #9c27b0;">
+                                    <strong>🔮 Plug & Play:</strong> Bu ayarı değiştirdiğinizde tüm stratejiler
+                                    otomatik olarak filtrelenmiş veriyle (smoothed_close) çalışır.
+                                    Orijinal close fiyatı korunur.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CARD 4C: MUM KAPANış KİLİDİ (YENİ!) -->
+                    <div class="settings-card ml-card" style="grid-column: 1 / -1; border-left: 4px solid #ff9800;">
+                        <div class="settings-card-header">
+                            <div>
+                                <h3 class="settings-card-title">⏱️ Katı Mum Kapanış Kilidi</h3>
+                                <p class="settings-card-description">Sinyalleri sadece mum kapanışında üret, ara dakikalarda atla</p>
+                            </div>
+                        </div>
+
+                        <div class="settings-card-body">
+                            <label class="settings-checkbox-label" style="margin-bottom: 16px;">
+                                <input type="checkbox" id="candle-lock-enabled" checked>
+                                <span>
+                                    <strong style="color: #ff9800;">⏱️ Katı Mum Kapanış Kilidi Aktif</strong>
+                                    <br>
+                                    <span style="font-size: 0.85rem; color: var(--text-muted);">
+                                        HTF botları (15m, 1h) için kritik - ara dakikalarda false sinyal önlenir
+                                    </span>
+                                </span>
+                            </label>
+
+                            <div class="settings-form-group">
+                                <label class="settings-form-label">
+                                    Kontrol Aralığı (saniye)
+                                    <span class="range-hint">(5 - 60 saniye)</span>
+                                </label>
+                                <input type="number" id="candle-lock-interval" class="settings-form-input"
+                                    value="5" min="5" max="60" step="5">
+                                <p class="settings-info-text" style="margin-top: 4px;">
+                                    💡 Kaç saniyede bir mum kapanışını kontrol etsin? (Düşük = daha hızlı tepki)
+                                </p>
+                            </div>
+
+                            <div class="settings-warning-box" style="background: rgba(255, 152, 0, 0.05); border-color: rgba(255, 152, 0, 0.2);">
+                                <p class="settings-warning-text" style="color: #ff9800;">
+                                    <strong>⚠️ ÖNEMLİ:</strong> Sinyal üretimi mum kapanışını bekler, ancak
+                                    çıkış (exit) ve trailing stop ASLA beklemez - anlık çalışır!
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- CARD 5: API YÖNETİMİ (GÜNCELLENMİŞ) -->
                     <div class="settings-card api-card" style="grid-column: 1 / -1; border-left: 4px solid var(--neon-purple);">
                         <div class="settings-card-header">
