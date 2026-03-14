@@ -65,6 +65,7 @@ class TrendMasterPro(BaseStrategy):
         # ATR çarpanı ve Kâr-al çarpanı (dinamik)
         return {
             "atr_multiplier": self.params.get('atr_multiplier', 3.5),
+            "risk_reward_ratio": self.params.get('risk_reward_ratio', 2.0),  # YENİ: TP hesaplaması için
             "tp_multiplier": self.params.get('tp_multiplier', 2.0)
         }
 

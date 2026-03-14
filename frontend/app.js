@@ -1101,6 +1101,145 @@ async function saveAdvancedSettings() {
 }
 
 /**
+ * Kalman Filtresi Ayarlarını Kaydet
+ */
+async function saveKalmanSettings() {
+    try {
+        const kalmanData = {
+            enabled: document.getElementById('kalman-enabled').checked,
+            process_noise: parseFloat(document.getElementById('kalman-process-noise').value),
+            measurement_noise: parseFloat(document.getElementById('kalman-measurement-noise').value)
+        };
+
+        // Validasyon
+        if (kalmanData.process_noise < 0.0001 || kalmanData.process_noise > 0.01) {
+            showToast('⚠️ Process Noise 0.0001-0.01 arasında olmalı', 'error');
+            return;
+        }
+
+        if (kalmanData.measurement_noise < 0.01 || kalmanData.measurement_noise > 1.0) {
+            showToast('⚠️ Measurement Noise 0.01-1.0 arasında olmalı', 'error');
+            return;
+        }
+
+        showToast('🔮 Kalman ayarları kaydediliyor...', 'info');
+
+        // Backend API çağrısı (JSON body)
+        const response = await fetch('/api/v1/config/advanced', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                kalman_smoothing: kalmanData
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            showToast('✅ ' + result.message, 'success');
+
+            // Store'a kaydet
+            const currentState = store.getState('settings');
+            store.setState('settings', {
+                ...currentState,
+                advanced: {
+                    ...currentState?.advanced,
+                    kalman_smoothing: kalmanData
+                }
+            });
+
+            // Kullanıcıya bilgi ver
+            if (kalmanData.enabled) {
+                showToast('🔮 Kalman Filtresi AKTIF! Botu restart etmeniz gerekebilir.', 'success');
+            } else {
+                showToast('🔮 Kalman Filtresi DEVRE DIŞI', 'info');
+            }
+        } else {
+            showToast('❌ ' + result.message, 'error');
+        }
+    } catch (error) {
+        console.error('❌ saveKalmanSettings hatası:', error);
+        showToast('❌ Kalman ayarları kaydedilemedi: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Kalman Filtresi Varsayılan Ayarları
+ */
+function resetKalmanSettings() {
+    document.getElementById('kalman-enabled').checked = false;
+    document.getElementById('kalman-process-noise').value = 0.001;
+    document.getElementById('kalman-measurement-noise').value = 0.1;
+    showToast('🔄 Kalman ayarları varsayılana döndürüldü', 'info');
+}
+
+/**
+ * Mum Kapanış Kilidi Ayarlarını Kaydet
+ */
+async function saveCandleLockSettings() {
+    try {
+        const candleLockData = {
+            enabled: document.getElementById('candle-lock-enabled').checked,
+            check_interval: parseInt(document.getElementById('candle-lock-interval').value)
+        };
+
+        // Validasyon
+        if (candleLockData.check_interval < 5 || candleLockData.check_interval > 60) {
+            showToast('⚠️ Kontrol Aralığı 5-60 saniye arasında olmalı', 'error');
+            return;
+        }
+
+        showToast('⏱️ Mum Kapanış Kilidi ayarları kaydediliyor...', 'info');
+
+        // Backend API çağrısı (JSON body)
+        const response = await fetch('/api/v1/config/advanced', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                candle_close_lock: candleLockData
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            showToast('✅ ' + result.message, 'success');
+
+            // Store'a kaydet
+            const currentState = store.getState('settings');
+            store.setState('settings', {
+                ...currentState,
+                advanced: {
+                    ...currentState?.advanced,
+                    candle_close_lock: candleLockData
+                }
+            });
+
+            // Kullanıcıya bilgi ver
+            if (candleLockData.enabled) {
+                showToast('⏱️ Mum Kapanış Kilidi AKTIF! Botu restart etmeniz gerekebilir.', 'success');
+            } else {
+                showToast('⏱️ Mum Kapanış Kilidi DEVRE DIŞI', 'info');
+            }
+        } else {
+            showToast('❌ ' + result.message, 'error');
+        }
+    } catch (error) {
+        console.error('❌ saveCandleLockSettings hatası:', error);
+        showToast('❌ Mum Kapanış Kilidi ayarları kaydedilemedi: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Mum Kapanış Kilidi Varsayılan Ayarları
+ */
+function resetCandleLockSettings() {
+    document.getElementById('candle-lock-enabled').checked = true;
+    document.getElementById('candle-lock-interval').value = 5;
+    showToast('🔄 Mum Kapanış Kilidi varsayılana döndürüldü', 'info');
+}
+
+/**
  * API Anahtarlarını Test Et
  */
 async function testApiKeys() {
@@ -2126,6 +2265,14 @@ function setupGlobalFunctions() {
 
     // YENİ: Gelişmiş ayarlar (WFO, ML, HTF)
     window.saveAdvancedSettings = saveAdvancedSettings;
+
+    // YENİ: Kalman Filtresi Fonksiyonları
+    window.saveKalmanSettings = saveKalmanSettings;
+    window.resetKalmanSettings = resetKalmanSettings;
+
+    // YENİ: Mum Kapanış Kilidi Fonksiyonları
+    window.saveCandleLockSettings = saveCandleLockSettings;
+    window.resetCandleLockSettings = resetCandleLockSettings;
     window.loadAdvancedSettings = loadAdvancedSettings;
     window.loadSystemSettings = loadSystemSettings;  // YENİ: Settings sekmesi için
 

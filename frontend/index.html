@@ -1197,6 +1197,18 @@
                                     Orijinal close fiyatı korunur.
                                 </p>
                             </div>
+
+                            <!-- Kaydet Butonu -->
+                            <div class="settings-button-group" style="margin-top: 20px; display: flex; gap: 12px;">
+                                <button class="settings-btn settings-btn-primary" onclick="saveKalmanSettings()"
+                                    style="padding: 12px 24px; font-size: 0.9rem; font-weight: 600; background: #9c27b0; border-color: #9c27b0;">
+                                    💾 Kalman Ayarlarını Kaydet
+                                </button>
+                                <button class="settings-btn settings-btn-secondary" onclick="resetKalmanSettings()"
+                                    style="padding: 12px 24px; font-size: 0.9rem; font-weight: 600; background: rgba(156, 39, 176, 0.1); border-color: #9c27b0; color: #9c27b0;">
+                                🔄 Varsayılana Dön
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -1238,6 +1250,18 @@
                                     <strong>⚠️ ÖNEMLİ:</strong> Sinyal üretimi mum kapanışını bekler, ancak
                                     çıkış (exit) ve trailing stop ASLA beklemez - anlık çalışır!
                                 </p>
+                            </div>
+
+                            <!-- Kaydet Butonu -->
+                            <div class="settings-button-group" style="margin-top: 20px; display: flex; gap: 12px;">
+                                <button class="settings-btn settings-btn-primary" onclick="saveCandleLockSettings()"
+                                    style="padding: 12px 24px; font-size: 0.9rem; font-weight: 600; background: #ff9800; border-color: #ff9800;">
+                                    💾 Mum Kapanış Kilidi Kaydet
+                                </button>
+                                <button class="settings-btn settings-btn-secondary" onclick="resetCandleLockSettings()"
+                                    style="padding: 12px 24px; font-size: 0.9rem; font-weight: 600; background: rgba(255, 152, 0, 0.1); border-color: #ff9800; color: #ff9800;">
+                                    🔄 Varsayılana Dön
+                                </button>
                             </div>
                         </div>
                     </div>
