@@ -777,32 +777,94 @@ class PaperTrader:
     def get_strategy_report(self) -> List[Dict[str, Any]]:
         """
         Kapanan işlemleri baz alarak stratejilerin karnesini (röntgenini) çıkarır.
-        
+        YENİ: Profit Factor ve Max Drawdown metrikleri eklendi.
+        YENİ: Veritabanından da oku (eski oturumlar için).
+
         Returns:
             List of strategy reports sorted by total_pnl
         """
         report = []
         groups = {}
 
-        # Sadece kapanan (history) işlemleri baz alır
-        for trade in self.trade_history:
-            strat = trade.get('strategy', 'Bilinmiyor')
-            if strat not in groups:
-                groups[strat] = {
+        # 1. Önce RAM'deki trade_history'yi kontrol et
+        trades_list = self.trade_history.trades if hasattr(self.trade_history, 'trades') else self.trade_history
+
+        # DEBUG: Trade history kontrolü
+        logger.info(f"📊 get_strategy_report çağrıldı. trade_history tipi: {type(self.trade_history)}")
+        logger.info(f"📊 trades_list tipi: {type(trades_list)}, uzunluk: {len(trades_list) if hasattr(trades_list, '__len__') else 'N/A'}")
+
+        # 2. Eğer RAM boşsa, veritabanından oku
+        if not trades_list or (hasattr(trades_list, '__len__') and len(trades_list) == 0):
+            logger.warning("⚠️ trade_history boş! Veritabanından okunuyor...")
+            try:
+                from data.database import db_manager
+                import asyncio
+
+                # Asenkron fonksiyonu senkron çağır
+                loop = asyncio.get_event_loop()
+                db_trades = loop.run_until_complete(db_manager.get_recent_trades(limit=1000))
+
+                if db_trades:
+                    logger.info(f"✅ Veritabanından {len(db_trades)} işlem okundu!")
+                    # Dict'leri Trade objesine çevir (gerekirse)
+                    trades_list = db_trades
+                else:
+                    logger.warning("⚠️ Veritabanında da işlem yok.")
+                    return []
+            except Exception as e:
+                logger.error(f"❌ Veritabanından okuma hatası: {e}")
+                return []
+
+        # Helper: Güvenli attribute/dict erişimi
+        def safe_get(obj, key, default=None):
+            if hasattr(obj, key):
+                return getattr(obj, key)
+            elif isinstance(obj, dict):
+                return obj.get(key, default)
+            else:
+                return default
+
+        for trade in trades_list:
+            # Trade objesi veya dict olabilir - güvenli erişim
+            strat = safe_get(trade, 'strategy_id') or safe_get(trade, 'strategy', 'Bilinmiyor')
+            pnl = safe_get(trade, 'pnl') or safe_get(trade, 'pnl_usd', 0)
+            symbol = safe_get(trade, 'symbol', 'Bilinmiyor')
+            timeframe = safe_get(trade, 'timeframe', '1m')
+
+            # Timeframe bilgisi ile strateji kombinasyonu
+            strat_key = f"{strat}"
+
+            if strat_key not in groups:
+                groups[strat_key] = {
+                    "strategy": strat,
+                    "timeframe": timeframe,  # İlk işlemden timeframe al
                     "total_trades": 0,
                     "wins": 0,
+                    "losses": 0,
                     "total_pnl": 0.0,
+                    "gross_profit": 0.0,
+                    "gross_loss": 0.0,
+                    "pnl_curve": [],  # Max Drawdown için
                     "symbols": {}
                 }
 
-            groups[strat]["total_trades"] += 1
-            if trade.get('pnl_usd', 0) > 0:
-                groups[strat]["wins"] += 1
-            groups[strat]["total_pnl"] += trade.get('pnl_usd', 0)
+            # Eğer bu stratejinin timeframe'i yoksa, ilk işleminkini kullan
+            if not groups[strat_key].get("timeframe") and timeframe:
+                groups[strat_key]["timeframe"] = timeframe
 
-            sym = trade.get('symbol', 'Bilinmiyor')
-            tf = trade.get('timeframe', '1m')
-            sym_key = f"{sym} ({tf})"
+            groups[strat]["total_trades"] += 1
+
+            if pnl > 0:
+                groups[strat]["wins"] += 1
+                groups[strat]["gross_profit"] += pnl
+            elif pnl < 0:
+                groups[strat]["losses"] += 1
+                groups[strat]["gross_loss"] += abs(pnl)
+
+            groups[strat]["total_pnl"] += pnl
+            groups[strat]["pnl_curve"].append(pnl)
+
+            sym_key = f"{symbol} ({timeframe})"
 
             if sym_key not in groups[strat]["symbols"]:
                 groups[strat]["symbols"][sym_key] = {
@@ -812,16 +874,66 @@ class PaperTrader:
                 }
 
             groups[strat]["symbols"][sym_key]["trades"] += 1
-            if trade.get('pnl_usd', 0) > 0:
+            if pnl > 0:
                 groups[strat]["symbols"][sym_key]["wins"] += 1
-            groups[strat]["symbols"][sym_key]["pnl"] += trade.get('pnl_usd', 0)
+            groups[strat]["symbols"][sym_key]["pnl"] += pnl
 
         for strat, data in groups.items():
             win_rate = (data["wins"] / data["total_trades"] * 100) if data["total_trades"] > 0 else 0
 
+            # ============================================
+            # YENİ METRİK 1: PROFIT FACTOR (Kâr Faktörü)
+            # ============================================
+            # Formül: Brüt Kâr / Brüt Zarar (mutlak değer)
+            # Zarar yoksa: float('inf') → UI'da 'Mükemmel' göster
+            if data["gross_loss"] == 0:
+                profit_factor = float('inf') if data["gross_profit"] > 0 else 0
+            else:
+                profit_factor = data["gross_profit"] / data["gross_loss"]
+
+            # ============================================
+            # YENİ METRİK 2: MAX DRAWDOWN (Maksimum Düşüş)
+            # ============================================
+            # Formül: Kümülatif PnL eğrisinde zirveden dibe en büyük düşüş
+            max_drawdown = 0.0
+            cumulative_pnl = 0.0
+            peak_pnl = 0.0
+
+            for pnl in data["pnl_curve"]:
+                cumulative_pnl += pnl
+
+                # Önce tepe noktasını güncelle
+                if cumulative_pnl > peak_pnl:
+                    peak_pnl = cumulative_pnl
+
+                # Drawdown hesapla (tepe - mevcut)
+                drawdown = peak_pnl - cumulative_pnl
+                if drawdown > max_drawdown:
+                    max_drawdown = drawdown
+
+            # Drawdown yüzdesi (başlangıç sermayesine göre veya mutlak değer)
+            # Eğer peak_pnl = 0 ise (ilk işlem kayıp), mutlak drawdown kullan
+            if peak_pnl > 0:
+                max_drawdown_pct = (max_drawdown / peak_pnl * 100)
+            elif max_drawdown > 0:
+                # İlk işlem kayıp ise: drawdown / |cumulative_pnl|
+                max_drawdown_pct = (max_drawdown / abs(cumulative_pnl) * 100) if cumulative_pnl != 0 else 0
+            else:
+                max_drawdown_pct = 0
+
+            # Sembol bazlı performans
             sym_perf = []
+            detected_timeframe = data.get("timeframe", "1m")  # Varsayılan
+
             for s_name, s_data in data["symbols"].items():
                 s_wr = (s_data["wins"] / s_data["trades"] * 100) if s_data["trades"] > 0 else 0
+
+                # Sembol isminden timeframe çıkar (örn: "BNB/USDT:USDT (1m)" → "1m")
+                if " (" in s_name and s_name.endswith(")"):
+                    tf = s_name.split(" (")[-1].rstrip(")")
+                    if tf:
+                        detected_timeframe = tf
+
                 sym_perf.append({
                     "name": s_name,
                     "trades": s_data["trades"],
@@ -829,24 +941,73 @@ class PaperTrader:
                     "pnl": round(s_data["pnl"], 2)
                 })
 
-            # Performans Önerileri
+            # ============================================
+            # YENİ: ZEKİ AI ÖNERİLERİ (Profit Factor ile)
+            # ============================================
             recommendation = ""
-            if win_rate < 40 and data["total_trades"] >= 3:
-                recommendation = "Düşük başarı oranı. Stop-Loss seviyesi hatalı veya işlem yapılan pariteler bu botun tarzına uymuyor (Yatay piyasa vs)."
-            elif win_rate >= 60 and data["total_pnl"] > 0:
-                recommendation = "Mükemmel uyum. Kârlılık ve kazanma oranı muazzam. Kaldıraç oranı ufak çaplı artırılarak gelir katlanabilir."
+
+            # Kritik: Profit Factor > 2.0 ama Win Rate düşük
+            if profit_factor >= 2.0 and win_rate < 50 and data["total_trades"] >= 5:
+                recommendation = (
+                    f"🎯 DÜŞÜK WIN RATE ({win_rate:.0f}%) AMA YÜKSEK KÂRLILIK! "
+                    f"Profit Factor: {profit_factor:.2f}. "
+                    f"Risk/Ödül dengesi muazzam - kayıplar küçük, kazançlar büyük. "
+                    f"Strateji 'trend following' tarzı çalışıyor olabilir."
+                )
+            # Düşük Win Rate + Düşük Profit Factor
+            elif win_rate < 40 and profit_factor < 1.2 and data["total_trades"] >= 3:
+                recommendation = (
+                    f"⚠️ KRİTİK: Düşük başarı oranı ({win_rate:.0f}%) ve zayıf kâr faktörü ({profit_factor:.2f}). "
+                    f"Stop-Loss seviyesi hatalı veya işlem yapılan pariteler bu botun tarzına uymuyor. "
+                    f"Acil parametre optimizasyonu gerekli!"
+                )
+            # Mükemmel uyum
+            elif win_rate >= 60 and profit_factor >= 1.5 and data["total_pnl"] > 0:
+                recommendation = (
+                    f"🏆 MÜKEMMEL UYUM! Win Rate: %{win_rate:.0f}, Profit Factor: {profit_factor:.2f}. "
+                    f"Kârlılık ve kazanma oranı muazzam. "
+                    f"Kaldıraç oranı ufak çaplı artırılarak gelir katlanabilir."
+                )
+            # Win Rate iyi ama PnL negatif (Risk/Ödül sorunu)
             elif win_rate >= 50 and data["total_pnl"] < 0:
-                recommendation = "Kazanma oranı iyi fakat alınan risk (Stop L.) kârı eritiyor. Risk/Ödül oranı iyileştirilmeli veya spread/fee kontrol edilmeli."
+                recommendation = (
+                    f"⚠️ DİKKAT: Kazanma oranı iyi (%{win_rate:.0f}) fakat alınan risk (Stop Loss) kârı eritiyor. "
+                    f"Profit Factor: {profit_factor:.2f}. "
+                    f"Risk/Ödül oranı iyileştirilmeli (min 1:2) veya spread/fee kontrol edilmeli."
+                )
+            # Yüksek Drawdown uyarısı
+            elif max_drawdown_pct > 30 and data["total_trades"] >= 5:
+                recommendation = (
+                    f"📉 YÜKSEK DRAWDOWN UYARISI: Maksimum düşüş %{max_drawdown:.1f}. "
+                    f"Strateji büyük değer kaybı yaşamış. "
+                    f"Pozisyon boyutu küçültülmeli veya kaldıraç düşürülmeli."
+                )
+            # Az işlem
             elif data["total_trades"] < 3:
-                recommendation = "İşlem hacmi rapor ve öneri sunmak için henüz çok kısıtlı. Simülasyon devam etmeli."
+                recommendation = (
+                    f"ℹ️ İŞLEM HACMİ YETERSİZ: Sadece {data['total_trades']} işlem. "
+                    f"Simülasyon devam etmeli, en az 30 işlem sonrası değerlendirme yapılmalı."
+                )
+            # Ortalama
             else:
-                recommendation = "Ortalama bir performans. Risk toleransına göre makul sayılabilir."
+                recommendation = (
+                    f"📊 ORTALAMA PERFORMANS: Win Rate %{win_rate:.0f}, Profit Factor {profit_factor:.2f}. "
+                    f"Risk toleransına göre makul sayılabilir."
+                )
 
             report.append({
                 "strategy": strat,
+                "timeframe": detected_timeframe,  # Sembolden çıkarılan timeframe
                 "total_trades": data["total_trades"],
+                "wins": data["wins"],
+                "losses": data["losses"],
                 "win_rate": round(win_rate, 1),
                 "total_pnl": round(data["total_pnl"], 2),
+                "gross_profit": round(data["gross_profit"], 2),
+                "gross_loss": round(data["gross_loss"], 2),
+                "profit_factor": round(profit_factor, 2) if profit_factor != float('inf') else None,
+                "max_drawdown": round(max_drawdown, 2),
+                "max_drawdown_pct": round(max_drawdown_pct, 1),
                 "symbols": sym_perf,
                 "recommendation": recommendation
             })

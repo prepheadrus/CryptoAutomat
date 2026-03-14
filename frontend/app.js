@@ -143,6 +143,11 @@ function handleTabSwitch(tabId) {
         case 'tab-history':
             loadTradeHistory();
             break;
+        case 'tab-reports':
+            // Performans Raporları sekmesi - raporu yükle
+            console.log('[INFO] 📊 Performans Raporları sekmesi açıldı');
+            loadStrategyReport();
+            break;
         case 'tab-ml':
             loadMLSymbols();
             loadMLTrainingHistory();
@@ -1572,10 +1577,22 @@ function updatePositionsTable(positions) {
             const directionClass = pos.direction === 'LONG' ? 'badge-success' : 'badge-danger';
             const notional = (pos.size || 0) * (pos.current_price || pos.entry_price || 0);
 
+            // Strateji adı ve timeframe (metadata'dan veya direkt)
+            const strategyName = pos.strategy || pos.strategy_id || 'Unknown';
+            const timeframe = pos.timeframe || 'N/A';
+
             return `
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <td style="font-size: 0.65rem; color: var(--text-muted); font-family: monospace;">
-                        ${pos.bot_id ? pos.bot_id.split('_')[1] || pos.bot_id.substring(0, 8) : 'N/A'}
+                    <td style="padding: 8px 4px;">
+                        <div style="display:flex; flex-direction:column; gap:4px;">
+                            <span style="font-weight:600; color:var(--text-bright); font-size:0.7rem;" title="${strategyName}">
+                                ${strategyName.length > 18 ? strategyName.substring(0, 18) + '...' : strategyName}
+                            </span>
+                            <span style="font-size:0.65rem; color:var(--text-muted); display:flex; align-items:center; gap:4px;">
+                                <span>⏱️</span>
+                                <span>${timeframe}</span>
+                            </span>
+                        </div>
                     </td>
                     <td>
                         <div style="display:flex; flex-direction:column;">
@@ -2638,15 +2655,69 @@ async function loadStrategyReport() {
     try {
         console.log('[INFO] 📈 Strateji performans raporu yükleniyor...');
         const container = document.getElementById('strategy-report-container');
-        if (!container) { console.error('❌ Container bulunamadı!'); return; }
+        if (!container) {
+            console.error('❌ Container bulunamadı!');
+            return;
+        }
         container.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p class="loading-text">📊 Rapor hazırlanıyor...</p><p class="loading-subtext">Tüm işlemler analiz ediliyor</p></div>';
+
         const response = await fetch('/api/v1/strategy-report');
         const data = await response.json();
         console.log('[DEBUG] Strategy report response:', data);
-        if (data.status === 'success' && data.report && data.report.length > 0) { renderStrategyReport(data.report); }
-        else if (data.status === 'success' && (!data.report || data.report.length === 0)) { container.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><h3 class="empty-title">Henüz işlem geçmişi yok</h3><p class="empty-text">Botları başlatıp işlem yaptıkça raporlar burada görünecek.</p><p class="empty-hint">💡 İpucu: Performans raporları sadece kapanan işlemleri baz alır.</p></div>'; }
-        else { container.innerHTML = '<div class="error-state"><div class="error-icon">❌</div><h3 class="error-title">Rapor yüklenemedi</h3><p class="error-message">' + (data.message || 'Bilinmeyen hata') + '</p></div>'; }
-    } catch (error) { console.error('❌ Rapor yükleme hatası:', error); showToast('❌ Rapor yüklenemedi: ' + error.message, 'error'); }
+
+        // Başarılı ve veri var
+        if (data.status === 'success' && data.report && data.report.length > 0) {
+            renderStrategyReport(data.report);
+        }
+        // Başarılı ama boş
+        else if (data.status === 'success' && (!data.report || data.report.length === 0)) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">📭</div>
+                    <h3 class="empty-title">Henüz kapanmış işlem yok</h3>
+                    <p class="empty-text">Botları başlatıp işlem yaptıkça raporlar burada görünecek.</p>
+                    <p class="empty-hint">💡 İpucu: Performans raporları sadece kapanan işlemleri baz alır.</p>
+                </div>
+            `;
+        }
+        // API hatası
+        else if (data.status === 'error') {
+            container.innerHTML = `
+                <div class="error-state">
+                    <div class="error-icon">⚠️</div>
+                    <h3 class="error-title">Rapor hatası</h3>
+                    <p class="error-message">${data.message || 'Bilinmeyen hata'}</p>
+                    <button class="btn btn-select" onclick="loadStrategyReport()" style="margin-top:10px;">🔄 Tekrar Dene</button>
+                </div>
+            `;
+        }
+        // Başka hata
+        else {
+            container.innerHTML = `
+                <div class="error-state">
+                    <div class="error-icon">❌</div>
+                    <h3 class="error-title">Rapor yüklenemedi</h3>
+                    <p class="error-message">${data.message || 'Bilinmeyen hata'}</p>
+                    <button class="btn btn-select" onclick="loadStrategyReport()" style="margin-top:10px;">🔄 Tekrar Dene</button>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('❌ Rapor yükleme hatası:', error);
+        showToast('❌ Rapor yüklenemedi: ' + error.message, 'error');
+
+        const container = document.getElementById('strategy-report-container');
+        if (container) {
+            container.innerHTML = `
+                <div class="error-state">
+                    <div class="error-icon">❌</div>
+                    <h3 class="error-title">Bağlantı hatası</h3>
+                    <p class="error-message">${error.message}</p>
+                    <button class="btn btn-select" onclick="loadStrategyReport()" style="margin-top:10px;">🔄 Tekrar Dene</button>
+                </div>
+            `;
+        }
+    }
 }
 
 function renderStrategyReport(report) {
@@ -2654,14 +2725,93 @@ function renderStrategyReport(report) {
         const container = document.getElementById('strategy-report-container');
         if (!container) { console.error('❌ Container bulunamadı!'); return; }
         console.log('[DEBUG] renderStrategyReport - report:', report?.length);
+
         container.innerHTML = '<div class="reports-grid">' + report.map(strat => {
+            // Win Rate stil ve renk
             const winRateClass = strat.win_rate >= 60 ? 'win-rate-excellent' : strat.win_rate >= 50 ? 'win-rate-good' : strat.win_rate >= 40 ? 'win-rate-average' : 'win-rate-poor';
             const winRateColor = strat.win_rate >= 60 ? 'var(--neon-green)' : strat.win_rate >= 50 ? 'var(--neon-blue)' : strat.win_rate >= 40 ? '#ffc107' : 'var(--neon-red)';
+
+            // PnL rengi
             const pnlColor = strat.total_pnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+
+            // Öneri ikonu
             const recommendationIcon = strat.win_rate >= 60 && strat.total_pnl > 0 ? '✅' : strat.win_rate >= 50 ? '⚠️' : '❌';
+
+            // ============================================
+            // YENİ: Profit Factor Badge
+            // ============================================
+            const profitFactor = strat.profit_factor;
+            let profitFactorBadge = '';
+            if (profitFactor !== null && profitFactor !== undefined) {
+                const pfColor = profitFactor >= 2.0 ? 'var(--neon-green)' : profitFactor >= 1.5 ? 'var(--neon-blue)' : profitFactor >= 1.2 ? '#ffc107' : 'var(--neon-red)';
+                const pfText = profitFactor >= 2.0 ? '🏆 Mükemmel' : profitFactor >= 1.5 ? '✅ İyi' : profitFactor >= 1.2 ? '⚠️ Orta' : '❌ Zayıf';
+                profitFactorBadge = `<div class="metric-badge" style="background: ${pfColor}20; border-color: ${pfColor}; color: ${pfColor};">
+                    <span class="badge-icon">📊</span>
+                    <span class="badge-label">Profit Factor</span>
+                    <span class="badge-value">${profitFactor.toFixed(2)}</span>
+                    <span class="badge-subtext">${pfText}</span>
+                </div>`;
+            }
+
+            // ============================================
+            // YENİ: Max Drawdown Badge
+            // ============================================
+            const maxDrawdown = strat.max_drawdown_pct || 0;
+            const drawdownColor = maxDrawdown <= 10 ? 'var(--neon-green)' : maxDrawdown <= 20 ? '#ffc107' : maxDrawdown <= 30 ? 'var(--neon-red)' : '#ff4444';
+            const drawdownText = maxDrawdown <= 10 ? '✅ Güvenli' : maxDrawdown <= 20 ? '⚠️ Orta' : maxDrawdown <= 30 ? '🔴 Yüksek' : '🚨 Kritik';
+            const drawdownBadge = `<div class="metric-badge" style="background: ${drawdownColor}20; border-color: ${drawdownColor}; color: ${drawdownColor};">
+                <span class="badge-icon">📉</span>
+                <span class="badge-label">Max Drawdown</span>
+                <span class="badge-value">%${maxDrawdown.toFixed(1)}</span>
+                <span class="badge-subtext">${drawdownText}</span>
+            </div>`;
+
             const escapeHtml = (text) => { if (!text) return ''; const div = document.createElement('div'); div.textContent = text; return div.innerHTML; };
-            return '<div class="report-card glass-panel"><div class="report-card-header"><h3 class="report-card-title">' + escapeHtml(strat.strategy) + '</h3><span class="report-badge ' + winRateClass + '" style="background: ' + winRateColor + ';">📊 %' + strat.win_rate + ' Win Rate</span></div><div class="report-metrics"><div class="report-metric"><div class="report-metric-label">Toplam İşlem</div><div class="report-metric-value">' + strat.total_trades + '</div></div><div class="report-metric"><div class="report-metric-label">Net P&L</div><div class="report-metric-value" style="color: ' + pnlColor + ';">$' + strat.total_pnl.toFixed(2) + '</div></div></div>' + (strat.symbols && strat.symbols.length > 0 ? '<div class="report-section"><h4 class="report-section-title">🎯 Sembol Performansı</h4><div class="symbols-list">' + strat.symbols.map(sym => '<div class="symbol-item"><span class="symbol-name">' + escapeHtml(sym.name) + '</span><div class="symbol-stats"><span class="symbol-trades">' + sym.trades + ' işlem</span><span class="symbol-win-rate" style="color: ' + (sym.win_rate >= 60 ? 'var(--neon-green)' : sym.win_rate >= 40 ? '#ffc107' : 'var(--neon-red)') + ';">%' + sym.win_rate + '</span><span class="symbol-pnl" style="color: ' + (sym.pnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)') + ';">$' + sym.pnl.toFixed(2) + '</span></div></div>').join('') + '</div></div>' : '<div class="report-section"><p class="no-data">Sembol verisi yok</p></div>') + '<div class="report-recommendation"><div class="recommendation-icon">' + recommendationIcon + '</div><div class="recommendation-content"><div class="recommendation-label">Analiz Önerisi</div><p class="recommendation-text">' + escapeHtml(strat.recommendation) + '</p></div></div></div>';
+
+            // Sembol listesini al (ilk 3 sembol)
+            const symbols = strat.symbols || [];
+            const symbolList = symbols.slice(0, 3).map(s => s.name.split(' ')[0]).join(', ');
+            const moreSymbols = symbols.length > 3 ? `+${symbols.length - 3}` : '';
+
+            return `<div class="report-card-compact glass-panel">
+                <div class="report-card-compact-header">
+                    <div class="strategy-info">
+                        <h3 class="report-card-compact-title">${escapeHtml(strat.strategy)}</h3>
+                        <div class="strategy-meta">
+                            <span class="meta-badge">⏱️ ${escapeHtml(strat.timeframe || 'N/A')}</span>
+                            <span class="meta-badge">💱 ${escapeHtml(symbolList || 'N/A')}</span>
+                            ${moreSymbols ? `<span class="meta-badge">+${moreSymbols}</span>` : ''}
+                        </div>
+                    </div>
+                    <span class="report-badge ${winRateClass}" style="background: ${winRateColor};">%${strat.win_rate} WR</span>
+                </div>
+
+                <div class="compact-metrics-grid">
+                    <div class="compact-metric">
+                        <div class="compact-metric-label">İşlem</div>
+                        <div class="compact-metric-value">${strat.total_trades}</div>
+                    </div>
+                    <div class="compact-metric">
+                        <div class="compact-metric-label">P&L</div>
+                        <div class="compact-metric-value" style="color: ${pnlColor};">$${strat.total_pnl.toFixed(2)}</div>
+                    </div>
+                    <div class="compact-metric">
+                        <div class="compact-metric-label">PF</div>
+                        <div class="compact-metric-value ${(strat.profit_factor || 0) >= 2 ? 'text-success' : (strat.profit_factor || 0) >= 1.2 ? 'text-warning' : 'text-danger'}">${(strat.profit_factor || 0).toFixed(2)}</div>
+                    </div>
+                    <div class="compact-metric">
+                        <div class="compact-metric-label">DD</div>
+                        <div class="compact-metric-value ${(strat.max_drawdown_pct || 0) <= 10 ? 'text-success' : (strat.max_drawdown_pct || 0) <= 20 ? 'text-warning' : 'text-danger'}">%${(strat.max_drawdown_pct || 0).toFixed(1)}</div>
+                    </div>
+                </div>
+
+                <div class="compact-recommendation">
+                    <span class="rec-icon">${recommendationIcon}</span>
+                    <span class="rec-text">${escapeHtml(strat.recommendation)}</span>
+                </div>
+            </div>`;
         }).join('') + '</div>';
+
         console.log('[INFO] ✅ Strateji raporu render edildi');
     } catch (error) { console.error('❌ renderStrategyReport hatası:', error); showToast('❌ Rapor render hatası: ' + error.message, 'error'); }
 }

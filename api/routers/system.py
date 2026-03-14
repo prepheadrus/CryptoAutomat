@@ -92,7 +92,8 @@ async def get_dashboard_metrics() -> Dict[str, Any]:
                 "take_profit": pos.get('take_profit'),
                 "liquidation_price": pos.get('liquidation_price', 0.0),
                 "strategy": pos.get('strategy', 'Unknown'),
-                "strategy_id": pos.get('strategy_id', 'unknown')
+                "strategy_id": pos.get('strategy_id', 'unknown'),
+                "timeframe": pos.get('timeframe', 'N/A')  # YENİ: Timeframe ekle
             })
         
         # Son kararlar (latest decisions)

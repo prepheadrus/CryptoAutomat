@@ -2135,6 +2135,22 @@ body {
     font-weight: 700;
     color: var(--text-main);
     margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.timeframe-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    white-space: nowrap;
 }
 
 .report-badge {
@@ -2196,6 +2212,129 @@ body {
     font-weight: 700;
     color: var(--text-main);
     font-family: var(--font-mono);
+}
+
+/* ============================================
+   YENİ: Kompakt Rapor Kartları
+   ============================================ */
+.report-card-compact {
+    background: rgba(22, 27, 34, 0.6);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    border-radius: 12px;
+    padding: 16px;
+    transition: all 0.3s ease;
+}
+
+.report-card-compact:hover {
+    border-color: rgba(88, 166, 255, 0.4);
+    box-shadow: 0 8px 24px rgba(88, 166, 255, 0.15);
+}
+
+.report-card-compact-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+    gap: 12px;
+}
+
+.strategy-info {
+    flex: 1;
+}
+
+.report-card-compact-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin: 0 0 8px 0;
+}
+
+.strategy-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.meta-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+/* Grid Metrics */
+.compact-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 12px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+}
+
+.compact-metric {
+    text-align: center;
+}
+
+.compact-metric-label {
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+    font-weight: 600;
+}
+
+.compact-metric-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-main);
+    font-family: var(--font-mono);
+}
+
+.text-success { color: var(--neon-green) !important; }
+.text-warning { color: #ffc107 !important; }
+.text-danger { color: var(--neon-red) !important; }
+
+/* Recommendation */
+.compact-recommendation {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 6px;
+    border-left: 3px solid var(--text-muted);
+}
+
+.rec-icon {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+.rec-text {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .compact-metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .strategy-meta {
+        flex-direction: column;
+    }
 }
 
 .report-section {

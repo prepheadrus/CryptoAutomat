@@ -234,26 +234,44 @@ async def _get_chart_data_by_bot_id(bot_id: str):
     # Eğer bot aktif değilse, geçmiş işlemlerden bulmayı dene
     if not bot_info:
         logger.info(f"  ⚠️ Bot aktif değil, geçmiş işlemlere bakılıyor...")
-        all_trades = paper_engine.trade_history + paper_engine.open_positions
+
+        # trade_history Trade objeleri içerir, open_positions dict olabilir
+        all_trades = list(paper_engine.trade_history.trades if hasattr(paper_engine.trade_history, 'trades') else paper_engine.trade_history) + list(paper_engine.open_positions)
         logger.info(f"  Trade history count: {len(paper_engine.trade_history)}")
         logger.info(f"  Open positions count: {len(paper_engine.open_positions)}")
 
-        found_trade = next((t for t in reversed(all_trades) if t.get('bot_id') == bot_id), None)
+        # Trade objeleri için direkt attribute erişimi, dict için .get()
+        found_trade = None
+        for t in reversed(all_trades):
+            t_bot_id = t.bot_id if hasattr(t, 'bot_id') else t.get('bot_id')
+            if t_bot_id == bot_id:
+                found_trade = t
+                break
+
         logger.info(f"  Found trade: {found_trade}")
 
         if found_trade:
             bot_info = {
-                "symbol": found_trade.get('symbol'),
-                "timeframe": found_trade.get('timeframe'),
-                "strategy_id": found_trade.get('strategy_id')
+                "symbol": found_trade.symbol if hasattr(found_trade, 'symbol') else found_trade.get('symbol'),
+                "timeframe": found_trade.timeframe if hasattr(found_trade, 'timeframe') else found_trade.get('timeframe'),
+                "strategy_id": found_trade.strategy_id if hasattr(found_trade, 'strategy_id') else found_trade.get('strategy_id')
             }
             logger.info(f"  ✅ Geçmiş işlem bulundu: {bot_info}")
         else:
             logger.error(f"  ❌ Bot bulunamadı: {bot_id}")
             logger.error(f"  Aranan bot_id: {bot_id}")
-            logger.error(f"  Tüm trade bot_id'leri: {[t.get('bot_id') for t in all_trades[-10:]]}")
+            # Son 10 trade'in bot_id'lerini göster
+            recent_trades = all_trades[-10:]
+            bot_ids = []
+            for t in recent_trades:
+                if hasattr(t, 'bot_id'):
+                    bot_ids.append(t.bot_id)
+                else:
+                    bot_ids.append(t.get('bot_id'))
+            logger.error(f"  Tüm trade bot_id'leri: {bot_ids}")
             raise HTTPException(status_code=404, detail=f"Bot bulunamadı: {bot_id}")
 
+    # bot_info dict olduğu için .get() kullanabiliriz
     symbol = bot_info.get('symbol')
     timeframe = bot_info.get('timeframe')
     logger.info(f"  Symbol: {symbol}, Timeframe: {timeframe}")
@@ -271,7 +289,10 @@ async def _get_chart_data_by_bot_id(bot_id: str):
     open_positions_for_bot = []
     for p in paper_engine.open_positions:
         try:
-            if p.get('bot_id') == bot_id:
+            # open_positions dict olabilir
+            p_bot_id = p.get('bot_id') if isinstance(p, dict) else (p.bot_id if hasattr(p, 'bot_id') else None)
+
+            if p_bot_id == bot_id:
                 # Pozisyon objesi ise to_dict() çağır
                 if hasattr(p, 'to_dict'):
                     pos_dict = p.to_dict()
@@ -315,7 +336,16 @@ async def _get_chart_data_by_bot_id(bot_id: str):
             import traceback
             traceback.print_exc()
 
-    closed_trades_for_bot = [t for t in paper_engine.trade_history if t.get('bot_id') == bot_id]
+    # Trade objeleri dataclass olduğu için .get() yerine direkt attribute erişimi kullan
+    # trade_history hem liste hem de TradeHistory objesi olabilir
+    if hasattr(paper_engine.trade_history, 'trades'):
+        # TradeHistory objesi
+        trades_list = paper_engine.trade_history.trades
+    else:
+        # Direkt liste
+        trades_list = paper_engine.trade_history
+
+    closed_trades_for_bot = [t for t in trades_list if hasattr(t, 'bot_id') and t.bot_id == bot_id]
     logger.info(f"  ✅ {len(open_positions_for_bot)} açık pozisyon, {len(closed_trades_for_bot)} kapalı işlem")
 
     # Format candles
@@ -348,12 +378,14 @@ async def _get_chart_data_by_strategy_id(strategy_id: str, symbol_filter: str = 
     # 2. Eğer aktif bot yoksa, geçmiş işlemlerden bul
     if not matching_bots:
         logger.info(f"  ⚠️ Aktif bot yok, geçmiş işlemlere bakılıyor...")
-        all_trades = paper_engine.trade_history + paper_engine.open_positions
+        # trade_history Trade objeleri, open_positions dict olabilir
+        all_trades = list(paper_engine.trade_history.trades if hasattr(paper_engine.trade_history, 'trades') else paper_engine.trade_history) + list(paper_engine.open_positions)
         for t in all_trades:
-            t_strategy_id = t.get('strategy_id')
-            t_bot_id = t.get('bot_id', '')
+            # Trade objesi için attribute, dict için .get()
+            t_strategy_id = t.strategy_id if hasattr(t, 'strategy_id') else t.get('strategy_id')
+            t_bot_id = t.bot_id if hasattr(t, 'bot_id') else t.get('bot_id', '')
             if t_strategy_id == strategy_id or (t_bot_id and strategy_id in t_bot_id):
-                logger.info(f"  ✅ Geçmiş işlem bulundu: {t.get('bot_id')}")
+                logger.info(f"  ✅ Geçmiş işlem bulundu: {t_bot_id}")
                 if t not in matching_bots:
                     matching_bots.append(t)
 
@@ -384,24 +416,29 @@ async def _get_chart_data_by_strategy_id(strategy_id: str, symbol_filter: str = 
     closed_trades_list = []
 
     for bot in matching_bots:
-        bid = bot.get('bot_id')
+        bid = bot.get('bot_id') if isinstance(bot, dict) else (bot.bot_id if hasattr(bot, 'bot_id') else None)
         if bid:
-            open_positions_list.extend([p for p in paper_engine.open_positions if p.get('bot_id') == bid])
-            closed_trades_list.extend([t for t in paper_engine.trade_history if t.get('bot_id') == bid])
+            # open_positions dict olabilir
+            open_positions_list.extend([p for p in paper_engine.open_positions if (isinstance(p, dict) and p.get('bot_id') == bid) or (hasattr(p, 'bot_id') and p.bot_id == bid)])
+            # trade_history Trade objeleri içerir
+            trades_list = paper_engine.trade_history.trades if hasattr(paper_engine.trade_history, 'trades') else paper_engine.trade_history
+            closed_trades_list.extend([t for t in trades_list if (hasattr(t, 'bot_id') and t.bot_id == bid) or (isinstance(t, dict) and t.get('bot_id') == bid)])
 
     # Remove duplicates by id
     seen_ids = set()
     unique_open = []
     unique_closed = []
     for p in open_positions_list:
-        pid = p.get('id') or p.get('bot_id')
+        # open_positions dict olabilir
+        pid = p.get('id') if isinstance(p, dict) else (p.id if hasattr(p, 'id') else p.get('bot_id') if isinstance(p, dict) else p.bot_id)
         if pid not in seen_ids:
             seen_ids.add(pid)
             unique_open.append(p)
 
     seen_ids = set()
     for t in closed_trades_list:
-        tid = t.get('id') or t.get('bot_id')
+        # closed_trades Trade objeleri veya dict olabilir
+        tid = t.id if hasattr(t, 'id') else (t.get('id') if isinstance(t, dict) else t.bot_id if hasattr(t, 'bot_id') else t.get('bot_id'))
         if tid not in seen_ids:
             seen_ids.add(tid)
             unique_closed.append(t)
