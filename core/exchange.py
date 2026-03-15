@@ -916,52 +916,10 @@ class ExchangeManager:
         logger.info(f"🚀 [FINAL HYBRID] {symbol} için strateji poller başlatılıyor ({timeframe})...")
 
         # ========================================================================
-        # YENİ: VERİ BOŞLUĞU KONTROLÜ (Gap Detection & Auto-Fill)
+        # YENİ: VERİ BOŞLUĞU KONTROLÜ (Gap Detection & Auto-Fill) - Refactored
         # ========================================================================
-        try:
-            from data.ohlcv_storage import get_storage
-            from datetime import datetime, timedelta
-
-            storage = get_storage()
-
-            # Son kayıtlı mumu bul
-            end_date = datetime.utcnow()
-            start_date = end_date - timedelta(days=1)  # Son 1 günü kontrol et
-
-            # 1m flat file'dan son mumu kontrol et
-            df_check = storage.load_ohlcv(symbol, '1m', start_date, end_date)
-
-            if df_check is not None and not df_check.empty:
-                last_recorded_mum = df_check['timestamp'].max()
-                last_mum_time = datetime.fromtimestamp(last_recorded_mum / 1000)
-
-                # Son mum ile şu an arasında kaç dakika var?
-                minutes_gap = (end_date - last_mum_time).total_seconds() / 60
-
-                if minutes_gap > 5:  # 5 dakikadan fazla boşluk var
-                    logger.warning(f"⚠️ [GAP DETECTION] {symbol} için {minutes_gap:.0f} dakikalık boşluk tespit edildi!")
-                    logger.info(f"🔄 [GAP FILL] Eksik veri otomatik dolduruluyor...")
-
-                    # Eksik dönemi indir
-                    gap_start = last_mum_time.strftime('%Y-%m-%d %H:%M')
-                    await self.download_historical_data(
-                        symbol=symbol,
-                        timeframe='1m',
-                        start_date_str=gap_start,
-                        market_type='future',
-                        is_resume=False
-                    )
-
-                    logger.info(f"✅ [GAP FILL] {symbol} için {minutes_gap:.0f} dakikalık boşluk dolduruldu!")
-                else:
-                    logger.debug(f"✅ [GAP CHECK] {symbol} veri güncel (boşluk: {minutes_gap:.1f} dakika)")
-            else:
-                logger.info(f"📖 [GAP CHECK] {symbol} için ilk kez veri çekiliyor...")
-
-        except Exception as e:
-            logger.error(f"❌ [GAP DETECTION] Hata: {e}")
-            logger.debug(f"Stack trace: {e}", exc_info=True)
-            # Hata olsa bile devam et (bot çalışsın)
+        from core.trading.services.data_sync import data_synchronizer
+        await data_synchronizer.check_and_fill_gap(symbol, self)
 
         # ============================================
         # 1. LOCAL DB FIRST: SQLite'dan geçmiş veriyi çek
@@ -1288,88 +1246,37 @@ class ExchangeManager:
                 last_candle_time = ohlcv_df.index[-1]
                 df_1m = ohlcv_df
 
-                # 4. HEDEF VADEYE DÖNÜŞTÜR (Resampling Engine)
+                # 4. HEDEF VADEYE DÖNÜŞTÜR (Resampling Engine) - REFACTORED (Async)
                 target_tf = paper_engine.active_timeframes.get(symbol, '1m')
-                df_target = StrategyIndicators.resample_data(df_1m, target_tf)
 
-                # 5. ÜST ZAMAN DİLİMİ (HTF) TEYİDİ - ALTIN ORAN (1:4 / 1:6)
-                # Config'den dinamik HTF haritasını oku
+                # HTF config'leri
                 htf_config = CONFIG.get('htf', {})
-                htf_enabled = htf_config.get('enabled', True)
                 htf_dynamic_map = htf_config.get('dynamic_map', {
-                    '1m': ['5m', '15m'],
-                    '3m': ['15m', '1h'],
-                    '5m': ['15m', '1h'],
-                    '15m': ['1h', '4h'],
-                    '30m': ['2h', '6h'],
-                    '1h': ['4h', '1d'],
-                    '4h': ['1d', '1w']
+                    '1m': ['5m', '15m'], '3m': ['15m', '1h'], '5m': ['15m', '1h'],
+                    '15m': ['1h', '4h'], '30m': ['2h', '6h'], '1h': ['4h', '1d'], '4h': ['1d', '1w']
                 })
-
-                # EMA Stack parametreleri
+                htf_levels = htf_dynamic_map.get(target_tf, ['5m', '15m'])
                 ema_fast = htf_config.get('ema_fast', 20)
                 ema_slow = htf_config.get('ema_slow', 50)
                 trend_method = htf_config.get('trend_method', 'ema_stack')
 
-                # Dinamik HTF seviyelerini al (örn: 1m -> ['5m', '15m'])
-                htf_levels = htf_dynamic_map.get(target_tf, ['5m', '15m'])
+                # Asenkron Thread üzerinden veri hazırlığı ve analiz
+                from core.trading.services.signal_generator import signal_generator_service
+                result = await signal_generator_service.prepare_target_data_and_detect_regime(
+                    df_1m, target_tf, htf_levels, ema_fast, ema_slow, trend_method
+                )
+                df_target, htf_trends, regime_info, current_price = result
 
-                # Her HTF seviyesi için trend analizini yap
-                htf_trends = {}  # {'5m': 'BULL', '15m': 'BEAR'}
+                if df_target is None or df_target.empty or current_price is None:
+                    continue
 
-                for htf_tf in htf_levels:
-                    # HTF verisini resample ve indikatör hesapla
-                    df_htf = StrategyIndicators.resample_data(df_1m, htf_tf)
-                    df_htf = StrategyIndicators.add_all_indicators(df_htf)
+                paper_engine.market_regime = regime_info.get('regime', 'UNKNOWN')
 
-                    # Trend tespiti (EMA Stack veya Close > EMA)
-                    trend = "NEUTRAL"
-                    if not df_htf.empty:
-                        htf_last = df_htf.iloc[-1]
-
-                        if trend_method == 'ema_stack':
-                            # EMA 20 > EMA 50 ise BULL, EMA 20 < EMA 50 ise BEAR
-                            ema_f = htf_last.get(f'EMA_{ema_fast}')
-                            ema_s = htf_last.get(f'EMA_{ema_slow}')
-
-                            if ema_f is not None and ema_s is not None and not np.isnan(ema_f) and not np.isnan(ema_s):
-                                if ema_f > ema_s:
-                                    trend = "BULL"
-                                elif ema_f < ema_s:
-                                    trend = "BEAR"
-                        else:
-                            # Fallback: Close > EMA 50
-                            val_c = htf_last.get('close')
-                            val_e = htf_last.get(f'EMA_{ema_slow}')
-
-                            if val_c is not None and val_e is not None and not np.isnan(val_c) and not np.isnan(val_e):
-                                if val_c > val_e:
-                                    trend = "BULL"
-                                elif val_c < val_e:
-                                    trend = "BEAR"
-
-                    htf_trends[htf_tf] = trend
-
-                # Major HTF (en büyük timeframe) ve Minor HTF (daha küçük timeframe) belirle
                 major_htf = htf_levels[-1] if htf_levels else None
-                minor_htf = htf_levels[0] if len(htf_levels) > 0 else None
-
-                # Geriye dönük uyumluluk için htf_trend (major HTF trendini kullan)
                 htf_trend = htf_trends.get(major_htf, "NEUTRAL") if major_htf else "NEUTRAL"
-
                 logger.debug(f"[HTF] {symbol} ({target_tf}) HTF Analizi: {htf_trends} → Major: {major_htf}={htf_trend}")
-                
-                # 6. İndikatörleri Hesapla (Hedef Vade Üzerinden)
-                df_target = StrategyIndicators.add_all_indicators(df_target)
-                df_target['volatility_ema'] = AdvancedFeatures.get_volatility(df_target['close'], span=20)
-                df_target.ffill(inplace=True); df_target.bfill(inplace=True)
 
                 if not df_target.empty:
-                    current_price = df_target.iloc[-1]['close']
-
-                    # 7. MARKET REGİME (PİYASA REJİMİ) TESPİTİ
-                    regime_info = MarketRegimeDetector.detect_regime(df_target)
-                    paper_engine.market_regime = regime_info['regime']
 
                     # 7.5 STRATEJİ KONTROLÜ - Eğer strateji yoksa işlem yapma
                     strategy = paper_engine.strategies.get(symbol)
@@ -1449,75 +1356,15 @@ class ExchangeManager:
                     logger.debug(f"✅ {symbol} {target_tf} (HTF: {htf_trends} | REJİM: {regime_info['regime']}) analiz tamamlandı. Botlar işlendi.")
 
                     # ========================================================================
-                    # 9. DATA LAKE GÜNCELLEME (Her yeni mumda - Kurumsal Caching)
+                    # 9. DATA LAKE GÜNCELLEME - REFACTORED (Async)
                     # ========================================================================
-                    # YENİ MUM KAPANDI - Tüm TF'leri Data Lake'e kaydet (PARQUET)
-                    # ========================================================================
-                    try:
-                        from data.data_lake import get_data_lake
-                        data_lake = get_data_lake()
-
-                        # 1m veriyi kaydet (RAM'deki tüm mumlar)
-                        save_df_1m = df_1m.copy()
-                        save_df_1m.reset_index(inplace=True)
-
-                        # Data Lake append mode ile kaydet
-                        data_lake.save(symbol, '1m', save_df_1m, append=True)
-
-                        # Diğer TF'leri de kaydet (resample + append)
-                        for tf in ['5m', '15m', '1h', '4h']:
-                            from data.indicators import StrategyIndicators
-                            df_tf = StrategyIndicators.resample_data(df_1m, tf)
-                            df_tf = df_tf.dropna()
-                            if not df_tf.empty:
-                                save_df_tf = df_tf.copy()
-                                save_df_tf.reset_index(inplace=True)
-                                data_lake.save(symbol, tf, save_df_tf, append=True)
-
-                        logger.debug(f"💾 [DATA LAKE] {symbol} güncellendi (TÜM TF'ler)")
-
-                    except Exception as lake_err:
-                        logger.debug(f"⚠️ [DATA LAKE] Güncelleme hatası: {lake_err}")
+                    from core.trading.services.data_sync import data_synchronizer
+                    await data_synchronizer.update_data_lake(symbol, df_1m)
 
                     # ========================================================================
-                    # 10. PERİYODİK TAM SENKRONİZASYON (Her 5 dakikada bir - DATA LAKE)
+                    # 10. PERİYODİK TAM SENKRONİZASYON - REFACTORED (Async)
                     # ========================================================================
-                    # DB'deki TÜM mumları Data Lake'e kaydet (güvenlik için)
-                    # ========================================================================
-                    try:
-                        current_minute = int(pd.Timestamp.now().timestamp()) // 60
-                        if current_minute % 5 == 0:  # Her 5 dakikada bir
-                            logger.info(f"🔄 [DATA LAKE] {symbol} için tam senkronizasyon başlatılıyor...")
-
-                            from data.data_lake import get_data_lake
-                            data_lake = get_data_lake()
-
-                            # DB'deki TÜM mumları çek
-                            all_klines = await db_manager.get_klines(symbol, '1m', limit=100000)  # 100k mum limit
-
-                            if all_klines and len(all_klines) > 0:
-                                all_df = pd.DataFrame(all_klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-                                all_df['timestamp'] = pd.to_datetime(all_df['timestamp'], unit='ms')
-                                all_df.set_index('timestamp', inplace=True)
-
-                                # Data Lake'e kaydet (overwrite - tüm veri)
-                                save_all_df = all_df.copy()
-                                save_all_df.reset_index(inplace=True)
-                                data_lake.save(symbol, '1m', save_all_df, append=False)
-
-                                # Diğer TF'leri de güncelle
-                                for tf in ['5m', '15m', '1h', '4h']:
-                                    from data.indicators import StrategyIndicators
-                                    df_tf = StrategyIndicators.resample_data(all_df, tf)
-                                    df_tf = df_tf.dropna()
-                                    if not df_tf.empty:
-                                        save_tf = df_tf.copy()
-                                        save_tf.reset_index(inplace=True)
-                                        data_lake.save(symbol, tf, save_tf, append=False)
-
-                                logger.info(f"✅ [DATA LAKE] {symbol} TAM SENKRONİZASYON tamamlandı ({len(all_df)} mum)")
-                    except Exception as sync_err:
-                        logger.debug(f"⚠️ [DATA LAKE] Tam senkronizasyon hatası: {sync_err}")
+                    await data_synchronizer.sync_all_from_db_to_lake(symbol)
 
             # BAĞLANTI KOPMA VE RECONNECT KALKANI
             except ccxt.NetworkError as e:
