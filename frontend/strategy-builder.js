@@ -336,7 +336,7 @@ async function loadStrategies() {
     try {
         console.log('[INFO] Stratejiler yükleniyor...');
 
-        const response = await fetch('/api/v1/strategies');
+        const response = await fetch('/api/v1/strategy/list');
         const result = await response.json();
 
         if (response.ok && result.status === 'success') {

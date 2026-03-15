@@ -113,7 +113,7 @@ class APIClient {
     // ========================================================================
     
     getBots() {
-        return this.get('/bot/list');
+        return this.get('/bots/list');
     }
     
     getBotStatus(botId) {
@@ -142,6 +142,10 @@ class APIClient {
     
     getStrategies() {
         return this.get('/strategies');
+    }
+
+    getStrategyReport() {
+        return this.get('/strategy-report');
     }
     
     // ========================================================================
