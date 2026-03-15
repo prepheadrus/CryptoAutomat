@@ -381,6 +381,7 @@ class ExchangeManager:
 
                             lake = get_parquet_lake('binance')
 
+                            from data.database import db_manager
                             # Son 1 saatin 1m verisini DB'den çek
                             klines_data = await db_manager.get_klines(symbol, '1m', limit=60)
 
