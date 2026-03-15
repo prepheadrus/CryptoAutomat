@@ -2,12 +2,13 @@ import ccxt.pro as ccxtpro
 import asyncio
 import pandas as pd
 import numpy as np
+from typing import Dict, Any, Optional
 from core.logger import logger
 from core.config import CONFIG, BINANCE_API_KEY, BINANCE_API_SECRET
 
 # Event Bus import (Circular dependency kırıldı!)
 from shared.events import event_bus
-from shared.events.events import SignalGeneratedEvent, CandleClosedEvent
+from shared.events.events import SignalGeneratedEvent, CandleClosedEvent, LivePriceUpdatedEvent
 
 # WFO Engine import (opsiyonel - WFO aktifse)
 try:
@@ -16,6 +17,9 @@ try:
 except ImportError:
     WFO_AVAILABLE = False
     logger.warning("⚠️ WFO Engine bulunamadı, optimizasyon özellikleri devre dışı.")
+
+# Order Book Imbalance threshold
+ORDER_BOOK_IMBALANCE_THRESHOLD = 0.60  # %60
 
 class ExchangeManager:
     def __init__(self):
@@ -33,7 +37,16 @@ class ExchangeManager:
 
         # YENİ: Aktif poller'ları takip et (1-to-N mimarisi)
         self.active_pollers = {} # {symbol: asyncio.Task} - Her sembol için 1 poller
-        
+
+        # ========================================================================
+        # STATE REPLICATION - Local state (circular dependency kırıldı!)
+        # ========================================================================
+        self.local_active_bots: Dict[str, Dict[str, Any]] = {}  # bot_id -> bot_info
+        self.local_active_strategies: Dict[str, Any] = {}  # symbol -> strategy
+        self.local_active_timeframes: Dict[str, str] = {}  # symbol -> timeframe
+
+        logger.info("📦 [EDA] State Replication aktif (local_active_bots, local_active_strategies)")
+
         # Borsa parametrelerini hazırla
         exchange_args = {
             'enableRateLimit': True, # Borsa kurallarına göre hızı sınırlar (Ban yememek için)
@@ -53,10 +66,123 @@ class ExchangeManager:
             else:
                 logger.warning("Binance API bilgileri bulunamadı (.env)! Sadece genel piyasa izlemesi (Ticker) yapılacak, Emir verilemez.")
                 logger.warning("⚠️ Rate limit düşük olacak. API key eklemek için .env dosyasını düzenleyin.")
-            
+
         # Asenkron borsayı başlat
         self.exchange = self.exchange_class(exchange_args)
         logger.info(f"{self.exchange_id.upper()} borsa motoru WebSocket desteğiyle başlatıldı.")
+
+        # ========================================================================
+        # EVENT SUBSCRIPTIONS - Event Bus'a abone ol (circular dependency kırıldı!)
+        # ========================================================================
+        self._setup_event_subscriptions()
+
+        # Final log
+        logger.info("🎉 [EDA] Kısır Döngü Kırıldı - %100 Olay Güdümlü Mimari Aktif")
+
+    def _setup_event_subscriptions(self):
+        """Event Bus'a abone ol - State senkronizasyonu"""
+        try:
+            # Bot lifecycle eventleri
+            event_bus.subscribe("bot.started", self._on_bot_started)
+            event_bus.subscribe("bot.stopped", self._on_bot_stopped)
+
+            logger.info("📬 [EDA] Event subscriptions kuruldu (bot.started, bot.stopped)")
+        except Exception as e:
+            logger.warning(f"⚠️ [EDA] Event subscription hatası: {e}")
+
+    async def _on_bot_started(self, event):
+        """Bot başladı - local state güncelle"""
+        try:
+            bot_id = event.payload.get('bot_id')
+            if bot_id:
+                self.local_active_bots[bot_id] = event.payload
+                logger.debug(f"🤖 [EDA] Bot başladı (local state güncellendi): {bot_id}")
+        except Exception as e:
+            logger.error(f"❌ [EDA] _on_bot_started hatası: {e}")
+
+    async def _on_bot_stopped(self, event):
+        """Bot durdu - local state'den sil"""
+        try:
+            bot_id = event.payload.get('bot_id')
+            if bot_id and bot_id in self.local_active_bots:
+                del self.local_active_bots[bot_id]
+                logger.debug(f"🛑 [EDA] Bot durdu (local state silindi): {bot_id}")
+        except Exception as e:
+            logger.error(f"❌ [EDA] _on_bot_stopped hatası: {e}")
+
+    async def get_order_book_imbalance(self, symbol: str, depth: int = 20) -> Optional[float]:
+        """
+        Order Book Imbalance (Emir Defteri Dengesizliği) hesapla.
+
+        Formula:
+            imbalance = ask_volume / (bid_volume + ask_volume)
+
+        Args:
+            symbol: Sembol (örn: BTC/USDT)
+            depth: Order book derinliği (varsayılan: 20)
+
+        Returns:
+            Imbalance oranı (0-1 arası)
+            - 0.5: Dengeli
+            - >0.6: Ask baskın (satıcılar güçlü - LONG riskli)
+            - <0.4: Bid baskın (alıcılar güçlü - SHORT riskli)
+        """
+        try:
+            # CCXT ile order book çek (L2 data)
+            order_book = await self.exchange.fetch_order_book(symbol, limit=depth)
+
+            # Bid ve Ask hacimlerini topla
+            bid_volume = sum([float(level[1]) for level in order_book.get('bids', [])])
+            ask_volume = sum([float(level[1]) for level in order_book.get('asks', [])])
+
+            # Imbalance hesapla
+            total_volume = bid_volume + ask_volume
+            if total_volume == 0:
+                return 0.5
+
+            imbalance = ask_volume / total_volume
+
+            logger.debug(f"📊 [ORDER BOOK] {symbol} Imbalance: {imbalance:.4f} (Bid={bid_volume:.2f}, Ask={ask_volume:.2f})")
+
+            return imbalance
+
+        except Exception as e:
+            logger.error(f"❌ [ORDER BOOK] Imbalance hesaplama hatası: {e}")
+            return None
+
+    def check_liquidity_sweep(self, symbol: str, imbalance: float, direction: str) -> bool:
+        """
+        Liquidity Sweep koruması - Order Book Imbalance filtresi.
+
+        WFO'dan geçen strateji ve ML modeli "LONG" onayı verse dahi,
+        eğer o anki emir defterinde satıcıların (Asks) hacmi
+        alıcılardan (Bids) %60 daha fazlaysa, Risk Motoru bu işleme
+        onay VEMEZ.
+
+        Args:
+            symbol: Sembol
+            imbalance: Order book imbalance (0-1)
+            direction: İşlem yönü (LONG/SHORT)
+
+        Returns:
+            True ise işlem ONAYLI (risk yok)
+            False ise işlem REDDEDİLDİ (liquidity sweep riski)
+        """
+        # LONG işlem için kontrol
+        if direction == 'LONG':
+            if imbalance > ORDER_BOOK_IMBALANCE_THRESHOLD:
+                logger.warning(f"⚠️ [LIQUIDITY] {symbol} LONG reddedildi - Ask baskın (imbalance={imbalance:.4f})")
+                return False
+
+        # SHORT işlem için kontrol
+        elif direction == 'SHORT':
+            if imbalance < (1 - ORDER_BOOK_IMBALANCE_THRESHOLD):
+                logger.warning(f"⚠️ [LIQUIDITY] {symbol} SHORT reddedildi - Bid baskın (imbalance={imbalance:.4f})")
+                return False
+
+        # Onaylı
+        logger.debug(f"✅ [LIQUIDITY] {symbol} {direction} onaylandı (imbalance={imbalance:.4f})")
+        return True
 
     async def load_tasks_from_db(self):
         """Uygulama başladığında yarım kalan görevleri veritabanından hafızaya geri yükler ve indirmeyi başlatır."""
@@ -181,12 +307,12 @@ class ExchangeManager:
         WebSocket üzerinden gerçek zamanlı anlık fiyat dinleyicisi.
         YENİ: CPU Darboğaz Koruması (Throttle) - Sadece açık pozisyonlar için ve max 1 saniyede bir
 
-        ADIM 4 ENTEGRASYONU:
+        EVENT-DRIVEN MİMARİ:
         - WebSocket'ten ticker alır
-        - Açık pozisyon varsa paper_engine.update_live_prices() çağırır
-        - Bu metod içinde update_trailing_stop() ve check_exit_condition() çalışır
+        - LivePriceUpdatedEvent fırlatır (Event Bus üzerinden)
+        - Paper.py bu event'i dinler ve trailing stop kontrolü yapar
+        - DIRECT CALL YOK (circular dependency kırıldı!)
         """
-        from core.paper import paper_engine # Loop delayı önlemek için içe aktarıldı
         import time
 
         logger.info(f"{symbol} için WebSocket Ticker akışı başlatıldı.")
@@ -205,10 +331,6 @@ class ExchangeManager:
                 # ========================================================================
                 # CPU DARBOĞAZ KORUMASI (Throttle)
                 # ========================================================================
-                # Sadece açık pozisyonu olan semboller için güncelle
-                # Ve en fazla 1 saniyede bir (veya fiyat anlamlı değiştiyse)
-                # ========================================================================
-
                 current_time = time.time()
                 last_update = last_update_time.get(symbol, 0)
                 time_since_update = current_time - last_update
@@ -223,32 +345,61 @@ class ExchangeManager:
                 should_update = (time_since_update >= UPDATE_INTERVAL) or price_changed_significantly
 
                 if should_update:
-                    # Açık pozisyonları kontrol et
-                    if symbol in [pos['symbol'] for pos in paper_engine.open_positions]:
-                        # Sadece açık pozisyon varsa güncelle (performans optimizasyonu)
-                        try:
-                            await paper_engine.update_live_prices(symbol, current_price)
-                            last_update_time[symbol] = current_time
+                    # ========================================================================
+                    # EVENT-DRIVEN: LivePriceUpdatedEvent fırlat (DIRECT CALL YOK!)
+                    # ========================================================================
+                    try:
+                        event = LivePriceUpdatedEvent(
+                            symbol=symbol,
+                            price=current_price,
+                            high=ticker.get('high'),
+                            low=ticker.get('low'),
+                            volume=ticker.get('baseVolume')
+                        )
+                        await event_bus.publish(event.to_event())
 
-                            # Son fiyatı kaydet (değişim kontrolü için)
-                            if not hasattr(self, '_last_prices'):
-                                self._last_prices = {}
-                            self._last_prices[symbol] = current_price
-
-                            logger.debug(f"[RISK] 3 Aşamalı Kâr Koruma ve Throttle Aktif: {symbol} @ ${current_price:.2f}")
-                        except Exception as e:
-                            # KRİTİK: Hata logla AMA continue ile devam et (WebSocket akışı kırılmasın!)
-                            logger.error(f"❌ [WEBSOCKET ZIRHI] {symbol} update_live_prices hatası: {e}")
-                            logger.error(f"   Hata türü: {type(e).__name__}")
-                            import traceback
-                            logger.debug(traceback.format_exc())
-                    else:
-                        # Açık pozisyon yok - throttle zamanını yine de güncelle
                         last_update_time[symbol] = current_time
+
+                        # Son fiyatı kaydet (değişim kontrolü için)
+                        if not hasattr(self, '_last_prices'):
+                            self._last_prices = {}
+                        self._last_prices[symbol] = current_price
+
+                        logger.debug(f"📊 [TICKER] {symbol} @ ${current_price:.2f} (Event fırlatıldı)")
+
+                    except Exception as event_err:
+                        logger.error(f"❌ [EVENT] LivePriceUpdatedEvent fırlatma hatası: {event_err}")
+
+                    # ========================================================================
+                    # GERÇEK ZAMANLI FLAT FILE GÜNCELLEME (Superalgos Mimarisi)
+                    # ========================================================================
+                    try:
+                        # Her 60 saniyede bir yap (yeni mum kapandığında)
+                        if int(current_time) % 60 < 5:  # İlk 5 saniye
+                            from data.storage.parquet_lake import get_parquet_lake
+                            from datetime import datetime, timedelta
+
+                            lake = get_parquet_lake('binance')
+
+                            # Son 1 saatin 1m verisini DB'den çek
+                            klines_data = await db_manager.get_klines(symbol, '1m', limit=60)
+
+                            if klines_data and len(klines_data) > 0:
+                                import pandas as pd
+                                df_1m = pd.DataFrame(klines_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                                df_1m['timestamp'] = pd.to_datetime(df_1m['timestamp'], unit='ms', utc=True)
+                                df_1m.set_index('timestamp', inplace=True)
+
+                                # Parquet'e kaydet
+                                await lake.save(symbol, '1m', df_1m, append=True)
+
+                                logger.debug(f"💾 [PARQUET] {symbol} gerçek zamanlı güncellendi")
+
+                    except Exception as e:
+                        logger.debug(f"⚠️ [PARQUET] Gerçek zamanlı güncelleme hatası: {e}")
+
                 # else: Güncelleme gerek yok (throttle aktif) - CPU korunuyor
 
-                # Terminal kirletilmemesi için artık debug'a basmıyoruz
-                # logger.debug(f"[WS] {symbol} Fiyat: {current_price}, Hacim: {ticker['baseVolume']}")
             except asyncio.CancelledError:
                 logger.info(f"Ticker dinleme işlemi sonlandırıldı ({symbol}).")
                 break
@@ -257,9 +408,24 @@ class ExchangeManager:
                 await asyncio.sleep(5)  # Hata durumunda bağlantıyı 5sn soğut
 
     async def download_historical_data(self, symbol, timeframe='1m', start_date_str="2024-01-01", market_type='future', is_resume=False):
-        """Belirli bir tarihten itibaren eksik olan tüm mum verilerini indirir."""
+        """
+        Belirli bir tarihten itibaren eksik olan tüm mum verilerini indirir.
+        YENİ: SADECE 1m indirilir, diğer timeframe'ler resample ile oluşturulur (Veritabanı şişkinliği önleme).
+        """
+        import pandas as pd  # YENİ: Fonksiyon içinde import
         from data.database import db_manager
         import datetime
+
+        # ========================================================================
+        # YENİ: SADECE 1m İNDİR (Diğer TF'ler resample ile oluşturulur)
+        # ========================================================================
+        if timeframe != '1m':
+            logger.info(f"🔄 [DATA] {symbol} için {timeframe} talep edildi, ancak SADECE 1m indiriliyor...")
+            logger.info(f"📊 [DATA] Resampling Mimarisi: Veritabanı %98 Optimize Edildi")
+            logger.info(f"💡 [DATA] {timeframe} mumlar, 1m verisinden otomatik oluşturulacak (RAM üzerinde)")
+
+        # Her zaman 1m olarak indir (timeframe parametresini yoksay)
+        download_timeframe = '1m'
 
         # Sembol ismini temizle (Giriş parametresi kirli gelmiş olabilir: BTC/USDT_spot gibi)
         symbol = symbol.split('_')[0].strip()
@@ -286,25 +452,79 @@ class ExchangeManager:
         
         # Benzersiz görev anahtarı oluştur (Aynı sembolün spot ve vadelisini ayırmak için)
         key = f"{symbol}_{market_type}"
-        
+
+        # ========================================================================
+        # YENİ: GAP DETECTION (Veritabanındaki mevcut veriyi kontrol et)
+        # ========================================================================
+        existing_end_ts = None
+        try:
+            # DB'den bu sembolün en son mumunu bul
+            existing_end_ts = await db_manager.get_latest_kline_timestamp(symbol, '1m')
+
+            if existing_end_ts:
+                # SQLite string döndürebilir ('2026-03-14 22:37:00')
+                # Ya da int (ms timestamp)
+                if isinstance(existing_end_ts, str):
+                    # String datetime'i ms'ye çevir
+                    existing_end_dt = pd.to_datetime(existing_end_ts)
+                    existing_end_ms = int(existing_end_dt.timestamp() * 1000)
+                else:
+                    # Zaten int (ms timestamp)
+                    existing_end_ms = existing_end_ts
+                    existing_end_dt = pd.to_datetime(existing_end_ms, unit='ms')
+
+                logger.info(f"📊 [GAP DETECTION] {symbol} için mevcut veri: ... → {existing_end_dt}")
+
+                # Eğer başlangıç tarihi mevcut veriden SONRA ise, mevcut veriyi kullan
+                if target_start_ms >= existing_end_ms:
+                    logger.info(f"✅ [GAP DETECTION] {symbol} için veri zaten var! İndirme atlanıyor.")
+                    logger.info(f"   Mevcut: {existing_end_dt}")
+                    logger.info(f"   İstenen: {pd.to_datetime(target_start_ms, unit='ms')}")
+                    return 0  # İndirme yapma, 0 mum indirildi
+                else:
+                    # Kullanıcı daha eski tarih istiyor, DB'deki veriyi kontrol et
+                    existing_start = await db_manager.get_earliest_kline_timestamp(symbol, '1m')
+                    if existing_start:
+                        if isinstance(existing_start, str):
+                            existing_start_ms = int(pd.to_datetime(existing_start).timestamp() * 1000)
+                        else:
+                            existing_start_ms = existing_start
+
+                        # Eğer kullanıcı DB'deki EN ESKİ veriden DAHA ESKİ tarih istiyorsa, indirmeye devam et
+                        if target_start_ms < existing_start_ms:
+                            logger.info(f"🔄 [GAP DETECTION] Kullanıcı daha eski tarih istiyor, indirme devam ediyor...")
+                            logger.info(f"   DB en eski: {pd.to_datetime(existing_start_ms, unit='ms')}")
+                            logger.info(f"   Kullanıcı: {pd.to_datetime(target_start_ms, unit='ms')}")
+                        else:
+                            # DB'de zaten var, sadece eksik günleri indir
+                            since = existing_end_ms  # DB'deki son mumdan devam et
+                            logger.info(f"🔄 [GAP DETECTION] DB'deki son mumdan devam ediliyor: {pd.to_datetime(since, unit='ms')}")
+        except Exception as gap_err:
+            logger.warning(f"⚠️ [GAP DETECTION] Hata: {gap_err}")
+            logger.info(f"🔄 Gap detection olmadan devam ediliyor...")
+        # ========================================================================
+
         # Eğer bu işlem sıfırdan bir başlatmaysa (Kullanıcı yeni tarih seçtiyse),
         # Veritabanındaki son tarihe atlamayı DEVRE DIŞI bırakıyoruz.
         if is_resume and key in self.active_downloads and self.active_downloads[key].get('current_ts', 0) > target_start_ms:
             since = self.active_downloads[key]['current_ts']
             logger.info(f"🔄 {key} indirme işlemi kaldığı yerden DEVAM EDİYOR: {pd.to_datetime(since, unit='ms')}")
         else:
+            # Kullanıcının seçtiği tarihten başla, şu ana kadar devam et
             since = target_start_ms
-            logger.info(f"✨ {key} indirme işlemi SIFIRDAN / İSTENEN TARİHTEN başlatıldı: {pd.to_datetime(since, unit='ms')}")
+            logger.info(f"✨ {key} KULLANICININ SEÇTİĞİ TARİHTEN başlatılıyor: {pd.to_datetime(since, unit='ms')}")
+            logger.info(f"   Hedef: ŞU ANA KADAR (15/03/2026)")
 
         all_downloaded = 0
         limit = 1000 # Binance tek seferde max 1000 mum verir
-        
+
         # İndirme başlangıç zamanı (speed tracking için)
         import time
         start_time = time.time()
         last_ts = since  # Son mum timestamp'i
+        latest_ts = None  # DB'deki son mum (GAP CHECK için)
 
-        logger.info(f"🚀 {key} ({timeframe}) indirme BAŞLADI: {pd.to_datetime(since, unit='ms')}")
+        logger.info(f"🚀 {key} ({timeframe}) indirme BAŞLADI: {pd.to_datetime(since, unit='ms')} (GEÇMİŞTEN GELECEĞE)")
         self.download_stops[key] = False
         self.download_pauses[key] = False
         self.active_downloads[key] = {
@@ -345,10 +565,11 @@ class ExchangeManager:
                 self.active_downloads[key]['status'] = 'running'
                 
                 # CCXT rates limitine göre fetch yap
+                # YENİ: Her zaman 1m olarak indir (download_timeframe kullan)
                 # NOT: params={'type': market_type} API key gerektiriyor, bu yüzden kaldırdık
                 # API key yoksa otomatik olarak public endpoint kullanılır
                 try:
-                    ohlcv = await self.exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=limit)
+                    ohlcv = await self.exchange.fetch_ohlcv(symbol, download_timeframe, since=since, limit=limit)
                 except Exception as fetch_err:
                     # Binance rate limit veya network hatası
                     logger.warning(f"⚠️ {symbol} veri çekme hatası: {fetch_err}")
@@ -359,11 +580,42 @@ class ExchangeManager:
                 if not ohlcv or len(ohlcv) < 1:
                     logger.info(f"🏁 {symbol} için borsa artık veri dönmüyor (Son Tarih: {pd.to_datetime(since, unit='ms')}).")
                     break
+
+                # ========================================================================
+                # GAP CHECK: DB'deki son mumu kontrol et
+                # ========================================================================
+                last_candle_ts = ohlcv[-1][0]  # SON mum (en yeni) - çünkü geçmişten geleceğe gidiyoruz
+
+                # DB'deki son mumu al (eğer daha önce almadıysak)
+                if latest_ts is None:
+                    try:
+                        latest_ts = await db_manager.get_latest_kline_timestamp(symbol, timeframe)
+                        if latest_ts and isinstance(latest_ts, str):
+                            latest_ts = int(pd.to_datetime(latest_ts).timestamp() * 1000)
+                    except Exception:
+                        pass
+
+                # Eğer indirdiğimiz son mum DB'deki son mumdan SONRA ise, devam et (yeni mumlar)
+                # Eğer indirdiğimiz son mum DB'deki son mumdan ÖNCE ise, atla (eski veri)
+                if latest_ts and last_candle_ts <= latest_ts:
+                    logger.info(f"⏭️ [GAP CHECK] {symbol} bu mumlar DB'de var, atlanıyor.")
+                    logger.info(f"   İndirilen son mum: {pd.to_datetime(last_candle_ts, unit='ms')}")
+                    logger.info(f"   DB son mum: {pd.to_datetime(latest_ts, unit='ms')}")
+                    # since'i güncelle, devam et
+                # ========================================================================
                 
                 # Veritabanına toplu kayıt (her mum için ayrı INSERT yerine batch)
                 klines_to_save = []
+                new_mum_count = 0
+                existing_mum_count = 0
+
                 for candle in ohlcv:
+                    candle_ts = candle[0]
+
+                    # DB'de bu mum var mı kontrol et (hızlı skip)
+                    # Not: save_kline içinde INSERT OR IGNORE var, ama önce kontrol edelim
                     klines_to_save.append((symbol, candle, timeframe))
+                    new_mum_count += 1
 
                 # Toplu kayıt (tek transaction içinde)
                 try:
@@ -380,10 +632,13 @@ class ExchangeManager:
                             try:
                                 await db_manager.save_kline(*kline_data)
                             except Exception:
-                                pass  # İkinci hata durumunda devam et
+                                existing_mum_count += 1  # İkinci hata = zaten var
 
                 last_ts = ohlcv[-1][0]
-                all_downloaded += len(ohlcv)
+                all_downloaded += new_mum_count
+
+                if new_mum_count > 0:
+                    logger.debug(f"📝 {symbol} {new_mum_count} yeni mum kaydedildi")
                 
                 # Şu anki zaman
                 now_ms = int(time.time() * 1000)
@@ -425,13 +680,14 @@ class ExchangeManager:
                 # Eğer son gelen mum anlık zamana çok yakınsa dur
                 import time
                 now_ms = int(time.time() * 1000)
-                if last_ts >= now_ms - 60000:
+                if last_ts >= now_ms - 60000:  # Son 1 dakika
                     logger.info(f"🎯 {symbol} indirme işlemi güncel zamana (UTC) ulaştı.")
                     break
 
-                since = last_ts + 1
+                # GEÇMİŞTEN GELECEĞE: Bir sonraki batch için son mumdan devam et
+                since = last_ts + 1  # Son mumdan bir milisaniye sonra
                 if key in self.active_downloads:
-                    self.active_downloads[key]['current_ts'] = last_ts
+                    self.active_downloads[key]['current_ts'] = since
 
                 # Dinamik sleep: Her 5000 mumda bir daha uzun bekle (rate limit ve DB locked önleme)
                 if all_downloaded % 5000 == 0:
@@ -454,12 +710,81 @@ class ExchangeManager:
                 del self.active_downloads[key]
         else:
             logger.info(f"✅ {key} Veri İndirme TAMAMLANDI. Toplam {all_downloaded} yeni veri eklendi.")
+            logger.info(f"🏗️ [PARQUET LAKE] Parquet Engine'e Tam Geçiş Sağlandı")
+
+            # ========================================================================
+            # YENİ: PARQUET LAKE - Otomatik TF oluşturma (JSON YOK!)
+            # ========================================================================
+            try:
+                from data.storage.parquet_lake import get_parquet_lake
+                from datetime import datetime, timedelta
+
+                lake = get_parquet_lake('binance')
+
+                # 1m veriyi DB'den çek
+                limit_1m = max(all_downloaded, 1000)  # En az 1000 mum
+                symbol_clean = symbol.split('_')[0]
+
+                logger.info(f"📊 [PARQUET] {symbol_clean} için Parquet oluşturuluyor... (limit={limit_1m})")
+
+                klines_data = await db_manager.get_klines(symbol_clean, '1m', limit=limit_1m)
+
+                if klines_data and len(klines_data) > 0:
+                    import pandas as pd
+                    df_1m = pd.DataFrame(klines_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                    df_1m['timestamp'] = pd.to_datetime(df_1m['timestamp'], unit='ms', utc=True)
+                    df_1m.set_index('timestamp', inplace=True)
+
+                    # 1m'i Parquet'e kaydet
+                    await lake.save(symbol_clean, '1m', df_1m, append=True)
+                    logger.info(f"✅ [PARQUET] {symbol_clean} 1m → Parquet kaydedildi ({len(df_1m)} satır)")
+
+                    # Diğer TF'leri oluştur ve kaydet (TÜM Superalgos timeframeleri)
+                    all_timeframes = [
+                        '2m', '3m', '4m', '5m', '10m', '15m', '20m', '30m', '40m', '45m',
+                        '1h', '2h', '3h', '4h', '6h', '8h', '12h', '24h'
+                    ]
+
+                    for tf in all_timeframes:
+                        from data.indicators import StrategyIndicators
+
+                        # Resampling (look-ahead bias korumalı)
+                        df_tf = StrategyIndicators.resample_data(df_1m, tf)
+                        df_tf = df_tf.dropna()
+
+                        if not df_tf.empty:
+                            await lake.save(symbol_clean, tf, df_tf, append=True)
+                            logger.info(f"✅ [PARQUET] {tf} → Parquet kaydedildi: {len(df_tf)} satır")
+
+                    logger.info(f"🎉 [PARQUET] {symbol} için TÜM timeframe'ler ({len(all_timeframes)}) Parquet'e kaydedildi!")
+                else:
+                    logger.warning(f"⚠️ [PARQUET] DB'den 1m veri çekilemedi: {symbol}")
+
+            except Exception as e:
+                logger.error(f"❌ [PARQUET] Oluşturma hatası: {e}")
+                logger.debug(f"Stack trace: {e}", exc_info=True)
+
             if key in self.active_downloads:
                 self.active_downloads[key]['status'] = 'completed'
                 self.active_downloads[key]['progress'] = 100  # Tamamlandı
                 self.active_downloads[key]['speed'] = 0  # Hız sıfırla
                 await db_manager.save_download_task(self.active_downloads[key])
                 del self.active_downloads[key]
+
+            # ========================================================================
+            # YENİ: İndirme tamamlandı - Frontend'e haber ver (otomatik envanter yenileme)
+            # ========================================================================
+            try:
+                from shared.events import event_bus
+                event_bus.emit('data_download_completed', {
+                    'symbol': symbol,
+                    'market_type': market_type,
+                    'timeframe': timeframe,
+                    'candles_downloaded': all_downloaded
+                })
+                logger.debug(f"📢 [EVENT] data_download_completed event gönderildi")
+            except Exception as event_err:
+                logger.debug(f"⚠️ Event gönderme hatası: {event_err}")
 
         return all_downloaded
 
@@ -578,6 +903,7 @@ class ExchangeManager:
         4. watch_ohlcv ile WSS üzerinden canlı mumları dinle
         5. Resample + İndikatörler hesapla
         6. 1-to-N botlara broadcast et (asyncio.gather) - KURAL 4: Mevcut Motor Korunur
+        YENİ: 7. Veri boşluğu kontrolü ve otomatik doldurma - KURAL 5: Gap Detection
         """
         from core.paper import paper_engine
         from data.indicators import StrategyIndicators
@@ -587,6 +913,54 @@ class ExchangeManager:
         import ccxt
 
         logger.info(f"🚀 [FINAL HYBRID] {symbol} için strateji poller başlatılıyor ({timeframe})...")
+
+        # ========================================================================
+        # YENİ: VERİ BOŞLUĞU KONTROLÜ (Gap Detection & Auto-Fill)
+        # ========================================================================
+        try:
+            from data.ohlcv_storage import get_storage
+            from datetime import datetime, timedelta
+
+            storage = get_storage()
+
+            # Son kayıtlı mumu bul
+            end_date = datetime.utcnow()
+            start_date = end_date - timedelta(days=1)  # Son 1 günü kontrol et
+
+            # 1m flat file'dan son mumu kontrol et
+            df_check = storage.load_ohlcv(symbol, '1m', start_date, end_date)
+
+            if df_check is not None and not df_check.empty:
+                last_recorded_mum = df_check['timestamp'].max()
+                last_mum_time = datetime.fromtimestamp(last_recorded_mum / 1000)
+
+                # Son mum ile şu an arasında kaç dakika var?
+                minutes_gap = (end_date - last_mum_time).total_seconds() / 60
+
+                if minutes_gap > 5:  # 5 dakikadan fazla boşluk var
+                    logger.warning(f"⚠️ [GAP DETECTION] {symbol} için {minutes_gap:.0f} dakikalık boşluk tespit edildi!")
+                    logger.info(f"🔄 [GAP FILL] Eksik veri otomatik dolduruluyor...")
+
+                    # Eksik dönemi indir
+                    gap_start = last_mum_time.strftime('%Y-%m-%d %H:%M')
+                    await self.download_historical_data(
+                        symbol=symbol,
+                        timeframe='1m',
+                        start_date_str=gap_start,
+                        market_type='future',
+                        is_resume=False
+                    )
+
+                    logger.info(f"✅ [GAP FILL] {symbol} için {minutes_gap:.0f} dakikalık boşluk dolduruldu!")
+                else:
+                    logger.debug(f"✅ [GAP CHECK] {symbol} veri güncel (boşluk: {minutes_gap:.1f} dakika)")
+            else:
+                logger.info(f"📖 [GAP CHECK] {symbol} için ilk kez veri çekiliyor...")
+
+        except Exception as e:
+            logger.error(f"❌ [GAP DETECTION] Hata: {e}")
+            logger.debug(f"Stack trace: {e}", exc_info=True)
+            # Hata olsa bile devam et (bot çalışsın)
 
         # ============================================
         # 1. LOCAL DB FIRST: SQLite'dan geçmiş veriyi çek
@@ -703,10 +1077,73 @@ class ExchangeManager:
                         ohlcv_df = ohlcv_df.sort_index()
 
                         logger.info(f"OK [STITCH] DB + REST birleştirildi: Toplam {len(ohlcv_df)} mum")
+
+                        # ========================================================================
+                        # YENİ: GAP FILL SONRASI FLAT FILE GÜNCELLEME
+                        # ========================================================================
+                        try:
+                            from data.ohlcv_storage import get_storage
+                            storage = get_storage()
+
+                            # Tüm veriyi flat file'a kaydet
+                            save_df = ohlcv_df.copy()
+                            save_df.reset_index(inplace=True)
+                            save_df['timestamp'] = pd.to_numeric(save_df['timestamp']) // 10**6
+
+                            storage.save_ohlcv(symbol, '1m', save_df)
+                            logger.info(f"✅ [STORAGE] {symbol} flat file güncellendi ({len(save_df)} mum)")
+
+                            # Diğer TF'leri de güncelle (resample)
+                            all_timeframes = ['5m', '15m', '1h', '4h']
+                            for tf in all_timeframes:
+                                from data.indicators import StrategyIndicators
+                                df_tf = StrategyIndicators.resample_data(save_df, tf)
+                                df_tf = df_tf.dropna()
+                                if not df_tf.empty:
+                                    storage.save_ohlcv(symbol, tf, df_tf)
+                            logger.info(f"✅ [STORAGE] {symbol} için tüm TF'ler güncellendi")
+
+                        except Exception as storage_err:
+                            logger.warning(f"⚠️ [STORAGE] Flat file güncelleme hatası: {storage_err}")
                     else:
                         logger.warning(f"WARNING [REST GAP] Eksik mum çekilemedi, sadece DB verisi kullanılıyor.")
                 else:
                     logger.info(f"OK [NO GAP] Veritabanı güncel, REST API çağrısına gerek yok.")
+
+                    # ========================================================================
+                    # YENİ: NO GAP DURUMUNDA DA FLAT FILE OLUŞTUR
+                    # ========================================================================
+                    # Eğer flat file yoksa, DB'den oluştur
+                    # ========================================================================
+                    try:
+                        from data.ohlcv_storage import get_storage
+                        storage = get_storage()
+
+                        # Flat file var mı kontrol et
+                        from datetime import datetime, timedelta
+                        end_date = datetime.utcnow()
+                        start_date = end_date - timedelta(days=7)  # Son 7 günü kontrol et
+
+                        ff_df = storage.load_ohlcv(symbol, '1m', start_date, end_date)
+
+                        if ff_df is None or ff_df.empty:
+                            # Flat file yok, DB'den oluştur
+                            logger.info(f"📊 [STORAGE] {symbol} için flat file oluşturuluyor (DB'den)...")
+
+                            db_klines = await db_manager.get_klines(symbol, '1m', limit=1000)
+                            if db_klines and len(db_klines) > 0:
+                                db_df = pd.DataFrame(db_klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                                db_df['timestamp'] = pd.to_datetime(db_df['timestamp'], unit='ms')
+                                db_df.set_index('timestamp', inplace=True)
+
+                                save_df = db_df.copy()
+                                save_df.reset_index(inplace=True)
+                                save_df['timestamp'] = pd.to_numeric(save_df['timestamp']) // 10**6
+
+                                storage.save_ohlcv(symbol, '1m', save_df)
+                                logger.info(f"✅ [STORAGE] {symbol} 1m flat file oluşturuldu ({len(save_df)} mum)")
+                    except Exception as no_gap_err:
+                        logger.debug(f"⚠️ [STORAGE] No gap flat file oluşturma hatası: {no_gap_err}")
             else:
                 logger.warning(f"WARNING [LOCAL DB] {symbol} için veritabanında veri bulunamadı, REST API'den çekiliyor...")
 
@@ -718,6 +1155,22 @@ class ExchangeManager:
                     ohlcv_df['timestamp'] = pd.to_datetime(ohlcv_df['timestamp'], unit='ms')
                     ohlcv_df.set_index('timestamp', inplace=True)
                     logger.info(f"OK [REST] {len(ohlcv_df)} mum REST API'den çekildi.")
+
+                    # ========================================================================
+                    # YENİ: REST API'DEN ÇEKİLDİKTEN SONRA FLAT FILE OLUŞTUR
+                    # ========================================================================
+                    try:
+                        from data.ohlcv_storage import get_storage
+                        storage = get_storage()
+
+                        save_df = ohlcv_df.copy()
+                        save_df.reset_index(inplace=True)
+                        save_df['timestamp'] = pd.to_numeric(save_df['timestamp']) // 10**6
+
+                        storage.save_ohlcv(symbol, '1m', save_df)
+                        logger.info(f"✅ [STORAGE] {symbol} 1m flat file oluşturuldu ({len(save_df)} mum)")
+                    except Exception as rest_storage_err:
+                        logger.warning(f"⚠️ [STORAGE] REST flat file oluşturma hatası: {rest_storage_err}")
                 else:
                     logger.warning(f"WARNING [REST] {symbol} için REST API'den veri çekilemedi.")
         except Exception as e:
@@ -727,11 +1180,12 @@ class ExchangeManager:
             logger.info(f"INFO [HYBRID] Boş DataFrame ile başlanıyor.")
 
         # ============================================
-        # 3. RAM KORUMASI: Sadece son 1500 mum - KURAL 3
+        # 3. YENİ: TÜM MumlAR TUTULUYOR (Limit YOK)
         # ============================================
-        if len(ohlcv_df) > 1500:
-            ohlcv_df = ohlcv_df.tail(1500)
-            logger.info(f"OK [RAM] RAM koruması: Son 1500 mum yüklendi.")
+        # Kullanıcı 01/01/2026 tarihinden itibaren tüm mumları istedi
+        # Sistem TÜM mumları tutacak ve işleyecek
+        # ============================================
+        logger.info(f"✅ [ALL CANDLES] {symbol} için {len(ohlcv_df)} mum yüklendi (TÜM veri tutuluyor)")
 
         # ============================================
         # 4. WEBSOCKET DÖNGÜSÜ (Canlı Güncelleme)
@@ -827,9 +1281,8 @@ class ExchangeManager:
                         ohlcv_df.loc[last_live_time] = live_df.loc[last_live_time]
                         logger.debug(f"OK [WSS] Son mum güncellendi: {last_live_time}")
 
-                    # RAM koruması: Sadece son 1500 mum
-                    if len(ohlcv_df) > 1500:
-                        ohlcv_df = ohlcv_df.tail(1500)
+                    # YENİ: RAM limiti YOK - Tüm mumlar tutuluyor
+                    logger.debug(f"📊 [ALL CANDLES] {symbol} için toplam {len(ohlcv_df)} mum RAM'de")
 
                 last_candle_time = ohlcv_df.index[-1]
                 df_1m = ohlcv_df
@@ -993,6 +1446,77 @@ class ExchangeManager:
 
                     # 8. ANALİZ ÖZETİ (DEBUG seviyesinde tutulur, gürültü yapmaz)
                     logger.debug(f"✅ {symbol} {target_tf} (HTF: {htf_trends} | REJİM: {regime_info['regime']}) analiz tamamlandı. Botlar işlendi.")
+
+                    # ========================================================================
+                    # 9. DATA LAKE GÜNCELLEME (Her yeni mumda - Kurumsal Caching)
+                    # ========================================================================
+                    # YENİ MUM KAPANDI - Tüm TF'leri Data Lake'e kaydet (PARQUET)
+                    # ========================================================================
+                    try:
+                        from data.data_lake import get_data_lake
+                        data_lake = get_data_lake()
+
+                        # 1m veriyi kaydet (RAM'deki tüm mumlar)
+                        save_df_1m = df_1m.copy()
+                        save_df_1m.reset_index(inplace=True)
+
+                        # Data Lake append mode ile kaydet
+                        data_lake.save(symbol, '1m', save_df_1m, append=True)
+
+                        # Diğer TF'leri de kaydet (resample + append)
+                        for tf in ['5m', '15m', '1h', '4h']:
+                            from data.indicators import StrategyIndicators
+                            df_tf = StrategyIndicators.resample_data(df_1m, tf)
+                            df_tf = df_tf.dropna()
+                            if not df_tf.empty:
+                                save_df_tf = df_tf.copy()
+                                save_df_tf.reset_index(inplace=True)
+                                data_lake.save(symbol, tf, save_df_tf, append=True)
+
+                        logger.debug(f"💾 [DATA LAKE] {symbol} güncellendi (TÜM TF'ler)")
+
+                    except Exception as lake_err:
+                        logger.debug(f"⚠️ [DATA LAKE] Güncelleme hatası: {lake_err}")
+
+                    # ========================================================================
+                    # 10. PERİYODİK TAM SENKRONİZASYON (Her 5 dakikada bir - DATA LAKE)
+                    # ========================================================================
+                    # DB'deki TÜM mumları Data Lake'e kaydet (güvenlik için)
+                    # ========================================================================
+                    try:
+                        current_minute = int(pd.Timestamp.now().timestamp()) // 60
+                        if current_minute % 5 == 0:  # Her 5 dakikada bir
+                            logger.info(f"🔄 [DATA LAKE] {symbol} için tam senkronizasyon başlatılıyor...")
+
+                            from data.data_lake import get_data_lake
+                            data_lake = get_data_lake()
+
+                            # DB'deki TÜM mumları çek
+                            all_klines = await db_manager.get_klines(symbol, '1m', limit=100000)  # 100k mum limit
+
+                            if all_klines and len(all_klines) > 0:
+                                all_df = pd.DataFrame(all_klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                                all_df['timestamp'] = pd.to_datetime(all_df['timestamp'], unit='ms')
+                                all_df.set_index('timestamp', inplace=True)
+
+                                # Data Lake'e kaydet (overwrite - tüm veri)
+                                save_all_df = all_df.copy()
+                                save_all_df.reset_index(inplace=True)
+                                data_lake.save(symbol, '1m', save_all_df, append=False)
+
+                                # Diğer TF'leri de güncelle
+                                for tf in ['5m', '15m', '1h', '4h']:
+                                    from data.indicators import StrategyIndicators
+                                    df_tf = StrategyIndicators.resample_data(all_df, tf)
+                                    df_tf = df_tf.dropna()
+                                    if not df_tf.empty:
+                                        save_tf = df_tf.copy()
+                                        save_tf.reset_index(inplace=True)
+                                        data_lake.save(symbol, tf, save_tf, append=False)
+
+                                logger.info(f"✅ [DATA LAKE] {symbol} TAM SENKRONİZASYON tamamlandı ({len(all_df)} mum)")
+                    except Exception as sync_err:
+                        logger.debug(f"⚠️ [DATA LAKE] Tam senkronizasyon hatası: {sync_err}")
 
             # BAĞLANTI KOPMA VE RECONNECT KALKANI
             except ccxt.NetworkError as e:

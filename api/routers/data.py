@@ -90,6 +90,23 @@ async def delete_download_task(request: DataDeleteRequest) -> Dict[str, Any]:
     return await data_service.delete_download_task(request)
 
 
+@router.delete("/delete-all")
+async def delete_all_klines_data() -> Dict[str, Any]:
+    """
+    Veritabanındaki TÜM klines verilerini siler.
+    DİKKAT: Geri alınamaz!
+    """
+    return await data_service.delete_all_klines()
+
+
+@router.delete("/delete-klines")
+async def delete_klines_by_symbol(request: DataDeleteRequest) -> Dict[str, Any]:
+    """
+    Belirli bir sembole ait TÜM klines verilerini siler.
+    """
+    return await data_service.delete_data(request)
+
+
 @router.post("/toggle-pause")
 async def toggle_pause(request: DataPauseRequest) -> Dict[str, Any]:
     """
@@ -104,6 +121,49 @@ async def get_symbols_with_data() -> Dict[str, Any]:
     Veritabanında verisi olan tüm sembolleri döner.
     """
     return await data_service.get_symbols_with_data()
+
+
+@router.get("/check-data-gaps")
+async def check_data_gaps(symbol: str = None) -> Dict[str, Any]:
+    """
+    Tüm sembollerin veya belirli bir sembolün veri boşluklarını kontrol et.
+
+    Args:
+        symbol: Sembol (opsiyonel, yoksa tüm semboller)
+
+    Returns:
+        {
+            "status": "success",
+            "gaps": [
+                {
+                    "symbol": "BTC/USDT",
+                    "gap_start": "2025-01-15 10:00",
+                    "gap_end": "2025-01-30 14:30",
+                    "gap_minutes": 21930,
+                    "gap_days": 15.2
+                }
+            ]
+        }
+    """
+    return await data_service.check_data_gaps(symbol)
+
+
+@router.post("/fill-data-gaps")
+async def fill_data_gaps(symbol: str = None) -> Dict[str, Any]:
+    """
+    Tüm sembollerin veya belirli bir sembolün veri boşluklarını otomatik doldur.
+
+    Args:
+        symbol: Sembol (opsiyonel, yoksa tüm semboller)
+
+    Returns:
+        {
+            "status": "success",
+            "message": "5 sembolün boşlukları dolduruldu",
+            "filled": [...]
+        }
+    """
+    return await data_service.fill_data_gaps(symbol)
 
 
 @router.get("/data-count")

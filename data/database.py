@@ -1,6 +1,7 @@
 import asyncio
 import aiosqlite
 import asyncpg
+import pandas as pd
 import os
 from core.logger import logger
 from core.config import TIMESCALE_DB_URL, REDIS_URL
@@ -281,7 +282,8 @@ class DatabaseManager:
     async def save_kline(self, symbol, kline_data, timeframe='1m'):
         """Veriyi UPSERT (Varsa güncelle yoksa ekle) yöntemiyle kaydeder."""
         # kline_data: [ts, o, h, l, c, v]
-        ts_iso = pd.to_datetime(kline_data[0], unit='ms').to_pydatetime() if self.engine_type == "sqlite" else kline_data[0]
+        # UTC olarak kaydet (SQLite timezone-naive storage)
+        ts_utc = pd.to_datetime(kline_data[0], unit='ms', utc=True).to_pydatetime()
 
         if self.engine_type == "postgres":
             async with self.db_pool.acquire() as conn:
@@ -292,7 +294,7 @@ class DatabaseManager:
                         open=EXCLUDED.open, high=EXCLUDED.high, low=EXCLUDED.low, close=EXCLUDED.close, volume=EXCLUDED.volume;
                 """, kline_data[0], symbol, timeframe, kline_data[1], kline_data[2], kline_data[3], kline_data[4], kline_data[5])
         else:
-            # SQLite Kaydı - LOCK İLE
+            # SQLite Kaydı - LOCK İLE (UTC timestamp)
             await self._execute_with_lock(
                 self.sqlite_conn.execute,
                 """
@@ -300,7 +302,7 @@ class DatabaseManager:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (timestamp, symbol, timeframe) DO UPDATE SET
                     open=excluded.open, high=excluded.high, low=excluded.low, close=excluded.close, volume=excluded.volume;
-            """, (ts_iso, symbol, timeframe, kline_data[1], kline_data[2], kline_data[3], kline_data[4], kline_data[5])
+            """, (ts_utc, symbol, timeframe, kline_data[1], kline_data[2], kline_data[3], kline_data[4], kline_data[5])
             )
             await self.sqlite_conn.commit()
 
@@ -514,6 +516,96 @@ class DatabaseManager:
 
         # Hiçbir varyant bulunamadı
         return 0
+
+    async def get_latest_kline_timestamp(self, symbol: str, timeframe: str = '1m') -> int:
+        """
+        Belirli bir sembol/timeframe için EN SON mumun timestamp'ini döner.
+        Gap detection için kullanılır.
+
+        Args:
+            symbol: Sembol (örn: BTC/USDT)
+            timeframe: Zaman dilimi (örn: 1m)
+
+        Returns:
+            int: En son mumun timestamp'i (ms) veya None
+        """
+        # Sembol varyasyonları oluştur (get_klines_count ile aynı mantık)
+        symbol_variants = [
+            symbol,
+            f"{symbol}_future",
+        ]
+        symbol_clean = symbol.replace('/', '').replace(':', '').replace('-', '')
+        if symbol_clean != symbol:
+            symbol_variants.append(f"{symbol_clean}_future")
+
+        # Her varyasyonu dene
+        for sym_variant in symbol_variants:
+            sql = "SELECT MAX(timestamp) as latest_ts FROM klines WHERE symbol = ? AND timeframe = ?"
+            params = (sym_variant, timeframe)
+
+            if self.engine_type == "postgres":
+                sql = sql.replace('?', '%s')
+                async with self.db_pool.acquire() as conn:
+                    row = await conn.fetchrow(sql, sym_variant, timeframe)
+                    latest_ts = row['latest_ts'] if row else None
+                    if latest_ts:
+                        logger.debug(f"✅ DB Son timestamp: {symbol} → {sym_variant} ({pd.to_datetime(latest_ts, unit='ms')})")
+                        return latest_ts
+            else:
+                async with self.sqlite_conn.execute(sql, params) as cursor:
+                    row = await cursor.fetchone()
+                    latest_ts = row[0] if row else None
+                    if latest_ts:
+                        logger.debug(f"✅ DB Son timestamp: {symbol} → {sym_variant} ({pd.to_datetime(latest_ts, unit='ms')})")
+                        return latest_ts
+
+        # Hiçbir varyant bulunamadı
+        return None
+
+    async def get_earliest_kline_timestamp(self, symbol: str, timeframe: str = '1m') -> int:
+        """
+        Belirli bir sembol/timeframe için EN İLK mumun timestamp'ini döner.
+        Gap detection için kullanılır (indirme durdurma).
+
+        Args:
+            symbol: Sembol (örn: BTC/USDT)
+            timeframe: Zaman dilimi (örn: 1m)
+
+        Returns:
+            int: En ilk mumun timestamp'i (ms) veya None
+        """
+        # Sembol varyasyonları oluştur
+        symbol_variants = [
+            symbol,
+            f"{symbol}_future",
+        ]
+        symbol_clean = symbol.replace('/', '').replace(':', '').replace('-', '')
+        if symbol_clean != symbol:
+            symbol_variants.append(f"{symbol_clean}_future")
+
+        # Her varyasyonu dene
+        for sym_variant in symbol_variants:
+            sql = "SELECT MIN(timestamp) as earliest_ts FROM klines WHERE symbol = ? AND timeframe = ?"
+            params = (sym_variant, timeframe)
+
+            if self.engine_type == "postgres":
+                sql = sql.replace('?', '%s')
+                async with self.db_pool.acquire() as conn:
+                    row = await conn.fetchrow(sql, sym_variant, timeframe)
+                    earliest_ts = row['earliest_ts'] if row else None
+                    if earliest_ts:
+                        logger.debug(f"✅ DB İlk timestamp: {symbol} → {sym_variant} ({pd.to_datetime(earliest_ts, unit='ms')})")
+                        return earliest_ts
+            else:
+                async with self.sqlite_conn.execute(sql, params) as cursor:
+                    row = await cursor.fetchone()
+                    earliest_ts = row[0] if row else None
+                    if earliest_ts:
+                        logger.debug(f"✅ DB İlk timestamp: {symbol} → {sym_variant} ({pd.to_datetime(earliest_ts, unit='ms')})")
+                        return earliest_ts
+
+        # Hiçbir varyant bulunamadı
+        return None
     async def get_symbols_with_data(self):
         """Veritabanında (klines tablosunda) en az 1 kaydı bulunan tüm pariteleri getirir."""
         sql = "SELECT DISTINCT symbol FROM klines"
@@ -528,6 +620,84 @@ class DatabaseManager:
                 symbols = [row[0] for row in rows]
 
         return sorted(symbols)
+
+    async def delete_klines(self, symbol: str, timeframe: str = '1m',
+                           start_date: str = None, end_date: str = None) -> int:
+        """
+        Belirli bir sembol/timeframe için mum verilerini siler.
+
+        Args:
+            symbol: Sembol (örn: BTC/USDT)
+            timeframe: Zaman dilimi (örn: 1m)
+            start_date: Başlangıç tarihi (örn: '2024-01-01', None ise tümü)
+            end_date: Bitiş tarihi (örn: '2024-12-31', None ise tümü)
+
+        Returns:
+            int: Silinen satır sayısı
+        """
+        # Sembol varyasyonları oluştur
+        symbol_variants = [
+            symbol,
+            f"{symbol}_future",
+        ]
+        symbol_clean = symbol.replace('/', '').replace(':', '').replace('-', '')
+        if symbol_clean != symbol:
+            symbol_variants.append(f"{symbol_clean}_future")
+
+        # SQL query oluştur
+        if start_date and end_date:
+            sql = "DELETE FROM klines WHERE symbol = ? AND timeframe = ? AND timestamp BETWEEN ? AND ?"
+            start_ts = int(pd.to_datetime(start_date).timestamp() * 1000)
+            end_ts = int(pd.to_datetime(end_date).timestamp() * 1000)
+        elif start_date:
+            sql = "DELETE FROM klines WHERE symbol = ? AND timeframe = ? AND timestamp >= ?"
+            start_ts = int(pd.to_datetime(start_date).timestamp() * 1000)
+        elif end_date:
+            sql = "DELETE FROM klines WHERE symbol = ? AND timeframe = ? AND timestamp <= ?"
+            end_ts = int(pd.to_datetime(end_date).timestamp() * 1000)
+        else:
+            sql = "DELETE FROM klines WHERE symbol = ? AND timeframe = ?"
+
+        deleted_count = 0
+
+        # Her varyant için sil
+        for sym_variant in symbol_variants:
+            if self.engine_type == "postgres":
+                sql_pg = sql.replace('?', '%s')
+                async with self.db_pool.acquire() as conn:
+                    if start_date and end_date:
+                        result = await conn.execute(sql_pg, sym_variant, timeframe, start_ts, end_ts)
+                    elif start_date:
+                        result = await conn.execute(sql_pg, sym_variant, timeframe, start_ts)
+                    elif end_date:
+                        result = await conn.execute(sql_pg, sym_variant, timeframe, end_ts)
+                    else:
+                        result = await conn.execute(sql_pg, sym_variant, timeframe)
+
+                    # PostgreSQL'de affected rows sayısını al
+                    deleted_count += int(result.split()[-1]) if result else 0
+
+            else:
+                # SQLite
+                if start_date and end_date:
+                    async with self.sqlite_conn.execute(sql, (sym_variant, timeframe, start_ts, end_ts)) as cursor:
+                        deleted_count += cursor.rowcount
+                elif start_date:
+                    async with self.sqlite_conn.execute(sql, (sym_variant, timeframe, start_ts)) as cursor:
+                        deleted_count += cursor.rowcount
+                elif end_date:
+                    async with self.sqlite_conn.execute(sql, (sym_variant, timeframe, end_ts)) as cursor:
+                        deleted_count += cursor.rowcount
+                else:
+                    async with self.sqlite_conn.execute(sql, (sym_variant, timeframe)) as cursor:
+                        deleted_count += cursor.rowcount
+
+                await self.sqlite_conn.commit()
+
+        if deleted_count > 0:
+            logger.info(f"🗑️ {symbol} için {deleted_count} mum silindi")
+
+        return deleted_count
 
     async def get_data_inventory(self):
         """

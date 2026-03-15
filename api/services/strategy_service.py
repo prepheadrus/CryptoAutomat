@@ -200,13 +200,31 @@ class StrategyService:
             elif closed_trades:
                 timeframe = closed_trades[0].get('timeframe') or \
                            closed_trades[0].get('metadata', {}).get('timeframe') or "1h"
-            
-            klines = await db_manager.get_klines(symbol, timeframe, limit=1000)
-            
-            # Eğer seçilen timeframe boşsa (örn: default 1h ama veri sadece 1m ise), 1m dene
-            if not klines and timeframe != "1m":
-                logger.info(f"ℹ️ {timeframe} için veri bulunamadı, 1m deneniyor: {symbol}")
-                timeframe = "1m"
+
+            # Flat file'dan çek (HIZLI!)
+            try:
+                from data.ohlcv_storage import get_storage
+                from datetime import datetime, timedelta
+
+                storage = get_storage()
+                end_date = datetime.utcnow()
+                start_date = end_date - timedelta(days=10)
+
+                df = storage.load_ohlcv(symbol, timeframe, start_date, end_date)
+
+                if df is not None and not df.empty:
+                    klines = df[['timestamp', 'open', 'high', 'low', 'close', 'volume']].values.tolist()
+                    logger.info(f"  ✅ {len(klines)} mum flat file'dan yüklendi")
+                else:
+                    # Flat file yoksa DB'den çek
+                    klines = await db_manager.get_klines(symbol, timeframe, limit=1000)
+                    # Eğer seçilen timeframe boşsa (örn: default 1h ama veri sadece 1m ise), 1m dene
+                    if not klines and timeframe != "1m":
+                        logger.info(f"ℹ️ {timeframe} için veri bulunamadı, 1m deneniyor: {symbol}")
+                        timeframe = "1m"
+                        klines = await db_manager.get_klines(symbol, timeframe, limit=1000)
+            except Exception as e:
+                logger.warning(f"  ⚠️ Flat file okuma hatası, DB'den çekiliyor: {e}")
                 klines = await db_manager.get_klines(symbol, timeframe, limit=1000)
 
             

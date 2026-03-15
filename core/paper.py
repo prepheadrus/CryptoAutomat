@@ -198,17 +198,22 @@ class PaperTrader:
         
         # Signal handler
         event_bus.subscribe("signal.generated", self.on_signal_generated)
-        
+
         # Position handlers
         event_bus.subscribe("position.opened", self.on_position_opened)
         event_bus.subscribe("position.closed", self.on_position_closed)
-        
+
         # Bot handlers
         event_bus.subscribe("bot.started", self.on_bot_started)
         event_bus.subscribe("bot.stopped", self.on_bot_stopped)
-        
+
+        # ========================================================================
+        # YENİ: Live Price Event (Tick Data Pub/Sub - Circular Dependency kırıldı!)
+        # ========================================================================
+        event_bus.subscribe("price.updated", self.on_live_price_updated)
+
         self._event_handlers_started = True
-        logger.info("📬 Event handlers başlatıldı")
+        logger.info("📬 [EDA] Event handlers başlatıldı (signal, position, bot, price)")
     
     async def on_signal_generated(self, event):
         """
@@ -523,12 +528,50 @@ class PaperTrader:
         """Bot Started Event Handler"""
         payload = event.payload
         logger.info(f"🚀 Bot başlatıldı: {payload.get('bot_id')}")
-    
+
     async def on_bot_stopped(self, event):
         """Bot Stopped Event Handler"""
         payload = event.payload
         logger.info(f"🛑 Bot durduruldu: {payload.get('bot_id')}")
-    
+
+    async def on_live_price_updated(self, event):
+        """
+        Live Price Updated Event Handler.
+
+        WebSocket'ten gelen gerçek zamanlı fiyat eventini dinler.
+        Trailing stop ve likidasyon kontrollerini tetikler.
+
+        EVENT-DRIVEN MİMARİ:
+        - Exchange LivePriceUpdatedEvent fırlatır
+        - Paper.py bu event'i dinler
+        - DIRECT CALL YOK (circular dependency kırıldı!)
+
+        Args:
+            event: LivePriceUpdatedEvent
+        """
+        try:
+            payload = event.payload
+            symbol = payload.get('symbol')
+            current_price = payload.get('price')
+
+            if not symbol or not current_price:
+                return
+
+            # Açık pozisyonları kontrol et
+            positions_to_update = [
+                pos for pos in self.open_positions
+                if pos.get('symbol') == symbol
+            ]
+
+            if positions_to_update:
+                # Trailing stop ve likidasyon kontrolleri
+                await self.update_live_prices(symbol, current_price)
+
+                logger.debug(f"💰 [EDA] {symbol} fiyat güncellendi: ${current_price:.2f} ({len(positions_to_update)} pozisyon)")
+
+        except Exception as e:
+            logger.error(f"❌ [EDA] on_live_price_updated hatası: {e}")
+
     # ========================================================================
     # DELEGATION METHODS (Legacy API Uyumluluğu)
     # ========================================================================

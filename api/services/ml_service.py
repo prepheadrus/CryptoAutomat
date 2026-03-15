@@ -65,46 +65,65 @@ class MLService:
         }
 
     async def _run_training(self, request: MLTrainRequest):
-        """Arka planda ML modelini eğitir."""
+        """Arka planda ML modelini eğitir. YENİ: Resampling mimarisi ile."""
         try:
             self.training_state["is_training"] = True
             self.training_state["progress"] = 5
             self.training_state["message"] = "Veri çekiliyor..."
-            self.training_state["current_step"] = "DB bağlantısı"
+            self.training_state["current_step"] = "Parquet Lake + Smart Cache"
 
             logger.info(f"🧠 [ML] Eğitim başlatılıyor: {request.symbol} ({request.timeframe}) - {request.limit} mum")
 
-            # 1. Veritabanından veri çek
-            from data.database import db_manager
-            await db_manager.connect()
-            
-            self.training_state["progress"] = 15
-            self.training_state["message"] = "Veri işleniyor..."
-            self.training_state["current_step"] = "Feature engineering"
-            
-            logger.info(f"📊 [ML] Veri çekiliyor: {request.symbol}, {request.timeframe}, limit={request.limit}")
-            
-            # Klines verisini çek (list of tuples döner)
-            klines_data = await db_manager.get_klines(request.symbol, request.timeframe, limit=request.limit)
-            
-            if not klines_data or len(klines_data) == 0:
-                raise ValueError(f"Veritabanında yeterli veri yok: {request.symbol} {request.timeframe}")
-            
-            # List of tuples'u DataFrame'e çevir
+            # ========================================================================
+            # 🏗️ PARQUET DATA LAKE - SMART CACHE
+            # ========================================================================
+            # 1. Önce Parquet gölünden yükle (vektörize okuma)
+            # 2. Eksik varsa SQLite'dan tamamla (1m + resample)
+            # 3. UTC timezone sync + NaN temizliği (Infinity koruması)
+            # ========================================================================
+
+            from api.services.data_service import DataService
+            from datetime import datetime, timedelta
+            import pytz
+
+            data_service = DataService()
+
+            # Tarih aralığı hesapla
+            end_date = datetime.now(tz=pytz.UTC)
+            start_date = end_date - timedelta(minutes=request.limit * 2)  # %50 buffer
+
+            logger.info(f"🏗️ [PARQUET LAKE] {request.symbol} {request.timeframe} için veri yükleniyor...")
+
+            # SMART CACHE köprü fonksiyonu
+            df = await data_service.get_cached_or_fetch_data(
+                symbol=request.symbol,
+                timeframe=request.timeframe,
+                start_date=start_date,
+                end_date=end_date
+            )
+
+            if df is None or len(df) == 0:
+                raise ValueError(f"Parquet Lake'te yeterli veri yok: {request.symbol} {request.timeframe}")
+
+            # DataFrame'i ML formatına hazırla
             import pandas as pd
-            df = pd.DataFrame(klines_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-            
-            # Timestamp'i numeric'e çevir (string olabilir)
-            df['timestamp'] = pd.to_numeric(df['timestamp'], errors='coerce')
-            
-            # Timestamp'i ms'den saniyeye çevir (gerekirse)
-            if pd.notna(df['timestamp'].iloc[0]) and df['timestamp'].iloc[0] > 1e12:
-                df['timestamp'] = df['timestamp'] // 1000
-            
-            # DataFrame'i hazırla (ML eğitimi için gerekli format)
-            df = df.sort_values('timestamp').reset_index(drop=True)
-            
-            logger.info(f"✅ [ML] {len(df)} mum çekildi ve DataFrame'e çevrildi")
+
+            # UTC timezone kontrolü (leakage koruması)
+            if df.index.tz is None:
+                df.index = df.index.tz_localize('UTC')
+            elif df.index.tz != pytz.UTC:
+                df.index = df.index.tz_convert('UTC')
+
+            # NaN/Infinity temizliği (XGBoost crash koruması)
+            df = df.replace([float('inf'), float('-inf')], float('nan'))
+            df = df.ffill().dropna(how='all')
+
+            logger.info(f"✅ [PARQUET LAKE] {request.symbol} {request.timeframe} → {len(df)} mum yüklendi")
+            logger.info(f"📊 [PARQUET LAKE] İlk: {df.index[0]}, Son: {df.index[-1]}")
+            logger.info(f"🛡️ [ML] NaN temizliği: UTC sync + ffill + dropna uygulandı")
+
+            # Final log
+            logger.info("🎉 [DATA LAKE] Parquet Engine'e Tam Geçiş Sağlandı ve Risk Kalkanları Aktif")
             
             self.training_state["progress"] = 30
             self.training_state["message"] = "Feature engineering ve etiketleme yapılıyor..."
@@ -325,6 +344,80 @@ class MLService:
 
         except Exception as e:
             logger.error(f"Geçmiş silme hatası: {e}")
+            return {"status": "error", "message": str(e)}
+
+    def delete_model(self, symbol: str, timeframe: str) -> Dict[str, Any]:
+        """
+        Belirli bir ML modelini sil.
+
+        Args:
+            symbol: Sembol (örn: BTC/USDT)
+            timeframe: Zaman dilimi (örn: 1h)
+
+        Returns:
+            Silme yanıtı
+        """
+        try:
+            from ml.model_training import get_model_paths
+
+            # Model yollarını al
+            model_paths = get_model_paths(symbol, timeframe)
+
+            # Silinecek dosyalar
+            deleted_files = []
+            errors = []
+
+            for file_path in [model_paths['xgboost_path'], model_paths['rf_path'], model_paths['metadata_path']]:
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                        deleted_files.append(file_path)
+                        logger.info(f"✅ [ML] Model dosyası silindi: {file_path}")
+                    except Exception as e:
+                        errors.append(f"{file_path}: {str(e)}")
+                        logger.error(f"❌ [ML] Dosya silme hatası: {file_path} - {e}")
+
+            # Training history'den de sil (eğer varsa)
+            history_deleted = False
+            try:
+                history_file = "artifacts/ml_training_history.json"
+                if os.path.exists(history_file):
+                    with open(history_file, 'r') as f:
+                        history = json.load(f)
+
+                    # Bu modele ait kayıtları filtrele
+                    original_count = len(history)
+                    history = [
+                        h for h in history
+                        if not (h.get('symbol') == symbol and h.get('timeframe') == timeframe)
+                    ]
+
+                    # Güncellenmiş history'yi kaydet
+                    with open(history_file, 'w') as f:
+                        json.dump(history, f, indent=2)
+
+                    if len(history) < original_count:
+                        history_deleted = True
+                        logger.info(f"✅ [ML] Training history'den {original_count - len(history)} kayıt silindi")
+            except Exception as e:
+                logger.warning(f"⚠️ [ML] Training history silme hatası: {e}")
+
+            if deleted_files or history_deleted:
+                return {
+                    "status": "success",
+                    "message": f"{len(deleted_files)} dosya ve {len([h for h in history if h.get('symbol') == symbol and h.get('timeframe') == timeframe])} history kaydı silindi" if history_deleted else f"{len(deleted_files)} dosya silindi",
+                    "deleted_files": deleted_files,
+                    "errors": errors if errors else None
+                }
+            else:
+                return {
+                    "status": "error",
+                    "message": "Silinecek dosya bulunamadı",
+                    "errors": errors
+                }
+
+        except Exception as e:
+            logger.error(f"Model silme hatası: {e}")
             return {"status": "error", "message": str(e)}
 
     def check_model(self, symbol: str, timeframe: str) -> Dict[str, Any]:

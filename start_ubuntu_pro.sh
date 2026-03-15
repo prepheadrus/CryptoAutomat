@@ -5,6 +5,14 @@ set -e # Hata durumunda betiği durdur
 # CRYPTO ALGO BOT - UBUNTU STARTUP SCRIPT (PRO ENHANCED)
 # 7/24 Production-Ready Bot Launcher
 # ============================================================================
+# 6 Faz Mimari:
+#   - Faz 1: Event-Driven Architecture (%100 Pub/Sub)
+#   - Faz 2: Clean Architecture API (194 satır)
+#   - Faz 3: ES6 Frontend Modules (210 satır)
+#   - Faz 4: Modular Indicators (5 modül)
+#   - Faz 5: Zero-Touch WFO (Bayesian TPE)
+#   - Faz 6: MLOps Auto-Retrain + Liquidity Sweep
+# ============================================================================
 
 # Colors
 RED='\033[0;31m'
@@ -114,11 +122,32 @@ if command -v df >/dev/null 2>&1; then
     log_info "Disk: $(df -h . | awk 'NR==2{print $4}') available"
 fi
 
+# Yeni: Parquet Data Lake kontrolü
+if [ -d "data/ohlcv/binance" ]; then
+    log_success "Parquet Data Lake: Ready"
+else
+    mkdir -p data/ohlcv/binance
+    log_info "Parquet Data Lake directory created"
+fi
+
+log_info ""
+log_info "Architecture Features:"
+log_info "  - Event-Driven Architecture (%100 Pub/Sub)"
+log_info "  - Clean Architecture API (194 satir)"
+log_info "  - ES6 Frontend Modules (210 satir)"
+log_info "  - Modular Indicators (5 modul)"
+log_info "  - Zero-Touch WFO (Bayesian TPE)"
+log_info "  - MLOps Auto-Retrain + Liquidity Sweep"
+log_info "  - Parquet Data Lake (Snappy compression)"
+log_info "  - Order Book Imbalance Filtresi"
+log_info "  - Commission + Slippage Gerçekçi Backtest"
+
 # STEP 9: Start Bot (With Exec)
 log_header "STEP 9: Starting Bot"
 log_info "Dashboard: http://localhost:8000"
 log_info "Press CTRL+C to stop"
 log_info "Pro Tip: Run inside 'tmux' or 'screen' to keep it alive after ssh disconnect"
+log_success "System Ready for Live Trading!"
 
 # Display hatasını engelle (Headless Linux Server için)
 export DISPLAY=""

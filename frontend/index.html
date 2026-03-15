@@ -217,7 +217,7 @@
                         style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                         <h3 style="color: var(--neon-blue);">📚 Eğitilmiş Modeller (Ensemble)</h3>
                         <div style="display: flex; gap: 10px;">
-                            <button class="btn btn-primary" onclick="loadTrainingHistory()"
+                            <button class="btn btn-primary" onclick="loadMLTrainingHistory()"
                                 style="padding: 8px 15px; font-size: 0.85rem;">
                                 🔄 Yenile
                             </button>
@@ -1381,26 +1381,53 @@
                                 <strong id="selected-symbol-val" class="selected-symbol">-- SEÇİNİZ --</strong>
                             </div>
 
+                            <!-- YENİ: SADECE 1m İNDİRİLİR (Resampling Mimarisi) -->
+                            <div class="resampling-info-box" style="
+                                background: linear-gradient(135deg, rgba(88, 166, 255, 0.1), rgba(99, 102, 241, 0.1));
+                                border: 2px solid var(--neon-blue);
+                                border-radius: 8px;
+                                padding: 15px;
+                                margin: 15px 0;
+                            ">
+                                <div style="display: flex; align-items: flex-start; gap: 12px;">
+                                    <span style="font-size: 1.5rem;">🏗️</span>
+                                    <div>
+                                        <h4 style="margin: 0 0 8px 0; color: var(--neon-blue); font-size: 0.9rem;">
+                                            🏗️ Parquet Data Lake Mimarisi Aktif
+                                        </h4>
+                                        <p style="margin: 0; font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
+                                            <strong style="color: var(--text-main);">Sistem otomatik olarak SADECE 1 dakikalık mumları indirir ve Parquet formatında kaydeder.</strong>
+                                            <br><br>
+                                            Diğer zaman dilimleri (5m, 15m, 1h, 4h, vb.) otomatik olarak oluşturulur ve
+                                            <strong style="color: var(--neon-green);">data/ohlcv/binance/</strong> klasörüne kaydedilir.
+                                            <br><br>
+                                            ✅ <strong>Avantajlar:</strong>
+                                            <ul style="margin: 8px 0 0 0; padding-left: 16px; font-size: 0.75rem;">
+                                                <li>Apache Parquet (columnar storage - %70 daha az yer)</li>
+                                                <li>Snappy compression (hızlı okuma/yazma)</li>
+                                                <li>MTF-Daily (1m, 5m, 15m) → Gün bazlı partition (YYYY/MM/DD/)</li>
+                                                <li>MTF-Market (1h, 4h, 1d) → Tek dosya (market.parquet)</li>
+                                                <li>Look-ahead bias koruması (gelecek mumlar düşürülür)</li>
+                                                <li>OOM koruması (50k batch stream - RAM dostu)</li>
+                                            </ul>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="form-row">
                                 <div class="form-group">
                                     <label class="form-label">Başlangıç:</label>
                                     <input type="date" id="download-start-date" class="data-input" value="2025-01-01">
                                 </div>
-                                <div class="form-group">
-                                    <label class="form-label">Zaman:</label>
-                                    <select id="download-timeframe" class="data-select">
-                                        <option value="1m">1m</option>
-                                        <option value="3m">3m</option>
-                                        <option value="5m">5m</option>
-                                        <option value="15m">15m</option>
-                                        <option value="30m">30m</option>
-                                        <option value="1h">1h</option>
-                                        <option value="2h">2h</option>
-                                        <option value="4h">4h</option>
-                                        <option value="6h">6h</option>
-                                        <option value="12h">12h</option>
-                                        <option value="1d">1d</option>
-                                    </select>
+                                <!-- Timeframe seçimi KALDIRILDI - SADECE 1m -->
+                                <div class="form-group" style="opacity: 0.5; pointer-events: none;">
+                                    <label class="form-label">
+                                        Zaman Dilimi
+                                        <span style="color: var(--neon-green); font-size: 0.7rem;"> ✅ SADECE 1m</span>
+                                    </label>
+                                    <input type="text" value="1m (Otomatik)" class="data-input" disabled
+                                        style="cursor: not-allowed; background: rgba(255,255,255,0.05);">
                                 </div>
                             </div>
 
@@ -1431,6 +1458,11 @@
                                     title="Veri durumunu yenile">
                                     🔄
                                 </button>
+                                <button class="data-btn data-btn-danger" onclick="clearAllData()"
+                                    title="Tüm veritabanını temizle (DİKKAT!)"
+                                    style="background: linear-gradient(135deg, #dc2626, #991b1b);">
+                                    🗑️ Tüm Verileri Sil
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -1453,10 +1485,7 @@
                 <div class="data-card inventory-card" style="margin-top: 20px;">
                     <div class="data-card-header">
                         <h3 class="data-card-title">🗄️ Veritabanı Envanteri & İstatistikler</h3>
-                        <button class="data-btn data-btn-primary" onclick="loadDataStats()"
-                            style="width: auto; padding: 6px 12px; font-size: 0.8rem;">
-                            🔄 Yenile
-                        </button>
+                        <!-- YENİ: Otomatik yenileme - butona gerek yok -->
                     </div>
 
                     <div class="data-card-body">
@@ -1549,7 +1578,7 @@
     <div id="drawer-overlay" class="drawer-overlay" onclick="closeStrategyDrawer()"></div>
 
     <!-- ES6 Modules -->
-    <script type="module" src="app.js?v=2026031012"></script>
+    <script type="module" src="app.js?v=2026031521"></script>
     <script src="strategy-builder.js?v=2026031011"></script>
 </body>
 

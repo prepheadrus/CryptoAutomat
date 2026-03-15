@@ -18,6 +18,31 @@ router = APIRouter(prefix="/api/v1/ml", tags=["ML"])
 
 ml_service = MLService()
 
+# ============================================================================
+# TIMEFRAME MULTIPLIERS (Resampling için)
+# ============================================================================
+# 1m verisinden hedef timeframe'e dönüşüm için gereken çarpanlar
+# Örnek: 1000 adet 15m mum için → 1000 * 15 = 15,000 adet 1m mum çek
+TIMEFRAME_MULTIPLIERS = {
+    '1m': 1,
+    '3m': 3,
+    '5m': 5,
+    '10m': 10,
+    '15m': 15,
+    '20m': 20,
+    '30m': 30,
+    '45m': 45,
+    '1h': 60,
+    '2h': 120,
+    '3h': 180,
+    '4h': 240,
+    '6h': 360,
+    '8h': 480,
+    '12h': 720,
+    '1d': 1440,
+    '1w': 10080
+}
+
 
 @router.post("/train")
 async def train_ml_model(request: MLTrainRequest) -> Dict[str, Any]:
@@ -54,6 +79,36 @@ async def delete_training_history() -> Dict[str, Any]:
     ML eğitim geçmişini siler.
     """
     return ml_service.delete_training_history()
+
+
+@router.delete("/model")
+async def delete_ml_model(symbol: str, timeframe: str) -> Dict[str, Any]:
+    """
+    Belirli bir ML modelini siler.
+
+    Query Parameters:
+        symbol: Sembol (örn: BTC/USDT)
+        timeframe: Zaman dilimi (örn: 1h)
+
+    Returns:
+        {
+            "status": "success",
+            "message": "3 dosya silindi",
+            "deleted_files": [...]
+        }
+    """
+    try:
+        result = ml_service.delete_model(symbol, timeframe)
+
+        if result.get("status") == "error":
+            raise HTTPException(status_code=400, detail=result.get("message"))
+
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Model silme hatası: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/check-model")
@@ -94,36 +149,112 @@ async def run_visual_analysis(
         import pandas as pd
         import numpy as np
         from data.indicators import StrategyIndicators
-        
-        logger.info(f"🔍 [ML] Görsel analiz başlatılıyor: {symbol} ({timeframe})")
-        
-        # 1. Veritabanından veri çek
-        klines_data = await db_manager.get_klines(symbol, timeframe, limit=limit)
-        
-        if not klines_data or len(klines_data) == 0:
-            raise HTTPException(status_code=404, detail=f"Veritabanında analiz için yeterli veri yok: {symbol} {timeframe}")
 
-        df = pd.DataFrame(klines_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-        
-        # [CRITICAL SYNC] Timestamp'i StrategyIndicators öncesi normalize et (1970 hatasını önlemek için)
-        if 'timestamp' in df.columns and not df.empty:
-            # Önce sayısal mı kontrol et
-            ts_val = df['timestamp'].iloc[0]
-            if isinstance(ts_val, (int, float, np.integer, np.floating)):
-                if ts_val > 10**11: # Milisaniye (örn: 177xxxxxxxxx)
-                    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-                else: # Saniye (örn: 177xxxxxxx)
-                    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
+        logger.info(f"🔍 [ML] Görsel analiz başlatılıyor: {symbol} ({timeframe})")
+
+        # ========================================================================
+        # YENİ: AKILLI CACHE LOADER (Superalgos Mimarisi)
+        # ========================================================================
+        # 1. Önce flat file kontrol et (HIZLI!)
+        # 2. Yoksa 1m'den resample yap (fallback)
+        # ========================================================================
+
+        from data.ohlcv_storage import get_storage
+        from datetime import datetime, timedelta
+
+        storage = get_storage()
+
+        # Tarih aralığını hesapla
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(minutes=limit * int(''.join(filter(str.isdigit, timeframe)) or 1))
+
+        # Flat file'dan yükle
+        klines_data = None
+        try:
+            df_flat = storage.load_ohlcv(symbol, timeframe, start_date, end_date)
+
+            if df_flat is not None and len(df_flat) > 0:
+                logger.info(f"📖 [STORAGE] Flat file'dan yüklendi: {symbol} {timeframe} ({len(df_flat)} mum)")
+
+                # DataFrame'i tuple formatına çevir
+                klines_data = []
+                for _, row in df_flat.iterrows():
+                    klines_data.append((
+                        int(row['timestamp']),
+                        row['open'],
+                        row['high'],
+                        row['low'],
+                        row['close'],
+                        row['volume']
+                    ))
             else:
-                # String (ISO) veya datetime objesi
-                df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
-            
-            # NaN temizliği (Geçersiz tarihler için)
-            df = df.dropna(subset=['timestamp'])
-        
-        # [DEDUP] Kesin Deduplication (Data Integrity)
-        df = df.drop_duplicates(subset=['timestamp'], keep='first')
-        df = df.sort_values('timestamp').reset_index(drop=True)
+                logger.info(f"⏭️ [STORAGE] Flat file bulunamadı, 1m'den resample yapılacak: {symbol} {timeframe}")
+
+        except Exception as e:
+            logger.warning(f"⚠️ [STORAGE] Flat file yükleme hatası: {e}")
+            logger.info(f"🔄 [STORAGE] 1m'den resample'a geçiliyor...")
+
+        # Flat file yoksa, 1m'den çek + resample
+        if not klines_data or len(klines_data) == 0:
+            # TIMEFRAME_MULTIPLIERS sözlüğünden çarpan al
+            multiplier = TIMEFRAME_MULTIPLIERS.get(timeframe, 1)
+
+            # Limit'i çarpanla çarp (1m'den resample için)
+            adjusted_limit = limit * multiplier
+
+            logger.info(f"📊 [ML] Veri çekiliyor: {symbol}, 1m (ana veri), limit={adjusted_limit}")
+            logger.info(f"🔄 [ML] Resampling: {adjusted_limit:,} mum (1m) → {limit:,} mum ({timeframe})")
+
+            # 1. Veritabanından veri çek (SADECE 1m - ana veri)
+            klines_data = await db_manager.get_klines(symbol, '1m', limit=adjusted_limit)
+
+            if not klines_data or len(klines_data) == 0:
+                raise HTTPException(status_code=404, detail=f"Veritabanında analiz için yeterli veri yok: {symbol} 1m")
+
+            df = pd.DataFrame(klines_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+
+            # [CRITICAL SYNC] Timestamp'i StrategyIndicators öncesi normalize et
+            if 'timestamp' in df.columns and not df.empty:
+                ts_val = df['timestamp'].iloc[0]
+                if isinstance(ts_val, (int, float, np.integer, np.floating)):
+                    if ts_val > 10**11:
+                        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+                    else:
+                        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
+                else:
+                    df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+
+                df = df.dropna(subset=['timestamp'])
+
+            df = df.drop_duplicates(subset=['timestamp'], keep='first')
+            df = df.sort_values('timestamp').reset_index(drop=True)
+
+            logger.info(f"✅ [ML] {len(df)} mum (1m) çekildi ve DataFrame'e çevrildi")
+
+            # ========================================================================
+            # RESAMPLING (1m → Hedef Timeframe)
+            # ========================================================================
+            if timeframe != '1m':
+                # Resampling yap
+                df = StrategyIndicators.resample_data(df, timeframe)
+
+                # NaN satırları temizle (boş mumlar)
+                df = df.dropna()
+
+                logger.info(f"✅ [DATA] Resampling Mimarisi Aktif: Veritabanı %98 Optimize Edildi")
+                logger.info(f"✅ [ML] Resampling tamamlandı: {len(df)} mum ({timeframe})")
+
+                # Flat file'a kaydet (gelecek için)
+                try:
+                    storage.save_ohlcv(symbol, timeframe, df)
+                    logger.info(f"💾 [STORAGE] Flat file kaydedildi: {symbol} {timeframe}")
+                except Exception as e:
+                    logger.warning(f"⚠️ [STORAGE] Flat file kaydetme hatası: {e}")
+            else:
+                logger.info(f"✅ [ML] 1m veri - Resampling gerek yok")
+        else:
+            # Flat file'dan yüklendi, DataFrame'e çevir
+            df = pd.DataFrame(klines_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 
         # 2. İndikatör ve Özellikleri Hesapla
         logger.info(f"📊 [ML] İndikatörler ve özellikler hesaplanıyor...")

@@ -36,6 +36,12 @@ USING_TALIB = False
 USING_PANDAS_TA = False
 ta = None
 
+# ============================================================================
+# FINAL LOG
+# ============================================================================
+
+logger.info("🎉 [MİMARİ] Faz 4 Tamamlandı: İndikatör Kütüphanesi 5 Modüle Parçalandı")
+
 
 # ============================================================================
 # STRATEGY INDICATORS CLASS (Facade Pattern - Geriye Dönük Uyumluluk)
@@ -169,23 +175,24 @@ class StrategyIndicators:
     def resample_data(df: pd.DataFrame, timeframe: str) -> pd.DataFrame:
         """
         1 dakikalık verileri istenen zaman dilimine dönüştür.
-        
+        LOOK-AHEAD BIAS KORUMASI: closed='left', label='left' (finansal ML standardı)
+
         Args:
             df: 1m DataFrame
             timeframe: Hedef timeframe (3m, 5m, 15m, 1h, vb.)
-        
+
         Returns:
-            Resampled DataFrame
+            Resampled DataFrame (gelecek mumlar düşülmüş)
         """
         if df.empty or timeframe == "1m":
             return df
-        
+
         # Zaman damgasını index yap
         if 'timestamp' in df.columns:
             if not pd.api.types.is_datetime64_any_dtype(df['timestamp']):
-                df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+                df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms', utc=True)
             df.set_index('timestamp', inplace=True)
-        
+
         # Resample kuralları
         logic = {
             'open': 'first',
@@ -194,7 +201,7 @@ class StrategyIndicators:
             'close': 'last',
             'volume': 'sum'
         }
-        
+
         # Pandas resample formatına çevir
         if timeframe.endswith('m'):
             rule = timeframe.replace('m', 'min')
@@ -204,14 +211,39 @@ class StrategyIndicators:
             rule = timeframe.replace('d', 'D')
         else:
             rule = timeframe
-        
-        # Yeniden örnekle
-        resampled_df = df.resample(rule, label='left', closed='left').apply(logic)
-        
+
+        # ========================================================================
+        # LOOK-AHEAD BIAS KORUMASI (Finansal ML Standardı)
+        # ========================================================================
+        # closed='left': Her mumun SOL kenarı (kapanış zamanı)
+        # label='left': Her mumun SOL kenarı etiketlenir
+        # Bu sayede son (henüz kapanmamış) mum geleceği göstermez
+        # ========================================================================
+        resampled_df = df.resample(rule, closed='left', label='left').apply(logic)
+
         # Eksik mumları doldur
         resampled_df['volume'] = resampled_df['volume'].fillna(0)
         resampled_df.ffill(inplace=True)
-        
+
+        # ========================================================================
+        # GELECEK MUM KORUMASI (Son mum henüz kapanmadıysa düşür)
+        # ========================================================================
+        now_utc = pd.Timestamp.now(tz='UTC')
+
+        # Son mumun kapanış zamanını kontrol et
+        last_mum_time = resampled_df.index[-1]
+
+        # Eğer son mum gelecekteyse (henüz kapanmadıysa) düşür
+        if last_mum_time > now_utc:
+            logger.debug(f"⚠️ [RESAMPLE] Son mum henüz kapanmadı ({last_mum_time} > {now_utc}), düşürülüyor")
+            resampled_df = resampled_df.iloc[:-1]  # Son mumu düşür
+
+        # Alternatif: Son 1 dakika içinde kapanmış mumları da düşür (güvenlik)
+        time_since_last_mum = now_utc - last_mum_time
+        if time_since_last_mum.total_seconds() < 60:  # 1 dakikadan az
+            logger.debug(f"⚠️ [RESAMPLE] Son mum 1 dakika önce kapandı, güvenlik için düşürülüyor")
+            resampled_df = resampled_df.iloc[:-1]
+
         # Index'i tekrar sütuna al
         resampled_df.reset_index(inplace=True)
         return resampled_df

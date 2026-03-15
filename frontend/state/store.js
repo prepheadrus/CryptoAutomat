@@ -1,273 +1,192 @@
 /**
- * State Store
+ * Centralized State Management (Redux-like Pattern)
  * 
- * Merkezi durum yönetimi (Redux-like pattern).
- * Tüm global state burada tutulur ve listener'lar ile güncellenir.
+ * Single Source of Truth - Uygulamanın tüm durumu tek nesnede.
+ * Pub/Sub Pattern - Değişiklikleri otomatik dinle.
+ * 
+ * Usage:
+ *   import store from '../state/store.js';
+ *   
+ *   // Subscribe
+ *   store.subscribe((state) => {
+ *       console.log('State changed:', state);
+ *   });
+ *   
+ *   // Update state
+ *   store.setState('bots', { list: [...], count: 5 });
+ *   
+ *   // Get state
+ *   const bots = store.getState('bots');
  */
 
-class Store {
-    constructor(initialState = {}) {
+class StateStore {
+    constructor() {
+        // Single Source of Truth
         this.state = {
-            // System
-            status: {
-                environment: 'development',
-                exchange: 'binance',
-                trackingSymbols: [],
-            },
-            
-            // Markets & Data
+            // Market data
             markets: {
-                all: [],
-                tracked: [],
-                selected: null,
-            },
-            
-            // Bots
-            bots: {
-                active: [],
-                loading: false,
-                error: null,
-            },
-            
-            // Strategies
-            strategies: {
                 list: [],
-                selected: {},
+                selected: null,
+                loading: false
             },
             
-            // Trades & Positions
-            trades: {
-                history: [],
-                positions: [],
+            // Bot management
+            bots: {
+                list: [],
+                active: [],
+                selected: null,
+                loading: false
             },
             
-            // ML
+            // Portfolio
+            portfolio: {
+                balance: 10000.0,
+                equity: 10000.0,
+                pnl: 0.0,
+                pnlPercent: 0.0,
+                openPositions: [],
+                closedTrades: []
+            },
+            
+            // ML decisions
             ml: {
-                training: {
-                    isTraining: false,
-                    progress: 0,
-                    message: '',
-                },
-                history: [],
-                analysis: null,
+                models: [],
+                predictions: {},
+                loading: false
             },
             
-            // Downloads
+            // Data downloads
             downloads: {
-                active: {},
-                status: {},
+                active: [],
+                completed: [],
+                loading: false
             },
-
-            // Data Symbols (symbols with downloaded candles)
-            dataSymbols: [],
-
-            // Dashboard
-            dashboard: {
-                metrics: null,
-                decisions: {},
-                portfolio: {},
+            
+            // System status
+            system: {
+                status: 'unknown',
+                metrics: {},
+                lastUpdate: null
             },
+            
+            // UI state
+            ui: {
+                activeTab: 'dashboard',
+                loading: false,
+                notifications: []
+            }
         };
-
-        this.listeners = new Set();
-        this.initialState = { ...initialState };
+        
+        // Subscribers (Pub/Sub)
+        this.subscribers = new Set();
+        
+        console.log('📦 [STORE] State management initialized');
     }
-
-    /**
-     * Get current state
-     */
-    getState() {
-        return this.state;
-    }
-
-    /**
-     * Get specific slice of state
-     */
-    getSlice(key) {
-        return this.state[key];
-    }
-
-    /**
-     * Update state and notify listeners
-     */
-    setState(slice, newState, notify = true) {
-        if (!this.state.hasOwnProperty(slice)) {
-            console.error(`Invalid state slice: ${slice}`);
-            return;
-        }
-
-        this.state[slice] = {
-            ...this.state[slice],
-            ...newState,
-        };
-
-        if (notify) {
-            this.notifyListeners();
-        }
-    }
-
-    /**
-     * Update nested state
-     */
-    setNestedState(slice, path, value, notify = true) {
-        if (!this.state.hasOwnProperty(slice)) {
-            console.error(`Invalid state slice: ${slice}`);
-            return;
-        }
-
-        const keys = path.split('.');
-        const obj = { ...this.state[slice] };
-        let current = obj;
-
-        for (let i = 0; i < keys.length - 1; i++) {
-            current[keys[i]] = { ...current[keys[i]] };
-            current = current[keys[i]];
-        }
-
-        current[keys[keys.length - 1]] = value;
-        this.state[slice] = obj;
-
-        if (notify) {
-            this.notifyListeners();
-        }
-    }
-
+    
     /**
      * Subscribe to state changes
+     * @param {Function} callback - Called when state changes
+     * @returns {Function} Unsubscribe function
      */
-    subscribe(listener) {
-        this.listeners.add(listener);
+    subscribe(callback) {
+        this.subscribers.add(callback);
+        console.debug('📬 [STORE] Subscriber added');
         
         // Return unsubscribe function
         return () => {
-            this.listeners.delete(listener);
+            this.subscribers.delete(callback);
+            console.debug('📤 [STORE] Subscriber removed');
         };
     }
-
+    
     /**
-     * Notify all listeners
+     * Update state (immutable pattern)
+     * @param {string} key - State key to update
+     * @param {any} value - New value
      */
-    notifyListeners() {
-        this.listeners.forEach(listener => {
+    setState(key, value) {
+        const oldState = this.state[key];
+        
+        // Update state
+        this.state[key] = value;
+        
+        // Notify subscribers
+        this.notify(this.state, key, oldState, value);
+    }
+    
+    /**
+     * Get state or specific key
+     * @param {string} [key] - Optional key to get specific state
+     * @returns {any} State or specific key value
+     */
+    getState(key) {
+        if (key) {
+            return this.state[key];
+        }
+        return this.state;
+    }
+    
+    /**
+     * Get specific state property
+     * @param {string} key - State key
+     * @param {string} property - Property name
+     * @returns {any} Property value
+     */
+    get(key, property) {
+        if (this.state[key] && property) {
+            return this.state[key][property];
+        }
+        return this.state[key];
+    }
+    
+    /**
+     * Notify all subscribers
+     * @param {Object} newState - New state
+     * @param {string} changedKey - Key that changed
+     * @param {any} oldValue - Old value
+     * @param {any} newValue - New value
+     */
+    notify(newState, changedKey, oldValue, newValue) {
+        // Clone state to prevent direct mutation
+        const stateClone = JSON.parse(JSON.stringify(newState));
+        
+        this.subscribers.forEach(callback => {
             try {
-                listener(this.state);
+                callback(stateClone, changedKey, oldValue, newValue);
             } catch (error) {
-                console.error('Store listener error:', error);
+                console.error('❌ [STORE] Subscriber error:', error);
             }
         });
+        
+        console.debug(`🔄 [STORE] State updated: ${changedKey}`);
     }
-
+    
     /**
      * Reset state to initial
      */
     reset() {
-        this.state = { ...this.initialState };
-        this.notifyListeners();
-    }
-
-    /**
-     * Batch update (multiple changes, single notification)
-     */
-    batchUpdate(updates) {
-        updates.forEach(({ slice, newState }) => {
-            if (this.state.hasOwnProperty(slice)) {
-                this.state[slice] = {
-                    ...this.state[slice],
-                    ...newState,
-                };
-            }
-        });
-        this.notifyListeners();
+        this.state = {
+            markets: { list: [], selected: null, loading: false },
+            bots: { list: [], active: [], selected: null, loading: false },
+            portfolio: { balance: 10000.0, equity: 10000.0, pnl: 0.0, pnlPercent: 0.0, openPositions: [], closedTrades: [] },
+            ml: { models: [], predictions: {}, loading: false },
+            downloads: { active: [], completed: [], loading: false },
+            system: { status: 'unknown', metrics: {}, lastUpdate: null },
+            ui: { activeTab: 'dashboard', loading: false, notifications: [] }
+        };
+        
+        this.notify(this.state, 'reset', null, null);
+        console.info('🔄 [STORE] State reset');
     }
 }
 
-// ============================================================================
-// SELECTORS (State'den veri çekme helper'ları)
-// ============================================================================
+// Singleton instance
+const store = new StateStore();
 
-const selectors = {
-    // Bots
-    getActiveBots: (state) => state.bots.active,
-    getBotById: (state, botId) => state.bots.active.find(b => b.bot_id === botId),
-    getBotsBySymbol: (state, symbol) => state.bots.active.filter(b => b.symbol === symbol),
-    isBotLoading: (state) => state.bots.loading,
-    getBotError: (state) => state.bots.error,
+// Export singleton
+export default store;
 
-    // Markets
-    getAllMarkets: (state) => state.markets.all,
-    getTrackedSymbols: (state) => state.markets.tracked,
-    getSelectedMarket: (state) => state.markets.selected,
-
-    // Strategies
-    getStrategies: (state) => state.strategies.list,
-    getStrategyById: (state, id) => state.strategies.list.find(s => s.id === id),
-
-    // Trades
-    getTradeHistory: (state) => state.trades.history,
-    getPositions: (state) => state.trades.positions,
-
-    // ML
-    isMLTraining: (state) => state.ml.training.isTraining,
-    getMLProgress: (state) => state.ml.training.progress,
-    getMLHistory: (state) => state.ml.history,
-
-    // Downloads
-    getActiveDownloads: (state) => state.downloads.active,
-    getDownloadStatus: (state, symbol) => state.downloads.status[symbol],
-
-    // Dashboard
-    getDashboardMetrics: (state) => state.dashboard.metrics,
-    getLatestDecisions: (state) => state.dashboard.decisions,
-    getPortfolio: (state) => state.dashboard.portfolio,
-};
-
-// ============================================================================
-// ACTIONS (State güncelleme helper'ları)
-// ============================================================================
-
-const actions = {
-    // Bots
-    setBots: (bots) => ({ slice: 'bots', newState: { active: bots, loading: false } }),
-    setBotsLoading: (loading) => ({ slice: 'bots', newState: { loading } }),
-    setBotsError: (error) => ({ slice: 'bots', newState: { error } }),
-
-    // Markets
-    setMarkets: (all) => ({ slice: 'markets', newState: { all } }),
-    setTrackedSymbols: (tracked) => ({ slice: 'markets', newState: { tracked } }),
-    setSelectedMarket: (selected) => ({ slice: 'markets', newState: { selected } }),
-
-    // Strategies
-    setStrategies: (list) => ({ slice: 'strategies', newState: { list } }),
-
-    // Trades
-    setTradeHistory: (history) => ({ slice: 'trades', newState: { history } }),
-    setPositions: (positions) => ({ slice: 'trades', newState: { positions } }),
-
-    // ML
-    setMLTraining: (isTraining, progress = 0, message = '') => ({
-        slice: 'ml',
-        newState: { training: { isTraining, progress, message } }
-    }),
-    setMLHistory: (history) => ({ slice: 'ml', newState: { history } }),
-
-    // Downloads
-    setActiveDownloads: (active) => ({ slice: 'downloads', newState: { active } }),
-    setDownloadStatus: (symbol, status) => ({
-        slice: 'downloads',
-        newState: { status: { ...store.state.downloads.status, [symbol]: status } }
-    }),
-
-    // Dashboard
-    setDashboardMetrics: (metrics) => ({ slice: 'dashboard', newState: { metrics } }),
-    setLatestDecisions: (decisions) => ({ slice: 'dashboard', newState: { decisions } }),
-    setPortfolio: (portfolio) => ({ slice: 'dashboard', newState: { portfolio } }),
-};
-
-// ============================================================================
-// SINGLETON INSTANCE
-// ============================================================================
-
-const store = new Store();
-
-// Export for ES6 modules
-export { Store, store, selectors, actions };
+// Also export for window access (debugging)
+if (typeof window !== 'undefined') {
+    window.store = store;
+}

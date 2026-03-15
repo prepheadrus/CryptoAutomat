@@ -98,11 +98,49 @@ class MLRecommendation(str, Enum):
     """ML önerisi"""
     STRONG_LONG = "STRONG_LONG"
     LONG = "LONG"
-    WEAK_LONG = "WEAK_LONG"
-    HOLD = "HOLD"
-    WEAK_SHORT = "WEAK_SHORT"
+    NEUTRAL = "NEUTRAL"
     SHORT = "SHORT"
     STRONG_SHORT = "STRONG_SHORT"
+
+
+# ============================================================================
+# LIVE PRICE EVENTS (Tick Data Pub/Sub)
+# ============================================================================
+
+@dataclass
+class LivePriceUpdatedEvent:
+    """
+    Canlı fiyat güncellemesi (WebSocket tick data).
+
+    TradingView'den gelen gerçek zamanlı fiyat olayı.
+    Trailing stop ve likidasyon kontrolleri için kullanılır.
+
+    Attributes:
+        symbol: Sembol (örn: BTC/USDT)
+        price: Güncel fiyat (float)
+        high: 24s yüksek (opsiyonel)
+        low: 24s düşük (opsiyonel)
+        volume: 24s hacim (opsiyonel)
+    """
+    symbol: str
+    price: float
+    high: Optional[float] = None
+    low: Optional[float] = None
+    volume: Optional[float] = None
+
+    def to_event(self) -> Event:
+        """Event wrapper"""
+        return Event(
+            type="price.updated",
+            payload={
+                'symbol': self.symbol,
+                'price': self.price,
+                'high': self.high,
+                'low': self.low,
+                'volume': self.volume
+            },
+            source="exchange"
+        )
 
 
 # ============================================================================

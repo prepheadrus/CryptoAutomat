@@ -1,468 +1,224 @@
 /**
- * Chart Renderer
- *
- * Lightweight Charts ve Plotly.js görselleştirme bileşenleri.
+ * Chart Renderer Component
+ * 
+ * TradingView Lightweight Charts wrapper.
+ * Tüm grafik çizim işlemleri bu modülde izole edilmiştir.
+ * 
+ * Usage:
+ *   import chartRenderer from '../components/charts/chart-renderer.js';
+ *   
+ *   // Initialize chart
+ *   chartRenderer.init('chart-container');
+ *   
+ *   // Update data
+ *   chartRenderer.updateCandles(candles);
+ *   chartRenderer.updateMarkers(markers);
  */
 
-import { store, selectors } from '../../state/store.js';
-
-// ============================================================================
-// LIGHTWEIGHT CHARTS (TradingView)
-// ============================================================================
-
 class ChartRenderer {
-    constructor(containerId) {
-        this.containerId = containerId;
+    constructor() {
         this.chart = null;
         this.candleSeries = null;
-        this.resizeObserver = null;
-        this.tooltip = null;
+        this.volumeSeries = null;
+        this.containerId = null;
+        
+        console.log('📊 [CHART] Renderer initialized');
     }
-
+    
     /**
      * Initialize chart
+     * @param {string} containerId - DOM container ID
+     * @param {Object} options - Chart options
      */
-    init(options = {}) {
-        const container = document.getElementById(this.containerId);
+    init(containerId, options = {}) {
+        this.containerId = containerId;
+        
+        const container = document.getElementById(containerId);
         if (!container) {
-            console.error(`Chart container #${this.containerId} not found`);
-            return null;
+            console.error(`❌ [CHART] Container not found: ${containerId}`);
+            return;
         }
-
+        
         const defaultOptions = {
             width: container.clientWidth,
-            height: 450,
+            height: 600,
             layout: {
-                background: { type: 'solid', color: 'transparent' }, // v4 syntax
-                backgroundColor: 'transparent', // v3 backup
-                textColor: '#8b949e',
+                backgroundColor: '#0a0e1a',
+                textColor: '#d1d4dc'
             },
             grid: {
-                vertLines: { color: 'rgba(255,255,255,0.05)' },
-                horzLines: { color: 'rgba(255,255,255,0.05)' },
+                vertLines: { color: 'rgba(42, 46, 57, 0.5)' },
+                horzLines: { color: 'rgba(42, 46, 57, 0.5)' }
             },
             crosshair: {
-                mode: LightweightCharts.CrosshairMode.Normal,
-                vertLine: { labelVisible: true },
-                horzLine: { labelVisible: true },
+                mode: LightweightCharts.CrosshairMode.Normal
             },
             timeScale: {
-                borderColor: 'rgba(255,255,255,0.1)',
+                borderColor: 'rgba(197, 203, 206, 0.8)',
                 timeVisible: true,
-                secondsVisible: false,
-                rightOffset: 5,
-                barSpacing: 6,
-            },
-            localization: { locale: 'tr-TR' },
-            ...options,
+                secondsVisible: false
+            }
         };
-
-        this.chart = LightweightCharts.createChart(container, defaultOptions);
-
-        // Auto-resize
-        this.setupResizeObserver();
-
-        // Tooltip
-        this.setupTooltip();
-
-        return this.chart;
-    }
-
-    /**
-     * Setup auto-resize
-     */
-    setupResizeObserver() {
-        const container = document.getElementById(this.containerId);
-        if (!container || !this.chart) return;
-
-        this.resizeObserver = new ResizeObserver(entries => {
-            if (entries.length === 0 || entries[0].target !== container) return;
-            const newRect = entries[0].contentRect;
+        
+        // Create chart
+        this.chart = LightweightCharts.createChart(container, { ...defaultOptions, ...options });
+        
+        // Add candlestick series
+        this.candleSeries = this.chart.addCandlestickSeries({
+            upColor: '#26a69a',
+            downColor: '#ef5350',
+            borderVisible: false,
+            wickUpColor: '#26a69a',
+            wickDownColor: '#ef5350'
+        });
+        
+        // Add volume series
+        this.volumeSeries = this.chart.addHistogramSeries({
+            color: '#26a69a',
+            priceFormat: { type: 'volume' },
+            priceScaleId: '',
+            scaleMargins: { top: 0.85, bottom: 0 }
+        });
+        
+        // Handle resize
+        window.addEventListener('resize', () => {
             this.chart.applyOptions({
-                width: newRect.width,
-                height: newRect.height,
+                width: container.clientWidth
             });
         });
-
-        this.resizeObserver.observe(container);
-    }
-
-    /**
-     * Setup tooltip
-     */
-    setupTooltip() {
-        const container = document.getElementById(this.containerId);
-        if (!container) return;
-
-        this.tooltip = document.createElement('div');
-        this.tooltip.id = 'chart-tooltip';
-        this.tooltip.style.cssText = `
-            position: absolute;
-            display: none;
-            padding: 8px 12px;
-            background: rgba(22, 27, 34, 0.95);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 6px;
-            font-size: 12px;
-            color: #a0a5ba;
-            pointer-events: none;
-            z-index: 1000;
-        `;
-        container.appendChild(this.tooltip);
-    }
-
-    /**
-     * Set candlestick data
-     */
-    setCandlestickData(candles, options = {}) {
-        if (!this.chart) {
-            this.init(options);
-        }
-
-        // Convert to TV format (backend sends 'time', not 'timestamp')
-        const tvCandles = candles.map(c => ({
-            time: this.parseTime(c.time || c.timestamp),
-            open: c.open,
-            high: c.high,
-            low: c.low,
-            close: c.close,
-        }));
-
-        const candleSeriesOptions = {
-            upColor: '#2ea043',
-            downColor: '#f85149',
-            borderVisible: false,
-            wickUpColor: '#2ea043',
-            wickDownColor: '#f85149',
-            ...options,
-        };
-
-        this.candleSeries = this.chart.addCandlestickSeries(candleSeriesOptions);
-        this.candleSeries.setData(tvCandles);
         
-        // [FIT] Veriyi görünür yap
-        setTimeout(() => {
-            if (this.chart) this.chart.timeScale().fitContent();
-        }, 100);
-
-        return this.candleSeries;
+        console.log(`✅ [CHART] Initialized on #${containerId}`);
     }
-
+    
+    /**
+     * Update candle data
+     * @param {Array} candles - OHLCV candles
+     */
+    updateCandles(candles) {
+        if (!this.candleSeries) {
+            console.error('❌ [CHART] Chart not initialized');
+            return;
+        }
+        
+        const formattedCandles = candles.map(c => ({
+            time: c[0] / 1000, // Convert ms to seconds
+            open: c[1],
+            high: c[2],
+            low: c[3],
+            close: c[4]
+        }));
+        
+        this.candleSeries.setData(formattedCandles);
+        console.debug(`📊 [CHART] Updated ${formattedCandles.length} candles`);
+    }
+    
+    /**
+     * Update volume data
+     * @param {Array} candles - OHLCV candles
+     */
+    updateVolume(candles) {
+        if (!this.volumeSeries) {
+            console.error('❌ [CHART] Volume series not initialized');
+            return;
+        }
+        
+        const volumeData = candles.map(c => ({
+            time: c[0] / 1000,
+            value: c[5],
+            color: c[4] >= c[1] ? 'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)'
+        }));
+        
+        this.volumeSeries.setData(volumeData);
+    }
+    
     /**
      * Add markers (signals, trades)
-     * Markers zamana göre sıralanır ve validasyon yapılır
+     * @param {Array} markers - Markers array
      */
-    addMarkers(markers) {
+    updateMarkers(markers) {
         if (!this.candleSeries) {
-            console.error('[ChartRenderer] candleSeries yok, markers eklenemedi');
+            console.error('❌ [CHART] Chart not initialized');
             return;
         }
-
-        if (!markers || markers.length === 0) {
-            console.log('[ChartRenderer] Markers boş, eklenmedi');
-            return;
-        }
-
-        // Markers'ları filtrele ve parse et
-        const validMarkers = markers
-            .filter(m => {
-                if (m.time === undefined || m.time === null) {
-                    console.warn('[ChartRenderer] Marker time eksik:', m);
-                    return false;
-                }
-                const parsedTime = this.parseTime(m.time);
-                if (isNaN(parsedTime) || parsedTime <= 0) {
-                    console.warn('[ChartRenderer] Marker time geçersiz (0 veya NaN):', m);
-                    return false;
-                }
-                return true;
-            })
-            .map(m => ({
-                ...m,
-                time: this.parseTime(m.time),
-            }))
-            .sort((a, b) => a.time - b.time);
-
-        console.log(`[ChartRenderer] ${validMarkers.length} marker eklendi`);
         
-        try {
-            this.candleSeries.setMarkers(validMarkers);
-            
-            // Eğer markerlar içinde tooltip verisi varsa crosshair takibini başlat
-            if (validMarkers.some(m => m.tooltip)) {
-                this.subscribeCrosshairHover(validMarkers);
-            }
-        } catch (error) {
-            console.error('[ChartRenderer] Markers eklenirken hata:', error);
-        }
+        const formattedMarkers = markers.map(m => ({
+            time: m.time / 1000,
+            position: m.position || 'aboveBar',
+            color: m.color || '#2196f3',
+            shape: m.shape || 'circle',
+            text: m.text
+        }));
+        
+        this.candleSeries.setMarkers(formattedMarkers);
+        console.debug(`📍 [CHART] Updated ${formattedMarkers.length} markers`);
     }
-
+    
     /**
-     * Entry çizgisi ekle
+     * Add trading line
+     * @param {Array} lineData - Line points
+     * @param {string} color - Line color
      */
-    addPriceLine(price, label = 'ENTRY', color = '#bc8cff') {
-        if (!this.candleSeries) return null;
-        return this.candleSeries.createPriceLine({
-            price: price,
+    addLine(lineData, color = '#2196f3') {
+        if (!this.chart) {
+            console.error('❌ [CHART] Chart not initialized');
+            return;
+        }
+        
+        const lineSeries = this.chart.addLineSeries({
             color: color,
-            lineWidth: 2,
-            lineStyle: LightweightCharts.LineStyle.Dashed,
-            axisLabelVisible: true,
-            title: label,
+            lineWidth: 2
         });
-    }
-
-    /**
-     * Trailing Stop (Basamak) serisi ekle
-     */
-    addTrailingStopSeries(data, color = '#ff3366') {
-        if (!this.chart) return null;
-        const stepSeries = this.chart.addLineSeries({
-            color: color,
-            lineWidth: 2,
-            lineType: LightweightCharts.LineType.Step,
-            lineStyle: LightweightCharts.LineStyle.Solid,
-            title: 'Trailing Stop',
-        });
-        stepSeries.setData(data.map(d => ({
-            time: this.parseTime(d.time),
+        
+        const formattedData = lineData.map(d => ({
+            time: d.time / 1000,
             value: d.value
-        })));
-        return stepSeries;
+        }));
+        
+        lineSeries.setData(formattedData);
+        return lineSeries;
     }
-
+    
     /**
-     * Kâr/Zarar alanı (Trade Area) ekle
+     * Fit content to visible range
      */
-    addTradeArea(data, isProfit = true) {
-        if (!this.chart) return null;
-        const color = isProfit ? 'rgba(46, 160, 67, 0.4)' : 'rgba(248, 81, 73, 0.4)';
-        const areaSeries = this.chart.addAreaSeries({
-            topColor: color,
-            bottomColor: 'rgba(0, 0, 0, 0)',
-            lineColor: 'transparent',
-            lineWidth: 0,
-        });
-        areaSeries.setData(data.map(d => ({
-            time: this.parseTime(d.time),
-            value: d.value
-        })));
-        return areaSeries;
-    }
-
-    /**
-     * Crosshair takip event'i (Marker Tooltip için)
-     */
-    subscribeCrosshairHover(markers) {
-        const container = document.getElementById(this.containerId);
-        this.chart.subscribeCrosshairMove(param => {
-            if (
-                param.point === undefined || !param.time ||
-                param.point.x < 0 || param.point.x > container.clientWidth ||
-                param.point.y < 0 || param.point.y > container.clientHeight
-            ) {
-                this.hideTooltip();
-                return;
-            }
-
-            // Bu zamana ait marker var mı?
-            const marker = markers.find(m => m.time === param.time);
-            if (marker && marker.tooltip) {
-                this.updateTooltip(param.point.x, param.point.y, marker.tooltip);
-            } else {
-                this.hideTooltip();
-            }
-        });
-    }
-
-    /**
-     * Parse timestamp to TV time
-     * Backend saniye cinsinden gönderir, bu yüzden bölme işlemi YOK
-     */
-    parseTime(timestamp) {
-        if (typeof timestamp === 'number') {
-            // Backend saniye cinsinden gönderir (örn: 1773142200)
-            // Lightweight Charts saniye kabul eder, DÖNÜŞÜM YOK
-            return timestamp;
-        }
-        if (typeof timestamp === 'string') {
-            // ISO string ise çevir
-            return Math.floor(new Date(timestamp).getTime() / 1000);
-        }
-        return timestamp;
-    }
-
-    /**
-     * Update tooltip content
-     */
-    updateTooltip(x, y, content) {
-        if (!this.tooltip) return;
-
-        this.tooltip.style.display = 'block';
-        this.tooltip.style.left = `${x + 15}px`;
-        this.tooltip.style.top = `${y}px`;
-        this.tooltip.innerHTML = content;
-    }
-
-    /**
-     * Hide tooltip
-     */
-    hideTooltip() {
-        if (this.tooltip) {
-            this.tooltip.style.display = 'none';
+    fitContent() {
+        if (this.chart) {
+            this.chart.timeScale().fitContent();
         }
     }
-
+    
+    /**
+     * Set visible range
+     * @param {number} from - From time (seconds)
+     * @param {number} to - To time (seconds)
+     */
+    setVisibleRange(from, to) {
+        if (this.chart) {
+            this.chart.timeScale().setVisibleRange({ from, to });
+        }
+    }
+    
     /**
      * Destroy chart
      */
     destroy() {
-        if (this.resizeObserver) {
-            this.resizeObserver.disconnect();
-        }
         if (this.chart) {
             this.chart.remove();
             this.chart = null;
-        }
-        if (this.tooltip && this.tooltip.parentNode) {
-            this.tooltip.parentNode.removeChild(this.tooltip);
+            this.candleSeries = null;
+            this.volumeSeries = null;
+            console.log('🗑️ [CHART] Destroyed');
         }
     }
 }
 
-// ============================================================================
-// PLOTLY CHARTS (Portfolio, Feature Importance)
-// ============================================================================
+// Singleton instance
+const chartRenderer = new ChartRenderer();
 
-class PlotlyRenderer {
-    /**
-     * Render portfolio equity curve
-     */
-    static renderEquityCurve(containerId, data, layout = {}) {
-        const trace = {
-            x: data.labels || [],
-            y: data.values || [],
-            type: 'scatter',
-            mode: 'lines+markers',
-            line: {
-                color: '#bc8cff',
-                width: 3,
-                shape: 'spline',
-            },
-            fill: 'tozeroy',
-            fillcolor: 'rgba(188, 140, 255, 0.1)',
-            name: 'Kasa Büyümesi',
-        };
+// Export singleton
+export default chartRenderer;
 
-        const defaultLayout = {
-            paper_bgcolor: 'transparent',
-            plot_bgcolor: 'transparent',
-            font: { color: '#8b949e', family: 'Inter' },
-            margin: { t: 10, b: 40, l: 40, r: 10 },
-            xaxis: {
-                showgrid: true,
-                gridcolor: 'rgba(255,255,255,0.05)',
-            },
-            yaxis: {
-                showgrid: true,
-                gridcolor: 'rgba(255,255,255,0.05)',
-                tickprefix: '$',
-            },
-            ...layout,
-        };
-
-        Plotly.newPlot(containerId, [trace], defaultLayout, {
-            responsive: true,
-            displayModeBar: false,
-        });
-    }
-
-    /**
-     * Render allocation pie chart
-     */
-    static renderAllocationChart(containerId, portfolio) {
-        const data = [{
-            values: [
-                portfolio.free_margin || 0,
-                portfolio.used_margin || 0,
-                portfolio.unrealized_pnl || 0,
-            ],
-            labels: ['Free Margin', 'Used Margin', 'Unrealized PnL'],
-            type: 'pie',
-            hole: 0.4,
-            marker: {
-                colors: ['#2ea043', '#bc8cff', '#f39c12'],
-            },
-            textinfo: 'label+percent',
-            textposition: 'outside',
-        }];
-
-        const layout = {
-            paper_bgcolor: 'transparent',
-            font: { color: '#8b949e', family: 'Inter' },
-            margin: { t: 0, b: 0, l: 0, r: 0 },
-            showlegend: true,
-            legend: {
-                orientation: 'h',
-                y: -0.1,
-            },
-        };
-
-        Plotly.newPlot(containerId, data, layout, {
-            responsive: true,
-            displayModeBar: false,
-        });
-    }
-
-    /**
-     * Render feature importance (horizontal bar)
-     */
-    static renderFeatureImportance(containerId, importance) {
-        const keys = Object.keys(importance).sort((a, b) => importance[a] - importance[b]);
-        const values = keys.map(k => importance[k]);
-
-        const trace = {
-            x: values,
-            y: keys.map(k => k.length > 20 ? k.substring(0, 20) + '...' : k),
-            type: 'bar',
-            orientation: 'h',
-            marker: {
-                color: '#bc8cff',
-            },
-        };
-
-        const layout = {
-            paper_bgcolor: 'transparent',
-            plot_bgcolor: 'transparent',
-            font: { color: '#8b949e', family: 'Inter' },
-            margin: { t: 10, b: 10, l: 150, r: 10 },
-            xaxis: {
-                showgrid: true,
-                gridcolor: 'rgba(255,255,255,0.05)',
-                title: 'Importance',
-            },
-            yaxis: {
-                showgrid: false,
-                automargin: true,
-            },
-        };
-
-        Plotly.newPlot(containerId, [trace], layout, {
-            responsive: true,
-            displayModeBar: false,
-        });
-    }
-
-    /**
-     * Destroy Plotly chart
-     */
-    static destroy(containerId) {
-        Plotly.purge(containerId);
-    }
+// Also export for window access (debugging)
+if (typeof window !== 'undefined') {
+    window.chartRenderer = chartRenderer;
 }
-
-// ============================================================================
-// EXPORTS
-// ============================================================================
-
-export { ChartRenderer, PlotlyRenderer };

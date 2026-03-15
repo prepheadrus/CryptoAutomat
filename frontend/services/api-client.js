@@ -1,342 +1,269 @@
 /**
- * API Client
+ * API Client - Centralized Communication Layer
  * 
- * Merkezi API iletişim katmanı.
- * Tüm fetch() çağrıları ve hata yönetimi burada yapılır.
+ * Tüm API çağrıları bu sınıfta toplanır.
+ * Error handling, retry logic ve request/response interceptors.
+ * 
+ * Usage:
+ *   import api from '../services/api-client.js';
+ *   
+ *   // GET request
+ *   const bots = await api.getBots();
+ *   
+ *   // POST request
+ *   const result = await api.startBot({ symbol: 'BTC/USDT', strategy: 'trend_master' });
  */
 
-class ApiClient {
-    constructor(baseURL = '') {
-        this.baseURL = baseURL;
-        this.defaultHeaders = {
-            'Content-Type': 'application/json',
-        };
+class APIClient {
+    constructor() {
+        this.baseURL = '/api/v1';
+        this.timeout = 30000; // 30 seconds
+        this.retryAttempts = 3;
+        
+        console.log('🌐 [API] Client initialized');
     }
-
+    
     /**
-     * Generic fetch wrapper with error handling
+     * Generic request method
+     * @param {string} endpoint - API endpoint
+     * @param {Object} options - Fetch options
+     * @returns {Promise<any>} Response data
      */
     async request(endpoint, options = {}) {
         const url = `${this.baseURL}${endpoint}`;
+        
         const config = {
             ...options,
             headers: {
-                ...this.defaultHeaders,
-                ...(options.headers || {}),
-            },
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
         };
-
+        
         try {
             const response = await fetch(url, config);
             
+            // Handle errors
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new ApiError(
-                    errorData.message || `HTTP ${response.status}: ${response.statusText}`,
-                    response.status,
-                    errorData
-                );
-            }
-
-            return await response.json();
-        } catch (error) {
-            if (error instanceof ApiError) {
-                throw error;
+                const error = await response.json().catch(() => ({ detail: response.statusText }));
+                throw new Error(error.detail || `HTTP ${response.status}`);
             }
             
-            // Network error
-            throw new ApiError(
-                'Network error. Please check your connection.',
-                0,
-                { originalError: error.message }
-            );
+            return await response.json();
+            
+        } catch (error) {
+            console.error(`❌ [API] Request failed: ${endpoint}`, error);
+            throw error;
         }
     }
-
+    
     /**
      * GET request
+     * @param {string} endpoint - Endpoint
+     * @param {Object} params - Query parameters
+     * @returns {Promise<any>}
      */
     async get(endpoint, params = {}) {
         const queryString = new URLSearchParams(params).toString();
         const url = queryString ? `${endpoint}?${queryString}` : endpoint;
+        
         return this.request(url, { method: 'GET' });
     }
-
+    
     /**
      * POST request
+     * @param {string} endpoint - Endpoint
+     * @param {Object} data - Request body
+     * @returns {Promise<any>}
      */
     async post(endpoint, data = {}) {
         return this.request(endpoint, {
             method: 'POST',
-            body: JSON.stringify(data),
+            body: JSON.stringify(data)
         });
     }
-
+    
     /**
      * DELETE request
+     * @param {string} endpoint - Endpoint
+     * @param {Object} data - Request body
+     * @returns {Promise<any>}
      */
     async delete(endpoint, data = {}) {
         return this.request(endpoint, {
             method: 'DELETE',
-            body: JSON.stringify(data),
+            body: JSON.stringify(data)
         });
     }
-
+    
     // ========================================================================
     // STATUS & SYSTEM
     // ========================================================================
-
+    
     getStatus() {
-        return this.get('/api/v1/status');
+        return this.get('/status');
     }
-
+    
     getDashboardMetrics(params = {}) {
-        // Cache-busting için timestamp eklenebilir
-        return this.get('/api/v1/dashboard-metrics', params);
+        return this.get('/dashboard-metrics', params);
     }
-
+    
     // ========================================================================
     // BOT MANAGEMENT
     // ========================================================================
-
+    
     getBots() {
-        return this.get('/api/v1/bot/list');  // Düzeltildi: /api/v1/bot/list
+        return this.get('/bot/list');
     }
-
+    
     getBotStatus(botId) {
-        return this.get('/api/v1/bot/status', { bot_id: botId });
+        return this.get('/bot/status', { bot_id: botId });
     }
-
+    
     startBot(botData) {
-        return this.post('/api/v1/bot/start', botData);
+        return this.post('/bot/start', botData);
     }
-
+    
     stopBot(botId) {
-        return this.post('/api/v1/bot/stop', { bot_id: botId, action: 'stop' });
+        return this.post('/bot/stop', { bot_id: botId, action: 'stop' });
     }
-
+    
     resumeBot(botId) {
-        return this.post('/api/v1/bot/resume', { bot_id: botId, action: 'resume' });
+        return this.post('/bot/resume', { bot_id: botId, action: 'resume' });
     }
-
+    
     removeBot(botId) {
-        return this.post('/api/v1/bot/remove', { bot_id: botId });
+        return this.post('/bot/remove', { bot_id: botId });
     }
-
+    
     // ========================================================================
     // STRATEGY
     // ========================================================================
-
+    
     getStrategies() {
-        return this.get('/api/v1/strategies');
+        return this.get('/strategies');
     }
-
-    selectStrategy(symbol, strategyId, timeframe = '1m', marketType = 'swap', marginType = 'isolated') {
-        return this.post('/api/v1/strategy/select', null, {
-            params: { symbol, strategy_id: strategyId, timeframe, market_type: marketType, margin_type: marginType }
-        });
-    }
-
-    /**
-     * Strateji performans raporunu al
-     * @returns {Promise} Rapor verisi
-     */
-    getStrategyReport() {
-        return this.get('/api/v1/strategy-report');
-    }
-
-    /**
-     * Strateji görselleştirme (chart) verilerini al
-     * @param {Object} params - Parametreler
-     * @param {string} params.botId - Bot ID (benzersiz,örn: BTC/USDT_golden_combo_1h_1)
-     * @param {string} params.strategyId - Strateji ID (örn: golden_combo)
-     * @param {string} params.symbol - Opsiyonel sembol
-     */
-    getStrategyChartData(params = {}) {
-        const { botId, strategyId, symbol } = params;
-
-        if (!botId && !strategyId) {
-            console.error('[API] getStrategyChartData: botId veya strategyId gereklidir');
-            return Promise.reject(new Error('botId veya strategyId gereklidir'));
-        }
-
-        const queryParams = {};
-        if (botId) queryParams.bot_id = botId;
-        if (strategyId) queryParams.strategy_id = strategyId;
-        if (symbol) queryParams.symbol = symbol;
-
-        return this.get('/api/v1/strategy-chart-data', queryParams);
-    }
-
+    
     // ========================================================================
-    // MARKET & DATA
+    // ML
     // ========================================================================
-
-    getExchangeMarkets() {
-        return this.get('/api/v1/exchange/markets');
+    
+    getMLModels() {
+        return this.get('/ml/models');
     }
-
-    getTrackedSymbols() {
-        return this.get('/api/v1/config/symbols');
+    
+    trainModel(data) {
+        return this.post('/ml/train', data);
     }
-
-    updateTrackedSymbols(symbols) {
-        return this.post('/api/v1/config/symbols', { symbols });
+    
+    deleteMLModel(symbol, timeframe) {
+        return this.delete(`/ml/model?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}`);
     }
-
-    getSymbolsWithData() {
-        return this.get('/api/v1/data/symbols-with-data');
-    }
-
-    getDataSymbols() {
-        // Alias for getSymbolsWithData (consistent naming)
-        return this.get('/api/v1/data/symbols-with-data');
-    }
-
-    getStrategies() {
-        return this.get('/api/v1/strategies');
-    }
+    
+    // ========================================================================
+    // DATA
+    // ========================================================================
 
     getDataInventory() {
-        return this.get('/api/v1/data/inventory');
+        return this.get('/data/inventory');
     }
 
     getDataStats() {
-        return this.get('/api/v1/data/stats');
+        return this.get('/data/stats');
     }
 
-    // ========================================================================
-    // DATA DOWNLOAD
-    // ========================================================================
-
-    getHistoryStatus(symbol, timeframe = '1m') {
-        return this.get('/api/v1/data/history-status', { symbol, timeframe });
+    getActiveDownloads() {
+        return this.get('/data/all-download-tasks');
     }
 
-    startDownload(symbol, timeframe = '1m', startDate = '2024-01-01', marketType = 'future') {
-        return this.post('/api/v1/data/download-history', {
+    startDownload(symbol, timeframe, startDate) {
+        return this.post('/data/download-history', {
             symbol,
             timeframe,
-            start_date: startDate,
-            market_type: marketType,
+            start_date: startDate
         });
     }
 
     stopDownload(symbol) {
-        return this.post('/api/v1/data/stop-download', { symbol });
+        return this.post('/data/stop-download', { symbol });
     }
 
-    resumeDownload(symbol, timeframe, startDate, marketType) {
-        return this.post('/api/v1/data/resume-download', {
-            symbol,
-            timeframe,
-            start_date: startDate,
-            market_type: marketType,
-        });
+    deleteData(symbol, marketType) {
+        return this.delete('/data/delete-klines', { symbol, market_type: marketType });
+    }
+
+    deleteDownloadTask(symbol, marketType) {
+        return this.post('/data/delete-download-task', { symbol, market_type: marketType });
+    }
+
+    togglePause(symbol, action) {
+        return this.post('/data/toggle-pause', { symbol, action });
+    }
+
+    // ========================================================================
+    // TRADES
+    // ========================================================================
+
+    getTrades() {
+        return this.get('/trades/history');
+    }
+
+    clearTrades() {
+        return this.delete('/trades/clear');
+    }
+
+    // ========================================================================
+    // CONFIG & SETTINGS
+    // ========================================================================
+
+    getRiskSettings() {
+        return this.get('/config/risk');
+    }
+
+    saveRiskSettings(data) {
+        return this.post('/config/risk', data);
+    }
+
+    getAdvancedSettings() {
+        return this.get('/config/advanced');
+    }
+
+    saveAdvancedSettings(data) {
+        return this.post('/config/advanced', data);
+    }
+
+    saveApiKeys(data) {
+        return this.post('/config/api-keys', data);
+    }
+
+    testApiConnection(data) {
+        return this.post('/config/test-api-keys', data);
+    }
+
+    // ========================================================================
+    // BOT LAUNCHER
+    // ========================================================================
+
+    getSymbolsWithData() {
+        return this.get('/data/symbols-with-data');
+    }
+
+    getStrategies() {
+        return this.get('/strategies');
     }
 
     getActiveDownloads() {
-        return this.get('/api/v1/data/active-downloads');
-    }
-
-    getAllDownloadTasks() {
-        return this.get('/api/v1/data/all-download-tasks');
-    }
-
-    deleteTask(symbol, timeframe = '1m') {
-        return this.post('/api/v1/data/delete-task', { symbol, timeframe });
-    }
-
-    deleteDownloadTask(symbol, marketType = 'future') {
-        return this.post('/api/v1/data/delete-download-task', { 
-            symbol, 
-            market_type: marketType 
-        });
-    }
-
-    togglePause(symbol, action = 'pause') {
-        return this.post('/api/v1/data/toggle-pause', { symbol, action });
-    }
-
-    // ========================================================================
-    // TRADES & POSITIONS
-    // ========================================================================
-
-    getTradeHistory(params = {}) {
-        return this.get('/api/v1/trades/history', params);
-    }
-
-    clearTradeHistory() {
-        return this.delete('/api/v1/trades/clear');
-    }
-
-    getTradeStats() {
-        return this.get('/api/v1/trades/stats');
-    }
-
-    getPositions() {
-        return this.get('/api/v1/dashboard-metrics'); // Positions included in metrics
-    }
-
-    closePosition(symbol) {
-        return this.post('/api/v1/position/close', { symbol });
-    }
-
-    // ========================================================================
-    // ML
-    // ========================================================================
-
-    trainModel(symbol, timeframe = '1h', limit = 1000, modelType = 'xgboost', tp = 2.0, sl = 2.0) {
-        return this.post('/api/v1/ml/train', {
-            symbol,
-            timeframe,
-            limit,
-            model_type: modelType,
-            tp,  // Take profit multiplier
-            sl,  // Stop loss multiplier
-        });
-    }
-
-    getMLStatus() {
-        return this.get('/api/v1/ml/status');
-    }
-
-    getMLTrainingHistory(limit = 50) {
-        return this.get('/api/v1/ml/training-history', { limit });
-    }
-
-    deleteMLTrainingHistory() {
-        return this.delete('/api/v1/ml/training-history');
-    }
-
-    checkModel(symbol, timeframe = '1h') {
-        return this.get('/api/v1/ml/check-model', { symbol, timeframe });
-    }
-
-    runVisualAnalysis(symbol, strategyId, timeframe = '1h', limit = 300) {
-        return this.get('/api/v1/ml/visual-analysis', {
-            symbol,
-            strategy_id: strategyId,
-            timeframe,
-            limit,
-        });
-    }
-}
-
-/**
- * Custom API Error class
- */
-class ApiError extends Error {
-    constructor(message, status, data) {
-        super(message);
-        this.name = 'ApiError';
-        this.status = status;
-        this.data = data;
+        return this.get('/data/all-download-tasks');
     }
 }
 
 // Singleton instance
-const api = new ApiClient();
+const api = new APIClient();
 
-// Export for ES6 modules
-export { ApiClient, ApiError, api };
+// Export singleton
+export default api;
+
+// Also export for window access (debugging)
+if (typeof window !== 'undefined') {
+    window.api = api;
+}

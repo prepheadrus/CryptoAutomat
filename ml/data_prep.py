@@ -109,25 +109,25 @@ def apply_triple_barrier(
                 lower_hit = True
                 break
         
-        # Etiket ata (XGBoost için 0, 1, 2 formatında olmalı!)
+        # Etiket ata (SİSTEM STANDARDI: 2=LONG, 0=SHORT, 1=HOLD)
         if upper_hit:
-            labels[i] = 1  # LONG başarılı
+            labels[i] = 2  # LONG başarılı (Üst bariyere çarptı)
             reasons.append('TP')
         elif lower_hit:
-            labels[i] = 0  # SHORT başarılı / LONG zarar (XGBoost için 0)
+            labels[i] = 0  # SHORT başarılı (Alt bariyere çarptı)
             reasons.append('SL')
         else:
             # Dikey bariyere çarptı (zaman doldu)
-            # Son fiyata göre etiket (nötr veya hafif yönlü)
+            # Son fiyata göre etiket (yukarı=2, aşağı=0, yatay=1)
             final_price = df[target_col].iloc[end_idx]
             if final_price > entry_price * 1.001:  # %0.1 üstte
-                labels[i] = 1  # LONG
+                labels[i] = 2  # LONG (yukarı kırık)
                 reasons.append('TIME_UP')
             elif final_price < entry_price * 0.999:  # %0.1 altta
-                labels[i] = 0  # SHORT
+                labels[i] = 0  # SHORT (aşağı kırık)
                 reasons.append('TIME_DOWN')
             else:
-                labels[i] = 2  # NÖTR (XGBoost için 2)
+                labels[i] = 1  # NÖTR/HOLD (yatay)
                 reasons.append('TIME_NEUTRAL')
     
     # Son time_horizon satır için etiket yok (ileriye dönük veri yok)

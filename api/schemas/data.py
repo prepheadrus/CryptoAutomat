@@ -65,12 +65,12 @@ class DataDeleteRequest(BaseModel):
 
     Attributes:
         symbol: Sembol
-        timeframe: Zaman dilimi (klines silme için)
+        timeframe: Zaman dilimi (klines silme için) - None ise TÜM timeframe'ler
         market_type: Piyasa tipi (download task silme için)
     """
     symbol: str = Field(..., description="Sembol")
-    timeframe: str = Field(default="1m", description="Zaman dilimi")
-    market_type: str = Field(default="future", description="Piyasa tipi")
+    timeframe: Optional[str] = Field(default=None, description="Zaman dilimi (None ise TÜM timeframe'ler)")
+    market_type: Optional[str] = Field(default=None, description="Piyasa tipi")
 
 
 class DataPauseRequest(BaseModel):

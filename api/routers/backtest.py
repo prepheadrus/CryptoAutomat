@@ -119,62 +119,51 @@ async def fetch_real_data(
     days: int
 ) -> pd.DataFrame:
     """
-    Veritabanından gerçek OHLCV verisi çek.
+    🏗️ PARQUET DATA LAKE'den gerçek OHLCV verisi çek.
+    SMART CACHE: Önce Parquet'ten yükle, eksik varsa SQLite'dan tamamla.
     """
-    logger.info(f"📊 Veritabanından veri çekiliyor: {symbol} ({timeframe}, {days} gün)")
+    logger.info(f"🏗️ [PARQUET LAKE] Veri çekiliyor: {symbol} ({timeframe}, {days} gün)")
 
-    exchange = None
     try:
-        # CCXT ile borsadan çek (geçici çözüm)
-        exchange = ccxtpro.binance({
-            'enableRateLimit': True,
-            'options': {'defaultType': 'future'}
-        })
+        # SMART CACHE kullan (data_service üzerinden)
+        from api.services.data_service import DataService
+        from datetime import datetime, timedelta
 
-        # timeframe'e göre limit hesapla
-        if timeframe == "1m":
-            bars_per_day = 1440
-        elif timeframe == "5m":
-            bars_per_day = 288
-        elif timeframe == "15m":
-            bars_per_day = 96
-        elif timeframe == "1h":
-            bars_per_day = 24
-        elif timeframe == "4h":
-            bars_per_day = 6
-        elif timeframe == "1d":
-            bars_per_day = 1
-        else:
-            bars_per_day = 24
+        data_service = DataService()
 
-        total_bars = days * bars_per_day
+        # Tarih aralığı hesapla
+        end_date = datetime.now(tz=__import__('pytz').timezone('UTC'))
+        start_date = end_date - timedelta(days=days)
 
-        # Veriyi çek
-        ohlcv = await exchange.fetch_ohlcv(symbol, timeframe, limit=min(total_bars, 5000))
+        # SMART CACHE köprü fonksiyonu
+        df = await data_service.get_cached_or_fetch_data(
+            symbol=symbol,
+            timeframe=timeframe,
+            start_date=start_date,
+            end_date=end_date
+        )
 
-        if not ohlcv or len(ohlcv) < 100:
-            raise ValueError(f"Yetersiz veri: {len(ohlcv)} mum. En az 100 mum gerekli.")
+        if df is None or len(df) < 100:
+            raise ValueError(f"Yetersiz veri: {len(df) if df else 0} mum. En az 100 mum gerekli.")
 
-        # DataFrame'e çevir
-        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-        df.set_index('timestamp', inplace=True)
+        # DataFrame formatını kontrol et
+        if not isinstance(df.index, pd.DatetimeIndex):
+            if 'timestamp' in df.columns:
+                df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True)
+                df.set_index('timestamp', inplace=True)
 
         # ATR ekle (backtest için gerekli)
+        from data.indicators import StrategyIndicators
         df['ATR_14'] = StrategyIndicators.atr(df['high'], df['low'], df['close'], 14)
 
-        logger.info(f"✅ Veri çekildi: {len(df)} mum, {symbol} ({timeframe})")
+        logger.info(f"✅ [PARQUET LAKE] {symbol} {timeframe} → {len(df)} mum yüklendi ({days} gün)")
+        logger.info(f"📊 [PARQUET LAKE] İlk: {df.index[0]}, Son: {df.index[-1]}")
 
         return df
 
     except Exception as e:
-        logger.error(f"❌ Veri çekme hatası: {e}")
+        logger.error(f"❌ [PARQUET LAKE] Veri çekme hatası: {e}")
         raise ValueError(f"Veri çekilemedi: {str(e)}")
-
-    finally:
-        # Exchange connection'ı her zaman kapat
-        if exchange:
-            await exchange.close()
 
 
 def generate_mock_data(

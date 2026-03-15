@@ -1,8 +1,25 @@
 """
-Security Module - API Key Encryption
+Security Module - AES-128-CBC Encryption (Fernet)
 
-Cryptography.fernet kullanarak AES-128-CBC şifreleme.
-API anahtarları .env dosyasında şifreli olarak saklanır.
+API anahtarlarını şifrelemek ve çözmek için kullanılır.
+cryptography.fernet kütüphanesi kullanır (AES-128-CBC standart).
+
+Usage:
+    from core.security import KeyManager
+    
+    key_manager = KeyManager()
+    
+    # Şifrele
+    encrypted = key_manager.encrypt("my_api_key")
+    
+    # Çöz
+    decrypted = key_manager.decrypt(encrypted)
+    
+    # API anahtarlarını kaydet
+    key_manager.save_api_keys(api_key, api_secret)
+    
+    # API anahtarlarını oku
+    api_key, api_secret = key_manager.load_api_keys()
 """
 
 import os
@@ -11,177 +28,181 @@ from cryptography.fernet import Fernet
 from core.logger import logger
 
 
-# ============================================================================
-# SABİTLER
-# ============================================================================
-
-SECRET_KEY_FILE = Path(".secret.key")
-ENV_FILE = Path(".env")
-
-
-# ============================================================================
-# FONKSİYONLAR
-# ============================================================================
-
-def generate_key() -> bytes:
+class KeyManager:
     """
-    Yeni bir Fernet şifreleme anahtarı oluştur.
+    API Key Manager with AES-128-CBC Encryption.
     
-    Returns:
-        bytes: 32-byte URL-safe base64-encoded key
+    .secret.key dosyasından şifreleme anahtarı üretir/yükler.
+    API anahtarlarını şifreleyerek .env dosyasına kaydeder.
     """
-    key = Fernet.generate_key()
     
-    # .secret.key dosyasına kaydet (sadece owner okuyabilir: 0o600)
-    with open(SECRET_KEY_FILE, 'wb') as f:
-        f.write(key)
-    
-    # Dosya izinlerini ayarla (Unix: 0o600, Windows: ignored)
-    try:
-        os.chmod(SECRET_KEY_FILE, 0o600)
-        logger.info(f"✅ Şifreleme anahtarı oluşturuldu: {SECRET_KEY_FILE} (izinler: 0o600)")
-    except Exception as e:
-        logger.warning(f"⚠️ Dosya izinleri ayarlanamadı (Windows): {e}")
-    
-    return key
-
-
-def load_key() -> bytes:
-    """
-    Mevcut şifreleme anahtarını yükle.
-    Yoksa yeni anahtar oluştur.
-    
-    Returns:
-        bytes: 32-byte URL-safe base64-encoded key
-    """
-    if SECRET_KEY_FILE.exists():
-        with open(SECRET_KEY_FILE, 'rb') as f:
-            key = f.read()
-        logger.info(f"✅ Şifreleme anahtarı yüklendi: {SECRET_KEY_FILE}")
-        return key
-    else:
-        logger.info("🔑 Şifreleme anahtarı bulunamadı, yeni anahtar oluşturuluyor...")
-        return generate_key()
-
-
-def get_fernet() -> Fernet:
-    """
-    Fernet instance oluştur.
-    
-    Returns:
-        Fernet: Şifreleme/deşifreleme instance'ı
-    """
-    key = load_key()
-    return Fernet(key)
-
-
-def encrypt_api_key(api_key: str) -> str:
-    """
-    API anahtarını şifrele.
-    
-    Args:
-        api_key: Düz metin API anahtarı
+    def __init__(self):
+        self.key_file = Path(".secret.key")
+        self.env_file = Path(".env")
+        self.fernet = None
         
-    Returns:
-        str: Şifreli API anahtarı (base64-encoded)
-    """
-    try:
-        fernet = get_fernet()
-        encrypted = fernet.encrypt(api_key.encode('utf-8'))
-        return encrypted.decode('utf-8')
-    except Exception as e:
-        logger.error(f"❌ API anahtarı şifreleme hatası: {e}")
-        raise
-
-
-def decrypt_api_key(encrypted_key: str) -> str:
-    """
-    Şifreli API anahtarını çöz.
-    
-    Args:
-        encrypted_key: Şifreli API anahtarı (base64-encoded)
+        # Şifreleme anahtarını yükle veya oluştur
+        self._load_or_create_key()
         
-    Returns:
-        str: Düz metin API anahtarı
-    """
-    try:
-        fernet = get_fernet()
-        decrypted = fernet.decrypt(encrypted_key.encode('utf-8'))
-        return decrypted.decode('utf-8')
-    except Exception as e:
-        logger.error(f"❌ API anahtarı çözme hatası: {e}")
-        raise
-
-
-def update_env_file(key: str, value: str):
-    """
-    .env dosyasına bir anahtar-değer çifti yaz/güncelle.
+        logger.info("🔐 [SECURITY] KeyManager initialized (AES-128-CBC)")
     
-    Args:
-        key: Anahtar adı (örn: BINANCE_API_KEY)
-        value: Değer (örn: şifreli API key)
-    """
-    # .env dosyasını oku
-    env_lines = []
-    if ENV_FILE.exists():
-        with open(ENV_FILE, 'r', encoding='utf-8') as f:
-            env_lines = f.readlines()
+    def _load_or_create_key(self):
+        """
+        .secret.key dosyasından anahtar yükle veya yeni oluştur.
+        """
+        if self.key_file.exists():
+            # Mevcut anahtarı yükle
+            try:
+                with open(self.key_file, 'rb') as f:
+                    key = f.read()
+                self.fernet = Fernet(key)
+                logger.debug("🔑 [SECURITY] Şifreleme anahtarı yüklendi")
+            except Exception as e:
+                logger.error(f"❌ [SECURITY] Anahtar yükleme hatası: {e}")
+                self._create_new_key()
+        else:
+            # Yeni anahtar oluştur
+            self._create_new_key()
     
-    # Anahtarı bul ve güncelle veya ekle
-    found = False
-    for i, line in enumerate(env_lines):
-        if line.strip().startswith(f"{key}="):
-            env_lines[i] = f"{key}={value}\n"
-            found = True
-            logger.info(f"✅ .env dosyasında {key} güncellendi")
-            break
+    def _create_new_key(self):
+        """
+        Yeni şifreleme anahtarı oluştur ve kaydet.
+        Dosya izinleri: 0o600 (sadece owner okuyabilir)
+        """
+        try:
+            # Fernet anahtarı oluştur
+            key = Fernet.generate_key()
+            
+            # Dosyaya kaydet
+            with open(self.key_file, 'wb') as f:
+                f.write(key)
+            
+            # Dosya izinlerini ayarla (0o600 = sadece owner)
+            os.chmod(self.key_file, 0o600)
+            
+            self.fernet = Fernet(key)
+            
+            logger.info("🔑 [SECURITY] Yeni şifreleme anahtarı oluşturuldu (.secret.key)")
+            logger.info(f"📁 [SECURITY] Dosya izinleri: 0o600 (sadece owner)")
+            
+        except Exception as e:
+            logger.error(f"❌ [SECURITY] Anahtar oluşturma hatası: {e}")
+            raise
     
-    # Bulunamadıysa ekle
-    if not found:
-        env_lines.append(f"{key}={value}\n")
-        logger.info(f"✅ .env dosyasına {key} eklendi")
-    
-    # .env dosyasına yaz
-    with open(ENV_FILE, 'w', encoding='utf-8') as f:
-        f.writelines(env_lines)
-    
-    logger.info(f"✅ .env dosyası güncellendi: {ENV_FILE}")
-
-
-def get_api_key_from_env() -> tuple[str, str]:
-    """
-    .env dosyasından şifreli API anahtarlarını oku ve çöz.
-    
-    Returns:
-        tuple: (api_key, api_secret) - düz metin
-    """
-    try:
-        # .env dosyasından oku
-        api_key_enc = os.getenv("BINANCE_API_KEY", "")
-        api_secret_enc = os.getenv("BINANCE_API_SECRET", "")
+    def encrypt(self, data: str) -> str:
+        """
+        Veriyi şifrele.
         
-        if not api_key_enc or not api_secret_enc:
-            logger.warning("⚠️ API anahtarları .env dosyasında bulunamadı")
-            return "", ""
+        Args:
+            data: Şifrelenecek veri
         
-        # Şifreyi çöz
-        api_key = decrypt_api_key(api_key_enc)
-        api_secret = decrypt_api_key(api_secret_enc)
+        Returns:
+            Şifrelenmiş veri (gAAAAABh... formatında)
+        """
+        try:
+            encrypted = self.fernet.encrypt(data.encode('utf-8'))
+            return encrypted.decode('utf-8')
+        except Exception as e:
+            logger.error(f"❌ [SECURITY] Şifreleme hatası: {e}")
+            raise
+    
+    def decrypt(self, encrypted_data: str) -> str:
+        """
+        Veriyi çöz.
         
-        logger.info("✅ API anahtarları .env dosyasından yüklendi ve çözüldü")
-        return api_key, api_secret
-    except Exception as e:
-        logger.error(f"❌ API anahtarları yüklenirken hata: {e}")
-        return "", ""
+        Args:
+            encrypted_data: Şifrelenmiş veri
+        
+        Returns:
+            Çözülmüş veri
+        """
+        try:
+            decrypted = self.fernet.decrypt(encrypted_data.encode('utf-8'))
+            return decrypted.decode('utf-8')
+        except Exception as e:
+            logger.error(f"❌ [SECURITY] Şifre çözme hatası: {e}")
+            raise
+    
+    def save_api_keys(self, api_key: str, api_secret: str):
+        """
+        API anahtarlarını şifreleyerek .env dosyasına kaydet.
+        
+        Args:
+            api_key: Binance API Key
+            api_secret: Binance API Secret
+        """
+        try:
+            # Şifrele
+            encrypted_key = self.encrypt(api_key)
+            encrypted_secret = self.encrypt(api_secret)
+            
+            # .env dosyasını oku
+            env_data = {}
+            if self.env_file.exists():
+                with open(self.env_file, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        if '=' in line and not line.strip().startswith('#'):
+                            key, value = line.strip().split('=', 1)
+                            env_data[key] = value
+            
+            # API anahtarlarını güncelle
+            env_data['BINANCE_API_KEY'] = encrypted_key
+            env_data['BINANCE_API_SECRET'] = encrypted_secret
+            
+            # .env dosyasına yaz
+            with open(self.env_file, 'w', encoding='utf-8') as f:
+                for key, value in env_data.items():
+                    f.write(f"{key}={value}\n")
+            
+            logger.info("✅ [SECURITY] API anahtarları şifrelenerek kaydedildi")
+            
+        except Exception as e:
+            logger.error(f"❌ [SECURITY] API anahtarı kaydetme hatası: {e}")
+            raise
+    
+    def load_api_keys(self) -> tuple:
+        """
+        .env dosyasından şifrelenmiş API anahtarlarını yükle ve çöz.
+        
+        Returns:
+            (api_key, api_secret) tuple
+        """
+        try:
+            if not self.env_file.exists():
+                logger.warning("⚠️ [SECURITY] .env dosyası yok")
+                return None, None
+            
+            # .env dosyasını oku
+            env_data = {}
+            with open(self.env_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if '=' in line and not line.strip().startswith('#'):
+                        key, value = line.strip().split('=', 1)
+                        env_data[key] = value
+            
+            # Şifrelenmiş anahtarları al
+            encrypted_key = env_data.get('BINANCE_API_KEY')
+            encrypted_secret = env_data.get('BINANCE_API_SECRET')
+            
+            if not encrypted_key or not encrypted_secret:
+                logger.warning("⚠️ [SECURITY] API anahtarları bulunamadı")
+                return None, None
+            
+            # Çöz
+            api_key = self.decrypt(encrypted_key)
+            api_secret = self.decrypt(encrypted_secret)
+            
+            logger.debug("🔓 [SECURITY] API anahtarları çözüldü")
+            
+            return api_key, api_secret
+            
+        except Exception as e:
+            logger.error(f"❌ [SECURITY] API anahtarı yükleme hatası: {e}")
+            return None, None
 
 
-# ============================================================================
-# INIT (Modül yüklendiğinde çalışır)
-# ============================================================================
+# Singleton instance
+key_manager = KeyManager()
 
-# Modül ilk yüklendiğinde şifreleme anahtarını yükle
-try:
-    _ = load_key()
-    logger.info("🔐 Security module initialized")
-except Exception as e:
-    logger.error(f"❌ Security module initialization failed: {e}")
+# Export
+__all__ = ['KeyManager', 'key_manager']

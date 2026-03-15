@@ -1,790 +1,489 @@
 """
-Walk-Forward Optimization (WFO) Engine
+Walk-Forward Optimization (WFO) Engine - Bayesian Optimization
 
-Bu modül, strateji parametrelerini piyasa koşulları değiştikçe otomatik olarak optimize eder.
-In-Sample (Eğitim) ve Out-of-Sample (Test) pencereleri kullanarak kayan optimizasyon yapar.
+Optuna TPE (Tree-structured Parzen Estimator) algoritması kullanarak
+binlerce kombinasyonu maksimum 50 denemede optimize eder.
 
-Mimari:
-- Rolling Window (Kayan Pencere) yaklaşımı
-- In-Sample: Son 30 gün (optimizasyon)
-- Out-of-Sample: Son 7 gün (test/doğrulama)
-- 16 farklı timeframe desteği
-- Asenkron yapı (asyncio) - event loop'u tıkamaz
+Geleneksel Grid Search yerine Bayesian Optimization kullanır.
+CPU koruma için asenkron thread pool executor kullanır.
+
+Usage:
+    from core.wfo_engine import WFOEngine
+    
+    engine = WFOEngine()
+    
+    # Walk-Forward optimizasyon çalıştır
+    best_params = await engine.optimize(
+        symbol='BTC/USDT',
+        timeframe='1h',
+        strategy_class=TrendMaster,
+        in_sample_days=30,
+        out_of_sample_days=7,
+        n_trials=50
+    )
 """
 
 import asyncio
 import pandas as pd
 import numpy as np
-from typing import Dict, Any, List, Tuple, Optional, Callable
 from datetime import datetime, timedelta
+from typing import Dict, Any, Optional, Callable, Type
+from concurrent.futures import ThreadPoolExecutor
+import optuna
+from optuna.samplers import TPESampler
+
 from core.logger import logger
-from core.config import CONFIG
-
-# Auto-Grid Generator (opsiyonel - otomatik ızgara için)
-try:
-    from core.auto_grid import generate_param_grid
-    AUTO_GRID_AVAILABLE = True
-except ImportError:
-    AUTO_GRID_AVAILABLE = False
-    logger.warning("⚠️ Auto-Grid Generator bulunamadı, manuel PARAM_GRID kullanılıyor.")
-
-# Optuna - Bayesian Optimization (opsiyonel)
-try:
-    import optuna
-    OPTUNA_AVAILABLE = True
-except ImportError:
-    OPTUNA_AVAILABLE = False
-    logger.warning("⚠️ Optuna bulunamadı, Grid Search kullanılıyor. Kurulum: pip install optuna")
+from core.auto_grid import auto_grid
+from data.storage.parquet_lake import get_parquet_lake
 
 
-class WalkForwardOptimizer:
+class WFOEngine:
     """
-    Walk-Forward Optimization Motoru
+    Walk-Forward Optimization Engine.
     
-    Strateji parametrelerini zaman içinde değişen piyasa koşullarına göre
-    otomatik olarak optimize eder.
+    Bayesian Optimization (TPE) + Walk-Forward Validation.
+    Overfitting'i önlemek için Out-of-Sample test yapar.
     """
     
-    def __init__(
-        self,
-        train_days: int = 30,      # In-Sample pencere (gün)
-        test_days: int = 7,        # Out-of-Sample pencere (gün)
-        reoptimize_interval: int = 168,  # Yeniden optimizasyon aralığı (saat)
-        min_improvement: float = 0.05,   # Minimum iyileştirme (%)
-        max_workers: int = 1       # Paralel işçi sayısı
-    ):
-        """
-        WFO Motorunu başlatır.
-        
-        Args:
-            train_days: In-Sample eğitim penceresi (gün)
-            test_days: Out-of-Sample test penceresi (gün)
-            reoptimize_interval: Yeniden optimizasyon sıklığı (saat)
-            min_improvement: Yeni parametrelerin kabulü için minimum iyileştirme
-            max_workers: Maksimum paralel işçi
-        """
-        self.train_days = train_days
-        self.test_days = test_days
-        self.reoptimize_interval = reoptimize_interval
-        self.min_improvement = min_improvement
-        self.max_workers = max_workers
-        
-        # Optimizasyon geçmişi
-        self.optimization_history = []
-        self.last_optimization = None
-        self.is_optimizing = False
-        
-        # Strateji parametre cache'i
-        self.current_params = {}
-        self.best_params = {}
-        
-        logger.info(f"🧠 WFO Motoru başlatıldı: Train={train_days}g, Test={test_days}g")
+    # Varsayılan ayarlar
+    DEFAULT_IN_SAMPLE_DAYS = 30
+    DEFAULT_OUT_OF_SAMPLE_DAYS = 7
+    DEFAULT_N_TRIALS = 50
+    DEFAULT_OPTIMIZATION_METRIC = 'sharpe'  # 'sharpe' veya 'net_pnl'
     
-    async def run_wfo(
+    # CPU koruma
+    MAX_WORKERS = 4  # Thread pool boyutu
+    
+    def __init__(self):
+        self.executor = ThreadPoolExecutor(max_workers=self.MAX_WORKERS)
+        logger.info(f"🧠 [WFO] Engine initialized (TPE Sampler, {self.MAX_WORKERS} workers)")
+        logger.info("🎉 [WFO] Zero-Touch Bayesian Optimizasyon Motoru Aktif")
+    
+    async def optimize(
         self,
-        df: pd.DataFrame,
-        strategy_class: Any,
-        param_grid: Dict[str, List[Any]],
-        timeframe: str = "1h",
-        symbol: str = "BTCUSDT",
-        optimization_metric: str = "net_pnl"  # net_pnl, sharpe, sortino
+        symbol: str,
+        timeframe: str,
+        strategy_class: Type,
+        in_sample_days: int = None,
+        out_of_sample_days: int = None,
+        n_trials: int = None,
+        optimization_metric: str = None,
+        param_grid: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         """
-        Walk-Forward Optimization döngüsünü çalıştırır.
-        
-        Algoritma:
-        1. Veriyi In-Sample ve Out-of-Sample olarak böl
-        2. In-Sample üzerinde grid search ile en iyi parametreleri bul
-        3. Out-of-Sample üzerinde test et
-        4. İyileştirme varsa parametreleri güncelle
+        Walk-Forward Bayesian optimizasyon çalıştır.
         
         Args:
-            df: OHLCV verisi (seçili timeframe'de)
-            strategy_class: Optimize edilecek strateji sınıfı
-            param_grid: Parametre aralıkları
-            timeframe: Zaman dilimi
-            symbol: Sembol adı
+            symbol: Sembol (örn: BTC/USDT)
+            timeframe: Timeframe (örn: 1h)
+            strategy_class: Strateji sınıfı
+            in_sample_days: In-Sample gün sayısı (eğitim)
+            out_of_sample_days: Out-of-Sample gün sayısı (test)
+            n_trials: Optuna deneme sayısı
+            optimization_metric: Optimizasyon metriği ('sharpe' veya 'net_pnl')
+            param_grid: Manuel param grid (None ise auto-grid)
+        
+        Returns:
+            En iyi parametreler ve metrikler
+        """
+        # Varsayılan değerler
+        in_sample_days = in_sample_days or self.DEFAULT_IN_SAMPLE_DAYS
+        out_of_sample_days = out_of_sample_days or self.DEFAULT_OUT_OF_SAMPLE_DAYS
+        n_trials = n_trials or self.DEFAULT_N_TRIALS
+        optimization_metric = optimization_metric or self.DEFAULT_OPTIMIZATION_METRIC
+        
+        logger.info(f"🧠 [WFO] Optimizasyon başlatılıyor: {symbol} {timeframe}")
+        logger.info(f"   📅 In-Sample: {in_sample_days} gün, Out-of-Sample: {out_of_sample_days} gün")
+        logger.info(f"   🔬 Trials: {n_trials}, Metric: {optimization_metric}")
+        
+        try:
+            # 1. Veriyi Parquet Lake'ten çek
+            logger.info(f"📊 [WFO] Veri çekiliyor: {symbol} {timeframe}")
+            data = await self._fetch_data(symbol, timeframe, in_sample_days + out_of_sample_days)
+            
+            if data is None or len(data) < 100:
+                logger.warning(f"⚠️ [WFO] Yetersiz veri: {len(data) if data else 0} mum")
+                return {}
+            
+            # 2. In-Sample / Out-of-Sample böl
+            logger.info(f"📊 [WFO] Veri bölünüyor (In-Sample / Out-of-Sample)")
+            train_data, test_data = self._split_data(data, in_sample_days, out_of_sample_days)
+            
+            if len(train_data) < 50 or len(test_data) < 10:
+                logger.warning(f"⚠️ [WFO] Yetersiz veri: Train={len(train_data)}, Test={len(test_data)}")
+                return {}
+            
+            # 3. Auto-Grid ile parametre uzayı oluştur
+            if param_grid is None:
+                logger.info(f"🔧 [WFO] Auto-Grid ile parametre uzayı oluşturuluyor")
+                strategy_instance = strategy_class()
+                param_grid = auto_grid.generate_from_strategy(strategy_instance)
+            else:
+                logger.info(f"🔧 [WFO] Manuel param grid kullanılıyor")
+            
+            # 4. Bayesian Optimization (TPE)
+            logger.info(f"🧠 [WFO] Bayesian Optimization başlatılıyor (TPE Sampler)")
+            
+            # Optuna study oluştur
+            study = optuna.create_study(
+                direction='maximize',
+                sampler=TPESampler(seed=42),
+                study_name=f'wfo_{symbol}_{timeframe}'
+            )
+            
+            # Objective fonksiyonu (CPU-bound, thread pool'da çalışacak)
+            objective = lambda trial: self._objective(
+                trial,
+                train_data=train_data,
+                test_data=test_data,
+                strategy_class=strategy_class,
+                param_grid=param_grid,
+                optimization_metric=optimization_metric
+            )
+            
+            # Thread pool'da çalıştır (Event Loop'u bloklamaz)
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                self.executor,
+                lambda: study.optimize(objective, n_trials=n_trials, show_progress_bar=True)
+            )
+            
+            # 5. En iyi parametreleri al
+            best_params = study.best_params
+            best_value = study.best_value
+            
+            logger.info(f"✅ [WFO] Optimizasyon tamamlandı!")
+            logger.info(f"   🏆 Best {optimization_metric}: {best_value:.4f}")
+            logger.info(f"   🎯 Best params: {best_params}")
+            
+            # 6. Out-of-Sample doğrulama
+            logger.info(f"🔍 [WFO] Out-of-Sample doğrulama")
+            oos_metrics = await self._validate_out_of_sample(
+                best_params,
+                test_data,
+                strategy_class
+            )
+            
+            # 7. Overfitting kontrolü
+            overfitting = self._check_overfitting(best_value, oos_metrics.get(optimization_metric, 0))
+            
+            if overfitting:
+                logger.warning(f"⚠️ [WFO] Overfitting tespit edildi! IS={best_value:.4f}, OOS={oos_metrics.get(optimization_metric, 0):.4f}")
+            else:
+                logger.info(f"✅ [WFO] Overfitting yok (IS={best_value:.4f}, OOS={oos_metrics.get(optimization_metric, 0):.4f})")
+            
+            return {
+                'best_params': best_params,
+                'best_value': best_value,
+                'optimization_metric': optimization_metric,
+                'in_sample_days': in_sample_days,
+                'out_of_sample_days': out_of_sample_days,
+                'oos_metrics': oos_metrics,
+                'overfitting': overfitting,
+                'n_trials': n_trials
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ [WFO] Optimizasyon hatası: {e}")
+            return {}
+    
+    async def _fetch_data(self, symbol: str, timeframe: str, days: int) -> pd.DataFrame:
+        """
+        Parquet Lake'ten veri çek.
+        
+        Args:
+            symbol: Sembol
+            timeframe: Timeframe
+            days: Gün sayısı
+        
+        Returns:
+            OHLCV DataFrame
+        """
+        lake = get_parquet_lake('binance')
+        
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+        
+        # Vektörize okuma
+        data = await lake.load_datasets(symbol, timeframe, start_date, end_date)
+        
+        if data is not None:
+            logger.info(f"📊 [WFO] {len(data)} mum yüklendi")
+        
+        return data
+    
+    def _split_data(
+        self,
+        data: pd.DataFrame,
+        in_sample_days: int,
+        out_of_sample_days: int
+    ) -> tuple:
+        """
+        Veriyi In-Sample ve Out-of-Sample olarak böl.
+        
+        Args:
+            data: OHLCV DataFrame
+            in_sample_days: In-Sample gün sayısı
+            out_of_sample_days: Out-of-Sample gün sayısı
+        
+        Returns:
+            (train_data, test_data) tuple
+        """
+        total_days = in_sample_days + out_of_sample_days
+        
+        # In-Sample: İlk in_sample_days gün
+        train_end_idx = int(len(data) * (in_sample_days / total_days))
+        
+        train_data = data.iloc[:train_end_idx].copy()
+        test_data = data.iloc[train_end_idx:].copy()
+        
+        logger.info(f"📊 [WFO] Split: Train={len(train_data)} mum, Test={len(test_data)} mum")
+        
+        return train_data, test_data
+    
+    def _objective(
+        self,
+        trial: optuna.trial.Trial,
+        train_data: pd.DataFrame,
+        test_data: pd.DataFrame,
+        strategy_class: Type,
+        param_grid: Dict[str, Any],
+        optimization_metric: str
+    ) -> float:
+        """
+        Bayesian Optimization objective fonksiyonu.
+        
+        Args:
+            trial: Optuna trial
+            train_data: In-Sample veri
+            test_data: Out-of-Sample veri
+            strategy_class: Strateji sınıfı
+            param_grid: Parametre uzayı
             optimization_metric: Optimizasyon metriği
-            
+        
         Returns:
-            Dict: Optimizasyon sonuçları
+            Sharpe ratio veya Net PnL (maximize edilecek)
         """
-        if self.is_optimizing:
-            logger.warning("⚠️ WFO zaten çalışıyor, yeni istek reddedildi.")
-            return {"status": "already_running"}
+        # 1. Parametreleri öner
+        params = {}
+        for param_name, param_range in param_grid.items():
+            if isinstance(param_range[0], int):
+                params[param_name] = trial.suggest_int(param_name, param_range[0], param_range[2])
+            else:
+                params[param_name] = trial.suggest_float(param_name, param_range[0], param_range[2])
         
-        self.is_optimizing = True
+        # 2. Strateji instance oluştur ve parametreleri güncelle
+        strategy = strategy_class()
+        if hasattr(strategy, 'update_params'):
+            strategy.update_params(params)
         
+        # 3. In-Sample backtest
         try:
-            logger.info(f"🔍 [WFO] {symbol} ({timeframe}) optimizasyonu başlatılıyor...")
-            start_time = datetime.now()
-            
-            # 1. Veriyi hazırla
-            df = df.dropna().copy()
-            
-            if len(df) < (self.train_days + self.test_days):
-                logger.warning(f"⚠️ [WFO] Yetersiz veri: {len(df)} mum. Minimum {(self.train_days + self.test_days)} mum gerekli.")
-                return {"status": "insufficient_data"}
-            
-            # 2. In-Sample ve Out-of-Sample pencerelerini belirle
-            # In-Sample: Son train_days gün
-            # Out-of-Sample: Son test_days gün (In-Sample'den sonra gelen)
-            
-            # Mum sayısını hesapla (timeframe'e göre)
-            candles_per_day = self._get_candles_per_day(timeframe)
-            train_size = int(self.train_days * candles_per_day)
-            test_size = int(self.test_days * candles_per_day)
-            
-            # Veriyi böl
-            df_train = df.iloc[-(train_size + test_size):-test_size].copy()
-            df_test = df.iloc[-test_size:].copy()
-            
-            logger.info(f"📊 [WFO] Veri bölündü: Train={len(df_train)} mum, Test={len(df_test)} mum")
-
-            # 3. In-Sample üzerinde Bayesian Optimization
-            logger.info("🔬 [WFO] In-Sample optimizasyon (Bayesian Search)...")
-
-            # Grid Search kombinasyon sayısını hesapla (karşılaştırma için)
-            import itertools
-            param_names = list(param_grid.keys())
-            param_values = list(param_grid.values())
-            total_combinations = sum(1 for _ in itertools.product(*param_values))
-
-            logger.info(f"📊 [BAYES-OPT] Geleneksel Grid Search ile {total_combinations} ihtimal vardı")
-
-            best_params, best_score = await self._bayesian_search(
-                df_train, strategy_class, param_grid, optimization_metric, n_trials=50
-            )
-
-            if best_params is None:
-                logger.error("❌ [WFO] Optimum parametre bulunamadı!")
-                return {"status": "no_optimal_params"}
-
-            logger.info(f"✅ [WFO] En iyi parametreler bulundu: {best_params}")
-            logger.info(f"📈 [WFO] In-Sample {optimization_metric}: {best_score:.4f}")
-
-            # 4. Out-of-Sample üzerinde test et
-            logger.info("🧪 [WFO] Out-of-Sample test...")
-            oos_score = await self._test_params(
-                df_test, strategy_class, best_params, optimization_metric
-            )
-
-            logger.info(f"📊 [WFO] Out-of-Sample {optimization_metric}: {oos_score:.4f}")
-
-            # 5. Mevcut parametrelerle karşılaştır
-            improvement = self._calculate_improvement(best_score, oos_score)
-
-            # 6. İyileştirme yeterli mi?
-            if improvement >= self.min_improvement:
-                logger.info(f"✅ [WFO] İyileştirme tespit edildi: +{improvement*100:.1f}%")
-
-                # ZERO-TOUCH log mesajı
-                logger.info(
-                    f"🎯 [ZERO-TOUCH WFO] {strategy_class.__name__} otonom olarak analiz edildi. "
-                    f"Auto-Grid sınırları çizdi, Bayes motoru {n_trials} iterasyonda en iyi ayarı buldu. "
-                    f"Yeni Parametreler: {best_params}"
-                )
-
-                # Parametreleri güncelle
-                old_params = self.current_params.copy()
-                self.current_params = best_params
-                self.best_params = best_params
-                
-                # Optimizasyon geçmişini kaydet
-                self.optimization_history.append({
-                    "timestamp": datetime.now().isoformat(),
-                    "symbol": symbol,
-                    "timeframe": timeframe,
-                    "old_params": old_params,
-                    "new_params": best_params,
-                    "in_sample_score": best_score,
-                    "out_of_sample_score": oos_score,
-                    "improvement": improvement
-                })
-                
-                self.last_optimization = datetime.now()
-                
-                # Log çıktısı
-                self._log_optimization_result(
-                    strategy_class.__name__, timeframe, old_params, best_params, oos_score
-                )
-                
-                return {
-                    "status": "optimized",
-                    "old_params": old_params,
-                    "new_params": best_params,
-                    "in_sample_score": best_score,
-                    "out_of_sample_score": oos_score,
-                    "improvement": improvement
-                }
-            else:
-                logger.info(f"⚠️ [WFO] İyileştirme yetersiz: +{improvement*100:.1f}% (Minimum: +{self.min_improvement*100:.1f}%)")
-                
-                return {
-                    "status": "no_improvement",
-                    "current_params": self.current_params,
-                    "improvement": improvement
-                }
-                
+            metrics = self._backtest(strategy, train_data)
         except Exception as e:
-            logger.error(f"❌ [WFO] Optimizasyon hatası: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
-            return {"status": "error", "error": str(e)}
-            
-        finally:
-            self.is_optimizing = False
-    
-    async def _bayesian_search(
-        self,
-        df: pd.DataFrame,
-        strategy_class: Any,
-        param_grid: Dict[str, List[Any]],
-        metric: str,
-        n_trials: int = 50
-    ) -> Tuple[Optional[Dict], float]:
-        """
-        Bayesian Optimization (Optuna) ile en iyi parametreleri bulur.
-
-        Grid Search yerine sadece 50 deneme ile optimum noktayı bulur.
-        TPE (Tree-structured Parzen Estimator) algoritması kullanır.
-
-        Args:
-            df: Eğitim verisi
-            strategy_class: Strateji sınıfı
-            param_grid: Parametre aralıkları
-            metric: Optimizasyon metriği
-            n_trials: Maksimum deneme sayısı
-
-        Returns:
-            Tuple: (En iyi parametreler, En iyi skor)
-        """
-        if not OPTUNA_AVAILABLE:
-            logger.warning("⚠️ [WFO] Optuna yok, Grid Search'e dönülüyor...")
-            return await self._grid_search(df, strategy_class, param_grid, metric)
-
-        logger.info(f"🧠 [BAYES-OPT] Bayesian Optimization başlatılıyor ({n_trials} trial)...")
-
-        # Auto-Grid'den gelen param_grid'i search space'e dönüştür
-        search_space = self._convert_to_search_space(param_grid)
-
-        logger.debug(f"📊 [BAYES-OPT] Arama uzayı: {len(search_space)} parametre")
-
-        # Optuna study oluştur (TPE sampler)
-        sampler = optuna.samplers.TPESampler(seed=42)
-        study = optuna.create_study(
-            direction="maximize",
-            sampler=sampler,
-            study_name=f"wfo_{strategy_class.__name__}"
-        )
-
-        # Objective fonksiyon
-        async def objective(trial):
-            # Search space'den parametre öner
-            params = {}
-            for param_name, param_range in search_space.items():
-                if param_range['type'] == 'categorical':
-                    params[param_name] = trial.suggest_categorical(param_name, param_range['values'])
-                elif param_range['type'] == 'float':
-                    params[param_name] = trial.suggest_float(param_name, param_range['low'], param_range['high'])
-                else:  # int
-                    params[param_name] = trial.suggest_int(param_name, param_range['low'], param_range['high'])
-
-            # Backtest yap
-            try:
-                score = await self._backtest_params(df, strategy_class, params, metric)
-                return score
-            except Exception as e:
-                logger.debug(f"⚠️ [BAYES-OPT] Trial hatası: {str(e)}")
-                return float('-inf')
-
-        # Optimizasyonu çalıştır
-        logger.info(f"🔍 [BAYES-OPT] Optimum parametreler aranıyor...")
-
-        # Optuna'yı async context'te çalıştır
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, study.optimize, objective, n_trials, show_progress_bar=False)
-
-        # En iyi sonuçları al
-        best_params = study.best_params
-        best_score = study.best_value
-
-        logger.info(f"✅ [BAYES-OPT] Optimizasyon tamamlandı!")
-        logger.info(f"📈 [BAYES-OPT] En iyi {metric}: {best_score:.4f}")
-        logger.info(f"🎯 [BAYES-OPT] En iyi parametreler: {best_params}")
-
-        return best_params, best_score
-
-    def _convert_to_search_space(
-        self,
-        param_grid: Dict[str, List[Any]]
-    ) -> Dict[str, Dict]:
-        """
-        Auto-Grid param_grid'i Optuna search space'e dönüştürür.
-
-        Args:
-            param_grid: {'rsi_period': [10, 14, 20], 'atr_multiplier': [2.45, 3.5, 4.55]}
-
-        Returns:
-            Dict: {'rsi_period': {'type': 'int', 'low': 10, 'high': 20}, ...}
-        """
-        search_space = {}
-
-        for param_name, values in param_grid.items():
-            if not values or len(values) == 0:
-                continue
-
-            # Değerlerin tipini kontrol et
-            if all(isinstance(v, int) for v in values):
-                # Integer parametre
-                search_space[param_name] = {
-                    'type': 'int',
-                    'low': min(values),
-                    'high': max(values)
-                }
-            elif all(isinstance(v, float) for v in values):
-                # Float parametre
-                search_space[param_name] = {
-                    'type': 'float',
-                    'low': min(values),
-                    'high': max(values)
-                }
-            else:
-                # Categorical parametre
-                search_space[param_name] = {
-                    'type': 'categorical',
-                    'values': values
-                }
-
-        return search_space
-
-    async def _grid_search(
-        self,
-        df: pd.DataFrame,
-        strategy_class: Any,
-        param_grid: Dict[str, List[Any]],
-        metric: str
-    ) -> Tuple[Optional[Dict], float]:
-        """
-        Grid Search ile en iyi parametreleri bulur.
-        (Artık sadece fallback olarak kullanılıyor - Optuna yoksa)
-
-        Args:
-            df: Eğitim verisi
-            strategy_class: Strateji sınıfı
-            param_grid: Parametre aralıkları
-            metric: Optimizasyon metriği
-
-        Returns:
-            Tuple: (En iyi parametreler, En iyi skor)
-        """
-        import itertools
-
-        # Parametre kombinasyonlarını oluştur
-        param_names = list(param_grid.keys())
-        param_values = list(param_grid.values())
-
-        best_params = None
-        best_score = float('-inf')
-        total_combinations = sum(1 for _ in itertools.product(*param_values))
-
-        logger.warning(f"⚠️ [WFO] Grid Search kullanılıyor ({total_combinations} kombinasyon) - Optuna kurun!")
-
-        combination_count = 0
-
-        for combination in itertools.product(*param_values):
-            combination_count += 1
-            current_params = dict(zip(param_names, combination))
-
-            try:
-                # Parametrelerle backtest yap
-                score = await self._backtest_params(
-                    df, strategy_class, current_params, metric
-                )
-
-                # En iyi skoru güncelle
-                if score > best_score:
-                    best_score = score
-                    best_params = current_params.copy()
-
-                if combination_count % 10 == 0:
-                    logger.debug(f"📊 [WFO] İlerleme: {combination_count}/{total_combinations} - En iyi: {best_score:.4f}")
-
-            except Exception as e:
-                logger.debug(f"⚠️ [WFO] Kombinasyon hatası: {current_params} - {str(e)}")
-                continue
-
-        logger.info(f"✅ [WFO] Grid Search tamamlandı: {combination_count} kombinasyon")
-
-        return best_params, best_score
-    
-    async def _backtest_params(
-        self,
-        df: pd.DataFrame,
-        strategy_class: Any,
-        params: Dict[str, Any],
-        metric: str
-    ) -> float:
-        """
-        Belirli parametrelerle backtest yapar.
+            logger.debug(f"⚠️ [WFO] Backtest hatası: {e}")
+            return 0.0  # Kötü skor
         
-        Args:
-            df: Veri
-            strategy_class: Strateji sınıfı
-            params: Parametreler
-            metric: Metrik
-            
-        Returns:
-            float: Skor (PnL veya Sharpe)
-        """
-        try:
-            # Strateji örneği oluştur
-            strategy = strategy_class()
-            
-            # Parametreleri uygula
-            for param_name, param_value in params.items():
-                if hasattr(strategy, param_name):
-                    setattr(strategy, param_name, param_value)
-            
-            # Basit backtest simülasyonu
-            # Gerçek implementasyonda VectorizedBacktester kullanılabilir
-            
-            trades = []
-            position = 0
-            entry_price = 0
-            total_pnl = 0
-            
-            # Sinyalleri üret
-            for i in range(1, len(df)):
-                row = df.iloc[i]
-                prev_row = df.iloc[i-1]
-                
-                try:
-                    signal = strategy.generate_signal(row)
-                except:
-                    signal = 1  # HOLD
-                
-                # Pozisyon aç/kapat
-                if signal == 2 and position == 0:  # AL
-                    position = 1
-                    entry_price = row['close']
-                elif signal == 0 and position == 1:  # SAT (LONG kapat)
-                    pnl = (row['close'] - entry_price) / entry_price
-                    total_pnl += pnl
-                    trades.append(pnl)
-                    position = 0
-                elif signal == 3 and position == 0:  # SHORT
-                    position = -1
-                    entry_price = row['close']
-                elif signal == 1 and position != 0:  # HOLD (pozisyon kapat)
-                    if position == 1:
-                        pnl = (row['close'] - entry_price) / entry_price
-                    else:
-                        pnl = (entry_price - row['close']) / entry_price
-                    total_pnl += pnl
-                    trades.append(pnl)
-                    position = 0
-            
-            # Metriği hesapla
-            if metric == "net_pnl":
-                return total_pnl
-            elif metric == "sharpe":
-                if len(trades) < 2:
-                    return 0
-                returns = pd.Series(trades)
-                return (returns.mean() / returns.std()) * np.sqrt(252) if returns.std() > 0 else 0
-            elif metric == "sortino":
-                if len(trades) < 2:
-                    return 0
-                returns = pd.Series(trades)
-                downside = returns[returns < 0]
-                if len(downside) == 0:
-                    return returns.mean() * np.sqrt(252)
-                return (returns.mean() / downside.std()) * np.sqrt(252)
-            else:
-                return total_pnl
-                
-        except Exception as e:
-            logger.debug(f"⚠️ [WFO] Backtest hatası: {str(e)}")
-            return float('-inf')
-    
-    async def _test_params(
-        self,
-        df: pd.DataFrame,
-        strategy_class: Any,
-        params: Dict[str, Any],
-        metric: str
-    ) -> float:
-        """
-        Parametreleri Out-of-Sample verisinde test eder.
-        
-        Args:
-            df: Test verisi
-            strategy_class: Strateji sınıfı
-            params: Parametreler
-            metric: Metrik
-            
-        Returns:
-            float: Test skoru
-        """
-        return await self._backtest_params(df, strategy_class, params, metric)
-    
-    def _calculate_improvement(self, new_score: float, old_score: float) -> float:
-        """
-        İyileştirme oranını hesaplar.
-        
-        Args:
-            new_score: Yeni skor
-            old_score: Eski skor
-            
-        Returns:
-            float: İyileştirme oranı (0-1 arası)
-        """
-        if old_score == 0:
-            return 0 if new_score == 0 else 1.0
-        
-        return (new_score - old_score) / abs(old_score)
-    
-    def _log_optimization_result(
-        self,
-        strategy_name: str,
-        timeframe: str,
-        old_params: Dict,
-        new_params: Dict,
-        oos_score: float
-    ):
-        """
-        Optimizasyon sonucunu loglar.
-        
-        Args:
-            strategy_name: Strateji adı
-            timeframe: Zaman dilimi
-            old_params: Eski parametreler
-            new_params: Yeni parametreler
-            oos_score: Out-of-Sample skor
-        """
-        # Değişen parametreleri bul
-        changes = []
-        for key in new_params:
-            if key in old_params and old_params[key] != new_params[key]:
-                changes.append(f"{key}: {old_params[key]} -> {new_params[key]}")
-        
-        if changes:
-            changes_str = ", ".join(changes)
-            logger.info(
-                f"🎯 [WFO] {strategy_name} ({timeframe}) optimize edildi. "
-                f"{changes_str} (OOS PnL: {oos_score*100:+.2f}%)"
-            )
+        # 4. Metriği döndür
+        if optimization_metric == 'sharpe':
+            return metrics.get('sharpe_ratio', 0.0)
         else:
-            logger.info(
-                f"🎯 [WFO] {strategy_name} ({timeframe}) optimize edildi. "
-                f"Yeni parametreler uygulandı (OOS PnL: {oos_score*100:+.2f}%)"
-            )
+            return metrics.get('net_pnl', 0.0)
     
-    def _get_candles_per_day(self, timeframe: str) -> float:
+    def _backtest(
+        self,
+        strategy: Any,
+        data: pd.DataFrame
+    ) -> Dict[str, float]:
         """
-        Timeframe'e göre günlük mum sayısını hesaplar.
-        
+        Basit backtest (vektörize) - KOMİSYON VE SLIPPAGE dahil.
+
+        Binance Futures komisyon oranları:
+        - Maker: %0.02 (0.0002)
+        - Taker: %0.04 (0.0004)
+
+        Slippage: %0.01 (0.0001) minimum kayma
+
         Args:
-            timeframe: Zaman dilimi (örn: 1m, 5m, 1h, 1d)
-            
+            strategy: Strateji instance
+            data: OHLCV DataFrame
+
         Returns:
-            float: Günlük mum sayısı
+            Metrikler (sharpe_ratio, net_pnl, vb.)
         """
-        if timeframe.endswith('m'):
-            minutes = int(timeframe.replace('m', ''))
-            return (24 * 60) / minutes
-        elif timeframe.endswith('h'):
-            hours = int(timeframe.replace('h', ''))
-            return 24 / hours
-        elif timeframe.endswith('d'):
-            days = int(timeframe.replace('d', ''))
-            return 1 / days
+        # Komisyon ve slippage oranları
+        MAKER_FEE = 0.0002  # %0.02
+        TAKER_FEE = 0.0004  # %0.04
+        SLIPPAGE = 0.0001   # %0.01
+
+        # Strateji sinyallerini üret
+        if hasattr(strategy, 'generate_signals'):
+            signals = strategy.generate_signals(data)
         else:
-            return 1  # Varsayılan
+            # Basit momentum stratejisi (fallback)
+            signals = pd.Series(0, index=data.index)
+            signals[data['close'] > data['close'].rolling(20).mean()] = 1
+            signals[data['close'] < data['close'].rolling(20).mean()] = -1
+
+        # İşlem sayısını hesapla (her sinyal değişimi 1 işlem)
+        trades = abs(signals.diff()).fillna(0)
+        total_trades = trades.sum() / 2
+
+        # Getiri hesapla
+        returns = data['close'].pct_change()
+
+        # Strateji getirisi (sinyal bir önceki mumdan)
+        strategy_returns = signals.shift(1) * returns
+
+        # KOMİSYON VE SLIPPAGE düş
+        # Her işlem için: (commission + slippage) * 2 (giriş + çıkış)
+        trade_cost = (TAKER_FEE + SLIPPAGE) * 2
+        strategy_returns = strategy_returns - (trades * trade_cost)
+
+        # Sharpe ratio (yıllık) - komisyonlar düşüldükten sonra
+        sharpe = (strategy_returns.mean() / strategy_returns.std()) * np.sqrt(252 * 24) if strategy_returns.std() > 0 else 0
+
+        # Net PnL (komisyonlar düşüldükten sonra)
+        net_pnl = (1 + strategy_returns).prod() - 1
+
+        logger.debug(f"📊 [WFO] Backtest: Trades={total_trades:.0f}, Sharpe={sharpe:.4f}, PnL={net_pnl:.2%}")
+
+        return {
+            'sharpe_ratio': sharpe,
+            'net_pnl': net_pnl,
+            'total_trades': total_trades,
+            'commission_costs': total_trades * trade_cost
+        }
     
-    def should_reoptimize(self) -> bool:
+    async def _validate_out_of_sample(
+        self,
+        params: Dict[str, Any],
+        test_data: pd.DataFrame,
+        strategy_class: Type
+    ) -> Dict[str, float]:
         """
-        Yeniden optimizasyon zamanı geldi mi kontrol eder.
-        
-        Returns:
-            bool: Optimizasyon gerekli mi?
-        """
-        if self.last_optimization is None:
-            return True
-        
-        hours_since_last = (datetime.now() - self.last_optimization).total_seconds() / 3600
-        return hours_since_last >= self.reoptimize_interval
-    
-    def get_optimization_history(self, limit: int = 10) -> List[Dict]:
-        """
-        Optimizasyon geçmişini döner.
+        Out-of-Sample doğrulama.
         
         Args:
-            limit: Maksimum kayıt sayısı
-            
-        Returns:
-            List[Dict]: Optimizasyon geçmişi
-        """
-        return self.optimization_history[-limit:]
-    
-    def get_current_params(self) -> Dict:
-        """
-        Mevcut parametreleri döner.
+            params: En iyi parametreler
+            test_data: Out-of-Sample veri
+            strategy_class: Strateji sınıfı
         
         Returns:
-            Dict: Mevcut parametreler
+            OOS metrikler
         """
-        return self.current_params.copy()
-
-
-# Global WFO instance'ları (sembol bazlı)
-_wfo_instances = {}
-
-
-def get_wfo_engine(symbol: str) -> WalkForwardOptimizer:
-    """
-    Sembol için WFO motorunu alır (yoksa oluşturur).
-    
-    Args:
-        symbol: Sembol adı
+        # Strateji oluştur
+        strategy = strategy_class()
+        if hasattr(strategy, 'update_params'):
+            strategy.update_params(params)
         
-    Returns:
-        WalkForwardOptimizer: WFO motoru
-    """
-    if symbol not in _wfo_instances:
-        _wfo_instances[symbol] = WalkForwardOptimizer()
+        # Backtest
+        metrics = self._backtest(strategy, test_data)
+        
+        logger.info(f"🔍 [WFO] OOS Sharpe: {metrics.get('sharpe_ratio', 0):.4f}, PnL: {metrics.get('net_pnl', 0):.2%}")
+        
+        return metrics
     
-    return _wfo_instances[symbol]
+    def _check_overfitting(
+        self,
+        is_score: float,
+        oos_score: float,
+        threshold: float = 0.3
+    ) -> bool:
+        """
+        Overfitting kontrolü.
+        
+        Eğer Out-of-Sample skoru, In-Sample skorundan %30'dan fazla düşerse,
+        overfitting var demektir.
+        
+        Args:
+            is_score: In-Sample skoru
+            oos_score: Out-of-Sample skoru
+            threshold: Düşüş eşiği (%30)
+        
+        Returns:
+            True ise overfitting var
+        """
+        if abs(is_score) < 0.01:  # Çok küçük skorlar için kontrol etme
+            return False
+        
+        decline = abs(is_score - oos_score) / abs(is_score)
+        
+        return decline > threshold
+    
+    def __del__(self):
+        """Destructor - thread pool'ı temizle"""
+        if hasattr(self, 'executor'):
+            self.executor.shutdown(wait=False)
+
+
+# Singleton instance
+wfo_engine = WFOEngine()
+
+# Export
+__all__ = ['WFOEngine', 'wfo_engine', 'start_wfo_background_task']
 
 
 async def start_wfo_background_task(
     symbol: str,
     timeframe: str,
-    strategy_class: Any,
-    param_grid: Dict[str, List[Any]] = None,
-    data_fetcher: Callable = None,
-    optimization_metric: str = "sharpe",
-    n_trials: int = 50
+    strategy_class: Type,
+    param_grid: Dict[str, Any] = None,
+    optimization_metric: str = 'sharpe',
+    n_trials: int = 50,
+    in_sample_days: int = 30,
+    out_of_sample_days: int = 7,
+    reoptimize_interval: int = 168  # Saat (1 hafta)
 ):
     """
-    Arka planda sürekli WFO optimizasyonu yapan asenkron görev.
-    TAM OTONOM - param_grid=None ise Auto-Grid + Bayesian Optimization kullanır.
+    WFO arka plan görevi (otomatik yeniden optimizasyon).
 
     Args:
-        symbol: Sembol adı
-        timeframe: Zaman dilimi
+        symbol: Sembol
+        timeframe: Timeframe
         strategy_class: Strateji sınıfı
-        param_grid: Parametre aralıkları (None ise otomatik oluşturulur - ZERO-TOUCH)
-        data_fetcher: Veri çekme fonksiyonu (async) - None ise varsayılan DB fetcher kullanılır
+        param_grid: Manuel param grid (None ise auto-grid)
         optimization_metric: Optimizasyon metriği
-        n_trials: Maksimum deneme sayısı (Bayesian için)
+        n_trials: Optuna deneme sayısı
+        in_sample_days: In-Sample gün sayısı
+        out_of_sample_days: Out-of-Sample gün sayısı
+        reoptimize_interval: Yeniden optimizasyon aralığı (saat)
     """
-    # Varsayılan veri çekici: DB'den Klines verisi
-    if data_fetcher is None:
-        async def default_data_fetcher(sym: str, tf: str):
-            from data.database import db_manager
-            try:
-                await db_manager.connect()
-                klines = await db_manager.get_klines(sym, timeframe=tf, limit=1000)
-                if klines:
-                    import pandas as pd
-                    df = pd.DataFrame(klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-                    df['timestamp'] = pd.to_numeric(df['timestamp'], errors='coerce')
-                    df = df.sort_values('timestamp').reset_index(drop=True)
-                    return df
-                return None
-            except Exception as e:
-                logger.error(f"❌ [WFO] Veri çekme hatası: {e}")
-                return None
-
-        data_fetcher = default_data_fetcher
-
-    wfo = get_wfo_engine(symbol)
-
-    # FAZ 3: TAM OTONOM AKIŞ
-    # param_grid=None ise Auto-Grid otomatik oluşturur
-    if param_grid is None:
-        if AUTO_GRID_AVAILABLE:
-            logger.info(f"🤖 [ZERO-TOUCH] {symbol} için otomatik parametre ızgarası oluşturuluyor...")
-            param_grid = generate_param_grid(strategy_class=strategy_class)
-
-            if not param_grid:
-                logger.error(f"❌ [ZERO-TOUCH] {symbol} için otomatik ızgara oluşturulamadı!")
-                return
-
-            logger.info(f"✅ [ZERO-TOUCH] Auto-Grid {len(param_grid)} parametre oluşturdu")
-        else:
-            logger.error(f"❌ [ZERO-TOUCH] {symbol} için param_grid tanımlı değil ve Auto-Grid mevcut değil!")
-            return
-
-    logger.info(f"🔄 [WFO] Arka plan görevi başlatıldı: {symbol} ({timeframe})")
-
-    # ============================================
-    # WFO DURUM KONTROLÜ (LOGGING)
-    # Kullanıcı arka planda WFO'nun çalıştığını bilmeli
-    # ============================================
-    logger.info(f"⏳ [WFO-STATUS] Arka plan otonom optimizasyon motoru şu an devrede ve {symbol} ({timeframe}) için veri işliyor...")
+    logger.info(f"🧠 [WFO] Arka plan görevi başlatıldı: {symbol} {timeframe}")
+    logger.info(f"   📅 Reoptimize interval: {reoptimize_interval} saat")
 
     while True:
         try:
-            # Yeniden optimizasyon zamanı geldi mi?
-            if wfo.should_reoptimize() and not wfo.is_optimizing:
-                logger.info(f"🔍 [WFO] {symbol} için optimizasyon tetiklendi...")
+            # Optimizasyon çalıştır
+            result = await wfo_engine.optimize(
+                symbol=symbol,
+                timeframe=timeframe,
+                strategy_class=strategy_class,
+                in_sample_days=in_sample_days,
+                out_of_sample_days=out_of_sample_days,
+                n_trials=n_trials,
+                optimization_metric=optimization_metric,
+                param_grid=param_grid
+            )
 
-                # Veri çek
-                df = await data_fetcher(symbol, timeframe)
+            # Eğer overfitting yoksa parametreleri güncelle
+            if result and not result.get('overfitting', True):
+                logger.info(f"✅ [WFO] Parametreler güncellendi: {result.get('best_params', {})}")
 
-                if df is not None and len(df) > 0:
-                    # WFO çalıştır
-                    result = await wfo.run_wfo(
-                        df=df,
-                        strategy_class=strategy_class,
-                        param_grid=param_grid,
-                        timeframe=timeframe,
-                        symbol=symbol,
-                        optimization_metric=optimization_metric
-                    )
+                # Strateji instance bul ve güncelle
+                from strategy.manager import StrategyManager
+                strategy = StrategyManager.get_strategy_by_symbol(symbol)
+                if strategy and hasattr(strategy, 'update_params'):
+                    strategy.update_params(result['best_params'])
+                    logger.info(f"📝 [WFO] Strateji parametreleri canlı bota uygulandı")
 
-                    if result.get('status') == 'optimized':
-                        logger.info(f"✅ [WFO] {symbol} parametreleri güncellendi!")
-
-                        # FAZ 4: Canlı parametre güncellemesi
-                        # PaperTrader'daki aktif stratejiyi bul ve güncelle
-                        try:
-                            from core.paper import paper_engine
-
-                            if symbol in paper_engine.strategies and paper_engine.strategies[symbol] is not None:
-                                # Strateji parametrelerini canlı olarak güncelle
-                                success = paper_engine.update_strategy_params(
-                                    symbol=symbol,
-                                    new_params=result['new_params'],
-                                    sharpe=result.get('out_of_sample_score', 0)
-                                )
-
-                                if success:
-                                    logger.info(f"🎯 [WFO] {symbol} canlı parametre güncellemesi başarılı!")
-                                else:
-                                    logger.warning(f"⚠️ [WFO] {symbol} parametre güncellemesi başarısız.")
-                            else:
-                                logger.warning(f"⚠️ [WFO] {symbol} için aktif strateji bulunamadı.")
-                        except Exception as e:
-                            logger.error(f"❌ [WFO] Canlı güncelleme hatası: {str(e)}")
-
-                    elif result.get('status') == 'no_improvement':
-                        logger.info(f"⚠️ [WFO] {symbol} için iyileştirme bulunamadı.")
-                else:
-                    logger.warning(f"⚠️ [WFO] {symbol} için veri çekilemedi.")
-
-            # 1 saat bekle
-            await asyncio.sleep(3600)
-
-            # Döngü devam ediyor - durum kontrolü
-            logger.debug(f"⏳ [WFO-STATUS] {symbol} için otonom optimizasyon izleniyor... (sonraki kontrol 1 saat)")
+            # Bekle (reoptimize interval)
+            logger.info(f"⏳ [WFO] Sonraki optimizasyon: {reoptimize_interval} saat")
+            await asyncio.sleep(reoptimize_interval * 3600)
 
         except asyncio.CancelledError:
-            logger.info(f"🛑 [WFO] {symbol} arka plan görevi durduruldu.")
+            logger.info(f"🛑 [WFO] Arka plan görevi durduruldu: {symbol}")
             break
         except Exception as e:
-            logger.error(f"❌ [WFO] Arka plan hatası ({symbol}): {str(e)}")
-            await asyncio.sleep(3600)
+            logger.error(f"❌ [WFO] Arka plan hatası: {e}")
+            await asyncio.sleep(3600)  # 1 saat bekle ve tekrar dene

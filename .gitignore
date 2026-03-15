@@ -18,6 +18,9 @@ __pycache__/
 *.db-wal
 cryptobot.db
 
+# OHLCV Flat Files (Superalgos Mimarisi)
+data/ohlcv/
+
 # Logs and Debug
 *.log
 debug_output.txt

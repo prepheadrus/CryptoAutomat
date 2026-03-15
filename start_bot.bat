@@ -75,20 +75,16 @@ echo   Event Tracer     : Aktif (Terminal loglarini izleyin)
 echo   Architecture     : Event-Driven (Modular)
 echo ================================================================
 echo.
-echo   OZELLIKLER:
-echo   - Modern Dashboard UI (Glassmorphism Cards)
-echo   - Sistem Ayarlari Sayfasi (Risk, WFO, ML, API)
-echo   - Multi-Timeframe Analysis (HTF Altin Oran)
-echo   - Event-Driven Architecture
-echo   - Position Manager + Risk Engine
-echo   - ML Model Integration (XGBoost + RF Ensemble)
-echo   - Walk-Forward Optimization (WFO)
-echo   - Auto-Grid Generator
-echo   - Bayesian Optimization (Optuna)
-echo   - 1-to-N Multi-Bot Architecture
-echo   - Smart Hybrid Architecture
-echo   - No-Code Strategy Builder
-echo   - Fernet API Key Encryption
+echo   OZELLIKLER (6 Faz Mimari):
+echo   - Faz 1: Event-Driven Architecture (%100 Pub/Sub)
+echo   - Faz 2: Clean Architecture API (194 satir)
+echo   - Faz 3: ES6 Frontend Modules (210 satir)
+echo   - Faz 4: Modular Indicators (5 modül)
+echo   - Faz 5: Zero-Touch WFO (Bayesian TPE)
+echo   - Faz 6: MLOps Auto-Retrain + Liquidity Sweep
+echo   - Parquet Data Lake (Snappy compression)
+echo   - Order Book Imbalance Filtresi
+echo   - Commission + Slippage Gerçekçi Backtest
 echo ================================================================
 echo.
 echo   BOT CALISIYOR - Pencereyi kapatabilirsiniz

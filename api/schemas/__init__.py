@@ -32,18 +32,9 @@ from api.schemas.data import (
     ActiveDownloadsResponse,
 )
 from api.schemas.config import (
-    RiskConfigRequest,
-    RiskConfigResponse,
-    WFOConfigRequest,
-    MLConfigRequest,
-    HTFConfigRequest,
-    AdvancedConfigRequest,
-    AdvancedConfigResponse,
-    BotConfigRequest,
-    BotConfigResponse,
-    ApiKeyRequest,
-    ApiKeyTestResponse,
-    ApiKeySaveResponse,
+    RiskConfigUpdate,
+    AdvancedConfigUpdate,
+    ApiKeyUpdateRequest,
 )
 
 __all__ = [
@@ -75,16 +66,7 @@ __all__ = [
     'ActiveDownloadsResponse',
 
     # Config
-    'RiskConfigRequest',
-    'RiskConfigResponse',
-    'WFOConfigRequest',
-    'MLConfigRequest',
-    'HTFConfigRequest',
-    'AdvancedConfigRequest',
-    'AdvancedConfigResponse',
-    'BotConfigRequest',
-    'BotConfigResponse',
-    'ApiKeyRequest',
-    'ApiKeyTestResponse',
-    'ApiKeySaveResponse',
+    'RiskConfigUpdate',
+    'AdvancedConfigUpdate',
+    'ApiKeyUpdateRequest',
 ]

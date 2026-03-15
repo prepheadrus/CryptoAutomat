@@ -1,107 +1,152 @@
 """
-Config Schemas - Pydantic models for configuration
+Config Schemas
+
+Pydantic models for configuration updates.
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
-from enum import Enum
-
-
-class EnvironmentType(str, Enum):
-    DEVELOPMENT = "development"
-    PRODUCTION = "production"
-
-
-class LogLevelType(str, Enum):
-    DEBUG = "DEBUG"
-    INFO = "INFO"
-    WARNING = "WARNING"
-    ERROR = "ERROR"
+from typing import Dict, Any, Optional
 
 
 # ============================================================================
-# RISK CONFIG SCHEMAS
+# RISK CONFIG
 # ============================================================================
 
-class RiskConfigRequest(BaseModel):
-    max_risk_per_trade_percent: float = Field(..., ge=0.1, le=5.0, description="İşlem başına maksimum risk (%)")
-    max_leverage: int = Field(..., ge=1, le=50, description="Maksimum kaldıraç (1-50x)")
-    max_open_positions: int = Field(..., ge=1, le=20, description="Maksimum açık pozisyon sayısı")
-    max_consecutive_losses: int = Field(..., ge=0, le=50, description="Maksimum ardışık kayıp (0 = sınırsız)")
-    kill_switch_enabled: bool = Field(default=True, description="Kill Switch aktif/pasif")
-
-
-class RiskConfigResponse(BaseModel):
-    status: str
-    message: Optional[str] = None
-    data: Optional[Dict[str, Any]] = None
-
-
-# ============================================================================
-# ADVANCED CONFIG SCHEMAS
-# ============================================================================
-
-class WFOConfigRequest(BaseModel):
-    enabled: bool = True
-    train_days: int = Field(default=30, ge=7, le=90)
-    test_days: int = Field(default=7, ge=1, le=30)
-    reoptimize_interval: int = Field(default=168, ge=24, le=720)
-
-
-class MLConfigRequest(BaseModel):
-    enabled: bool = True
-    confidence_threshold: float = Field(default=0.65, ge=0.50, le=0.95)
-
-
-class HTFConfigRequest(BaseModel):
-    enabled: bool = True
-    trend_method: str = "ema_stack"
-
-
-class AdvancedConfigRequest(BaseModel):
-    wfo: Optional[WFOConfigRequest] = None
-    ml: Optional[MLConfigRequest] = None
-    htf: Optional[HTFConfigRequest] = None
-
-
-class AdvancedConfigResponse(BaseModel):
-    status: str
-    message: Optional[str] = None
-    data: Optional[Dict[str, Any]] = None
-
-
-# ============================================================================
-# BOT CONFIG SCHEMAS
-# ============================================================================
-
-class BotConfigRequest(BaseModel):
-    exchange: str = "binance"
-    environment: EnvironmentType = EnvironmentType.DEVELOPMENT
-    log_level: LogLevelType = LogLevelType.DEBUG
-
-
-class BotConfigResponse(BaseModel):
-    status: str
-    message: Optional[str] = None
-    data: Optional[Dict[str, Any]] = None
+class RiskConfigUpdate(BaseModel):
+    """
+    Risk ayarları güncelleme isteği.
+    
+    Attributes:
+        max_risk_per_trade_percent: İşlem başına maksimum risk (%)
+        max_leverage: Maksimum kaldıraç
+        max_open_positions: Maksimum açık pozisyon
+        max_consecutive_losses: Maksimum ardışık kayıp
+    """
+    max_risk_per_trade_percent: float = Field(
+        default=1.0,
+        ge=0.1,
+        le=5.0,
+        description="İşlem başına maksimum risk (%)"
+    )
+    max_leverage: int = Field(
+        default=10,
+        ge=1,
+        le=50,
+        description="Maksimum kaldıraç"
+    )
+    max_open_positions: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Maksimum açık pozisyon"
+    )
+    max_consecutive_losses: int = Field(
+        default=5,
+        ge=1,
+        le=10,
+        description="Maksimum ardışık kayıp"
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "max_risk_per_trade_percent": 1.0,
+                "max_leverage": 10,
+                "max_open_positions": 5,
+                "max_consecutive_losses": 5
+            }
+        }
 
 
 # ============================================================================
-# API KEY SCHEMAS
+# ADVANCED CONFIG
 # ============================================================================
 
-class ApiKeyRequest(BaseModel):
-    api_key: str = Field(..., min_length=10)
-    api_secret: str = Field(..., min_length=10)
+class KalmanConfig(BaseModel):
+    """Kalman filtresi ayarları"""
+    enabled: bool = Field(default=True, description="Kalman filtresi aktif")
+    q: float = Field(default=0.001, ge=0.0001, le=0.01, description="Process noise")
+    r: float = Field(default=0.1, ge=0.01, le=1.0, description="Measurement noise")
 
 
-class ApiKeyTestResponse(BaseModel):
-    status: str
-    message: Optional[str] = None
-    valid: Optional[bool] = None
+class CandleLockConfig(BaseModel):
+    """Mum kapanış kilidi ayarları"""
+    enabled: bool = Field(default=True, description="Mum kilidi aktif")
+    interval: int = Field(default=1, ge=1, le=5, description="Kontrol aralığı (mum)")
 
 
-class ApiKeySaveResponse(BaseModel):
-    status: str
-    message: Optional[str] = None
-    encrypted: Optional[bool] = None
+class WFOConfig(BaseModel):
+    """Walk-Forward Optimization ayarları"""
+    enabled: bool = Field(default=False, description="WFO aktif")
+    reoptimize_interval: int = Field(default=168, ge=24, le=720, description="Yeniden optimizasyon aralığı (saat)")
+    optimization_metric: str = Field(default="sharpe", description="Optimizasyon metriği")
+    train_days: int = Field(default=30, ge=7, le=90, description="Eğitim günü")
+    test_days: int = Field(default=7, ge=1, le=30, description="Test günü")
+
+
+class MLConfig(BaseModel):
+    """ML ayarları"""
+    enabled: bool = Field(default=True, description="ML aktif")
+    confidence_threshold: float = Field(default=0.6, ge=0.3, le=0.9, description="Güven eşiği")
+
+
+class HTFConfig(BaseModel):
+    """High Timeframe ayarları"""
+    enabled: bool = Field(default=True, description="HTF aktif")
+    ema_fast: int = Field(default=20, ge=5, le=50, description="Hızlı EMA")
+    ema_slow: int = Field(default=50, ge=20, le=200, description="Yavaş EMA")
+
+
+class AdvancedConfigUpdate(BaseModel):
+    """
+    Gelişmiş ayarlar güncelleme isteği.
+    """
+    wfo: Optional[WFOConfig] = None
+    ml: Optional[MLConfig] = None
+    htf: Optional[HTFConfig] = None
+    kalman: Optional[KalmanConfig] = None
+    candle_lock: Optional[CandleLockConfig] = None
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "wfo": {"enabled": False, "reoptimize_interval": 168},
+                "ml": {"enabled": True, "confidence_threshold": 0.6},
+                "htf": {"enabled": True, "ema_fast": 20, "ema_slow": 50},
+                "kalman": {"enabled": True, "q": 0.001, "r": 0.1},
+                "candle_lock": {"enabled": True, "interval": 1}
+            }
+        }
+
+
+# ============================================================================
+# API KEY UPDATE
+# ============================================================================
+
+class ApiKeyUpdateRequest(BaseModel):
+    """
+    API anahtarı güncelleme isteği.
+    """
+    api_key: str = Field(..., min_length=10, description="API Key")
+    api_secret: str = Field(..., min_length=10, description="API Secret")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "api_key": "pk_live_abc123xyz...",
+                "api_secret": "sk_live_xyz789abc..."
+            }
+        }
+
+
+# ============================================================================
+# API TEST
+# ============================================================================
+
+class ApiTestRequest(BaseModel):
+    """
+    API bağlantı testi isteği.
+    """
+    api_key: str = Field(..., description="API Key")
+    api_secret: str = Field(..., description="API Secret")
+    exchange: str = Field(default="binance", description="Borsa")
