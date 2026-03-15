@@ -148,6 +148,7 @@ class StrategyExecutor:
                 raise ValueError(f"Eksik alan: {field}")
 
         # "conditions" alanı için safe get - yoksa varsayılan ekle
+        from core.logger import logger
         conditions = self.strategy_data.get('conditions')
 
         if not conditions:

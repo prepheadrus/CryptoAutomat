@@ -298,7 +298,7 @@ class DataLakeStorage:
         # Index'i reset le
         df = df.reset_index(drop=True)
 
-        logger.debug(f"✅ [DATA LAKE] Integrity check: {symbol} {timeframe} ({len(df)} mum)")
+        logger.debug(f"✅ [DATA LAKE] Integrity check: ({len(df)} mum)")
         return df
 
     async def load_or_resample(self, symbol: str, timeframe: str, db_manager,
