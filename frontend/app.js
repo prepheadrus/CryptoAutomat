@@ -1089,8 +1089,9 @@ async function loadSymbolsForBot() {
         const symbolSelects = document.querySelectorAll('.symbol-select');
         symbolSelects.forEach(select => {
             if (select.id !== 'market-symbol') { // Market selection list is different
+                // symbols is an array of strings (e.g., ["BTC/USDT", "ETH/USDT"])
                 select.innerHTML = '<option value="">Sembol Seçin...</option>' +
-                    symbols.map(s => `<option value="${s.symbol}">${s.symbol}</option>`).join('');
+
             }
         });
 
@@ -1135,6 +1136,76 @@ async function loadTimeframesForBot() {
     console.log(`⏱️ [TIMEFRAMES] ${timeframes.length} timeframe yüklendi`);
 }
 
+/**
+ * Handle bot start form submit
+ * @param {Event} event - Form submit event
+ */
+async function handleBotSubmit(event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    console.log('🚀 [BOT] === FORM SUBMIT TRIGGERED ===');
+    console.log('[BOT] Event:', event.type);
+    console.log('[BOT] Form:', event.target.id);
+
+    // Get form values
+    const symbol = document.getElementById('bot-symbol')?.value;
+    const strategy = document.getElementById('bot-strategy')?.value;
+    const timeframe = document.getElementById('bot-timeframe')?.value;
+    const market = document.getElementById('bot-market')?.value || 'swap';
+    const marginType = document.getElementById('bot-margin-type')?.value || 'isolated';
+
+    console.log('[BOT] Form values:', { symbol, strategy, timeframe, market, marginType });
+
+    // Validation
+    if (!symbol || !strategy) {
+        console.error('❌ [BOT] Validation failed:', { symbol, strategy });
+        alert('❌ Lütfen sembol ve strateji seçiniz!');
+        return;
+    }
+
+    try {
+        console.log(`🚀 [BOT] Starting bot: ${symbol} | ${strategy} | ${timeframe} | ${market} | ${marginType}`);
+
+        // Prepare bot data (backend schema ile uyumlu)
+        const botData = {
+            symbol: symbol,
+            strategy_id: strategy,
+            timeframe: timeframe || '1h',
+            market_type: market,  // swap, spot, future
+            margin_type: marginType  // isolated, cross
+        };
+
+        console.log('[BOT] Sending to API:', botData);
+
+        // Start bot via botManager
+        console.log('[BOT] Calling botManager.startBot()...');
+        const result = await botManager.startBot(botData);
+        console.log('[BOT] Result:', result);
+
+        if (result && result.status === 'success') {
+            alert(`✅ Bot başarıyla başlatıldı!\n\nBot ID: ${result.bot_id}\nSembol: ${symbol}\nStrateji: ${strategy}`);
+
+            // Reset form
+            document.getElementById('bot-start-form')?.reset();
+
+            // Refresh bot list - HEMEN yenile
+            console.log('[BOT] Refreshing bot list immediately...');
+            await botManager.loadBots();
+            console.log('[BOT] Bot list refreshed');
+        } else {
+            alert(`❌ Bot başlatma hatası: ${result?.message || 'Bilinmeyen hata'}`);
+        }
+
+    } catch (error) {
+        console.error('❌ [BOT] Start error:', error);
+        alert(`❌ Bot başlatma hatası: ${error.message}`);
+    }
+}
+
+// Export handleBotSubmit to window
+window.handleBotSubmit = handleBotSubmit;
+
 // ============================================================================
 // EVENT LISTENERS
 // ============================================================================
@@ -1154,6 +1225,13 @@ function setupEventListeners() {
         botManager.destroy();
         chartRenderer.destroy();
     });
+
+    // Bot start form submit
+    const botForm = document.getElementById('bot-start-form');
+    if (botForm) {
+        botForm.addEventListener('submit', handleBotSubmit);
+        console.log('✅ [FORM] Bot start form listener attached');
+    }
 }
 
 // ============================================================================
@@ -1198,6 +1276,11 @@ window.store = store;
 window.api = api;
 window.loadDashboard = loadDashboard;
 window.loadActiveTasks = loadActiveTasks;
+window.handleBotSubmit = handleBotSubmit;
+window.saveRiskSettings = saveRiskSettings;
+window.saveAdvancedSettings = saveAdvancedSettings;
+window.saveApiKeys = saveApiKeys;
+window.testApiConnection = testApiConnection;
 
 // Settings & Launcher
 window.handleBotSubmit = handleBotSubmit;
