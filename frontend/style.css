@@ -100,12 +100,14 @@ body {
 
 .menu-item:hover,
 .menu-item.active {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(88, 166, 255, 0.05);
     color: white;
 }
 
 .menu-item.active {
     border-left: 3px solid var(--neon-blue);
+    box-shadow: inset 5px 0 15px -5px rgba(88, 166, 255, 0.3);
+    text-shadow: 0 0 8px rgba(88, 166, 255, 0.4);
 }
 
 /* Main */
@@ -211,6 +213,15 @@ body {
 .chart-container {
     height: 100%;
     width: 100%;
+}
+
+/* Tab Management */
+.tab-content {
+    display: none;
+}
+
+.tab-content.active-tab {
+    display: block;
 }
 
 /* Multi-Asset Decision Grid */
@@ -2866,6 +2877,7 @@ select option {
         right: -100%;
     }
 }
+
 
 /* Toast Notifications */
 #toast-container {
