@@ -97,6 +97,13 @@ class HTFConfig(BaseModel):
     ema_slow: int = Field(default=50, ge=20, le=200, description="Yavaş EMA")
 
 
+class BotConfigUpdate(BaseModel):
+    """Genel bot ayarları güncelleme isteği"""
+    environment: str = Field(default="development", description="Ortam (development/production)")
+    exchange: str = Field(default="binance", description="Borsa")
+    log_level: str = Field(default="INFO", description="Log seviyesi")
+
+
 class AdvancedConfigUpdate(BaseModel):
     """
     Gelişmiş ayarlar güncelleme isteği.
