@@ -52,6 +52,7 @@ async function init() {
         await loadActiveTasks();
         await loadDatabaseInventory();  // Load inventory
         await loadMarketList();  // Load market list
+        await loadBotConfig();      // Load bot config
         await loadRiskSettings();  // Load risk settings
         await loadAdvancedSettings();  // Load advanced settings
         await loadSymbolsForBot();  // Load symbols for bot launcher
@@ -724,8 +725,120 @@ window.togglePause = async function(symbol, action) {
 };
 
 // ============================================================================
+// UI UTILITIES
+// ============================================================================
+
+/**
+ * Show toast notification
+ * @param {string} message - Notification message
+ * @param {string} type - success, error, info, warning
+ */
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toast-container') || createToastContainer();
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+
+    let icon = 'ℹ️';
+    if (type === 'success') icon = '✅';
+    if (type === 'error') icon = '❌';
+    if (type === 'warning') icon = '⚠️';
+
+    toast.innerHTML = `
+        <span class="toast-icon">${icon}</span>
+        <span class="toast-message">${message}</span>
+    `;
+
+    container.appendChild(toast);
+
+    // Auto-remove
+    setTimeout(() => {
+        toast.classList.add('fade-out');
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+}
+
+function createToastContainer() {
+    const container = document.createElement('div');
+    container.id = 'toast-container';
+    document.body.appendChild(container);
+    return container;
+}
+
+// ============================================================================
+// BOT LAUNCHER
+// ============================================================================
+
+/**
+ * Handle bot start form submission
+ */
+async function handleBotSubmit(event) {
+    event.preventDefault();
+
+    const botData = {
+        symbol: document.getElementById('bot-symbol').value,
+        strategy_id: document.getElementById('bot-strategy').value,
+        timeframe: document.getElementById('bot-timeframe').value,
+        market_type: document.getElementById('bot-market').value,
+        margin_type: document.getElementById('bot-margin-type').value
+    };
+
+    if (!botData.symbol || !botData.strategy_id) {
+        showToast('❌ Lütfen sembol ve strateji seçin!', 'error');
+        return;
+    }
+
+    try {
+        showToast(`🚀 ${botData.symbol} için bot başlatılıyor...`, 'info');
+        const result = await botManager.startBot(botData);
+        showToast(`✅ Bot başlatıldı! ID: ${result.bot_id}`, 'success');
+    } catch (error) {
+        showToast(`❌ Hata: ${error.message}`, 'error');
+    }
+}
+
+// ============================================================================
 // SETTINGS FORMS
 // ============================================================================
+
+/**
+ * Load general bot config
+ */
+async function loadBotConfig() {
+    try {
+        const data = await api.getBotConfig();
+        if (data.status === 'success' && data.config) {
+            document.getElementById('bot-config-exchange').value = data.config.exchange || 'binance';
+            document.getElementById('bot-config-environment').value = data.config.environment || 'development';
+            document.getElementById('bot-config-loglevel').value = data.config.log_level || 'INFO';
+            console.log('⚙️ [SETTINGS] Bot config loaded');
+        }
+    } catch (error) {
+        console.error('❌ [SETTINGS] Bot config load error:', error);
+    }
+}
+
+/**
+ * Save general bot config
+ */
+async function saveBotConfig() {
+    const data = {
+        exchange: document.getElementById('bot-config-exchange').value,
+        environment: document.getElementById('bot-config-environment').value,
+        log_level: document.getElementById('bot-config-loglevel').value
+    };
+
+    try {
+        const result = await api.saveBotConfig(data);
+        if (result.status === 'success') {
+            showToast('✅ Bot ayarları güncellendi', 'success');
+        } else {
+            showToast('❌ ' + result.message, 'error');
+        }
+    } catch (error) {
+        showToast('❌ Kaydetme hatası: ' + error.message, 'error');
+    }
+}
 
 /**
  * Load risk settings
@@ -735,11 +848,12 @@ async function loadRiskSettings() {
         const data = await api.getRiskSettings();
 
         if (data.status === 'success' && data.config) {
-            // Fill form inputs
-            document.getElementById('risk-max-risk-percent').value = data.config.max_risk_per_trade_percent || 1.0;
+            // Fill form inputs (Aligning with HTML IDs)
+            document.getElementById('risk-max-risk').value = data.config.max_risk_per_trade_percent || 0.2;
             document.getElementById('risk-max-leverage').value = data.config.max_leverage || 10;
             document.getElementById('risk-max-positions').value = data.config.max_open_positions || 5;
-            document.getElementById('risk-max-losses').value = data.config.max_consecutive_losses || 5;
+            document.getElementById('risk-max-losses').value = data.config.max_consecutive_losses || 10;
+            document.getElementById('risk-kill-switch-enabled').checked = data.config.kill_switch_enabled !== false;
 
             console.log('⚙️ [SETTINGS] Risk settings loaded');
         }
@@ -753,19 +867,16 @@ async function loadRiskSettings() {
  */
 async function saveRiskSettings() {
     const data = {
-        max_risk_per_trade_percent: parseFloat(document.getElementById('risk-max-risk-percent').value),
+        max_risk_per_trade_percent: parseFloat(document.getElementById('risk-max-risk').value),
         max_leverage: parseInt(document.getElementById('risk-max-leverage').value),
         max_open_positions: parseInt(document.getElementById('risk-max-positions').value),
-        max_consecutive_losses: parseInt(document.getElementById('risk-max-losses').value)
+        max_consecutive_losses: parseInt(document.getElementById('risk-max-losses').value),
+        kill_switch_enabled: document.getElementById('risk-kill-switch-enabled').checked
     };
 
     // Validation
     if (data.max_risk_per_trade_percent < 0.1 || data.max_risk_per_trade_percent > 5.0) {
         showToast('❌ Risk %0.1 - %5.0 arasında olmalı!', 'error');
-        return;
-    }
-    if (data.max_leverage < 1 || data.max_leverage > 50) {
-        showToast('❌ Kaldıraç 1x - 50x arasında olmalı!', 'error');
         return;
     }
 
@@ -774,7 +885,6 @@ async function saveRiskSettings() {
 
         if (result.status === 'success') {
             showToast('✅ Risk ayarları güncellendi (Hot-Reload)', 'success');
-            console.log('⚙️ [SETTINGS] Risk settings saved');
         } else {
             showToast('❌ ' + result.message, 'error');
         }
@@ -794,6 +904,8 @@ async function loadAdvancedSettings() {
             // WFO
             const wfo = data.config.wfo || {};
             document.getElementById('wfo-enabled').checked = wfo.enabled || false;
+            document.getElementById('wfo-train-days').value = wfo.train_days || 30;
+            document.getElementById('wfo-test-days').value = wfo.test_days || 7;
             document.getElementById('wfo-interval').value = wfo.reoptimize_interval || 168;
 
             // ML
@@ -804,19 +916,18 @@ async function loadAdvancedSettings() {
             // HTF
             const htf = data.config.htf || {};
             document.getElementById('htf-enabled').checked = htf.enabled || true;
-            document.getElementById('htf-ema-fast').value = htf.ema_fast || 20;
-            document.getElementById('htf-ema-slow').value = htf.ema_slow || 50;
+            document.getElementById('htf-method').value = htf.trend_method || 'ema_stack';
 
             // Kalman
             const kalman = data.config.kalman || { enabled: true, q: 0.001, r: 0.1 };
             document.getElementById('kalman-enabled').checked = kalman.enabled;
-            document.getElementById('kalman-q').value = kalman.q;
-            document.getElementById('kalman-r').value = kalman.r;
+            document.getElementById('kalman-process-noise').value = kalman.q || 0.001;
+            document.getElementById('kalman-measurement-noise').value = kalman.r || 0.1;
 
             // Candle Lock
             const candleLock = data.config.candle_lock || { enabled: true, interval: 1 };
             document.getElementById('candle-lock-enabled').checked = candleLock.enabled;
-            document.getElementById('candle-lock-interval').value = candleLock.interval;
+            document.getElementById('candle-lock-interval').value = candleLock.interval || 5;
 
             console.log('⚙️ [SETTINGS] Advanced settings loaded');
         }
@@ -832,10 +943,9 @@ async function saveAdvancedSettings() {
     const data = {
         wfo: {
             enabled: document.getElementById('wfo-enabled').checked,
-            reoptimize_interval: parseInt(document.getElementById('wfo-interval').value),
-            optimization_metric: 'sharpe',
-            train_days: 30,
-            test_days: 7
+            train_days: parseInt(document.getElementById('wfo-train-days').value),
+            test_days: parseInt(document.getElementById('wfo-test-days').value),
+            reoptimize_interval: parseInt(document.getElementById('wfo-interval').value)
         },
         ml: {
             enabled: document.getElementById('ml-enabled').checked,
@@ -843,32 +953,14 @@ async function saveAdvancedSettings() {
         },
         htf: {
             enabled: document.getElementById('htf-enabled').checked,
-            ema_fast: parseInt(document.getElementById('htf-ema-fast').value),
-            ema_slow: parseInt(document.getElementById('htf-ema-slow').value)
-        },
-        kalman: {
-            enabled: document.getElementById('kalman-enabled').checked,
-            q: parseFloat(document.getElementById('kalman-q').value),
-            r: parseFloat(document.getElementById('kalman-r').value)
-        },
-        candle_lock: {
-            enabled: document.getElementById('candle-lock-enabled').checked,
-            interval: parseInt(document.getElementById('candle-lock-interval').value)
+            trend_method: document.getElementById('htf-method').value
         }
     };
 
-    // Validation
-    if (data.ml.confidence_threshold < 0.3 || data.ml.confidence_threshold > 0.9) {
-        showToast('❌ ML güven eşiği %30 - %90 arasında olmalı!', 'error');
-        return;
-    }
-
     try {
         const result = await api.saveAdvancedSettings(data);
-
         if (result.status === 'success') {
-            showToast('✅ Gelişmiş ayarlar güncellendi (Hot-Reload)', 'success');
-            console.log('⚙️ [SETTINGS] Advanced settings saved');
+            showToast('✅ Gelişmiş ayarlar güncellendi', 'success');
         } else {
             showToast('❌ ' + result.message, 'error');
         }
@@ -878,19 +970,72 @@ async function saveAdvancedSettings() {
 }
 
 /**
+ * Save Kalman Settings
+ */
+async function saveKalmanSettings() {
+    const data = {
+        kalman: {
+            enabled: document.getElementById('kalman-enabled').checked,
+            q: parseFloat(document.getElementById('kalman-process-noise').value),
+            r: parseFloat(document.getElementById('kalman-measurement-noise').value)
+        }
+    };
+
+    try {
+        const result = await api.saveAdvancedSettings(data);
+        if (result.status === 'success') {
+            showToast('✅ Kalman ayarları güncellendi', 'success');
+        } else {
+            showToast('❌ ' + result.message, 'error');
+        }
+    } catch (error) {
+        showToast('❌ Kaydetme hatası: ' + error.message, 'error');
+    }
+}
+
+async function resetKalmanSettings() {
+    document.getElementById('kalman-process-noise').value = 0.001;
+    document.getElementById('kalman-measurement-noise').value = 0.1;
+    await saveKalmanSettings();
+}
+
+/**
+ * Save Candle Lock Settings
+ */
+async function saveCandleLockSettings() {
+    const data = {
+        candle_lock: {
+            enabled: document.getElementById('candle-lock-enabled').checked,
+            interval: parseInt(document.getElementById('candle-lock-interval').value)
+        }
+    };
+
+    try {
+        const result = await api.saveAdvancedSettings(data);
+        if (result.status === 'success') {
+            showToast('✅ Mum kapanış kilidi güncellendi', 'success');
+        } else {
+            showToast('❌ ' + result.message, 'error');
+        }
+    } catch (error) {
+        showToast('❌ Kaydetme hatası: ' + error.message, 'error');
+    }
+}
+
+async function resetCandleLockSettings() {
+    document.getElementById('candle-lock-interval').value = 5;
+    await saveCandleLockSettings();
+}
+
+/**
  * Save API keys
  */
 async function saveApiKeys() {
-    const apiKey = document.getElementById('api-key-input').value;
-    const apiSecret = document.getElementById('api-secret-input').value;
+    const apiKey = document.getElementById('api-key').value;
+    const apiSecret = document.getElementById('api-secret').value;
 
     if (!apiKey || !apiSecret) {
         showToast('❌ API Key ve Secret giriniz!', 'error');
-        return;
-    }
-
-    if (apiKey.length < 10 || apiSecret.length < 10) {
-        showToast('❌ API Key/Secret en az 10 karakter olmalı!', 'error');
         return;
     }
 
@@ -899,7 +1044,6 @@ async function saveApiKeys() {
 
         if (result.status === 'success') {
             showToast('✅ API anahtarları şifrelenerek kaydedildi', 'success');
-            console.log('🔐 [SECURITY] API keys saved');
         } else {
             showToast('❌ ' + result.message, 'error');
         }
@@ -912,8 +1056,8 @@ async function saveApiKeys() {
  * Test API connection
  */
 async function testApiConnection() {
-    const apiKey = document.getElementById('api-key-input').value;
-    const apiSecret = document.getElementById('api-secret-input').value;
+    const apiKey = document.getElementById('api-key').value;
+    const apiSecret = document.getElementById('api-secret').value;
 
     if (!apiKey || !apiSecret) {
         showToast('❌ API Key ve Secret giriniz!', 'error');
@@ -922,11 +1066,10 @@ async function testApiConnection() {
 
     try {
         showToast('🧪 API bağlantısı test ediliyor...', 'info');
-
         const result = await api.testApiConnection({ api_key: apiKey, api_secret: apiSecret });
 
         if (result.valid) {
-            showToast(`✅ API bağlantısı başarılı! USDT: ${result.usdt_balance}`, 'success');
+            showToast(`✅ API bağlantısı başarılı!`, 'success');
         } else {
             showToast('❌ ' + result.message, 'error');
         }
@@ -1138,6 +1281,19 @@ window.saveRiskSettings = saveRiskSettings;
 window.saveAdvancedSettings = saveAdvancedSettings;
 window.saveApiKeys = saveApiKeys;
 window.testApiConnection = testApiConnection;
+
+// Settings & Launcher
+window.handleBotSubmit = handleBotSubmit;
+window.saveBotConfig = saveBotConfig;
+window.saveRiskSettings = saveRiskSettings;
+window.saveAdvancedSettings = saveAdvancedSettings;
+window.saveKalmanSettings = saveKalmanSettings;
+window.resetKalmanSettings = resetKalmanSettings;
+window.saveCandleLockSettings = saveCandleLockSettings;
+window.resetCandleLockSettings = resetCandleLockSettings;
+window.saveApiKeys = saveApiKeys;
+window.testApiConnection = testApiConnection;
+window.showToast = showToast;
 
 // ============================================================================
 // START APPLICATION
