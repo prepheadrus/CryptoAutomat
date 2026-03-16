@@ -30,10 +30,13 @@ def main():
 
     # Tüm modüler sistemi, FastAPI endpoints ve arka plan Bot WebSockets dahil uvicorn ile başlatır.
     # Uvicorn, asenkron motoru çok verimli kullanır (Tek potada web + finansal işlemler).
+    # Vercel Live Preview uyumluluğu için portu ortam değişkeninden de oku veya 3000'e fallback yap
+    import os
+    port = int(os.environ.get("PORT", 3000))
     uvicorn.run(
         "api.server:app",
         host="0.0.0.0",
-        port=8000,
+        port=port,
         log_level=CONFIG['bot']['log_level'].lower(),
         reload=True if CONFIG['bot']['environment'] == 'development' else False
     )

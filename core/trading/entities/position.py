@@ -37,6 +37,7 @@ Kullanım:
     trade = position.close(exit_price=51000.0, reason="take_profit")
 """
 
+import dataclasses
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, Dict, Any
@@ -413,7 +414,7 @@ class Position:
         exit_price: float,
         reason: str = "manual",
         commission: float = 0.0
-    ) -> 'Trade':
+    ):
         """
         Pozisyon kapat ve Trade oluştur.
         

@@ -279,6 +279,7 @@ async def test_strategy(request: StrategyTestRequest):
             # Son 30 gün için saatlik veri (30 * 24 = 720 satır)
             n_rows = request.days * 24 if request.timeframe == "1h" else request.days * 4  # 4h için
             
+            import pandas as pd
             np.random.seed(42)
             
             # Random walk fiyat simülasyonu
