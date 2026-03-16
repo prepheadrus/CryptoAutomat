@@ -510,6 +510,14 @@ window.selectMarket = function(symbol, marketType) {
 
     if (selectedSymbolEl) {
         selectedSymbolEl.textContent = symbol;
+
+        // Visual feedback
+        const container = document.getElementById('selected-symbol-container');
+        if (container) {
+            container.classList.add('pulse-blue');
+            setTimeout(() => container.classList.remove('pulse-blue'), 2000);
+        }
+
         console.log(`✅ [MARKET] Symbol filled: ${symbol}`);
     }
 
