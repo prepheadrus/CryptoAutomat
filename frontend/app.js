@@ -119,10 +119,14 @@ function switchTab(tabId) {
     document.querySelectorAll('.tab-content').forEach(content => {
         const contentId = content.id.replace('tab-', '');
         if (tabId === content.id || tabId === contentId) {
-            content.style.display = 'block';
+            content.classList.add('active-tab');
+            // Remove inline display if exists
+            content.style.display = '';
             console.log(`✅ [TAB] Showing: ${content.id}`);
         } else {
-            content.style.display = 'none';
+            content.classList.remove('active-tab');
+            // Remove inline display if exists
+            content.style.display = '';
         }
     });
 
@@ -729,11 +733,13 @@ window.togglePause = async function(symbol, action) {
 // ============================================================================
 
 /**
+
  * Show toast notification
  * @param {string} message - Notification message
  * @param {string} type - success, error, info, warning
  */
 function showToast(message, type = 'info') {
+
     const container = document.getElementById('toast-container') || createToastContainer();
 
     const toast = document.createElement('div');
@@ -1281,6 +1287,19 @@ window.saveRiskSettings = saveRiskSettings;
 window.saveAdvancedSettings = saveAdvancedSettings;
 window.saveApiKeys = saveApiKeys;
 window.testApiConnection = testApiConnection;
+
+// Settings & Launcher
+window.handleBotSubmit = handleBotSubmit;
+window.saveBotConfig = saveBotConfig;
+window.saveRiskSettings = saveRiskSettings;
+window.saveAdvancedSettings = saveAdvancedSettings;
+window.saveKalmanSettings = saveKalmanSettings;
+window.resetKalmanSettings = resetKalmanSettings;
+window.saveCandleLockSettings = saveCandleLockSettings;
+window.resetCandleLockSettings = resetCandleLockSettings;
+window.saveApiKeys = saveApiKeys;
+window.testApiConnection = testApiConnection;
+window.showToast = showToast;
 
 // Settings & Launcher
 window.handleBotSubmit = handleBotSubmit;

@@ -92,19 +92,27 @@ class BotManager {
      * @param {string} botId - Bot ID
      */
     async stopBot(botId) {
+        console.log(`🛑 [BOT] Stop button clicked for: ${botId}`);
+
+        if (!confirm(`${botId} botunu durdurmak istediğinizden emin misiniz?`)) {
+            return;
+        }
+
         try {
+            console.log(`[BOT] Stopping bot: ${botId}`);
             const result = await api.stopBot(botId);
-            
+            console.log(`[BOT] Stop result:`, result);
+
             if (result.status === 'success') {
                 console.log(`🛑 [BOT] Stopped: ${botId}`);
                 await this.loadBots();
-                return result;
+                alert(`✅ Bot durduruldu: ${botId}`);
             } else {
                 throw new Error(result.message);
             }
         } catch (error) {
             console.error('❌ [BOT] Stop error:', error);
-            throw error;
+            alert(`❌ Bot durdurma hatası: ${error.message}`);
         }
     }
     
@@ -195,6 +203,8 @@ class BotManager {
 
         container.innerHTML = this.bots.map(bot => {
             console.log('[BOT] Rendering bot:', bot);
+            console.log('[BOT] Bot status:', bot.status);
+
             const statusLabel = bot.status === 'running' ? '🟢 Çalışıyor' :
                                bot.status === 'stopped' ? '🔴 Durduruldu' :
                                bot.status === 'paused' ? '🟡 Duraklatıldı' :
