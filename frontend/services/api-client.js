@@ -220,6 +220,14 @@ class APIClient {
     // CONFIG & SETTINGS
     // ========================================================================
 
+    getBotConfig() {
+        return this.get('/config/bot');
+    }
+
+    saveBotConfig(data) {
+        return this.post('/config/bot', data);
+    }
+
     getRiskSettings() {
         return this.get('/config/risk');
     }

@@ -66,6 +66,7 @@ class MLService:
 
     async def _run_training(self, request: MLTrainRequest):
         """Arka planda ML modelini eğitir. YENİ: Resampling mimarisi ile."""
+        start_time = datetime.now()
         try:
             self.training_state["is_training"] = True
             self.training_state["progress"] = 5
@@ -196,7 +197,8 @@ class MLService:
                 model_paths['xgboost_path'],  # XGBoost ana model yolunu kaydet
                 X_train.shape[0] + X_test.shape[0],  # Toplam örnek sayısı
                 X_train.shape[1],  # Feature sayısı
-                training_metrics  # Eğitim metrikleri
+                training_metrics,  # Eğitim metrikleri
+                start_time
             )
             
             # 8. Tamamlandı
@@ -214,7 +216,7 @@ class MLService:
             self.training_state["message"] = f"Hata: {str(e)}"
             self.training_state["current_step"] = "Error"
 
-    def _save_training_history(self, request: MLTrainRequest, model_path: str, dataset_size: int, feature_count: int, training_metrics: dict = None):
+    def _save_training_history(self, request: MLTrainRequest, model_path: str, dataset_size: int, feature_count: int, training_metrics: dict = None, start_time: datetime = None):
         """Eğitim geçmişini kaydet."""
         try:
             history_file = "artifacts/ml_training_history.json"
@@ -236,6 +238,11 @@ class MLService:
                 rf_accuracy = metrics.get('rf_accuracy', accuracy)
                 ensemble_accuracy = metrics.get('ensemble_accuracy', accuracy)
 
+            # Duration hesapla
+            completed_at = datetime.now()
+            started_at = start_time if start_time else completed_at
+            duration_seconds = (completed_at - started_at).total_seconds()
+
             # Yeni kayıt
             new_entry = {
                 "training_id": f"{request.symbol}_{request.timeframe}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
@@ -246,9 +253,9 @@ class MLService:
                 "feature_count": feature_count,
                 "tp_multiplier": getattr(request, 'tp', 2.0),
                 "sl_multiplier": getattr(request, 'sl', 2.0),
-                "started_at": datetime.now().isoformat(),
-                "completed_at": datetime.now().isoformat(),
-                "duration_seconds": 0,  # TODO: Calculate actual duration
+                "started_at": started_at.isoformat(),
+                "completed_at": completed_at.isoformat(),
+                "duration_seconds": duration_seconds,
                 "metrics": {
                     "accuracy": accuracy,
                     "f1_score": f1_score,
