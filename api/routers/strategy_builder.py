@@ -366,8 +366,16 @@ async def get_strategy_info(filename: str):
         Dict: Strateji bilgileri
     """
     try:
-        filepath = Path("artifacts/strategies") / filename
+        # Security: Prevent path traversal
+        base_dir = Path("artifacts/strategies").resolve()
+        filepath = (base_dir / filename).resolve()
         
+        if not filepath.is_relative_to(base_dir):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
+
         if not filepath.exists():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -405,8 +413,16 @@ async def delete_strategy(filename: str):
         Dict: Silme durumu
     """
     try:
-        filepath = Path("artifacts/strategies") / filename
+        # Security: Prevent path traversal
+        base_dir = Path("artifacts/strategies").resolve()
+        filepath = (base_dir / filename).resolve()
         
+        if not filepath.is_relative_to(base_dir):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
+
         if not filepath.exists():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

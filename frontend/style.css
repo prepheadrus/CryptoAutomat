@@ -2878,59 +2878,6 @@ select option {
     }
 }
 
-/* AI Terminal Widget */
-.ai-terminal {
-    position: fixed;
-    bottom: 20px;
-    left: 20px;
-    width: 300px;
-    height: 180px;
-    background: rgba(10, 14, 26, 0.9);
-    border: 1px solid var(--neon-blue);
-    border-radius: 8px;
-    z-index: 9998;
-    display: flex;
-    flex-direction: column;
-    font-family: var(--font-mono);
-    font-size: 0.7rem;
-    overflow: hidden;
-    box-shadow: 0 0 20px rgba(88, 166, 255, 0.15);
-}
-
-.terminal-header {
-    background: rgba(88, 166, 255, 0.1);
-    padding: 5px 10px;
-    border-bottom: 1px solid rgba(88, 166, 255, 0.2);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    color: var(--neon-blue);
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
-
-.terminal-body {
-    flex: 1;
-    padding: 10px;
-    overflow-y: auto;
-    color: var(--neon-green);
-    scrollbar-width: none;
-}
-
-.terminal-body::-webkit-scrollbar {
-    display: none;
-}
-
-.terminal-line {
-    margin-bottom: 4px;
-    line-height: 1.2;
-}
-
-.terminal-line::before {
-    content: "> ";
-    color: var(--neon-blue);
-}
 
 /* Toast Notifications */
 #toast-container {

@@ -838,7 +838,7 @@
                         </div>
 
                         <div class="settings-card-body">
-                            <form id="bot-start-form" onsubmit="handleBotSubmit(event)">
+                            <form id="bot-start-form">
                                 <div class="settings-form-grid">
                                     <div class="settings-form-group">
                                         <label class="settings-form-label">🪙 Sembol</label>
@@ -871,8 +871,9 @@
                                     <div class="settings-form-group">
                                         <label class="settings-form-label">🏛️ Market</label>
                                         <select id="bot-market" class="settings-form-input">
-                                            <option value="swap">Futures (Swap)</option>
+                                            <option value="swap" selected>Futures (Swap)</option>
                                             <option value="spot">Spot</option>
+                                            <option value="future">Futures</option>
                                         </select>
                                     </div>
 
@@ -1591,7 +1592,7 @@
     </div>
 
     <!-- ES6 Modules -->
-    <script type="module" src="app.js?v=2026031521"></script>
+    <script type="module" src="app.js?v=2026031605"></script>
     <script src="/js/strategy_report.js"></script>
     <script src="strategy-builder.js?v=2026031011"></script>
 </body>
