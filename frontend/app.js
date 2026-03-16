@@ -938,8 +938,9 @@ async function loadSymbolsForBot() {
         const symbolSelects = document.querySelectorAll('.symbol-select');
         symbolSelects.forEach(select => {
             if (select.id !== 'market-symbol') { // Market selection list is different
+                // symbols is an array of strings (e.g., ["BTC/USDT", "ETH/USDT"])
                 select.innerHTML = '<option value="">Sembol Seçin...</option>' +
-                    symbols.map(s => `<option value="${s.symbol}">${s.symbol}</option>`).join('');
+                    symbols.map(s => `<option value="${s}">${s}</option>`).join('');
             }
         });
 
