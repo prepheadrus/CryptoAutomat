@@ -176,11 +176,17 @@ async def run_visual_analysis(
             if df_flat is not None and len(df_flat) > 0:
                 logger.info(f"📖 [STORAGE] Flat file'dan yüklendi: {symbol} {timeframe} ({len(df_flat)} mum)")
 
-                # DataFrame'i tuple formatına çevir (itertuples() ile hızlandırıldı)
-                klines_data = [
-                    (int(row.timestamp), row.open, row.high, row.low, row.close, row.volume)
-                    for row in df_flat.itertuples(index=False)
-                ]
+                # DataFrame'i tuple formatına çevir
+                klines_data = []
+                for _, row in df_flat.iterrows():
+                    klines_data.append((
+                        int(row['timestamp']),
+                        row['open'],
+                        row['high'],
+                        row['low'],
+                        row['close'],
+                        row['volume']
+                    ))
             else:
                 logger.info(f"⏭️ [STORAGE] Flat file bulunamadı, 1m'den resample yapılacak: {symbol} {timeframe}")
 
