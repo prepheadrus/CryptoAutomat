@@ -948,7 +948,7 @@ async function loadSymbolsForBot() {
             if (select.id !== 'market-symbol') { // Market selection list is different
                 // symbols is an array of strings (e.g., ["BTC/USDT", "ETH/USDT"])
                 select.innerHTML = '<option value="">Sembol Seçin...</option>' +
-                    symbols.map(s => `<option value="${s}">${s}</option>`).join('');
+
             }
         });
 
