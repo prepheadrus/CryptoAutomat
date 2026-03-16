@@ -198,7 +198,7 @@ class MLService:
                 X_train.shape[0] + X_test.shape[0],  # Toplam örnek sayısı
                 X_train.shape[1],  # Feature sayısı
                 training_metrics,  # Eğitim metrikleri
-                start_time=start_time
+
             )
             
             # 8. Tamamlandı
@@ -216,7 +216,7 @@ class MLService:
             self.training_state["message"] = f"Hata: {str(e)}"
             self.training_state["current_step"] = "Error"
 
-    def _save_training_history(self, request: MLTrainRequest, model_path: str, dataset_size: int, feature_count: int, training_metrics: dict = None, start_time: Optional[datetime] = None):
+
         """Eğitim geçmişini kaydet."""
         try:
             history_file = "artifacts/ml_training_history.json"
@@ -238,6 +238,11 @@ class MLService:
                 rf_accuracy = metrics.get('rf_accuracy', accuracy)
                 ensemble_accuracy = metrics.get('ensemble_accuracy', accuracy)
 
+            # Duration hesapla
+            completed_at = datetime.now()
+            started_at = start_time if start_time else completed_at
+            duration_seconds = (completed_at - started_at).total_seconds()
+
             # Yeni kayıt
             now = datetime.now()
             started_at = start_time.isoformat() if start_time else now.isoformat()
@@ -252,8 +257,7 @@ class MLService:
                 "feature_count": feature_count,
                 "tp_multiplier": getattr(request, 'tp', 2.0),
                 "sl_multiplier": getattr(request, 'sl', 2.0),
-                "started_at": started_at,
-                "completed_at": now.isoformat(),
+
                 "duration_seconds": duration_seconds,
                 "metrics": {
                     "accuracy": accuracy,
