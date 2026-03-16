@@ -947,7 +947,10 @@ async function loadSymbolsForBot() {
         symbolSelects.forEach(select => {
             if (select.id !== 'market-symbol') { // Market selection list is different
                 select.innerHTML = '<option value="">Sembol Seçin...</option>' +
-                    symbols.map(s => `<option value="${s.symbol}">${s.symbol}</option>`).join('');
+                    symbols.map(s => {
+                        const val = typeof s === 'string' ? s : s.symbol;
+                        return `<option value="${val}">${val}</option>`;
+                    }).join('');
             }
         });
 
