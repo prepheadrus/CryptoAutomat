@@ -3,12 +3,13 @@ Strategy Builder API Endpoints
 Frontend'den gelen strateji oluşturma isteklerini işler.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 from typing import Dict, List, Any, Optional
 import json
 import os
 from datetime import datetime
+from pathlib import Path
 
 from strategy.builder import StrategyBuilder, StrategyExecutor, StrategyValidator
 
@@ -135,10 +136,18 @@ async def load_strategy(filename: str):
     Kayıtlı stratejiyi yükle
     """
     try:
-        filepath = os.path.join(STRATEGY_DIR, filename)
+        # Security: Prevent path traversal
+        base_dir = Path(STRATEGY_DIR).resolve()
+        filepath = (base_dir / filename).resolve()
+
+        if not filepath.is_relative_to(base_dir):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
         
-        if not os.path.exists(filepath):
-            raise HTTPException(status_code=404, detail="Strategy not found")
+        if not filepath.exists():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Strategy not found")
         
         with open(filepath, 'r', encoding='utf-8') as f:
             strategy = json.load(f)
@@ -160,12 +169,20 @@ async def delete_strategy(filename: str):
     Stratejiyi sil
     """
     try:
-        filepath = os.path.join(STRATEGY_DIR, filename)
+        # Security: Prevent path traversal
+        base_dir = Path(STRATEGY_DIR).resolve()
+        filepath = (base_dir / filename).resolve()
+
+        if not filepath.is_relative_to(base_dir):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
         
-        if not os.path.exists(filepath):
-            raise HTTPException(status_code=404, detail="Strategy not found")
+        if not filepath.exists():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Strategy not found")
         
-        os.remove(filepath)
+        filepath.unlink()
         
         return {
             "status": "success",
