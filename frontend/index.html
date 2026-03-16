@@ -1305,7 +1305,7 @@
                                     style="padding: 12px; font-size: 0.9rem; font-weight: 600;">
                                     🔑 Şifrele ve Kaydet
                                 </button>
-                                <button class="settings-btn settings-btn-test" onclick="testApiKeys()"
+                                <button class="settings-btn settings-btn-test" onclick="testApiConnection()"
                                     style="padding: 12px; font-size: 0.9rem; font-weight: 600;">
                                     🔄 Bağlantıyı Test Et
                                 </button>
@@ -1347,7 +1347,7 @@
                     <!-- CARD 1: PİYASA SEÇİMİ -->
                     <div class="data-card market-card">
                         <div class="data-card-header">
-                            <h3 class="data-card-title">🔍 Piyasa Seçimi</h3>
+                            <h3 class="data-card-title"><span class="step-number">1</span> 🔍 Piyasa Seçimi</h3>
                             <button class="data-btn data-btn-primary" onclick="saveMarketSelection()"
                                 style="width: auto; padding: 6px 12px; font-size: 0.8rem;">
                                 ✅ Takibi Güncelle
@@ -1372,48 +1372,47 @@
                     <!-- CARD 2: İNDİRME KONTROLÜ -->
                     <div class="data-card download-card">
                         <div class="data-card-header">
-                            <h3 class="data-card-title">⚙️ İndirme Kontrolü</h3>
+                            <h3 class="data-card-title"><span class="step-number">2</span> ⚙️ İndirme Kontrolü</h3>
                         </div>
 
                         <div class="data-card-body">
-                            <div class="selected-symbol-box">
+                            <div class="selected-symbol-box" id="selected-symbol-container">
                                 <label class="mini-label">Seçili Sembol:</label>
                                 <strong id="selected-symbol-val" class="selected-symbol">-- SEÇİNİZ --</strong>
                             </div>
 
                             <!-- YENİ: SADECE 1m İNDİRİLİR (Resampling Mimarisi) -->
-                            <div class="resampling-info-box" style="
-                                background: linear-gradient(135deg, rgba(88, 166, 255, 0.1), rgba(99, 102, 241, 0.1));
-                                border: 2px solid var(--neon-blue);
-                                border-radius: 8px;
-                                padding: 15px;
-                                margin: 15px 0;
-                            ">
-                                <div style="display: flex; align-items: flex-start; gap: 12px;">
-                                    <span style="font-size: 1.5rem;">🏗️</span>
-                                    <div>
-                                        <h4 style="margin: 0 0 8px 0; color: var(--neon-blue); font-size: 0.9rem;">
-                                            🏗️ Parquet Data Lake Mimarisi Aktif
-                                        </h4>
-                                        <p style="margin: 0; font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
-                                            <strong style="color: var(--text-main);">Sistem otomatik olarak SADECE 1 dakikalık mumları indirir ve Parquet formatında kaydeder.</strong>
-                                            <br><br>
-                                            Diğer zaman dilimleri (5m, 15m, 1h, 4h, vb.) otomatik olarak oluşturulur ve
-                                            <strong style="color: var(--neon-green);">data/ohlcv/binance/</strong> klasörüne kaydedilir.
-                                            <br><br>
-                                            ✅ <strong>Avantajlar:</strong>
-                                            <ul style="margin: 8px 0 0 0; padding-left: 16px; font-size: 0.75rem;">
-                                                <li>Apache Parquet (columnar storage - %70 daha az yer)</li>
-                                                <li>Snappy compression (hızlı okuma/yazma)</li>
-                                                <li>MTF-Daily (1m, 5m, 15m) → Gün bazlı partition (YYYY/MM/DD/)</li>
-                                                <li>MTF-Market (1h, 4h, 1d) → Tek dosya (market.parquet)</li>
-                                                <li>Look-ahead bias koruması (gelecek mumlar düşürülür)</li>
-                                                <li>OOM koruması (50k batch stream - RAM dostu)</li>
-                                            </ul>
-                                        </p>
+                            <details class="resampling-info-details">
+                                <summary class="resampling-info-summary">
+                                    🏗️ Parquet Data Lake Mimarisi Detayları
+                                </summary>
+                                <div class="resampling-info-box">
+                                    <div style="display: flex; align-items: flex-start; gap: 12px;">
+                                        <span style="font-size: 1.5rem;">🏗️</span>
+                                        <div>
+                                            <h4 style="margin: 0 0 8px 0; color: var(--neon-blue); font-size: 0.9rem;">
+                                                🏗️ Parquet Data Lake Mimarisi Aktif
+                                            </h4>
+                                            <p style="margin: 0; font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
+                                                <strong style="color: var(--text-main);">Sistem otomatik olarak SADECE 1 dakikalık mumları indirir ve Parquet formatında kaydeder.</strong>
+                                                <br><br>
+                                                Diğer zaman dilimleri (5m, 15m, 1h, 4h, vb.) otomatik olarak oluşturulur ve
+                                                <strong style="color: var(--neon-green);">data/ohlcv/binance/</strong> klasörüne kaydedilir.
+                                                <br><br>
+                                                ✅ <strong>Avantajlar:</strong>
+                                                <ul style="margin: 8px 0 0 0; padding-left: 16px; font-size: 0.75rem;">
+                                                    <li>Apache Parquet (columnar storage - %70 daha az yer)</li>
+                                                    <li>Snappy compression (hızlı okuma/yazma)</li>
+                                                    <li>MTF-Daily (1m, 5m, 15m) → Gün bazlı partition (YYYY/MM/DD/)</li>
+                                                    <li>MTF-Market (1h, 4h, 1d) → Tek dosya (market.parquet)</li>
+                                                    <li>Look-ahead bias koruması (gelecek mumlar düşürülür)</li>
+                                                    <li>OOM koruması (50k batch stream - RAM dostu)</li>
+                                                </ul>
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            </details>
 
                             <div class="form-row">
                                 <div class="form-group">
@@ -1458,11 +1457,12 @@
                                     title="Veri durumunu yenile">
                                     🔄
                                 </button>
-                                <button class="data-btn data-btn-danger" onclick="clearAllData()"
-                                    title="Tüm veritabanını temizle (DİKKAT!)"
-                                    style="background: linear-gradient(135deg, #dc2626, #991b1b);">
-                                    🗑️ Tüm Verileri Sil
-                                </button>
+                                <div class="danger-zone-container">
+                                    <button class="data-btn data-btn-danger" onclick="clearAllData()"
+                                        title="Tüm veritabanını temizle (DİKKAT!)">
+                                        🗑️ Tüm Verileri Sil
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1470,7 +1470,7 @@
                     <!-- CARD 3: GÖREV YÖNETİCİSİ -->
                     <div class="data-card tasks-card">
                         <div class="data-card-header">
-                            <h3 class="data-card-title">📊 Aktif ve Geçmiş Görevler</h3>
+                            <h3 class="data-card-title"><span class="step-number">3</span> 📊 Aktif ve Geçmiş Görevler</h3>
                             <div id="active-tasks-count" class="task-count-badge">0 Aktif / 0 Toplam</div>
                         </div>
 
@@ -1576,6 +1576,19 @@
         </div>
     </div>
     <div id="drawer-overlay" class="drawer-overlay" onclick="closeStrategyDrawer()"></div>
+
+    <!-- AI Terminal Widget -->
+    <div class="ai-terminal" id="ai-terminal">
+        <div class="terminal-header">
+            <span>🧠 AI Kernel Logs</span>
+            <span class="pulse-dot"></span>
+        </div>
+        <div class="terminal-body" id="terminal-body">
+            <div class="terminal-line">Neural network initialized...</div>
+            <div class="terminal-line">Data Lake connected via Parquet...</div>
+            <div class="terminal-line">Waiting for market signals...</div>
+        </div>
+    </div>
 
     <!-- ES6 Modules -->
     <script type="module" src="app.js?v=2026031521"></script>
