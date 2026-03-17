@@ -1,7 +1,7 @@
 bot:
   environment: development    # development | production
   exchange: binance
-  log_level: DEBUG             # DEBUG | INFO | WARNING
+  log_level: INFO              # DEBUG | INFO | WARNING
   name: CryptoAlgoBot
 
 htf:
