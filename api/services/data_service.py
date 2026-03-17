@@ -211,6 +211,15 @@ class DataService:
         start_ts = pd.Timestamp(start_date).tz_convert('UTC') if hasattr(start_date, 'tzinfo') else pd.Timestamp(start_date, tz='UTC')
         end_ts = pd.Timestamp(end_date).tz_convert('UTC') if hasattr(end_date, 'tzinfo') else pd.Timestamp(end_date, tz='UTC')
 
+        # 🔥 DÜZELTME: Index DatetimeIndex değilse çevir
+        if not isinstance(df_combined.index, pd.DatetimeIndex):
+            df_combined.index = pd.to_datetime(df_combined.index, utc=True)
+
+        # Index timezone-aware değilse UTC yap
+        if df_combined.index.tzinfo is None:
+            df_combined.index = df_combined.index.tz_localize('UTC')
+
+        # Filtreleme (artık güvenli)
         df_combined = df_combined[
             (df_combined.index >= start_ts) &
             (df_combined.index <= end_ts)
