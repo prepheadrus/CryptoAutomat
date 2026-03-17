@@ -259,12 +259,17 @@ async def run_visual_analysis(
         # 2. İndikatör ve Özellikleri Hesapla
         logger.info(f"📊 [ML] İndikatörler ve özellikler hesaplanıyor...")
         df = StrategyIndicators.add_all_indicators(df)
-        
+
         # [SYNC] LWC için saniye formatına kesin zorla (int64)
         if 'timestamp' in df.columns:
+            # 🔥 DÜZELTME: Timezone-aware datetime'ı önce UTC'ye, sonra naive yap, sonra int64
+            if hasattr(df['timestamp'].iloc[0], 'tzinfo') and df['timestamp'].iloc[0].tzinfo is not None:
+                # Timezone-aware → UTC → Naive → int64
+                df['timestamp'] = df['timestamp'].dt.tz_convert('UTC').dt.tz_localize(None)
+
             # Datetime'dan saniyeye (Pandas versiyonlarından bağımsız en güvenli yol)
             df['timestamp'] = ((df['timestamp'] - pd.Timestamp('1970-01-01')) // pd.Timedelta('1s')).astype('int64')
-        
+
         # [DEBUG] Final veri aralığı kontrolü
         if not df.empty:
             logger.info(f"📊 [ML] Zaman damgası aralığı: {df['timestamp'].min()} - {df['timestamp'].max()}")
@@ -461,16 +466,20 @@ async def run_visual_analysis(
         # Kesin sayısal tip zorlaması (Crash önlemi)
         for col in ['open', 'high', 'low', 'close']:
             candles_df[col] = pd.to_numeric(candles_df[col], errors='coerce').fillna(0).astype(float)
-        
+
         candles_df = candles_df.dropna(subset=['time'])
         candles_df = candles_df.drop_duplicates(subset=['time'])
         candles_df = candles_df.sort_values('time')
-        
+
         # [SYNC] LWC için saniye formatına kesin zorla (int)
+        # 🔥 DÜZELTME: Timezone-aware datetime'ı önce naive yap, sonra int64
+        if hasattr(candles_df['time'].iloc[0], 'tzinfo') and candles_df['time'].iloc[0].tzinfo is not None:
+            candles_df['time'] = candles_df['time'].dt.tz_convert('UTC').dt.tz_localize(None)
+
         candles_df['time'] = candles_df['time'].astype('int64')
-        
+
         candles = candles_df.to_dict('records')
-        
+
         logger.info(f"✅ [ML] Görsel analiz tamamlandı: {len(candles)} mum, {len(markers)} marker")
 
         return {
