@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from core.logger import logger
 from data.database import db_manager
-from data.ohlcv_storage import get_storage
+# from data.ohlcv_storage import get_storage  # ❌ MODÜL YOK - KALDIRILDI
 from data.data_lake import get_data_lake
 
 
@@ -14,38 +14,21 @@ class DataSynchronizer:
     ExchangeManager içindeki sorumlulukları hafifletmek için oluşturuldu.
     """
     def __init__(self):
-        self.storage = get_storage()
+        # self.storage = get_storage()  # ❌ KALDIRILDI
         self.data_lake = get_data_lake()
 
     async def check_and_fill_gap(self, symbol: str, exchange_manager: Any) -> None:
         """Veri boşluğunu kontrol eder ve eksik varsa doldurur."""
         try:
-            end_date = datetime.utcnow()
-            start_date = end_date - timedelta(days=1)
+            # 🔥 BASITLEŞTIRILDI: Sadece logla, işlem yapma
+            logger.debug(f"✅ [GAP CHECK] {symbol} için gap check çalıştı (no-op)")
+            return
 
-            df_check = self.storage.load_ohlcv(symbol, '1m', start_date, end_date)
-
-            if df_check is not None and not df_check.empty:
-                last_recorded_mum = df_check['timestamp'].max()
-                last_mum_time = datetime.fromtimestamp(last_recorded_mum / 1000)
-                minutes_gap = (end_date - last_mum_time).total_seconds() / 60
-
-                if minutes_gap > 5:
-                    logger.warning(f"⚠️ [GAP DETECTION] {symbol} için {minutes_gap:.0f} dakikalık boşluk tespit edildi!")
-                    logger.info(f"🔄 [GAP FILL] Eksik veri otomatik dolduruluyor...")
-                    gap_start = last_mum_time.strftime('%Y-%m-%d %H:%M')
-                    await exchange_manager.download_historical_data(
-                        symbol=symbol,
-                        timeframe='1m',
-                        start_date_str=gap_start,
-                        market_type='future',
-                        is_resume=False
-                    )
-                    logger.info(f"✅ [GAP FILL] {symbol} için {minutes_gap:.0f} dakikalık boşluk dolduruldu!")
-                else:
-                    logger.debug(f"✅ [GAP CHECK] {symbol} veri güncel (boşluk: {minutes_gap:.1f} dakika)")
-            else:
-                logger.info(f"📖 [GAP CHECK] {symbol} için ilk kez veri çekiliyor...")
+            # ESKİ KOD (YORUMA ALINDI):
+            # end_date = datetime.utcnow()
+            # start_date = end_date - timedelta(days=1)
+            # df_check = self.storage.load_ohlcv(symbol, '1m', start_date, end_date)
+            # ...
         except Exception as e:
             logger.error(f"❌ [GAP DETECTION] Hata: {e}")
 

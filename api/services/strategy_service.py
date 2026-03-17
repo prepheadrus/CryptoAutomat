@@ -29,7 +29,7 @@ class StrategyService:
         Tüm stratejileri al.
 
         Returns:
-            Strateji listesi
+            Strateji listesi (detaylı bilgilerle)
         """
         try:
             # Her istekte dinamik stratejileri yükle
@@ -37,18 +37,51 @@ class StrategyService:
 
             # YENİ METOD: get_all_strategies() kullan
             all_strategies = self.strategy_manager.get_all_strategies()
-            
+
             # List formatına çevir (frontend uyumlu)
             strategies_list = []
             for strategy_id, data in all_strategies.items():
+                # Strateji instance'ını al ve detaylı bilgileri çıkar
+                strategy_instance = None
+                indicators = []
+                conditions = {'LONG': [], 'SHORT': []}
+
+                try:
+                    # Strateji instance'ını oluştur
+                    if strategy_id not in ['trend_master', 'scalper_ninja', 'adaptive_koncorde',
+                                          'golden_combo', 'divergence_hunter', 'knn_quant_atr']:
+                        # Custom strateji
+                        strategy_instance = self.strategy_manager.get_strategy(strategy_id)
+                    else:
+                        # Built-in strateji - manager'dan al
+                        strategy_instance = self.strategy_manager.get_strategy(strategy_id)
+
+                    if strategy_instance:
+                        # İndikatörleri al
+                        if hasattr(strategy_instance, 'required_indicators'):
+                            indicators = strategy_instance.required_indicators
+                        elif hasattr(strategy_instance, 'indicators'):
+                            indicators = strategy_instance.indicators
+
+                        # Koşulları al (eğer varsa)
+                        if hasattr(strategy_instance, 'get_conditions'):
+                            conditions = strategy_instance.get_conditions()
+                        elif hasattr(strategy_instance, 'conditions'):
+                            conditions = strategy_instance.conditions
+                except Exception as e:
+                    logger.debug(f"Strateji detayları okunamadı {strategy_id}: {e}")
+
                 strategies_list.append({
                     'id': strategy_id,
                     'name': data.get('name', strategy_id),
                     'description': data.get('description', ''),
                     'timeframe': data.get('timeframe', '1m'),
-                    'type': data.get('type', 'builtin')
+                    'type': data.get('type', 'builtin'),
+                    'indicators': indicators,
+                    'conditions': conditions,
+                    'info': data.get('info', data.get('description', ''))
                 })
-            
+
             return {"status": "success", "strategies": strategies_list}
 
         except Exception as e:

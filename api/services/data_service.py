@@ -86,8 +86,11 @@ class DataService:
             cached_start = df_cached.index.min()
             cached_end = df_cached.index.max()
 
-            # Tarih aralığı tam kapsanıyor mu?
-            if cached_start <= pd.Timestamp(start_date, tz='UTC') and cached_end >= pd.Timestamp(end_date, tz='UTC'):
+            # Tarih aralığı tam kapsanıyor mu? (timezone-aware)
+            start_ts = pd.Timestamp(start_date).tz_convert('UTC') if hasattr(start_date, 'tzinfo') else pd.Timestamp(start_date, tz='UTC')
+            end_ts = pd.Timestamp(end_date).tz_convert('UTC') if hasattr(end_date, 'tzinfo') else pd.Timestamp(end_date, tz='UTC')
+
+            if cached_start <= start_ts and cached_end >= end_ts:
                 logger.info(f"✅ [SMART CACHE] {symbol} {timeframe} → Parquet'ten TAM yüklendi ({len(df_cached)} satır)")
                 return df_cached
 
@@ -150,10 +153,13 @@ class DataService:
             df_1m['timestamp'] = pd.to_datetime(df_1m['timestamp'], unit='ms', utc=True)
             df_1m.set_index('timestamp', inplace=True)
 
-            # Tarih aralığını filtrele
+            # Tarih aralığını filtrele (timezone-aware timestamp'lar)
+            missing_start_ts = pd.Timestamp(missing_start).tz_convert('UTC') if hasattr(missing_start, 'tzinfo') else pd.Timestamp(missing_start, tz='UTC')
+            missing_end_ts = pd.Timestamp(missing_end).tz_convert('UTC') if hasattr(missing_end, 'tzinfo') else pd.Timestamp(missing_end, tz='UTC')
+
             df_1m = df_1m[
-                (df_1m.index >= pd.Timestamp(missing_start, tz='UTC')) &
-                (df_1m.index <= pd.Timestamp(missing_end, tz='UTC'))
+                (df_1m.index >= missing_start_ts) &
+                (df_1m.index <= missing_end_ts)
             ]
 
             if df_1m.empty:
@@ -191,10 +197,13 @@ class DataService:
         # Sırala
         df_combined = df_combined.sort_index()
 
-        # Tarih aralığını filtrele
+        # Tarih aralığını filtrele (timezone-aware)
+        start_ts = pd.Timestamp(start_date).tz_convert('UTC') if hasattr(start_date, 'tzinfo') else pd.Timestamp(start_date, tz='UTC')
+        end_ts = pd.Timestamp(end_date).tz_convert('UTC') if hasattr(end_date, 'tzinfo') else pd.Timestamp(end_date, tz='UTC')
+
         df_combined = df_combined[
-            (df_combined.index >= pd.Timestamp(start_date, tz='UTC')) &
-            (df_combined.index <= pd.Timestamp(end_date, tz='UTC'))
+            (df_combined.index >= start_ts) &
+            (df_combined.index <= end_ts)
         ]
 
         # Son NaN temizliği
@@ -722,10 +731,12 @@ class DataService:
         Veritabanında verisi olan sembolleri al.
 
         Returns:
-            Sembol listesi
+            Sembol listesi (obje formatında)
         """
         symbols = await self.db_manager.get_symbols_with_data()
-        return {"status": "success", "symbols": symbols}
+        # Frontend uyumlu formata çevir (obje listesi)
+        symbols_list = [{"symbol": s} for s in symbols]
+        return {"status": "success", "symbols": symbols_list}
 
     async def check_data_gaps(self, symbol: str = None) -> Dict[str, Any]:
         """

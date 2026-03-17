@@ -278,9 +278,33 @@ class DataLakeStorage:
         if ts_col and ts_col != 'timestamp':
             df.rename(columns={ts_col: 'timestamp'}, inplace=True)
 
-        # Timestamp'i datetime'a çevir
+        # 🔥 TIMESTAMP DÖNÜŞÜMÜ: timezone-aware timestamp'leri destekle
         if 'timestamp' in df.columns:
-            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms' if df['timestamp'].iloc[0] > 1e12 else 's', utc=True)
+            # İlk değeri al
+            first_ts = df['timestamp'].iloc[0]
+
+            # Zaten datetime ise UTC'ye çevir
+            if isinstance(first_ts, (pd.Timestamp, datetime)):
+                if hasattr(first_ts, 'tzinfo') and first_ts.tzinfo is None:
+                    # tz-naive ise UTC yap
+                    df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True)
+                else:
+                    # Zaten tz-aware ise UTC'ye çevir
+                    df['timestamp'] = pd.to_datetime(df['timestamp']).dt.tz_convert('UTC')
+            else:
+                # Numeric timestamp (ms veya s)
+                # 🔥 KARŞILAŞTIRMA ÖNCESİ TYPE CHECK
+                try:
+                    # İlk değerin tipine göre unit belirle
+                    if isinstance(first_ts, (int, float, np.number)):
+                        unit = 'ms' if first_ts > 1e12 else 's'
+                    else:
+                        unit = 'ms'  # Default
+
+                    df['timestamp'] = pd.to_datetime(df['timestamp'], unit=unit, utc=True)
+                except Exception as ts_err:
+                    logger.warning(f"⚠️ [DATA LAKE] Timestamp dönüşüm hatası: {ts_err}, defaulting to 'ms'")
+                    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms', utc=True)
 
         # NaN değerleri temizle
         df = df.dropna(subset=required_cols)

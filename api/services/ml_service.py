@@ -9,7 +9,7 @@ import asyncio
 import os
 import json
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from core.logger import logger
 from api.schemas.ml import MLTrainRequest
@@ -43,7 +43,7 @@ class MLService:
             request: ML eğitim isteği
 
         Returns:
-            Eğitim başlatma yanıtı
+            Eğitim yanıtı (BEKLEYEN - training bitene kadar dönmez)
         """
         if self.training_state["is_training"]:
             return {
@@ -51,18 +51,9 @@ class MLService:
                 "message": "Eğitim zaten devam ediyor, lütfen bekleyin."
             }
 
-        # Arka plan görevi olarak başlat
-        asyncio.create_task(self._run_training(request))
-
-        # Merkezi path generator fonksiyonunu kullan
-        from ml.model_training import get_model_paths
-        model_paths = get_model_paths(request.symbol, request.timeframe)
-
-        return {
-            "status": "success",
-            "message": f"ML modeli eğitimi başlatıldı ({request.symbol})...",
-            "model_path": model_paths['xgboost_path']
-        }
+        # ÖNEMLİ: Arka plan görevi olarak başlatma - BEKLE!
+        # Kullanıcı UI'da "tamamlandı" görmeden eğitim bitsin
+        return await self._run_training(request)
 
     async def _run_training(self, request: MLTrainRequest):
         """Arka planda ML modelini eğitir. YENİ: Resampling mimarisi ile."""
@@ -84,16 +75,30 @@ class MLService:
             # ========================================================================
 
             from api.services.data_service import DataService
-            from datetime import datetime, timedelta
             import pytz
 
             data_service = DataService()
 
-            # Tarih aralığı hesapla
+            # Tarih aralığı hesapla - KULLANICI LIMIT'İNE GÖRE
+            # 1m timeframe için: limit * 1 dakika
+            # Kullanıcı 100K mum istiyorsa, tam olarak 100K mum çek
             end_date = datetime.now(tz=pytz.UTC)
-            start_date = end_date - timedelta(minutes=request.limit * 2)  # %50 buffer
+
+            # Timeframe'e göre dakika hesaplama
+            tf_minutes = {
+                '1m': 1, '3m': 3, '5m': 5, '10m': 10, '15m': 15,
+                '20m': 20, '30m': 30, '45m': 45, '1h': 60, '2h': 120,
+                '3h': 180, '4h': 240, '6h': 360, '8h': 480, '12h': 720,
+                '1d': 1440, '1w': 10080
+            }
+            minutes_per_candle = tf_minutes.get(request.timeframe, 1)
+
+            # İstenen mum sayısı kadar geriye git
+            total_minutes = request.limit * minutes_per_candle
+            start_date = end_date - timedelta(minutes=total_minutes)
 
             logger.info(f"🏗️ [PARQUET LAKE] {request.symbol} {request.timeframe} için veri yükleniyor...")
+            logger.info(f"📅 [TIME RANGE] {start_date} - {end_date} ({request.limit} mum, ~{total_minutes} dakika)")
 
             # SMART CACHE köprü fonksiyonu
             df = await data_service.get_cached_or_fetch_data(
@@ -119,7 +124,13 @@ class MLService:
             df = df.replace([float('inf'), float('-inf')], float('nan'))
             df = df.ffill().dropna(how='all')
 
-            logger.info(f"✅ [PARQUET LAKE] {request.symbol} {request.timeframe} → {len(df)} mum yüklendi")
+            # ⚠️ ÖNEMLİ: Kullanıcı limit'ini uygula
+            # Data service fazla veri dönmüş olabilir, son N mumu al
+            if len(df) > request.limit:
+                logger.info(f"✂️ [LIMIT] {len(df)} mum bulundu, son {request.limit} mum kullanılıyor")
+                df = df.tail(request.limit)
+
+            logger.info(f"✅ [PARQUET LAKE] {request.symbol} {request.timeframe} → {len(df)} mum yüklendi (limit: {request.limit})")
             logger.info(f"📊 [PARQUET LAKE] İlk: {df.index[0]}, Son: {df.index[-1]}")
             logger.info(f"🛡️ [ML] NaN temizliği: UTC sync + ffill + dropna uygulandı")
 
@@ -186,7 +197,7 @@ class MLService:
             logger.info(f"   XGBoost: {model_paths['xgboost_path']}")
             logger.info(f"   RF:      {model_paths['rf_path']}")
             logger.info(f"   Meta:    {model_paths['metadata_path']}")
-            
+
             # 7. Eğitim geçmişini güncelle
             self.training_state["progress"] = 95
             self.training_state["message"] = "Geçmiş güncelleniyor..."
@@ -200,15 +211,44 @@ class MLService:
                 training_metrics,  # Eğitim metrikleri
                 start_time
             )
-            
+
             # 8. Tamamlandı
             self.training_state["is_training"] = False
             self.training_state["progress"] = 100
             self.training_state["message"] = f"✅ ML eğitimi tamamlandı: {request.symbol}"
             self.training_state["current_step"] = "Completed"
-            
+
             logger.info(f"🎉 [ML] Eğitim başarıyla tamamlandı: {request.symbol}")
-            
+
+            # ⚠️ ÖNEMLİ: Tüm NumPy tiplerini Python native tiplerine çevir (Pydantic JSON serialization)
+            import numpy as np
+
+            def convert_numpy_types(obj):
+                """Recursively convert numpy types to native Python types."""
+                if isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                elif isinstance(obj, (np.int8, np.int16, np.int32, np.int64, np.integer)):
+                    return int(obj)
+                elif isinstance(obj, (np.float16, np.float32, np.float64, np.floating)):
+                    return float(obj)
+                elif isinstance(obj, dict):
+                    return {k: convert_numpy_types(v) for k, v in obj.items()}
+                elif isinstance(obj, (list, tuple)):
+                    return [convert_numpy_types(item) for item in obj]
+                return obj
+
+            metrics_for_response = convert_numpy_types(training_metrics)
+
+            # Başarı yanıtı dön
+            return {
+                "status": "success",
+                "message": f"ML modeli eğitildi ({request.symbol})",
+                "model_path": model_paths['xgboost_path'],
+                "metrics": metrics_for_response,
+                "dataset_size": int(X_train.shape[0] + X_test.shape[0]),
+                "accuracy": float(training_metrics.get('metrics', {}).get('accuracy', 0) * 100)
+            }
+
         except Exception as e:
             logger.error(f"❌ [ML] Eğitim hatası: {e}")
             logger.error(f"❌ [ML] Traceback: {traceback.format_exc()}")
@@ -216,34 +256,44 @@ class MLService:
             self.training_state["message"] = f"Hata: {str(e)}"
             self.training_state["current_step"] = "Error"
 
+            # Hata yanıtı dön
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+
     def _save_training_history(self, request: MLTrainRequest, model_path: str, dataset_size: int, feature_count: int, training_metrics: dict = None, start_time: datetime = None):
         """Eğitim geçmişini kaydet."""
         try:
             history_file = "artifacts/ml_training_history.json"
             os.makedirs("artifacts", exist_ok=True)
-            
-            # Training metrics'den accuracy'leri al
+
+            # Training metrics'den TÜM metrikleri al
             accuracy = 0.0
+            precision = 0.0
+            recall = 0.0
+            f1_score = 0.0
             xgb_accuracy = 0.0
             rf_accuracy = 0.0
             ensemble_accuracy = 0.0
-            f1_score = 0.0
-            
+
             if training_metrics:
                 # metrics dict'unun iç yapısını kullan
                 metrics = training_metrics.get('metrics', {})
-                accuracy = metrics.get('accuracy', 0.0)
-                f1_score = metrics.get('f1', 0.0)
-                xgb_accuracy = metrics.get('xgb_accuracy', accuracy)
-                rf_accuracy = metrics.get('rf_accuracy', accuracy)
-                ensemble_accuracy = metrics.get('ensemble_accuracy', accuracy)
+                accuracy = float(metrics.get('accuracy', 0.0))
+                precision = float(metrics.get('precision', 0.0))
+                recall = float(metrics.get('recall', 0.0))
+                f1_score = float(metrics.get('f1', 0.0))
+                xgb_accuracy = float(metrics.get('xgb_accuracy', accuracy))
+                rf_accuracy = float(metrics.get('rf_accuracy', accuracy))
+                ensemble_accuracy = float(metrics.get('ensemble_accuracy', accuracy))
 
             # Duration hesapla
             completed_at = datetime.now()
             started_at = start_time if start_time else completed_at
             duration_seconds = (completed_at - started_at).total_seconds()
 
-            # Yeni kayıt
+            # Yeni kayıt - TÜM METRKLERİ KAYDET
             new_entry = {
                 "training_id": f"{request.symbol}_{request.timeframe}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
                 "symbol": request.symbol,
@@ -251,14 +301,16 @@ class MLService:
                 "model_type": request.model_type,
                 "dataset_size": dataset_size,
                 "feature_count": feature_count,
-                "tp_multiplier": getattr(request, 'tp', 2.0),
-                "sl_multiplier": getattr(request, 'sl', 2.0),
+                "tp_multiplier": float(getattr(request, 'tp_multiplier', 2.0)),
+                "sl_multiplier": float(getattr(request, 'sl_multiplier', 2.0)),
                 "started_at": started_at.isoformat(),
                 "completed_at": completed_at.isoformat(),
                 "duration_seconds": duration_seconds,
                 "metrics": {
                     "accuracy": accuracy,
-                    "f1_score": f1_score,
+                    "precision": precision,
+                    "recall": recall,
+                    "f1": f1_score,
                     "xgb_accuracy": xgb_accuracy,
                     "rf_accuracy": rf_accuracy,
                     "ensemble_accuracy": ensemble_accuracy
@@ -283,7 +335,8 @@ class MLService:
                 json.dump(history, f, indent=2)
 
             logger.info(f"📝 [ML] Eğitim geçmişi güncellendi: {len(history)} kayıt")
-            logger.info(f"📊 [ML] Metrics kaydedildi: XGB={xgb_accuracy:.4f}, RF={rf_accuracy:.4f}, Ensemble={ensemble_accuracy:.4f}")
+            logger.info(f"📊 [ML] Metrics kaydedildi: Acc={accuracy:.4f}, Prec={precision:.4f}, Rec={recall:.4f}, F1={f1_score:.4f}")
+            logger.info(f"📊 [ML] Model Acc: XGB={xgb_accuracy:.4f}, RF={rf_accuracy:.4f}, Ens={ensemble_accuracy:.4f}")
 
         except Exception as e:
             logger.error(f"❌ [ML] Geçmiş kaydetme hatası: {e}")

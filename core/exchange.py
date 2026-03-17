@@ -807,6 +807,14 @@ class ExchangeManager:
         try:
             # Bot bilgilerini al
             bot_info = paper_engine.active_bots.get(bot_id, {})
+
+            # 🔥 DEBUG: bot_info tipini kontrol et
+            if not isinstance(bot_info, dict):
+                logger.error(f"❌ [BOT TASK] bot_info is not a dict! Type: {type(bot_info)}, Value: {bot_info}")
+                logger.error(f"   🔥 [BOT TASK] paper_engine.active_bots keys: {list(paper_engine.active_bots.keys())}")
+                logger.error(f"   🔥 [BOT TASK] Requested bot_id: {bot_id}")
+                return  # Erken çık, crash etme
+
             symbol = bot_info.get('symbol', '')
             strategy_id = bot_info.get('strategy_id', '')
             timeframe = bot_info.get('timeframe', '1m')
@@ -858,17 +866,57 @@ class ExchangeManager:
             # Strateji sinyali üret
             strategy = paper_engine.strategies.get(symbol)
             if strategy is None or df.empty or len(df) < 50:
+                logger.debug(f"⏭️ [SINYAL] {symbol} strateji yok veya veri yetersiz")
                 return
 
             latest_candle = df.iloc[-1]
             strategy_signal = strategy.generate_signal(latest_candle)
 
-            # ML ve Analiz için tüm indikatörleri topla (numeric columns)
-            indicators_payload = {}
-            for col, val in latest_candle.items():
-                if isinstance(val, (int, float, np.integer, np.floating)):
-                    # NaN kontrolü ve tip dönüşümü
-                    indicators_payload[col] = float(val) if not np.isnan(val) else 0.0
+            # 🎯 SİNYAL LOGLAMA (Production Analysis)
+            if strategy_signal:
+                signal_type = strategy_signal.get('signal', 'NONE')
+                logger.info(f"🎯 [SINYAL] {symbol} | {signal_type} | Fiyat: ${current_price:.2f} | TF: {timeframe}")
+                logger.info(f"   📊 Strateji: {strategy_id} | HTF: {htf_trend} | Rejim: {regime}")
+            else:
+                logger.debug(f"⏸️ [SINYAL] {symbol} | NONE | Beklemede")
+
+            # 🧠 ML CONFIDENCE SCORE (Ensemble Prediction)
+            ml_confidence = None
+            ml_prediction = 'HOLD'
+            ml_enabled = True  # 🔥 ML aktif mi?
+
+            if ml_enabled:
+                try:
+                    from ml.inference import get_ml_prediction
+                    ml_result = get_ml_prediction(symbol, timeframe, indicators_payload)
+                    if ml_result:
+                        ml_confidence = ml_result.get('confidence', 0)
+                        ml_prediction = ml_result.get('prediction', 'HOLD')
+
+                        # 🔥 ML SİNYAL ONAYLAMA (Ensemble Voting)
+                        if strategy_signal and ml_confidence:
+                            strategy_side = strategy_signal.get('signal', 'NONE')  # LONG/SHORT/NEUTRAL
+
+                            # ML ve Strateji aynı yönde mi?
+                            if ml_prediction == strategy_side and ml_confidence >= 0.50:  # %50 threshold
+                                logger.info(f"   ✅ [ML ONAY] {strategy_side} sinyali ML tarafından onaylandı! (Confidence: {ml_confidence:.2%})")
+                                strategy_signal['ml_approved'] = True
+                                strategy_signal['ml_confidence'] = ml_confidence
+                            elif ml_prediction != strategy_side:
+                                logger.warning(f"   ⚠️ [ML ÇELİŞKİ] Strateji: {strategy_side}, ML: {ml_prediction} (Confidence: {ml_confidence:.2%})")
+                                strategy_signal['ml_approved'] = False
+                                strategy_signal['ml_confidence'] = ml_confidence
+                            else:
+                                logger.info(f"   ℹ️ [ML BEKLEME] Confidence düşük: {ml_confidence:.2%} < 50%")
+                                strategy_signal['ml_approved'] = False
+                                strategy_signal['ml_confidence'] = ml_confidence
+
+                except Exception as ml_err:
+                    logger.debug(f"⚠️ [ML] Model yüklenemedi veya tahmin yapılamadı: {ml_err}")
+                    strategy_signal['ml_approved'] = None  # ML yoksa None
+            else:
+                logger.debug(f"ℹ️ [ML] ML entegrasyonu devre dışı")
+                strategy_signal['ml_approved'] = None  # ML kapalı
 
             # EVENT-DRIVEN: SignalGeneratedEvent yayınla
             event = SignalGeneratedEvent(
@@ -882,12 +930,15 @@ class ExchangeManager:
                     'htf_trend': htf_trend,
                     'htf_trends': htf_trends,
                     'regime': regime,
-                    'strategy_id': strategy_id
+                    'strategy_id': strategy_id,
+                    'ml_confidence': ml_confidence  # ML confidence ekle
                 }
             ).to_event(source="exchange_manager")
 
             # Event Bus'a yayınla (Pub/Sub)
             await event_bus.publish(event)
+
+            logger.debug(f"✅ [EVENT] {symbol} sinyali yayınlandı (Event Bus)")
 
             logger.debug(f"📤 Signal event published: {bot_id} signal={strategy_signal}")
 
@@ -897,29 +948,49 @@ class ExchangeManager:
 
     async def run_strategy_poller(self, symbol, timeframe='1m'):
         """
-        FINAL HYBRID (Local DB + REST Pagination + WebSocket Push) Strateji Motoru:
-        1. Yerel DB'den 1500 mum çek (Warm-up) - KURAL 1: db_manager import
-        2. Eksik varsa PAGINATION ile doldur - KURAL 2: Sınırsız Yama
-        3. RAM koruması (tail 1500) - KURAL 3: RAM Koruması
-        4. watch_ohlcv ile WSS üzerinden canlı mumları dinle
-        5. Resample + İndikatörler hesapla
-        6. 1-to-N botlara broadcast et (asyncio.gather) - KURAL 4: Mevcut Motor Korunur
-        YENİ: 7. Veri boşluğu kontrolü ve otomatik doldurma - KURAL 5: Gap Detection
+        FINAL HYBRID (Local DB + REST Pagination + WebSocket Push) Strateji Motoru
         """
         from core.paper import paper_engine
         from data.indicators import StrategyIndicators
         from data.features import AdvancedFeatures
         from core.detector import MarketRegimeDetector
-        from data.database import db_manager  # KURAL 1: db_manager import
+        from data.database import db_manager
         import ccxt
 
+        # 🔥 KRITIK LOGLAMA - Poller başlangıcını izle
+        logger.info(f"🔥 [POLLER DEBUG] {symbol} run_strategy_poller BAŞLADI")
+        logger.info(f"🔥 [POLLER DEBUG] symbol={symbol}, timeframe={timeframe}")
         logger.info(f"🚀 [FINAL HYBRID] {symbol} için strateji poller başlatılıyor ({timeframe})...")
+
+        from core.paper import paper_engine
+        logger.info(f"📊 [POLLER DEBUG] paper_engine={paper_engine is not None}")
+        logger.info(f"📊 [POLLER DEBUG] active_bots={len(paper_engine.active_bots) if paper_engine else 0}")
 
         # ========================================================================
         # YENİ: VERİ BOŞLUĞU KONTROLÜ (Gap Detection & Auto-Fill) - Refactored
         # ========================================================================
-        from core.trading.services.data_sync import data_synchronizer
-        await data_synchronizer.check_and_fill_gap(symbol, self)
+        logger.info(f"🔥 [GAP CHECK] check_and_fill_gap başlatılıyor...")
+        try:
+            from core.trading.services.data_sync import data_synchronizer
+            # ARKA PLANDA ÇALIŞTIR - event loop'u kilitleme!
+            await asyncio.wait_for(
+                data_synchronizer.check_and_fill_gap(symbol, self),
+                timeout=30.0  # 30 saniye timeout
+            )
+            logger.info(f"✅ [GAP CHECK] check_and_fill_gap TAMAMLANDI")
+        except asyncio.TimeoutError:
+            logger.warning(f"⚠️ [GAP CHECK] check_and_fill_gap TIMEOUT (30s) - devam ediliyor")
+        except Exception as gap_err:
+            logger.error(f"❌ [GAP CHECK] check_and_fill_gap HATA: {gap_err}")
+            logger.warning(f"⚠️ [GAP CHECK] Gap check atlandı, devam ediliyor")
+
+        # ============================================
+        # 1. LOCAL DB FIRST: SQLite'dan geçmiş veriyi çek
+        # ============================================
+        logger.info(f"📚 [LOCAL DB] {symbol} için yerel veritabanı kontrol ediliyor...")
+        ohlcv_df = pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
+        ohlcv_df.index.name = 'timestamp'
+        logger.info(f"✅ [LOCAL DB] DataFrame oluşturuldu")
 
         # ============================================
         # 1. LOCAL DB FIRST: SQLite'dan geçmiş veriyi çek
@@ -941,12 +1012,18 @@ class ExchangeManager:
                 # SQLite'dan gelen timestamp string veya int olabilir, her ikisini de parse et
                 if ohlcv_df['timestamp'].dtype == 'object':
                     # String formatında (SQLite datetime)
-                    ohlcv_df['timestamp'] = pd.to_datetime(ohlcv_df['timestamp'])
+                    ohlcv_df['timestamp'] = pd.to_datetime(ohlcv_df['timestamp'], utc=True)
                 else:
                     # Integer formatında (ms timestamp)
-                    ohlcv_df['timestamp'] = pd.to_datetime(ohlcv_df['timestamp'], unit='ms')
+                    ohlcv_df['timestamp'] = pd.to_datetime(ohlcv_df['timestamp'], unit='ms', utc=True)
 
                 ohlcv_df.set_index('timestamp', inplace=True)
+
+                # 🔥 TIMEZONE DÜZELTMESİ: Tüm index'i UTC yap
+                if ohlcv_df.index.tzinfo is None:
+                    ohlcv_df.index = ohlcv_df.index.tz_localize('UTC')
+                else:
+                    ohlcv_df.index = ohlcv_df.index.tz_convert('UTC')
 
                 last_db_time = ohlcv_df.index[-1]
                 current_time = pd.Timestamp.now(tz='UTC')
@@ -1025,8 +1102,12 @@ class ExchangeManager:
 
                         # DataFrame'e dönüştür
                         gap_df = pd.DataFrame(all_gap_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-                        gap_df['timestamp'] = pd.to_datetime(gap_df['timestamp'], unit='ms')
+                        gap_df['timestamp'] = pd.to_datetime(gap_df['timestamp'], unit='ms', utc=True)
                         gap_df.set_index('timestamp', inplace=True)
+
+                        # 🔥 TIMEZONE DÜZELTMESİ: gap_df'i UTC yap
+                        if gap_df.index.tzinfo is None:
+                            gap_df.index = gap_df.index.tz_localize('UTC')
 
                         # DB verisi ile REST verisini birleştir (concat)
                         ohlcv_df = pd.concat([ohlcv_df, gap_df])
@@ -1150,14 +1231,22 @@ class ExchangeManager:
         # 4. WEBSOCKET DÖNGÜSÜ (Canlı Güncelleme)
         # ============================================
         logger.info(f"📡 [WSS] {symbol} için WebSocket döngüsü başlatılıyor...")
+        logger.info(f"🔥 [WSS DEBUG] DataFrame boyutu: {len(ohlcv_df)} mum")
+        logger.info(f"🔥 [WSS DEBUG] active_timeframes={paper_engine.active_timeframes}")
 
         # YENİ MUM KİLİDİ: Aynı mumu tekrar işlemeyi önler
         last_processed_ts = None
+        loop_iteration = 0
 
         while True:
+            loop_iteration += 1
+            logger.debug(f"🔄 [WSS LOOP] {symbol} iteration #{loop_iteration}")
+
             try:
                 # WebSocket üzerinden OHLCV dinle (PUSH - POLLING YOK!)
+                logger.debug(f"📡 [WSS] watch_ohlcv çağrılıyor...")
                 live_ohlcv = await self.exchange.watch_ohlcv(symbol, timeframe='1m', limit=100)
+                logger.debug(f"✅ [WSS] watch_ohlcv döndü: {len(live_ohlcv) if live_ohlcv else 0} mum")
 
                 if not live_ohlcv or len(live_ohlcv) == 0:
                     logger.warning(f"WARNING [WSS] {symbol} boş OHLCV, devam ediliyor...")
@@ -1203,11 +1292,15 @@ class ExchangeManager:
 
                 # WebSocket timestamp parse (int veya string olabilir)
                 if live_df['timestamp'].dtype == 'object':
-                    live_df['timestamp'] = pd.to_datetime(live_df['timestamp'])
+                    live_df['timestamp'] = pd.to_datetime(live_df['timestamp'], utc=True)
                 else:
-                    live_df['timestamp'] = pd.to_datetime(live_df['timestamp'], unit='ms')
+                    live_df['timestamp'] = pd.to_datetime(live_df['timestamp'], unit='ms', utc=True)
 
                 live_df.set_index('timestamp', inplace=True)
+
+                # 🔥 TIMEZONE DÜZELTMESİ: live_df'i UTC yap
+                if live_df.index.tzinfo is None:
+                    live_df.index = live_df.index.tz_localize('UTC')
 
                 # ============================================
                 # 5. CANLI VERİ BİRLEŞTİRME + RAM KORUMASI
@@ -1220,6 +1313,9 @@ class ExchangeManager:
                     # Canlı veriyi geçmiş veriye ekle/güncelle
                     last_live_time = live_df.index[-1]
                     last_hist_time = ohlcv_df.index[-1]
+
+                    logger.debug(f"🔥 [TZ DEBUG] last_live_time={last_live_time} (tz={last_live_time.tzinfo})")
+                    logger.debug(f"🔥 [TZ DEBUG] last_hist_time={last_hist_time} (tz={last_hist_time.tzinfo})")
 
                     if last_live_time > last_hist_time:
                         # Yeni mum geldi, ekle (DUPLICATE kontrolü)
@@ -1312,14 +1408,13 @@ class ExchangeManager:
                     ]
 
                     if active_bot_ids:
-                        logger.debug(f"🤖 [1-to-N] {symbol} için {len(active_bot_ids)} aktif bot işleniyor...")
+                        logger.info(f"🤖 [1-to-N] {symbol} için {len(active_bot_ids)} aktif bot işleniyor...")
+                        logger.info(f"   🔥 [BOT DEBUG] active_bot_ids={active_bot_ids}")
 
                         # PARALEL İŞLEME: Her bot için asenkron task oluştur
-                        # Kritik: 1h botunun ML hesaplaması 1m botunu bekletmez!
                         bot_tasks = []
                         for bot_id in active_bot_ids:
-                            # Her bot task'ı ayrı oluştur (non-blocking)
-                            # YENİ: htf_trends sözlüğünü de ilet
+                            logger.debug(f"   📝 [BOT TASK] {bot_id} için task oluşturuluyor...")
                             task = asyncio.create_task(
                                 self._process_bot_task(
                                     paper_engine,
@@ -1328,27 +1423,28 @@ class ExchangeManager:
                                     current_price,
                                     htf_trend,
                                     regime_info['regime'],
-                                    htf_trends  # YENİ: Çoklu HTF trend bilgisi
+                                    htf_trends
                                 )
                             )
                             bot_tasks.append(task)
+                            logger.debug(f"   ✅ [BOT TASK] {bot_id} task oluşturuldu")
 
-                        # Tüm botları PARALEL çalıştır (gather)
-                        # Hata yönetimi: Bir bot çökerse diğerleri etkilenmez
+                        # Tüm botları PARALEL çalıştır
                         if bot_tasks:
+                            logger.info(f"   🚀 [BOT GATHER] {len(bot_tasks)} task çalıştırılıyor...")
                             try:
                                 results = await asyncio.gather(*bot_tasks, return_exceptions=True)
+                                logger.info(f"   ✅ [BOT GATHER] Tüm tasklar tamamlandı")
 
-                                # Sonuçları logla
                                 for bot_id, result in zip(active_bot_ids, results):
                                     if isinstance(result, Exception):
-                                        logger.error(f"❌ [BOT] {bot_id} işleme hatası: {result}")
+                                        logger.error(f"   ❌ [BOT] {bot_id} işleme hatası: {result}")
                                     else:
-                                        logger.debug(f"✅ [BOT] {bot_id} başarıyla işlendi")
+                                        logger.debug(f"   ✅ [BOT] {bot_id} başarıyla işlendi")
                             except Exception as gather_err:
-                                logger.error(f"❌ [1-to-N] Gather hatası: {gather_err}")
+                                logger.error(f"   ❌ [1-to-N] Gather hatası: {gather_err}")
                     else:
-                        logger.debug(f"⚠️ [1-to-N] {symbol} için aktif bot yok")
+                        logger.info(f"⚠️ [1-to-N] {symbol} için aktif bot yok")
 
                     # ESKİ MİMARİ KALDIRILDI! Sadece 1-to-N kullanılıyor
 

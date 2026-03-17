@@ -111,27 +111,28 @@ class APIClient {
     // ========================================================================
     // BOT MANAGEMENT
     // ========================================================================
-    
+
     getBots() {
-        return this.get('/bots/list');
+        return this.get('/bot/bots/list');
     }
-    
+
     getBotStatus(botId) {
         return this.get('/bot/status', { bot_id: botId });
     }
-    
+
     startBot(botData) {
+        console.log('🔥 [API] startBot çağrıldı:', botData);
         return this.post('/bot/start', botData);
     }
-    
+
     stopBot(botId) {
         return this.post('/bot/stop', { bot_id: botId, action: 'stop' });
     }
-    
+
     resumeBot(botId) {
         return this.post('/bot/resume', { bot_id: botId, action: 'resume' });
     }
-    
+
     removeBot(botId) {
         return this.post('/bot/remove', { bot_id: botId });
     }

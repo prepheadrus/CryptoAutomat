@@ -49,7 +49,7 @@ if errorlevel 1 (
     exit /b 1
 )
 echo [OK] FastAPI sunucusu arka planda baslatildi
-echo [INFO] Endpoint: http://localhost:8000
+echo [INFO] Endpoint: http://localhost:3000
 echo.
 
 :: Wait for server to start
@@ -60,17 +60,17 @@ echo.
 
 :: Open dashboard in browser (separate process - won't close with terminal)
 echo [4/4] Dashboard tarayicida aciliyor...
-start "" "http://localhost:8000"
-echo [OK] Dashboard acildi: http://localhost:8000
+start "" "http://localhost:3000"
+echo [OK] Dashboard acildi: http://localhost:3000
 echo.
 
 :: Show system info
 echo ================================================================
 echo                    SYSTEM STATUS
 echo ================================================================
-echo   FastAPI Server   : http://localhost:8000
-echo   Dashboard        : http://localhost:8000
-echo   API Docs         : http://localhost:8000/docs
+echo   FastAPI Server   : http://localhost:3000
+echo   Dashboard        : http://localhost:3000
+echo   API Docs         : http://localhost:3000/docs
 echo   Event Tracer     : Aktif (Terminal loglarini izleyin)
 echo   Architecture     : Event-Driven (Modular)
 echo ================================================================

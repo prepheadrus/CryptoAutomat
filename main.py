@@ -21,6 +21,10 @@ def main():
 
     # Event tracer'ı asenkron başlat
     try:
+        # Python 3.10+ için deprecation warning önle
+        import warnings
+        warnings.filterwarnings("ignore", category=DeprecationWarning, message="There is no current event loop")
+
         loop = asyncio.get_event_loop()
         loop.create_task(start_event_tracer())
         logger.info("✅ Event Tracer aktif")

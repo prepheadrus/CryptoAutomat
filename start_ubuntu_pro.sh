@@ -2,13 +2,13 @@
 set -e # Hata durumunda betiği durdur
 
 # ============================================================================
-# CRYPTO ALGO BOT - UBUNTU STARTUP SCRIPT (PRO ENHANCED)
+# CRYPTO ALGO BOT - UBUNTU STARTUP SCRIPT (PRO ENHANCED v2026.03)
 # 7/24 Production-Ready Bot Launcher
 # ============================================================================
 # 6 Faz Mimari:
 #   - Faz 1: Event-Driven Architecture (%100 Pub/Sub)
-#   - Faz 2: Clean Architecture API (194 satır)
-#   - Faz 3: ES6 Frontend Modules (210 satır)
+#   - Faz 2: Clean Architecture API (Modüler)
+#   - Faz 3: ES6 Frontend Modules (Dashboard)
 #   - Faz 4: Modular Indicators (5 modül)
 #   - Faz 5: Zero-Touch WFO (Bayesian TPE)
 #   - Faz 6: MLOps Auto-Retrain + Liquidity Sweep
@@ -23,10 +23,10 @@ CYAN='\033[0;36m'
 WHITE='\033[1;37m'
 NC='\033[0m'
 
-# İşletim sistemi RAM aşımı vb durumlarında uygulamanın çökmesini önlemek için bellek serbest bırakma mekanizması
+# Memory management for edge cases
 export MALLOC_ARENA_MAX=2
 
-# Script directory (Güvenli Dizin Çözümleme)
+# Script directory (Safe Resolution)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
@@ -37,19 +37,22 @@ log_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 log_header() { echo -e "\n${WHITE}========================================${NC}\n${WHITE}$1${NC}\n${WHITE}========================================${NC}\n"; }
 
-# STEP 1: Directory check
+# ============================================================================
+# STEP 1: Directory Check
+# ============================================================================
 log_header "STEP 1: Project Directory"
 if [ ! -f "main.py" ]; then
-    log_error "main.py not found! Betik doğru dizinde çalıştırılmıyor olabilir."
+    log_error "main.py not found! Script may not be running from correct directory."
     exit 1
 fi
 log_success "Project directory verified"
 
+# ============================================================================
 # STEP 2: Git Update & Stash Protection
+# ============================================================================
 log_header "STEP 2: Git Update"
 if [ -d ".git" ]; then
-    log_info "Yerel değişiklikler korunarak (stash) güncelleme yapılıyor..."
-    # Local değişiklikleri (config.yaml vb) koruma altına alıp güncel kodu çekiyoruz
+    log_info "Stashing local changes (config files, etc.)..."
     git stash -q || true
     git pull origin main --rebase
     git stash pop -q || true
@@ -58,21 +61,25 @@ else
     log_warning "Not a git repository, skipping update"
 fi
 
+# ============================================================================
 # STEP 3: Virtual Environment (Robust Method)
+# ============================================================================
 log_header "STEP 3: Virtual Environment"
 if [ ! -d "venv" ]; then
     log_info "Creating virtual environment..."
     python3 -m venv venv
     log_success "Virtual environment created"
 fi
-# source kullanmak yerine doğrudan binary path'i kullanacağız
+
 PYTHON_BIN="$SCRIPT_DIR/venv/bin/python"
 PIP_BIN="$SCRIPT_DIR/venv/bin/pip"
 log_success "Virtual environment paths verified"
 
+# ============================================================================
 # STEP 4: Dependencies
+# ============================================================================
 log_header "STEP 4: Dependencies"
-$PIP_BIN install --upgrade pip wheel --quiet
+$PYTHON_BIN -m pip install --upgrade pip wheel --quiet
 if [ -f "requirements.txt" ]; then
     $PIP_BIN install -r requirements.txt --quiet
     log_success "Dependencies installed/verified"
@@ -80,77 +87,118 @@ else
     log_warning "requirements.txt not found!"
 fi
 
+# Install pytz if missing (ML requirement)
+$PYTHON_BIN -c "import pytz" 2>/dev/null || $PIP_BIN install pytz --quiet
+
+# ============================================================================
 # STEP 5: Cache Cleanup
+# ============================================================================
 log_header "STEP 5: Cache Cleanup"
 find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 find . -type f -name "*.pyc" -delete 2>/dev/null || true
 log_success "Python cache cleaned"
 
-# STEP 6: Config Files
+# ============================================================================
+# STEP 6: Configuration Files
+# ============================================================================
 log_header "STEP 6: Configuration"
-if [ ! -f "config.yaml" ]; then
-    cp config.yaml.example config.yaml 2>/dev/null || true
-    log_warning "Created default config.yaml"
-fi
 if [ ! -f ".env" ]; then
     cp .env.example .env 2>/dev/null || true
     log_warning "Created default .env file"
 fi
-log_success "Configuration verified"
 
-# STEP 7: Database Check
-log_header "STEP 7: Database Health"
-if [ -f "cryptobot.db" ]; then
-    DB_STATUS=$($PYTHON_BIN -c "import sqlite3; c=sqlite3.connect('cryptobot.db'); print('DB OK' if c.execute('PRAGMA integrity_check').fetchone()[0]=='ok' else 'DB FAILED')" 2>/dev/null || echo "DB ERROR")
-    if [[ "$DB_STATUS" == "DB OK" ]]; then
-        log_success "Database integrity check passed"
+# Check API keys
+if [ -f ".env" ]; then
+    if grep -q "BINANCE_API_KEY=" .env && ! grep -q '""' .env; then
+        log_success "Binance API keys configured"
     else
-        log_warning "Database check returned issues: $DB_STATUS"
+        log_warning "Binance API keys not configured - Running in PUBLIC mode"
+    fi
+fi
+
+# ============================================================================
+# STEP 7: Database & Data Lake Health
+# ============================================================================
+log_header "STEP 7: Database & Data Lake"
+
+# SQLite check
+if [ -f "cryptobot.db" ]; then
+    DB_STATUS=$($PYTHON_BIN -c "import sqlite3; c=sqlite3.connect('cryptobot.db'); print('OK' if c.execute('PRAGMA integrity_check').fetchone()[0]=='ok' else 'FAILED')" 2>/dev/null || echo "ERROR")
+    if [[ "$DB_STATUS" == "OK" ]]; then
+        log_success "SQLite database integrity check passed"
+    else
+        log_warning "Database check returned: $DB_STATUS"
     fi
 else
-    log_info "New database will be created on startup"
+    log_info "New SQLite database will be created on startup"
 fi
 
-# STEP 8: System Check
-log_header "STEP 8: System Requirements"
-log_info "Python: $($PYTHON_BIN --version 2>&1)"
-# Linux'a özel komutlar
-if command -v free >/dev/null 2>&1; then
-    log_info "RAM: $(free -m | awk '/^Mem:/{print $7}')MB available"
-fi
-if command -v df >/dev/null 2>&1; then
-    log_info "Disk: $(df -h . | awk 'NR==2{print $4}') available"
-fi
-
-# Yeni: Parquet Data Lake kontrolü
+# Parquet Data Lake check
 if [ -d "data/ohlcv/binance" ]; then
-    log_success "Parquet Data Lake: Ready"
+    PARQUET_COUNT=$(find data/ohlcv/binance -name "*.parquet" 2>/dev/null | wc -l)
+    if [ "$PARQUET_COUNT" -gt 0 ]; then
+        log_success "Parquet Data Lake: $PARQUET_COUNT files found"
+    else
+        log_info "Parquet Data Lake directory empty - Download data via Dashboard"
+    fi
 else
     mkdir -p data/ohlcv/binance
     log_info "Parquet Data Lake directory created"
 fi
 
-log_info ""
-log_info "Architecture Features:"
-log_info "  - Event-Driven Architecture (%100 Pub/Sub)"
-log_info "  - Clean Architecture API (194 satir)"
-log_info "  - ES6 Frontend Modules (210 satir)"
-log_info "  - Modular Indicators (5 modul)"
-log_info "  - Zero-Touch WFO (Bayesian TPE)"
-log_info "  - MLOps Auto-Retrain + Liquidity Sweep"
-log_info "  - Parquet Data Lake (Snappy compression)"
-log_info "  - Order Book Imbalance Filtresi"
-log_info "  - Commission + Slippage Gerçekçi Backtest"
+# ============================================================================
+# STEP 8: System Requirements
+# ============================================================================
+log_header "STEP 8: System Requirements"
+log_info "Python: $($PYTHON_BIN --version 2>&1)"
 
-# STEP 9: Start Bot (With Exec)
-log_header "STEP 9: Starting Bot"
-log_info "Dashboard: http://localhost:8000"
+if command -v free >/dev/null 2>&1; then
+    RAM_AVAIL=$(free -m | awk '/^Mem:/{print $7}')
+    log_info "RAM: ${RAM_AVAIL}MB available"
+    if [ "$RAM_AVAIL" -lt 512 ]; then
+        log_warning "Low RAM detected (< 512MB)"
+    fi
+fi
+
+if command -v df >/dev/null 2>&1; then
+    DISK_AVAIL=$(df -h . | awk 'NR==2{print $4}')
+    log_info "Disk: $DISK_AVAIL available"
+fi
+
+# ML Model check
+if [ -d "artifacts/models" ]; then
+    MODEL_COUNT=$(find artifacts/models -name "*.json" -o -name "*.joblib" 2>/dev/null | wc -l)
+    log_success "ML Models: $MODEL_COUNT files"
+fi
+
+# ============================================================================
+# STEP 9: Architecture Features
+# ============================================================================
+log_header "Architecture Features"
+log_info "✅ Event-Driven Architecture (%100 Pub/Sub)"
+log_info "✅ Clean Architecture API (Modüler)"
+log_info "✅ ES6 Frontend Modules (Dashboard)"
+log_info "✅ Modular Indicators (5 modül)"
+log_info "✅ Zero-Touch WFO (Bayesian TPE)"
+log_info "✅ MLOps Auto-Retrain + Liquidity Sweep"
+log_info "✅ Parquet Data Lake (Snappy compression)"
+log_info "✅ ML Ensemble (XGBoost + Random Forest)"
+log_info "✅ Triple Barrier Method Labeling"
+
+# ============================================================================
+# STEP 10: Start Bot
+# ============================================================================
+log_header "STEP 10: Starting Bot"
+
+PORT=3000
+log_info "Dashboard: http://localhost:$PORT"
+log_info "API Docs: http://localhost:$PORT/docs"
 log_info "Press CTRL+C to stop"
-log_info "Pro Tip: Run inside 'tmux' or 'screen' to keep it alive after ssh disconnect"
+log_info "Pro Tip: Use 'tmux' or 'screen' for SSH sessions"
 log_success "System Ready for Live Trading!"
 
-# Display hatasını engelle (Headless Linux Server için)
+# Headless server support
 export DISPLAY=""
 
-# 'exec' komutu bash kabuğunu python prosesiyle değiştirir. RAM tasarrufu sağlar ve sinyalleri (CTRL+C) direkt olarak bota iletir.
+# Start with exec (replaces bash process, better signal handling)
 exec $PYTHON_BIN main.py

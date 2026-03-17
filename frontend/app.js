@@ -58,6 +58,10 @@ async function init() {
         await loadSymbolsForBot();  // Load symbols for bot launcher
         await loadStrategiesForBot();  // Load strategies
         await loadTimeframesForBot();  // Load timeframes
+        await loadStrategyLibrary();  // Load strategy library
+        await loadMLTrainingHistory();  // Load ML training history
+        await loadSymbolsForML();  // Load symbols for ML training
+        await loadTimeframesForML();  // Load timeframes for ML training
 
         // 5. Start auto-refresh
         startAutoRefresh();
@@ -120,13 +124,11 @@ function switchTab(tabId) {
         const contentId = content.id.replace('tab-', '');
         if (tabId === content.id || tabId === contentId) {
             content.classList.add('active-tab');
-            // Remove inline display if exists
-            content.style.display = '';
+            content.style.display = 'block';
             console.log(`✅ [TAB] Showing: ${content.id}`);
         } else {
             content.classList.remove('active-tab');
-            // Remove inline display if exists
-            content.style.display = '';
+            content.style.display = 'none';
         }
     });
 
@@ -154,11 +156,180 @@ async function loadDashboard() {
 
         console.log('📊 [DASHBOARD] Metrics loaded');
 
+        // Render positions and update performance metrics
+        if (metrics.positions) {
+            renderPositions(metrics.positions);
+        }
+        if (metrics.portfolio) {
+            updatePerformanceMetrics(metrics.portfolio);
+        }
+
     } catch (error) {
         console.error('❌ [DASHBOARD] Load error:', error);
         store.setState('system', { status: 'error' });
     }
 }
+
+/**
+ * Render open positions table
+ */
+function renderPositions(positions) {
+    const tbody = document.getElementById('positions-body');
+    if (!tbody) return;
+
+    if (positions.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:40px; color:var(--text-muted);">📭 Açık pozisyon yok</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = positions.map(pos => {
+        const direction = pos.direction || pos.side || 'LONG';
+        const directionIcon = direction === 'LONG' ? '🟢' : '🔴';
+        const directionColor = direction === 'LONG' ? 'var(--neon-green)' : 'var(--neon-red)';
+        const pnl = pos.unrealized_usd || pos.pnl_usd || 0;
+        const pnlClass = pnl >= 0 ? 'color:var(--neon-green)' : 'color:var(--neon-red)';
+        const pnlSign = pnl >= 0 ? '+' : '';
+        const roe = pos.pnl_percent || 0;
+        const roeClass = roe >= 0 ? 'color:var(--neon-green)' : 'color:var(--neon-red)';
+        const roeSign = roe >= 0 ? '+' : '';
+        const notional = (pos.size || 0) * (pos.entry_price || 0) * (pos.leverage || 1);
+
+        return `
+            <tr>
+                <td>
+                    <div style="font-weight:600; color:var(--text-main);">${pos.strategy_id || pos.strategy || 'Unknown'}</div>
+                    <div style="font-size:0.7rem; color:var(--text-muted);">${pos.timeframe || 'N/A'}</div>
+                </td>
+                <td>
+                    <div style="color:${directionColor}; font-weight:600;">${directionIcon} ${direction}</div>
+                    <div style="font-size:0.75rem; color:var(--text-main);">${pos.symbol || 'N/A'}</div>
+                </td>
+                <td>
+                    <div style="font-family:monospace;">${(pos.size || 0).toFixed(4)}</div>
+                    <div style="font-size:0.7rem; color:var(--text-muted);">${pos.leverage || 1}x</div>
+                </td>
+                <td>
+                    <div style="font-family:monospace;">$${(pos.entry_price || 0).toFixed(2)}</div>
+                    <div style="font-size:0.7rem; color:var(--text-muted);">$${notional.toFixed(2)}</div>
+                </td>
+                <td>
+                    <div style="font-family:monospace; font-weight:bold; ${pnlClass}">${pnlSign}$${pnl.toFixed(2)}</div>
+                    <div style="font-size:0.7rem; color:var(--text-muted);">$${(pos.current_price || pos.entry_price || 0).toFixed(2)}</div>
+                </td>
+                <td style="font-family:monospace; font-weight:bold; ${roeClass}">
+                    ${roeSign}${roe.toFixed(2)}%
+                </td>
+                <td style="font-size:0.7rem;">
+                    <div style="color:var(--neon-red);">SL: $${(pos.stop_loss || 0).toFixed(2)}</div>
+                    <div style="color:var(--neon-green);">TP: $${(pos.take_profit || 0).toFixed(2)}</div>
+                    <div style="color:var(--text-muted);">Liq: $${(pos.liquidation_price || 0).toFixed(2)}</div>
+                </td>
+                <td>
+                    <button onclick="closePosition('${pos.bot_id || pos.id || ''}', '${pos.symbol || ''}')"
+                        style="padding:4px 8px; background:var(--neon-red); color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:0.7rem; font-weight:600;">
+                        🚫 Kapat
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    console.log(`✅ [POSITIONS] ${positions.length} pozisyon render edildi`);
+}
+
+/**
+ * Update performance metrics (KPI dashboard)
+ */
+function updatePerformanceMetrics(portfolio) {
+    const elBalance = document.getElementById('perf-balance');
+    const elEquity = document.getElementById('perf-equity');
+    const elWinRate = document.getElementById('perf-winrate');
+    const elCount = document.getElementById('perf-count');
+    const elTotalTrades = document.getElementById('perf-total-trades');
+    const elTotalPnl = document.getElementById('perf-total-pnl');
+    const elFees = document.getElementById('perf-total-fees');
+
+    const elUsedMargin = document.getElementById('usage-used-margin');
+    const elFreeMargin = document.getElementById('usage-free-margin');
+    const elNotional = document.getElementById('usage-notional');
+    const elLeverage = document.getElementById('usage-leverage');
+
+    const balance = portfolio.balance || 10000;
+    const equity = portfolio.equity || balance;
+    const usedMargin = portfolio.used_margin || 0;
+    const freeMargin = portfolio.free_margin || balance;
+    const totalPnl = portfolio.total_pnl || 0;
+    const winRate = portfolio.win_rate || 0;
+    const totalTrades = portfolio.total_trades || 0;
+    const fees = portfolio.total_commission || 0;
+    const notional = portfolio.total_notional || 0;
+
+    // Calculate average leverage (approximate)
+    const avgLeverage = notional > 0 && usedMargin > 0 ? (notional / usedMargin).toFixed(1) : '1.0';
+
+    // Update DOM
+    if (elBalance) elBalance.textContent = `$${balance.toFixed(2)}`;
+    if (elEquity) elEquity.textContent = `$${equity.toFixed(2)}`;
+    if (elWinRate) {
+        elWinRate.textContent = `${winRate.toFixed(1)}%`;
+        elWinRate.style.color = winRate >= 50 ? 'var(--neon-green)' : 'var(--neon-red)';
+    }
+    if (elCount) elCount.textContent = totalTrades;
+    if (elTotalTrades) elTotalTrades.textContent = totalTrades;
+    if (elTotalPnl) {
+        elTotalPnl.textContent = `$${totalPnl.toFixed(2)}`;
+        elTotalPnl.style.color = totalPnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+    }
+    if (elFees) elFees.textContent = `$${fees.toFixed(2)}`;
+
+    if (elUsedMargin) {
+        elUsedMargin.textContent = `$${usedMargin.toFixed(2)}`;
+        elUsedMargin.style.color = usedMargin > balance * 0.5 ? 'var(--neon-red)' : 'var(--text-main)';
+    }
+    if (elFreeMargin) {
+        elFreeMargin.textContent = `$${freeMargin.toFixed(2)}`;
+        elFreeMargin.style.color = freeMargin < balance * 0.2 ? 'var(--neon-red)' : 'var(--neon-green)';
+    }
+    if (elNotional) elNotional.textContent = `$${notional.toFixed(2)}`;
+    if (elLeverage) elLeverage.textContent = `${avgLeverage}x`;
+
+    console.log('📊 [PERF] Metrics updated');
+}
+
+/**
+ * Close position
+ */
+window.closePosition = function(botId, symbol) {
+    if (!botId) {
+        showToast('❌ Bot ID bulunamadı', 'error');
+        return;
+    }
+
+    if (!confirm(`⚠️ ${symbol} pozisyonunu kapatmak istediğinizden emin misiniz?`)) {
+        return;
+    }
+
+    console.log('🚫 [POSITION] Closing position:', { botId, symbol });
+
+    // Bot manager'ı kullan
+    if (typeof botManager !== 'undefined' && botManager.stopBot) {
+        botManager.stopBot(botId)
+            .then(result => {
+                if (result.status === 'success') {
+                    showToast(`✅ ${symbol} pozisyonu kapatıldı`, 'success');
+                    // Refresh dashboard
+                    setTimeout(() => loadDashboard(), 1000);
+                } else {
+                    showToast('❌ ' + (result.message || 'Kapatma başarısız'), 'error');
+                }
+            })
+            .catch(error => {
+                showToast('❌ Hata: ' + error.message, 'error');
+            });
+    } else {
+        showToast('❌ Bot manager bulunamadı', 'error');
+    }
+};
 
 /**
  * Load active download tasks
@@ -803,13 +974,22 @@ function createToastContainer() {
 async function handleBotSubmit(event) {
     event.preventDefault();
 
+    const timeframeEl = document.getElementById('bot-timeframe');
     const botData = {
         symbol: document.getElementById('bot-symbol').value,
         strategy_id: document.getElementById('bot-strategy').value,
-        timeframe: document.getElementById('bot-timeframe').value,
+        timeframe: timeframeEl?.value || '1m',  // Fallback to '1m' if empty
         market_type: document.getElementById('bot-market').value,
         margin_type: document.getElementById('bot-margin-type').value
     };
+
+    // 🔥 DEBUG: Form değerlerini logla
+    console.log('🔥 [BOT FORM] handleBotSubmit çağrıldı');
+    console.log('   📊 Symbol:', botData.symbol);
+    console.log('   📚 Strategy:', botData.strategy_id);
+    console.log('   ⏱️ Timeframe:', botData.timeframe, `(element value: ${timeframeEl?.value})`);
+    console.log('   🏛️ Market:', botData.market_type);
+    console.log('   🛡️ Margin:', botData.margin_type);
 
     if (!botData.symbol || !botData.strategy_id) {
         showToast('❌ Lütfen sembol ve strateji seçin!', 'error');
@@ -1116,7 +1296,8 @@ async function loadSymbolsForBot() {
 
         const symbolSelects = document.querySelectorAll('.symbol-select');
         symbolSelects.forEach(select => {
-            if (select.id !== 'market-symbol') { // Market selection list is different
+            // ML training symbol selection should NOT be filled here
+            if (select.id !== 'market-symbol' && select.id !== 'ml-train-symbol') {
                 select.innerHTML = '<option value="">Sembol Seçin...</option>' +
                     symbols.map(s => `<option value="${s.symbol}">${s.symbol}</option>`).join('');
             }
@@ -1125,6 +1306,26 @@ async function loadSymbolsForBot() {
         console.log(`📊 [SYMBOLS] ${symbols.length} sembol yüklendi`);
     } catch (error) {
         console.error('❌ [SYMBOLS] Load error:', error);
+    }
+}
+
+/**
+ * Load symbols for ML training
+ */
+async function loadSymbolsForML() {
+    try {
+        const data = await api.getSymbolsWithData();
+        const symbols = data.symbols || [];
+
+        const mlSymbolSelect = document.getElementById('ml-train-symbol');
+        if (mlSymbolSelect) {
+            mlSymbolSelect.innerHTML = '<option value="">Sembol Seçin...</option>' +
+                symbols.map(s => `<option value="${s.symbol}">${s.symbol}</option>`).join('');
+        }
+
+        console.log(`📊 [ML] ${symbols.length} sembol ML için yüklendi`);
+    } catch (error) {
+        console.error('❌ [ML] Symbol load error:', error);
     }
 }
 
@@ -1138,8 +1339,11 @@ async function loadStrategiesForBot() {
 
         const strategySelects = document.querySelectorAll('.strategy-select');
         strategySelects.forEach(select => {
-            select.innerHTML = '<option value="">Strateji Seçin...</option>' +
-                strategies.map(s => `<option value="${s.id || s.strategy_id}">${s.name || s.strategy_id}</option>`).join('');
+            // ML training symbol selection should NOT be filled here
+            if (select.id !== 'ml-train-symbol') {
+                select.innerHTML = '<option value="">Strateji Seçin...</option>' +
+                    strategies.map(s => `<option value="${s.id || s.strategy_id}">${s.name || s.strategy_id}</option>`).join('');
+            }
         });
 
         console.log(`📚 [STRATEGIES] ${strategies.length} strateji yüklendi`);
@@ -1156,16 +1360,748 @@ async function loadTimeframesForBot() {
 
     const timeframeSelects = document.querySelectorAll('.timeframe-select');
     timeframeSelects.forEach(select => {
-        select.innerHTML = '<option value="">Timeframe Seçin...</option>' +
-            timeframes.map(tf => `<option value="${tf}">${tf}</option>`).join('');
+        // ML training timeframe selection should NOT be filled here
+        if (select.id !== 'ml-train-timeframe') {
+            select.innerHTML = '<option value="">Timeframe Seçin...</option>' +
+                timeframes.map(tf => `<option value="${tf}">${tf}</option>`).join('');
+        }
     });
 
     console.log(`⏱️ [TIMEFRAMES] ${timeframes.length} timeframe yüklendi`);
 }
 
+/**
+ * Load timeframes for ML training
+ */
+async function loadTimeframesForML() {
+    const timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d'];
+
+    const mlTimeframeSelect = document.getElementById('ml-train-timeframe');
+    if (mlTimeframeSelect) {
+        mlTimeframeSelect.innerHTML = '<option value="1h" selected>1h</option>' +
+            timeframes.filter(tf => tf !== '1h').map(tf => `<option value="${tf}">${tf}</option>`).join('');
+    }
+
+    console.log(`⏱️ [ML] Timeframes yüklendi`);
+}
+
+/**
+ * Load strategy library (detailed strategy info with logic)
+ */
+async function loadStrategyLibrary() {
+    try {
+        const data = await api.getStrategies();
+        const strategies = data.strategies || [];
+
+        console.log(`📚 [LIBRARY] ${strategies.length} strateji yüklendi`);
+        renderStrategyLibrary(strategies);
+    } catch (error) {
+        console.error('❌ [LIBRARY] Load error:', error);
+    }
+}
+
+/**
+ * Load trade history
+ */
+async function loadTradeHistory() {
+    try {
+        console.log('📜 [HISTORY] Loading trade history...');
+        const data = await api.getTrades();
+        const trades = data.trades || [];
+
+        console.log(`📜 [HISTORY] ${trades.length} işlem yüklendi`);
+        renderTradeHistory(trades);
+    } catch (error) {
+        console.error('❌ [HISTORY] Load error:', error);
+        const tbody = document.getElementById('history-body');
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:40px; color:var(--neon-red);">Hata: ${error.message}</td></tr>`;
+        }
+    }
+}
+
+/**
+ * Render trade history table
+ */
+function renderTradeHistory(trades) {
+    const tbody = document.getElementById('history-body');
+    if (!tbody) return;
+
+    if (trades.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:40px; color:var(--text-muted);">Henüz işlem geçmişi yok</td></tr>`;
+        updateHistoryStats([]);
+        return;
+    }
+
+    tbody.innerHTML = trades.map(trade => {
+        const pnl = trade.pnl_usd || trade.pnl || 0;
+        const pnlPercent = trade.pnl_percent || 0;
+        const isProfit = pnl >= 0;
+        const direction = trade.direction || 'LONG';
+        const directionIcon = direction === 'LONG' ? '🟢' : '🔴';
+        const closedAt = trade.closed_at;
+        let dateStr = 'N/A';
+        if (closedAt) {
+            try {
+                if (typeof closedAt === 'string') {
+                    dateStr = new Date(closedAt).toLocaleString('tr-TR');
+                } else if (closedAt instanceof Date) {
+                    dateStr = closedAt.toLocaleString('tr-TR');
+                }
+            } catch (e) {
+                dateStr = closedAt;
+            }
+        }
+
+        return `
+            <tr>
+                <td>${dateStr}</td>
+                <td style="font-weight:600; color:var(--text-main);">${trade.symbol || 'N/A'}</td>
+                <td style="font-size:0.85rem; color:var(--text-muted);">${trade.strategy_id || trade.strategy || 'N/A'}</td>
+                <td><span style="color:${direction === 'LONG' ? 'var(--neon-green)' : 'var(--neon-red)'};">${directionIcon} ${direction}</span></td>
+                <td style="font-family:monospace;">$${(trade.entry_price || 0).toFixed(4)}</td>
+                <td style="font-family:monospace;">$${(trade.exit_price || 0).toFixed(4)}</td>
+                <td style="font-family:monospace;">${(trade.size || 0).toFixed(4)} / ${trade.leverage || 1}x</td>
+                <td style="font-family:monospace; font-weight:bold; color:${isProfit ? 'var(--neon-green)' : 'var(--neon-red)'};">
+                    ${isProfit ? '+' : ''}$${pnl.toFixed(2)}
+                </td>
+                <td style="font-family:monospace; color:${pnlPercent >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'};">
+                    ${pnlPercent >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%
+                </td>
+                <td style="font-size:0.75rem; color:var(--text-muted); max-width:150px; overflow:hidden; text-overflow:ellipsis;">
+                    ${trade.reason || '-'}
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    updateHistoryStats(trades);
+    console.log('✅ [HISTORY] Table rendered');
+}
+
+/**
+ * Update trade history statistics
+ */
+function updateHistoryStats(trades) {
+    const totalTrades = trades.length;
+    const winningTrades = trades.filter(t => (t.pnl_usd || t.pnl || 0) > 0).length;
+    const winRate = totalTrades > 0 ? (winningTrades / totalTrades * 100) : 0;
+    const totalPnl = trades.reduce((sum, t) => sum + (t.pnl_usd || t.pnl || 0), 0);
+    const avgPnl = totalTrades > 0 ? totalPnl / totalTrades : 0;
+
+    // Calculate best strategy
+    const strategyPnl = {};
+    trades.forEach(t => {
+        const strat = t.strategy_id || t.strategy || 'Unknown';
+        const pnl = t.pnl_usd || t.pnl || 0;
+        strategyPnl[strat] = (strategyPnl[strat] || 0) + pnl;
+    });
+
+    let bestStrategy = 'N/A';
+    let maxPnl = -Infinity;
+    Object.entries(strategyPnl).forEach(([strat, pnl]) => {
+        if (pnl > maxPnl) {
+            maxPnl = pnl;
+            bestStrategy = strat;
+        }
+    });
+
+    // Update DOM
+    const elTotalTrades = document.getElementById('hist-total-trades');
+    const elWinRate = document.getElementById('hist-win-rate');
+    const elTotalPnl = document.getElementById('hist-total-pnl');
+    const elAvgPnl = document.getElementById('hist-avg-pnl');
+    const elBestStrategy = document.getElementById('hist-best-strategy');
+
+    if (elTotalTrades) elTotalTrades.textContent = totalTrades;
+    if (elWinRate) elWinRate.textContent = `${winRate.toFixed(1)}%`;
+    if (elTotalPnl) {
+        elTotalPnl.textContent = `$${totalPnl.toFixed(2)}`;
+        elTotalPnl.style.color = totalPnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+    }
+    if (elAvgPnl) {
+        elAvgPnl.textContent = `$${avgPnl.toFixed(2)}`;
+        elAvgPnl.style.color = avgPnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+    }
+    if (elBestStrategy) elBestStrategy.textContent = bestStrategy;
+
+    console.log('📊 [HISTORY] Stats updated');
+}
+
+/**
+ * Clear trade history
+ */
+async function clearTradeHistory() {
+    if (!confirm('⚠️ Tüm işlem geçmişini silmek istediğinizden emin misiniz? Bu işlem geri alınamaz!')) {
+        return;
+    }
+
+    try {
+        const result = await api.clearTrades();
+        if (result.status === 'success') {
+            showToast('✅ İşlem geçmişi temizlendi', 'success');
+            await loadTradeHistory();
+        } else {
+            showToast('❌ ' + (result.message || 'Temizleme başarısız'), 'error');
+        }
+    } catch (error) {
+        showToast('❌ Hata: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Filter history table by symbol
+ */
+window.filterHistoryTable = function() {
+    const filterInput = document.getElementById('hist-filter-symbol');
+    if (!filterInput) return;
+
+    const filter = filterInput.value.toUpperCase();
+    const table = document.getElementById('history-table');
+    if (!table) return;
+
+    const tr = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+
+    for (let i = 0; i < tr.length; i++) {
+        const td = tr[i].getElementsByTagName('td')[1]; // Symbol column
+        if (td) {
+            const txtValue = td.textContent || td.innerText;
+            tr[i].style.display = txtValue.toUpperCase().indexOf(filter) > -1 ? '' : 'none';
+        }
+    }
+};
+
+// Global scope'a ekle (HTML onclick için)
+window.loadTradeHistory = loadTradeHistory;
+window.clearTradeHistory = clearTradeHistory;
+
+// ============================================================================
+// ML TRAINING FUNCTIONS
+// ============================================================================
+
+/**
+ * Validate mum count against database
+ */
+window.validateMumCount = function() {
+    const symbolSelect = document.getElementById('ml-train-symbol');
+    const timeframeSelect = document.getElementById('ml-train-timeframe');
+    const limitInput = document.getElementById('ml-train-limit');
+    const dbCountEl = document.getElementById('ml-db-count');
+    const warningEl = document.getElementById('ml-limit-warning');
+    const rangeEl = document.getElementById('ml-db-range');
+
+    if (!symbolSelect || !timeframeSelect || !limitInput) return;
+
+    const symbol = symbolSelect.value;
+    const timeframe = timeframeSelect.value;
+
+    if (!symbol) {
+        if (dbCountEl) dbCountEl.textContent = '';
+        if (rangeEl) rangeEl.textContent = '';
+        return;
+    }
+
+    // Get available data count from API
+    api.getDataStats().then(stats => {
+        if (!stats || !stats.stats) {
+            if (rangeEl) {
+                rangeEl.textContent = '❌ Veri sorgulanamadı!';
+                rangeEl.style.color = 'var(--neon-red)';
+            }
+            return;
+        }
+
+        // Find matching symbol/timeframe
+        const stat = stats.stats.find(s => {
+            const sSymbol = s.symbol || s.pair || '';
+            const sTimeframe = s.timeframe || s.tf || '';
+            return sSymbol.includes(symbol) && sTimeframe === timeframe;
+        });
+
+        if (stat) {
+            const dbCount = stat.candle_count || stat.count || stat.total || 0;
+            const limitValue = parseInt(limitInput.value) || 0;
+
+            if (dbCountEl) dbCountEl.textContent = `(DB: ${(dbCount / 1000).toFixed(1)}K)`;
+            if (rangeEl) {
+                if (limitValue > dbCount && dbCount > 0) {
+                    rangeEl.textContent = `⚠️ Veritabanında ${(dbCount / 1000).toFixed(1)}K mum var. ${limitValue} mum için önce veri indirin!`;
+                    rangeEl.style.color = 'var(--neon-red)';
+                } else if (dbCount > 0) {
+                    rangeEl.textContent = `✅ Mevcut: ${(dbCount / 1000).toFixed(1)}K mum - ${Math.min(limitValue, dbCount)} mum kullanılacak`;
+                    rangeEl.style.color = 'var(--neon-green)';
+                } else {
+                    rangeEl.textContent = '❌ Bu sembol/timeframe için veri bulunamadı!';
+                    rangeEl.style.color = 'var(--neon-red)';
+                }
+            }
+
+            // Show warning if limit > db count
+            if (warningEl) {
+                if (limitValue > dbCount && dbCount > 0) {
+                    warningEl.style.display = 'block';
+                    warningEl.textContent = `⚠️ DB'de sadece ${(dbCount / 1000).toFixed(1)}K mum var! Önce veri indirin.`;
+                    limitInput.style.borderColor = 'var(--neon-red)';
+                } else {
+                    warningEl.style.display = 'none';
+                    limitInput.style.borderColor = 'rgba(255,255,255,0.1)';
+                }
+            }
+        } else {
+            if (rangeEl) {
+                rangeEl.textContent = '⏳ Veri yükleniyor...';
+                rangeEl.style.color = 'var(--text-muted)';
+            }
+        }
+    }).catch(err => {
+        console.error('❌ [ML] DB stats error:', err);
+        if (rangeEl) {
+            rangeEl.textContent = '❌ DB sorgusu başarısız!';
+            rangeEl.style.color = 'var(--neon-red)';
+        }
+    });
+};
+
+/**
+ * Start ML model training
+ */
+window.startMLTraining = async function() {
+    const symbolSelect = document.getElementById('ml-train-symbol');
+    const timeframeSelect = document.getElementById('ml-train-timeframe');
+    const limitInput = document.getElementById('ml-train-limit');
+    const tpInput = document.getElementById('ml-train-tp');
+    const slInput = document.getElementById('ml-train-sl');
+
+    const symbol = symbolSelect?.value;
+    const timeframe = timeframeSelect?.value;
+    const limit = parseInt(limitInput?.value) || 5000;
+    const tpMultiplier = parseFloat(tpInput?.value) || 2.0;
+    const slMultiplier = parseFloat(slInput?.value) || 2.0;
+
+    // Validation
+    if (!symbol || !timeframe) {
+        showToast('❌ Sembol ve zaman dilimi seçin!', 'error');
+        return;
+    }
+
+    if (limit < 100) {
+        showToast('❌ Mum sayısı en az 100 olmalı!', 'error');
+        return;
+    }
+
+    if (tpMultiplier < 0.5 || tpMultiplier > 10) {
+        showToast('❌ TP çarpanı 0.5 - 10 arasında olmalı!', 'error');
+        return;
+    }
+
+    if (slMultiplier < 0.5 || slMultiplier > 10) {
+        showToast('❌ SL çarpanı 0.5 - 10 arasında olmalı!', 'error');
+        return;
+    }
+
+    // Check DB count before training
+    let dbCount = 0;
+    try {
+        const stats = await api.getDataStats();
+        if (stats && stats.stats) {
+            const stat = stats.stats.find(s => {
+                const sSymbol = s.symbol || s.pair || '';
+                const sTimeframe = s.timeframe || s.tf || '';
+                return sSymbol.includes(symbol) && sTimeframe === timeframe;
+            });
+
+            if (stat) {
+                dbCount = stat.candle_count || stat.count || stat.total || 0;
+            }
+        }
+    } catch (err) {
+        console.error('❌ [ML] DB stats error:', err);
+    }
+
+    // Warn if limit > db count
+    if (limit > dbCount && dbCount > 0) {
+        const confirmed = await new Promise(resolve => {
+            const result = confirm(
+                `⚠️ UYARI: Veritabanında sadece ${(dbCount / 1000).toFixed(1)}K (${dbCount}) mum var!\n\n` +
+                `Siz ${limit} mum istiyorsunuz.\n\n` +
+                `Seçenekler:\n` +
+                `1️⃣ Devam et (Mevcut ${dbCount} mum kullanılacak)\n` +
+                `2️⃣ İptal et ve önce veri indir\n\n` +
+                `Devam etmek istiyor musunuz?`
+            );
+            resolve(result);
+        });
+
+        if (!confirmed) {
+            showToast('ℹ️ Eğitim iptal edildi. Önce veri laboratuvarından veri indirebilirsiniz.', 'info');
+            return;
+        }
+    }
+
+    // Confirm
+    if (!confirm(`🧠 ${symbol} (${timeframe}) için ML modeli eğitilecek.\n\nParametreler:\n- Mum Sayısı: ${limit}${dbCount > 0 ? ` (Mevcut: ${(dbCount / 1000).toFixed(1)}K)` : ''}\n- TP Çarpan: ${tpMultiplier}\n- SL Çarpan: ${slMultiplier}\n\nDevam etmek istiyor musunuz?`)) {
+        return;
+    }
+
+    // Show progress
+    const progressDiv = document.getElementById('ml-training-progress');
+    const progressBar = document.getElementById('ml-progress-bar');
+    const progressMsg = document.getElementById('ml-training-message');
+    const resultDiv = document.getElementById('ml-training-result');
+
+    if (progressDiv) progressDiv.style.display = 'block';
+    if (progressBar) progressBar.style.width = '0%';
+    if (progressMsg) progressMsg.textContent = '📊 Veri hazırlanıyor...';
+    if (resultDiv) resultDiv.style.display = 'none';
+
+    try {
+        // Start training - BEKLE!
+        const data = {
+            symbol: symbol,
+            timeframe: timeframe,
+            limit: limit,
+            tp_multiplier: tpMultiplier,
+            sl_multiplier: slMultiplier
+        };
+
+        console.log('🧠 [ML] Eğitim başlatılıyor...', data);
+
+        const result = await api.trainModel(data);
+
+        if (result.status === 'success') {
+            // Show success
+            if (progressBar) progressBar.style.width = '100%';
+            if (progressMsg) progressMsg.textContent = '✅ Eğitim tamamlandı!';
+
+            if (resultDiv) {
+                resultDiv.style.display = 'block';
+                resultDiv.style.background = 'rgba(46, 220, 135, 0.1)';
+                resultDiv.style.border = '1px solid var(--neon-green)';
+
+                const accuracy = (result.accuracy || 0).toFixed(2);
+                const datasetSize = result.dataset_size || 0;
+
+                resultDiv.innerHTML = `
+                    <h4 style="color: var(--neon-green); margin-bottom: 10px;">🎉 ML Model Eğitimi Başarılı!</h4>
+                    <div style="text-align: left; max-width: 500px; margin: 0 auto; color: var(--text-main);">
+                        <p><strong>Sembol:</strong> ${symbol}</p>
+                        <p><strong>Timeframe:</strong> ${timeframe}</p>
+                        <p><strong>Dataset:</strong> ${datasetSize.toLocaleString()} örnek</p>
+                        <p><strong>Accuracy:</strong> ${accuracy}%</p>
+                        <p style="color: var(--neon-blue); margin-top: 15px;">
+                            Model artık Strateji Karar Merkezi'nde kullanıma hazır.
+                        </p>
+                    </div>
+                `;
+            }
+
+            showToast('✅ ML modeli eğitildi! Geçmiş yenileniyor...', 'success');
+
+            // Refresh history AFTER training completes
+            setTimeout(() => {
+                loadMLTrainingHistory();
+            }, 500);
+        } else {
+            throw new Error(result.message || 'Eğitim başarısız');
+        }
+
+    } catch (error) {
+        console.error('❌ [ML] Training error:', error);
+
+        if (progressDiv) progressDiv.style.display = 'none';
+        if (resultDiv) {
+            resultDiv.style.display = 'block';
+            resultDiv.style.background = 'rgba(248, 83, 73, 0.1)';
+            resultDiv.style.border = '1px solid var(--neon-red)';
+            resultDiv.innerHTML = `
+                <h4 style="color: var(--neon-red); margin-bottom: 10px;">❌ Eğitim Hatası!</h4>
+                <p style="color: var(--text-main); font-size: 0.85rem;">
+                    ${error.message || 'Bilinmeyen hata'}
+                </p>
+                <p style="color: var(--text-muted); font-size: 0.75rem; margin-top: 10px;">
+                    Server hatası olabilir. Console'u (F12) kontrol edin.
+                </p>
+            `;
+        }
+
+        showToast('❌ ML eğitimi hatası: ' + error.message, 'error');
+    }
+};
+
+/**
+ * Load ML training history
+ */
+window.loadMLTrainingHistory = async function() {
+    const container = document.getElementById('training-history-table');
+    if (!container) return;
+
+    try {
+        const data = await api.get('/ml/training-history');
+        const history = data.history || data.training_history || [];
+
+        if (history.length === 0) {
+            container.innerHTML = `
+                <p style="text-align: center; padding: 40px; color: var(--text-muted);">
+                    📭 Henüz eğitilmiş model yok
+                </p>
+            `;
+            return;
+        }
+
+        container.innerHTML = `
+            <div style="overflow-x: auto;">
+                <table class="positions-table" style="font-size: 0.7rem; min-width: 1200px;">
+                    <thead>
+                        <tr>
+                            <th style="min-width: 150px;">Tarih</th>
+                            <th>Sembol</th>
+                            <th>TF</th>
+                            <th>Dataset</th>
+                            <th>Feat</th>
+                            <th style="min-width: 200px;">📊 Metrikler</th>
+                            <th style="min-width: 150px;">🎯 Accuracy</th>
+                            <th>İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${history.map(item => {
+                            const date = item.timestamp || item.created_at || 'N/A';
+                            const dateStr = typeof date === 'string' ? date.split('T')[0] : date;
+                            const metrics = item.metrics || {};
+
+                            // Ana accuracy
+                            const accuracy = (metrics.accuracy || 0) * 100;
+                            const f1 = metrics.f1 || 0;
+                            const precision = metrics.precision || 0;
+                            const recall = metrics.recall || 0;
+
+                            // Model-specific accuracies
+                            const xgbAcc = (metrics.xgb_accuracy || accuracy) * 100;
+                            const rfAcc = (metrics.rf_accuracy || accuracy) * 100;
+                            const ensembleAcc = (metrics.ensemble_accuracy || accuracy) * 100;
+
+                            // Color coding
+                            const accColor = accuracy >= 50 ? 'var(--neon-green)' : (accuracy >= 40 ? '#ffcc00' : 'var(--neon-red)');
+                            const xgbColor = xgbAcc >= 50 ? 'var(--neon-green)' : (xgbAcc >= 40 ? '#ffcc00' : 'var(--neon-red)');
+                            const rfColor = rfAcc >= 50 ? 'var(--neon-green)' : (rfAcc >= 40 ? '#ffcc00' : 'var(--neon-red)');
+                            const ensembleColor = ensembleAcc >= 50 ? 'var(--neon-green)' : (ensembleAcc >= 40 ? '#ffcc00' : 'var(--neon-red)');
+
+                            return `
+                                <tr style="vertical-align: top;">
+                                    <td style="font-size: 0.7rem;">${dateStr}<br><span style="color: var(--text-muted);">${typeof date === 'string' && date.includes('T') ? date.split('T')[1].split('.')[0] : ''}</span></td>
+                                    <td style="font-weight:600; color:var(--text-main);">${item.symbol || 'N/A'}</td>
+                                    <td>${item.timeframe || 'N/A'}</td>
+                                    <td>${(item.dataset_size || 0).toLocaleString()}</td>
+                                    <td>${item.feature_count || 0}</td>
+                                    <td>
+                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 0.65rem;">
+                                            <div>Precision: <strong style="color: var(--neon-blue);">${(precision * 100).toFixed(1)}%</strong></div>
+                                            <div>Recall: <strong style="color: var(--neon-purple);">${(recall * 100).toFixed(1)}%</strong></div>
+                                            <div>F1-Score: <strong style="color: var(--neon-green);">${(f1 * 100).toFixed(1)}%</strong></div>
+                                            <div>TP: <strong>${(metrics.tp_multiplier || 2.0).toFixed(1)}x</strong></div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div style="display: grid; gap: 3px; font-size: 0.65rem;">
+                                            <div style="color: ${xgbColor};">🌲 XGB: <strong>${xgbAcc.toFixed(1)}%</strong></div>
+                                            <div style="color: ${rfColor};">🌳 RF: <strong>${rfAcc.toFixed(1)}%</strong></div>
+                                            <div style="color: ${ensembleColor}; border-top: 1px solid var(--glass-border); padding-top: 2px;">🎯 Ens: <strong>${ensembleAcc.toFixed(1)}%</strong></div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <button onclick="deleteMLModel('${item.symbol || ''}', '${item.timeframe || ''}')"
+                                            style="padding:4px 8px; background:rgba(255,255,255,0.1); color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:0.65rem;"
+                                            title="Modeli sil">
+                                            🗑️
+                                        </button>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        console.log(`✅ [ML] ${history.length} eğitim geçmişi yüklendi`);
+
+    } catch (error) {
+        console.error('❌ [ML] History load error:', error);
+        container.innerHTML = `
+            <p style="text-align: center; padding: 40px; color: var(--neon-red);">
+                ❌ Geçmiş yüklenemedi: ${error.message}
+            </p>
+        `;
+    }
+};
+
+/**
+ * Clear ML training history
+ */
+window.clearTrainingHistory = async function() {
+    if (!confirm('⚠️ Tüm ML eğitim geçmişini silmek istediğinizden emin misiniz?')) {
+        return;
+    }
+
+    try {
+        const result = await api.delete('/ml/training-history');
+        if (result.status === 'success') {
+            showToast('✅ Geçmiş temizlendi', 'success');
+            loadMLTrainingHistory();
+        } else {
+            showToast('❌ ' + (result.message || 'Temizleme başarısız'), 'error');
+        }
+    } catch (error) {
+        showToast('❌ Hata: ' + error.message, 'error');
+    }
+};
+
+/**
+ * Delete ML model
+ */
+window.deleteMLModel = async function(symbol, timeframe) {
+    if (!symbol || !timeframe) {
+        showToast('❌ Sembol ve timeframe gerekli', 'error');
+        return;
+    }
+
+    if (!confirm(`⚠️ ${symbol} (${timeframe}) ML modelini silmek istediğinizden emin misiniz?`)) {
+        return;
+    }
+
+    try {
+        const result = await api.deleteMLModel(symbol, timeframe);
+        if (result.status === 'success') {
+            showToast('✅ Model silindi', 'success');
+            loadMLTrainingHistory();
+        } else {
+            showToast('❌ ' + (result.message || 'Silme başarısız'), 'error');
+        }
+    } catch (error) {
+        showToast('❌ Hata: ' + error.message, 'error');
+    }
+};
+
+/**
+ * Render strategy library with detailed info
+ */
+function renderStrategyLibrary(strategies) {
+    const container = document.getElementById('strategy-library-container');
+    if (!container) return;
+
+    if (strategies.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: var(--text-muted); grid-column: span 3;">
+                📭 Henüz strateji bulunmuyor
+            </div>
+        `;
+        return;
+    }
+
+    // Strateji bilgilerini detaylı göster
+    container.innerHTML = strategies.map(strategy => {
+        const strategyId = strategy.id || strategy.strategy_id || strategy.filename || 'unknown';
+        const name = strategy.name || strategy.strategy_id || strategyId;
+        const description = strategy.description || strategy.info || 'Açıklama yok';
+        const indicators = strategy.indicators || [];
+        const longConditions = strategy.conditions?.LONG || [];
+        const shortConditions = strategy.conditions?.SHORT || [];
+
+        return `
+            <div class="strategy-card glass-panel" style="padding: 20px; border-radius: 12px; border: 1px solid var(--glass-border);">
+                <div class="strategy-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="color: var(--neon-blue); margin: 0;">${name}</h3>
+                    <span style="font-size: 0.75rem; padding: 4px 8px; background: rgba(88, 166, 255, 0.1); color: var(--neon-blue); border-radius: 4px;">
+                        ${indicators.length} İndikatör
+                    </span>
+                </div>
+
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px; line-height: 1.5;">
+                    ${description}
+                </p>
+
+                <div style="margin-bottom: 15px;">
+                    <h4 style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;">📊 İndikatörler:</h4>
+                    <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                        ${indicators.map(ind => `
+                            <span style="font-size: 0.75rem; padding: 4px 8px; background: rgba(255,255,255,0.05); border-radius: 4px; color: var(--text-main);">
+                                ${ind.name || ind}
+                            </span>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div style="background: rgba(46, 220, 135, 0.05); padding: 12px; border-radius: 8px; border: 1px solid rgba(46, 220, 135, 0.2);">
+                        <h4 style="font-size: 0.8rem; color: var(--neon-green); margin-bottom: 8px;">🟢 LONG Koşulları</h4>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.6;">
+                            ${longConditions.length > 0 ? longConditions.map(c => `• ${c.description || c}`).join('<br>') : 'ℹ️ Koşul tanımlanmamış'}
+                        </div>
+                    </div>
+
+                    <div style="background: rgba(248, 83, 73, 0.05); padding: 12px; border-radius: 8px; border: 1px solid rgba(248, 83, 73, 0.2);">
+                        <h4 style="font-size: 0.8rem; color: var(--neon-red); margin-bottom: 8px;">🔴 SHORT Koşulları</h4>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.6;">
+                            ${shortConditions.length > 0 ? shortConditions.map(c => `• ${c.description || c}`).join('<br>') : 'ℹ️ Koşul tanımlanmamış'}
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--glass-border); display: flex; gap: 8px;">
+                    <button onclick="useStrategy('${strategyId}')" style="flex: 1; padding: 8px 12px; background: var(--neon-blue); color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem;">
+                        🚀 Bu Stratejiyi Kullan
+                    </button>
+                    <button onclick="editStrategy('${strategyId}')" style="padding: 8px 12px; background: rgba(255,255,255,0.1); color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
+                        ✏️ Düzenle
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    console.log('✅ [LIBRARY] Stratejiler render edildi');
+}
+
 // ============================================================================
 // EVENT LISTENERS
 // ============================================================================
+
+/**
+ * Use strategy (navigate to bot launcher with pre-selected strategy)
+ */
+window.useStrategy = function(strategyId) {
+    console.log('🚀 [STRATEGY] Using strategy:', strategyId);
+
+    // Navigate to settings tab
+    switchTab('tab-settings');
+
+    // Wait for tab to render, then select strategy
+    setTimeout(() => {
+        const strategySelect = document.querySelector('.strategy-select');
+        if (strategySelect) {
+            strategySelect.value = strategyId;
+            // Trigger change event
+            strategySelect.dispatchEvent(new Event('change'));
+            showToast(`✅ ${strategyId} stratejisi seçildi`, 'success');
+        }
+    }, 300);
+};
+
+/**
+ * Edit strategy (navigate to strategy builder)
+ */
+window.editStrategy = function(strategyId) {
+    console.log('✏️ [STRATEGY] Editing strategy:', strategyId);
+
+    // Navigate to strategy builder tab
+    switchTab('tab-strategy-builder');
+
+    // Load strategy into builder
+    setTimeout(() => {
+        showToast(`ℹ️ ${strategyId} düzenleme moduna geçildi`, 'info');
+        // Strategy builder will handle loading
+    }, 300);
+};
 
 /**
  * Setup global event listeners
@@ -1239,6 +2175,12 @@ window.resetCandleLockSettings = resetCandleLockSettings;
 window.saveApiKeys = saveApiKeys;
 window.testApiConnection = testApiConnection;
 window.showToast = showToast;
+
+// ML Training
+window.startMLTraining = startMLTraining;
+window.validateMumCount = validateMumCount;
+window.loadMLTrainingHistory = loadMLTrainingHistory;
+window.clearTrainingHistory = clearTrainingHistory;
 
 // ============================================================================
 // START APPLICATION

@@ -308,13 +308,27 @@ class ParquetDataLake:
                         partition_path = self._get_partition_path(symbol, timeframe, date_obj)
 
                         if append and partition_path.exists():
-                            # Mevcut dosyaya ekle
-                            existing_df = await asyncio.to_thread(self._read_parquet_thread, partition_path)
-                            if existing_df is not None:
+                            # Mevcut dosyaya ekle (async fonksiyon - doğrudan await)
+                            existing_df = await self._read_parquet_thread(partition_path)
+                            if existing_df is not None and not existing_df.empty:
+                                # ⏰ TIMEZONE STANDARDIZASYONU (UTC'ye zorla)
+                                if existing_df.index.tzinfo is None:
+                                    existing_df.index = existing_df.index.tz_localize('UTC')
+                                else:
+                                    existing_df.index = existing_df.index.tz_convert('UTC')
+
+                                if day_df.index.tzinfo is None:
+                                    day_df.index = day_df.index.tz_localize('UTC')
+                                else:
+                                    day_df.index = day_df.index.tz_convert('UTC')
+
+                                # Artık her ikisi de UTC - güvenle birleştir
                                 combined_df = pd.concat([existing_df, day_df])
                                 combined_df = combined_df[~combined_df.index.duplicated(keep='last')]
+                                combined_df.sort_index(inplace=True)
                                 day_df = combined_df
 
+                        # Yazma işlemi senkron - asyncio.to_thread ile await
                         await asyncio.to_thread(self._write_parquet_thread, day_df, partition_path)
 
                     logger.info(f"✅ [PARQUET] {symbol} {timeframe} → {len(df.groupby(df.index.date))} gün kaydedildi")
@@ -324,13 +338,27 @@ class ParquetDataLake:
                     partition_path = self._get_partition_path(symbol, timeframe, datetime.now())
 
                     if append and partition_path.exists():
-                        # Mevcut dosyaya ekle
-                        existing_df = await asyncio.to_thread(self._read_parquet_thread, partition_path)
-                        if existing_df is not None:
+                        # Mevcut dosyaya ekle (async fonksiyon - doğrudan await)
+                        existing_df = await self._read_parquet_thread(partition_path)
+                        if existing_df is not None and not existing_df.empty:
+                            # ⏰ TIMEZONE STANDARDIZASYONU (UTC'ye zorla)
+                            if existing_df.index.tzinfo is None:
+                                existing_df.index = existing_df.index.tz_localize('UTC')
+                            else:
+                                existing_df.index = existing_df.index.tz_convert('UTC')
+
+                            if df.index.tzinfo is None:
+                                df.index = df.index.tz_localize('UTC')
+                            else:
+                                df.index = df.index.tz_convert('UTC')
+
+                            # Artık her ikisi de UTC - güvenle birleştir
                             combined_df = pd.concat([existing_df, df])
                             combined_df = combined_df[~combined_df.index.duplicated(keep='last')]
+                            combined_df.sort_index(inplace=True)
                             df = combined_df
 
+                    # Yazma işlemi senkron - asyncio.to_thread ile await
                     await asyncio.to_thread(self._write_parquet_thread, df, partition_path)
                     logger.info(f"✅ [PARQUET] {symbol} {timeframe} → market.parquet kaydedildi ({len(df)} satır)")
 
