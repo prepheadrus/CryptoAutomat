@@ -329,7 +329,17 @@ class ParquetDataLake:
                                 day_df = combined_df
 
                         # Yazma işlemi senkron - asyncio.to_thread ile await
-                        await asyncio.to_thread(self._write_parquet_thread, day_df, partition_path)
+                        try:
+                            await asyncio.to_thread(self._write_parquet_thread, day_df, partition_path)
+                        except ImportError as ie:
+                            # PyArrow/fastparquet eksik, uyarı ver ama devam et
+                            logger.warning(f"⚠️ [PARQUET] PyArrow/fastparquet eksik, parquet kaydedilemedi: {ie}")
+                            logger.warning(f"⚠️ [PARQUET] ML eğitimi SQLite'dan devam edecek")
+                            # Parquet kaydedilemedi ama işlem devam etsin
+                            pass
+                        except Exception as e:
+                            logger.error(f"❌ [PARQUET] Kaydetme hatası: {symbol} {timeframe} - {e}")
+                            raise  # Başka hataları yükselt
 
                     logger.info(f"✅ [PARQUET] {symbol} {timeframe} → {len(df.groupby(df.index.date))} gün kaydedildi")
 

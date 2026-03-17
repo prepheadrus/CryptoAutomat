@@ -104,11 +104,17 @@ else
     exit 1
 fi
 
-# PyArrow ve XGBoost doğrulama
+# PyArrow ve XGBoost doğrulama (Ubuntu için kritik!)
 log_info "Kritik kütüphaneler doğrulanıyor..."
 ./venv/bin/python -c "import pandas; import xgboost; import pyarrow; print('✅ Pandas, XGBoost, PyArrow doğrulandı')" || {
     log_error "Kritik kütüphaneler yüklenemedi!"
-    exit 1
+    log_error "PyArrow eksik, tekrar kuruluyor..."
+    ./venv/bin/pip install pyarrow --quiet --upgrade
+    ./venv/bin/python -c "import pyarrow; print('✅ PyArrow doğrulandı')" || {
+        log_error "PyArrow hala yüklenemedi!"
+        log_error "Manuel kurulum: ./venv/bin/pip install pyarrow"
+        exit 1
+    }
 }
 
 log_success "Kantitatif bağımlılıklar doğrulandı"
