@@ -150,7 +150,17 @@ class DataService:
 
             # DataFrame'e çevir
             df_1m = pd.DataFrame(klines_1m, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-            df_1m['timestamp'] = pd.to_datetime(df_1m['timestamp'], unit='ms', utc=True)
+
+            # 🔥 DÜZELTME: Timestamp zaten datetime string olabilir, önce kontrol et
+            # Eğer string ise (datetime formatında), direkt datetime'a çevir
+            # Eğer numeric ise (ms timestamp), unit='ms' ile çevir
+            if isinstance(df_1m['timestamp'].iloc[0], str):
+                # String datetime → datetime (timezone-aware)
+                df_1m['timestamp'] = pd.to_datetime(df_1m['timestamp'], utc=True)
+            else:
+                # Numeric timestamp (ms) → datetime
+                df_1m['timestamp'] = pd.to_datetime(df_1m['timestamp'], unit='ms', utc=True)
+
             df_1m.set_index('timestamp', inplace=True)
 
             # Tarih aralığını filtrele (timezone-aware timestamp'lar)
