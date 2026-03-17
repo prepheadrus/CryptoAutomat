@@ -184,6 +184,21 @@ else
     log_success "config.yaml mevcut"
 fi
 
+# Log seviyesini INFO yap (production için)
+log_info "Log seviyesi INFO'ya ayarlanıyor..."
+if [ -f "config.yaml" ]; then
+    # Python ile YAML güncelle
+    ./venv/bin/python -c "
+import yaml
+with open('config.yaml', 'r') as f:
+    cfg = yaml.safe_load(f)
+cfg.setdefault('bot', {}).update({'log_level': 'INFO'})
+with open('config.yaml', 'w') as f:
+    yaml.dump(cfg, f)
+print('✅ Log seviyesi INFO yapıldı')
+" || log_warning "Log seviyesi değiştirilemedi (manuel ayarlayın)"
+fi
+
 log_header "STEP 3: Systemd Daemon Entegrasyonu (7/24 Uptime)"
 
 # ============================================================================
