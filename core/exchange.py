@@ -42,9 +42,7 @@ def normalize_symbol(symbol: str) -> str:
 
     # Adım 0: Gereksiz başlangıç karakterlerini temizle (örn: /BTC → BTC)
     symbol = symbol.strip()
-    if symbol.startswith('/'):
-        symbol = symbol[1:]
-    if symbol.startswith('_'):
+    while symbol.startswith('/') or symbol.startswith('_'):
         symbol = symbol[1:]
 
     # Adım 1: Gereksiz karakterleri temizle
