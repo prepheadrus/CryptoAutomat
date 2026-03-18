@@ -65,11 +65,13 @@ async def lifespan(app: FastAPI):
         logger.info("🔄 [AUTO-SYNC] config.yaml boş, Parquet Data Lake'den semboller yükleniyor...")
         try:
             from data.storage.parquet_lake import get_parquet_lake
+            from core.exchange import normalize_symbol
             lake = get_parquet_lake('binance')
             stats = lake.get_stats()
 
             if stats['total_symbols'] > 0:
-                symbols = list(stats['symbols'].keys())
+                # [SYMBOL FIX] Parquet'ten gelen sembolleri normalize et (örn: /BTC → BTC/USDT)
+                symbols = [normalize_symbol(s) for s in stats['symbols'].keys()]
                 logger.info(f"✅ [AUTO-SYNC] Parquet'ten {len(symbols)} sembol yüklendi!")
                 logger.info(f"   Toplam dosya: {stats['total_files']}, Boyut: {stats['total_size_mb']:.2f} MB")
             else:

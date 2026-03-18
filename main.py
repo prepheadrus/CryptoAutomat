@@ -7,7 +7,7 @@ from core.config import CONFIG
 from core.diagnostics.event_tracer import start_event_tracer, event_tracer
 
 # Bot Background Tasks imports
-from core.exchange import exchange_manager
+from core.exchange import exchange_manager, normalize_symbol
 from shared.events import event_bus
 from strategy.manager import StrategyManager
 
@@ -46,7 +46,8 @@ async def start_background_tasks():
             stats = lake.get_stats()
 
             if stats['total_symbols'] > 0:
-                symbols = list(stats['symbols'].keys())
+                # [SYMBOL FIX] Parquet'ten gelen sembolleri normalize et (örn: /BTC → BTC/USDT)
+                symbols = [normalize_symbol(s) for s in stats['symbols'].keys()]
                 logger.info(f"✅ [AUTO-SYNC] Parquet'ten {len(symbols)} sembol yüklendi!")
                 logger.info(f"   Semboller: {', '.join(symbols[:5])}{'...' if len(symbols) > 5 else ''}")
                 logger.info(f"   Toplam dosya: {stats['total_files']}, Boyut: {stats['total_size_mb']:.2f} MB")

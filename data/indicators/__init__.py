@@ -226,6 +226,14 @@ class StrategyIndicators:
         resampled_df.ffill(inplace=True)
 
         # ========================================================================
+        # [TZ FIX] Index timezone-aware yap (UTC)
+        # ========================================================================
+        if resampled_df.index.tzinfo is None:
+            resampled_df.index = resampled_df.index.tz_localize('UTC')
+        else:
+            resampled_df.index = resampled_df.index.tz_convert('UTC')
+
+        # ========================================================================
         # GELECEK MUM KORUMASI (Son mum henüz kapanmadıysa düşür)
         # ========================================================================
         now_utc = pd.Timestamp.now(tz='UTC')

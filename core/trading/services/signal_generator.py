@@ -17,8 +17,18 @@ class SignalGeneratorService:
     async def prepare_target_data_and_detect_regime(df_1m: pd.DataFrame, target_tf: str, htf_levels: list, ema_fast: int, ema_slow: int, trend_method: str) -> Tuple[pd.DataFrame, dict, dict, float]:
         """
         Ağır pandas hesaplamalarını asyncio.to_thread içine sararak Event Loop'u kilitlemez.
+
+        [TZ FIX] DataFrame index'inin UTC olduğundan emin ol.
         """
         def _process_data():
+            # ========================================================================
+            # [TZ FIX] DataFrame index UTC yap (timezone-aware)
+            # ========================================================================
+            if df_1m.index.tzinfo is None:
+                df_1m.index = df_1m.index.tz_localize('UTC')
+            else:
+                df_1m.index = df_1m.index.tz_convert('UTC')
+
             # 1. Resample to Target TF
             df_target = StrategyIndicators.resample_data(df_1m, target_tf)
 
