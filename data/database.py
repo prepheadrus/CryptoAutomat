@@ -702,13 +702,14 @@ class DatabaseManager:
     async def get_data_inventory(self):
         """
         Veritabanındaki tüm kline verilerinin envanterini çıkarır.
-        
+
         Returns:
             dict: {
                 'total_candles': int,
                 'inventory': [
                     {
                         'symbol': str,
+                        'market_type': str (spot/future),
                         'timeframe': str,
                         'min_timestamp': datetime,
                         'max_timestamp': datetime,
@@ -719,39 +720,48 @@ class DatabaseManager:
             }
         """
         import pandas as pd
-        
+
+        # YENİ: market_type tespit et (sembol formatından)
         sql = """
-            SELECT 
-                symbol, 
-                timeframe, 
-                MIN(timestamp) as min_ts, 
-                MAX(timestamp) as max_ts, 
+            SELECT
+                symbol,
+                timeframe,
+                MIN(timestamp) as min_ts,
+                MAX(timestamp) as max_ts,
                 COUNT(*) as candle_count
             FROM klines
             GROUP BY symbol, timeframe
             ORDER BY symbol, timeframe
         """
-        
+
         total_candles = 0
         inventory = []
-        
+
         try:
             if self.engine_type == "sqlite":
                 async with self.sqlite_conn.execute(sql) as cursor:
                     rows = await cursor.fetchall()
                     logger.info(f"📊 Envanter sorgusu: {len(rows)} kayıt bulundu")
-                    
+
                     for row in rows:
                         count = row[4] or 0
                         total_candles += count
+
+                        # MARKET TYPE TESPİTİ
+                        symbol_raw = row[0]
+                        market_type = 'future' if (':' in symbol_raw or symbol_raw.endswith('-SWAP')) else 'spot'
+                        market_label = '💹 Futures' if market_type == 'future' else '💰 Spot'
+
                         inventory.append({
                             'symbol': row[0],
+                            'market_type': market_type,
+                            'market_label': market_label,
                             'timeframe': row[1],
                             'min_timestamp': row[2],
                             'max_timestamp': row[3],
                             'count': count
                         })
-                    
+
                     logger.info(f"📊 Toplam mum sayısı: {total_candles}")
             else:
                 async with self.db_pool.acquire() as conn:
@@ -759,14 +769,22 @@ class DatabaseManager:
                     for row in rows:
                         count = row['candle_count'] or 0
                         total_candles += count
+
+                        # MARKET TYPE TESPİTİ
+                        symbol_raw = row['symbol']
+                        market_type = 'future' if (':' in symbol_raw or symbol_raw.endswith('-SWAP')) else 'spot'
+                        market_label = '💹 Futures' if market_type == 'future' else '💰 Spot'
+
                         inventory.append({
                             'symbol': row['symbol'],
+                            'market_type': market_type,
+                            'market_label': market_label,
                             'timeframe': row['timeframe'],
                             'min_timestamp': row['min_ts'],
                             'max_timestamp': row['max_ts'],
                             'count': count
                         })
-            
+
             # Timestamp'leri okunabilir formata çevir
             for item in inventory:
                 if item['min_timestamp']:
@@ -778,7 +796,7 @@ class DatabaseManager:
                         item['min_date'] = str(item['min_timestamp'])
                 else:
                     item['min_date'] = 'N/A'
-                    
+
                 if item['max_timestamp']:
                     if isinstance(item['max_timestamp'], (int, float)):
                         item['max_date'] = pd.to_datetime(item['max_timestamp'], unit='ms').strftime('%Y-%m-%d %H:%M')
@@ -788,7 +806,7 @@ class DatabaseManager:
                         item['max_date'] = str(item['max_timestamp'])
                 else:
                     item['max_date'] = 'N/A'
-            
+
             return {
                 'total_candles': total_candles,
                 'inventory': inventory
@@ -798,6 +816,10 @@ class DatabaseManager:
             logger.error(f"Exception type: {type(e).__name__}")
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
+            return {
+                'total_candles': 0,
+                'inventory': []
+            }
             # Hata olsa bile boş response dön
             return {
                 'total_candles': total_candles,

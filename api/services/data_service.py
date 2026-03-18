@@ -750,11 +750,24 @@ class DataService:
         Veritabanında verisi olan sembolleri al.
 
         Returns:
-            Sembol listesi (obje formatında)
+            Sembol listesi (obje formatında, market_type ile)
         """
         symbols = await self.db_manager.get_symbols_with_data()
-        # Frontend uyumlu formata çevir (obje listesi)
-        symbols_list = [{"symbol": s} for s in symbols]
+
+        # Frontend uyumlu formata çevir (market_type ekleyerek)
+        symbols_list = []
+        for s in symbols:
+            # MARKET TYPE TESPİTİ
+            symbol_raw = s if isinstance(s, str) else s.get('symbol', '')
+            market_type = 'future' if (':' in symbol_raw or symbol_raw.endswith('-SWAP')) else 'spot'
+            market_label = '💹 Futures' if market_type == 'future' else '💰 Spot'
+
+            symbols_list.append({
+                "symbol": symbol_raw,
+                "market_type": market_type,
+                "market_label": market_label
+            })
+
         return {"status": "success", "symbols": symbols_list}
 
     async def check_data_gaps(self, symbol: str = None) -> Dict[str, Any]:
