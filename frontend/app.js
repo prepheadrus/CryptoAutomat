@@ -2081,7 +2081,7 @@ async function loadMLStrategies() {
     }
 
     try {
-        const response = await api.get('/api/v1/strategies');
+        const response = await api.get('/strategies');
         const strategies = response.strategies || [];
 
         // Clear existing options (hardcoded olanları temizle)
@@ -2119,7 +2119,7 @@ async function loadMLSymbols() {
     }
 
     try {
-        const response = await api.get('/api/v1/data/symbols-with-data');
+        const response = await api.get('/data/symbols-with-data');
         const symbols = response.symbols || [];
 
         // Clear existing options
