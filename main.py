@@ -38,21 +38,32 @@ async def start_background_tasks():
     symbols = CONFIG.get('trading', {}).get('symbols', [])
 
     if not symbols:
-        # YENİ: config.yaml boşsa, DB'den otomatik yükle
-        logger.info("🔄 [AUTO-SYNC] config.yaml boş, DB'den semboller yükleniyor...")
+        # YENİ: config.yaml boşsa, Parquet Data Lake'den otomatik yükle
+        logger.info("🔄 [AUTO-SYNC] config.yaml boş, Parquet Data Lake'den semboller yükleniyor...")
         try:
-            from data.database import db_manager
-            await db_manager.connect()
-            db_symbols = await db_manager.get_symbols_with_data()
+            from data.storage.parquet_lake import get_parquet_lake
+            lake = get_parquet_lake('binance')
+            stats = lake.get_stats()
 
-            if db_symbols:
-                symbols = db_symbols
-                logger.info(f"✅ [AUTO-SYNC] DB'den {len(symbols)} sembol yüklendi!")
+            if stats['total_symbols'] > 0:
+                symbols = list(stats['symbols'].keys())
+                logger.info(f"✅ [AUTO-SYNC] Parquet'ten {len(symbols)} sembol yüklendi!")
                 logger.info(f"   Semboller: {', '.join(symbols[:5])}{'...' if len(symbols) > 5 else ''}")
+                logger.info(f"   Toplam dosya: {stats['total_files']}, Boyut: {stats['total_size_mb']:.2f} MB")
             else:
-                logger.warning("⚠️ DB'de veri yok! Veri Laboratuvarı'ndan veri indirin.")
+                logger.warning("⚠️ Parquet Data Lake boş! Veri Laboratuvarı'ndan veri indirin.")
         except Exception as e:
-            logger.error(f"❌ [AUTO-SYNC] DB'den sembol yükleme hatası: {e}")
+            logger.error(f"❌ [AUTO-SYNC] Parquet'ten sembol yükleme hatası: {e}")
+            logger.info("ℹ️ SQLite DB'den deneniyor...")
+            try:
+                from data.database import db_manager
+                await db_manager.connect()
+                db_symbols = await db_manager.get_symbols_with_data()
+                if db_symbols:
+                    symbols = db_symbols
+                    logger.info(f"✅ [AUTO-SYNC] DB'den {len(symbols)} sembol yüklendi!")
+            except Exception as e2:
+                logger.error(f"❌ [AUTO-SYNC] DB'den sembol yükleme hatası: {e2}")
 
     # Sembollerle botları başlat
     if symbols:

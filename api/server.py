@@ -61,17 +61,21 @@ async def lifespan(app: FastAPI):
     symbols = CONFIG.get('trading', {}).get('symbols', [])
 
     if not symbols:
-        # YENİ: config.yaml boşsa, DB'den otomatik yükle
-        logger.info("🔄 [AUTO-SYNC] config.yaml boş, DB'den semboller yükleniyor...")
+        # YENİ: config.yaml boşsa, Parquet Data Lake'den otomatik yükle
+        logger.info("🔄 [AUTO-SYNC] config.yaml boş, Parquet Data Lake'den semboller yükleniyor...")
         try:
-            db_symbols = await db_manager.get_symbols_with_data()
-            if db_symbols:
-                symbols = db_symbols
-                logger.info(f"✅ [AUTO-SYNC] DB'den {len(symbols)} sembol yüklendi!")
+            from data.storage.parquet_lake import get_parquet_lake
+            lake = get_parquet_lake('binance')
+            stats = lake.get_stats()
+
+            if stats['total_symbols'] > 0:
+                symbols = list(stats['symbols'].keys())
+                logger.info(f"✅ [AUTO-SYNC] Parquet'ten {len(symbols)} sembol yüklendi!")
+                logger.info(f"   Toplam dosya: {stats['total_files']}, Boyut: {stats['total_size_mb']:.2f} MB")
             else:
-                logger.info("ℹ️ DB'de veri yok - Dashboard'dan bot başlatabilirsiniz")
+                logger.info("ℹ️ Parquet Data Lake boş - Dashboard'dan bot başlatabilirsiniz")
         except Exception as e:
-            logger.error(f"❌ [AUTO-SYNC] DB'den sembol yükleme hatası: {e}")
+            logger.error(f"❌ [AUTO-SYNC] Parquet'ten sembol yükleme hatası: {e}")
 
     tasks = []
     for symbol in symbols:
