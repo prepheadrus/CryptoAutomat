@@ -471,6 +471,28 @@ async def run_visual_analysis(
         candles_df = candles_df.drop_duplicates(subset=['time'])
         candles_df = candles_df.sort_values('time')
 
+        # ========================================================================
+        # OOM (Out of Memory) KORUMASI - XAI Standardı
+        # ========================================================================
+        # 1. Veriyi son 1500 mum ile sınırla (tail)
+        # 2. NaN/Infinity değerlerini sıfırla
+        # ========================================================================
+
+        # Tail(1500) - Son 1500 mumu al (OOM önleme)
+        candles_df = candles_df.tail(1500)
+        logger.info(f"🛡️ [ML] OOM Koruması: {len(candles_df)} mum (tail 1500)")
+
+        # Markers'ları da sınırla (sadece son 1500 mum içindekiler)
+        if len(candles_df) > 0:
+            min_time = candles_df['time'].min()
+            markers = [m for m in markers if m.get('time', 0) >= min_time]
+            logger.info(f"🛡️ [ML] Markers filtrelendi: {len(markers)} marker kaldı")
+
+        # NaN/Infinity temizliği (XAI standardı)
+        for col in ['open', 'high', 'low', 'close', 'volume']:
+            if col in candles_df.columns:
+                candles_df[col] = candles_df[col].replace([np.inf, -np.inf], 0).fillna(0)
+
         # [SYNC] LWC için saniye formatına kesin zorla (int)
         # 🔥 DÜZELTME: Timezone-aware datetime'ı önce naive yap, sonra int64
         if hasattr(candles_df['time'].iloc[0], 'tzinfo') and candles_df['time'].iloc[0].tzinfo is not None:

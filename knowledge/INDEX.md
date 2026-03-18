@@ -1,426 +1,333 @@
-# 📚 CryptoAlgoBot Bilgi Bankası (Knowledge Base)
+# 📚 CryptoAlgoBot Knowledge Base
 
-Bu klasör, CryptoAlgoBot projesinin tüm teknik dokümantasyonunu, stratejilerini, mimari kararlarını ve planlama belgelerini içerir.
-
-**Son Güncelleme:** Mart 2026  
-**Durum:** ✅ Aktif Geliştirme
+**Version:** v4.0 (Production-Ready)
+**Last Update:** March 2026
+**Status:** ✅ Production Ready (14/14 E2E Tests Passed)
+**Architecture:** Event-Driven (Olay Güdümlü)
 
 ---
 
-## 📁 Klasör Yapısı
+## 🎯 Overview
+
+This knowledge base contains comprehensive technical documentation for CryptoAlgoBot v4.0, a production-ready cryptocurrency trading bot with event-driven architecture, ML integration, and realistic execution simulation.
+
+**Key Features:**
+- ✅ **Event-Driven Architecture:** Pub/Sub pattern (loose coupling)
+- ✅ **ML Integration:** XGBoost + Random Forest ensemble
+- ✅ **Parquet Data Lake:** MTF-Daily partition (columnar storage)
+- ✅ **Risk Engine:** Position sizing, dynamic leverage, kill switch
+- ✅ **Paper Trader:** Fee + slippage simulation, trailing stop
+- ✅ **Modular API:** FastAPI routers, services, schemas
+
+---
+
+## 📁 Folder Structure
 
 ```
 knowledge/
-├── architecture/          # Sistem mimarisi ve veri akışı
-│   ├── overview.md       # 5 katmanlı mimari genel bakış
-│   ├── data_pipeline.md  # Veri boru hattı ve özellik mühendisliği
-│   ├── 1-to-N-multi-bot-architecture.md  # Çoklu bot mimarisi
-│   ├── event_driven_architecture.md  # Event-Driven Architecture
-│   ├── value_objects.md  # Value Objects (DDD)
-│   ├── api_modularization.md  # API Modularization
-│   └── event_tracer.md  # Event Tracer (Sistem Röntgeni) (YENİ!)
+├── architecture/          # System architecture and data flow
+│   ├── event_driven_architecture.md  # Event Bus (Pub/Sub) - NEW!
+│   ├── api_modularization.md         # API Layer (Routers/Services/Schemas) - NEW!
+│   ├── overview.md                   # 5-layer architecture overview
+│   ├── data_pipeline.md              # Data pipeline and feature engineering
+│   ├── 1-to-N-multi-bot-architecture.md  # Multi-bot architecture
+│   ├── value_objects.md              # Value Objects (DDD)
+│   ├── event_tracer.md               # Event tracer (system diagnostics)
+│   └── smart-hybrid-architecture.md  # Smart hybrid architecture
 │
-├── strategies/           # Trading stratejileri ve algoritmalar
-│   └── concept_and_implementation.md  # Strateji konseptleri ve tasarım
+├── features/            # Feature documentation
+│   ├── ml_integration.md           # ML (XGBoost + Triple Barrier) - NEW!
+│   ├── parquet_data_lake.md        # Parquet Data Lake (MTF-Daily) - NEW!
+│   ├── risk_engine.md              # Risk Engine (Position Sizing) - UPDATED!
+│   ├── position_manager.md         # Position lifecycle management
+│   ├── bot_manager.md              # Bot orchestration
+│   ├── ATR_TRAILING_STOP_SYSTEM.md # ATR trailing stop system
+│   ├── walk_forward_optimization.md # WFO (Walk-Forward Optimization)
+│   ├── auto_grid_generator.md      # Auto-grid generator
+│   ├── bayesian_optimization.md    # Bayesian optimization (Optuna)
+│   ├── htf_golden_ratio.md         # HTF golden ratio (multi-timeframe)
+│   ├── dynamic_signal_breathing.md # Dynamic signal animation
+│   ├── wfo_zero_touch_telemetry.md # WFO live parameter telemetry
+│   ├── wfo_dynamic_refresh.md      # Dynamic WFO refresh
+│   ├── ml_model_naming_convention.md # ML model naming convention
+│   ├── no_code_strategy_builder.md # No-code strategy builder
+│   └── strategy_builder_guide.md   # Strategy builder guide
 │
-├── trading_engine/       # İşlem motoru ve risk yönetimi
-│   └── paper_trader.md   # Sanal işlem modülü detayları
+├── trading_engine/      # Trading engine documentation
+│   └── paper_trader.md             # Paper Trader (Execution Engine) - UPDATED!
 │
-├── frontend/             # Kullanıcı arayüzü ve görselleştirme
-│   └── dashboard_and_visualization.md  # Dashboard tasarım ilkeleri
+├── strategies/          # Trading strategies
+│   ├── concept_and_implementation.md  # Strategy concepts
+│   └── smart_money_strategy.md     # Smart Money strategy
 │
-├── planning/             # Proje planlama ve yol haritası
-│   ├── roadmap.md        # Aşamalı geliştirme planı
-│   ├── tech_stack.md     # Teknoloji yığını ve araçlar
-│   └── tasks.md          # Görev takibi ve öncelikler
+├── frontend/            # User interface
+│   └── dashboard_and_visualization.md  # Dashboard and visualization
 │
-├── features/             # Özellik dokümantasyonu
-│   ├── no_code_strategy_builder.md  # No-Code Strateji Oluşturucu
-│   ├── strategy_builder_guide.md    # Strateji Oluşturucu Kılavuzu
-│   ├── ATR_TRAILING_STOP_SYSTEM.md  # ATR Trailing Stop Sistemi
-│   ├── walk_forward_optimization.md  # WFO (Walk-Forward Optimization)
-│   ├── auto_grid_generator.md        # Auto-Grid Generator
-│   ├── bayesian_optimization.md      # Bayesian Optimization (Optuna)
-│   ├── ml_model_naming_convention.md # ML Model İsimlendirme
-│   ├── wfo_zero_touch_telemetry.md   # WFO Canlı Parametre Telemetrisi
-│   ├── wfo_dynamic_refresh.md        # Dinamik WFO Refresh
-│   ├── dynamic_signal_breathing.md   # Dinamik Sinyal Gösterimi
-│   └── htf_golden_ratio.md           # HTF Altın Oran
+├── testing/             # Testing documentation
+│   ├── E2E_TEST_BLUEPRINT.md     # E2E test blueprint
+│   └── CRITICAL_TEST_CASES.md    # Critical test cases
 │
-└── documentation/        # Genel dokümantasyon
-    ├── session_history.md  # Geliştirme oturum geçmişi
-    ├── ai_skill.md         # AI asistan yetenek tanımlaması
-    ├── technical_improvements.md  # Teknik iyileştirmeler
-    └── RECENT_IMPROVEMENTS.md  # Son iyileştirmeler
+├── planning/            # Project planning
+│   ├── roadmap.md                # Development roadmap
+│   ├── tech_stack.md             # Technology stack
+│   └── tasks.md                  # Task tracking
+│
+├── documentation/       # General documentation
+│   ├── CRYPTO_ALGOBOT_TECHNICAL_REPORT.md  # Technical report - NEW!
+│   ├── session_history.md          # Development session history
+│   ├── ai_skill.md                 # AI assistant skill definition
+│   ├── technical_improvements.md   # Technical improvements
+│   └── RECENT_IMPROVEMENTS.md      # Recent improvements
+│
+└── INDEX.md             # This file (master index)
 ```
 
 ---
 
-## 📁 Stratejiler
+## 📊 Quick Access Index
 
-```
-strategies/
-├── concept_and_implementation.md  # Strateji konseptleri ve tasarım
-└── smart_money_strategy.md        # Smart Money Stratejisi
-```
+### **Architecture (Mimari)**
 
----
-
-## 🔐 YENİ: GÜVENLİK DOKÜMANTASYONU
-
-```
-knowledge/security/         # Güvenlik dokümantasyonu (YENİ!)
-├── api_key_encryption.md  # API Key Şifreleme Sistemi
-└── best_practices.md      # Güvenlik En İyi Uygulamaları
-```
+| Document | Description | Status |
+|----------|-------------|--------|
+| **[Event-Driven Architecture](architecture/event_driven_architecture.md)** | Event Bus (Pub/Sub), 40+ event types, async isolation | ✅ v4.0 |
+| **[API Modularization](architecture/api_modularization.md)** | Routers, Services, Schemas (1374 → 161 lines) | ✅ v4.0 |
+| [Overview](architecture/overview.md) | 5-layer architecture | ✅ Active |
+| [Data Pipeline](architecture/data_pipeline.md) | Data pipeline and features | ✅ Active |
+| [1-to-N Multi-Bot](architecture/1-to-N-multi-bot-architecture.md) | Multi-bot orchestration | ✅ Active |
+| [Value Objects](architecture/value_objects.md) | DDD value objects | ✅ Active |
+| [Event Tracer](architecture/event_tracer.md) | System diagnostics | ✅ Active |
 
 ---
 
-## 🆕 Yeni Eklenen Dökümanlar
+### **Features (Özellikler)**
 
-### **WFO Canlı Parametre Telemetrisi**
-- **Dosya:** `features/wfo_zero_touch_telemetry.md`
-- **Özellikler:** Backend'den frontend'e aktif parametreler, son güncelleme zamanı
-- **Dosyalar:** `core/paper.py`, `frontend/components/bots/bot-manager.js`
-
-### **Zero-Touch Dinamik Render**
-- **Dosya:** `features/wfo_zero_touch_telemetry.md`
-- **Özellikler:** Smart Parameter Formatter, 20+ kısaltma, max 6 rozet
-- **Dosyalar:** `frontend/components/bots/bot-manager.js`, `frontend/style.css`
-
-### **Dinamik WFO Refresh**
-- **Dosya:** `features/wfo_dynamic_refresh.md`
-- **Özellikler:** Re-opt aralığına göre otomatik refresh, API yükü %99.86 azaldı
-- **Dosyalar:** `frontend/app.js`
-
-### **Nefes Animasyonu + Otomatik HOLD**
-- **Dosya:** `features/dynamic_signal_breathing.md`
-- **Özellikler:** AL/SAT nefes alıyor, pozisyon kapandıktan sonra otomatik HOLD
-- **Dosyalar:** `frontend/style.css`, `frontend/components/bots/bot-manager.js`, `core/paper.py`
-
-### **ML Model İsimlendirme**
-- **Dosya:** `features/ml_model_naming_convention.md`
-- **Özellikler:** Merkezi `get_model_paths()`, standart sembol temizleme
-- **Dosyalar:** `ml/model_training.py`, `api/services/ml_service.py`, `core/paper.py`
-
-### **Smart Money Stratejisi**
-- **Dosya:** `strategies/smart_money_strategy.md`
-- **Özellikler:** DEFAULT_PARAMS, update_params(), WFO uyumlu
-- **Dosya:** `strategy/custom/smart_money.py`
+| Document | Description | Status |
+|----------|-------------|--------|
+| **[ML Integration](features/ml_integration.md)** | XGBoost + RF, Triple Barrier Method | ✅ NEW v4.0 |
+| **[Parquet Data Lake](features/parquet_data_lake.md)** | MTF-Daily partition, Async I/O, UTC standardization | ✅ NEW v4.0 |
+| **[Risk Engine](features/risk_engine.md)** | Position sizing, dynamic leverage, kill switch | ✅ UPDATED v4.0 |
+| [Position Manager](features/position_manager.md) | Position lifecycle | ✅ Active |
+| [Bot Manager](features/bot_manager.md) | Bot orchestration | ✅ Active |
+| [ATR Trailing Stop](features/ATR_TRAILING_STOP_SYSTEM.md) | ATR-based trailing stop | ✅ Active |
+| [WFO](features/walk_forward_optimization.md) | Walk-Forward Optimization | ✅ Active |
+| [Auto-Grid Generator](features/auto_grid_generator.md) | Parameter grid generation | ✅ Active |
+| [Bayesian Optimization](features/bayesian_optimization.md) | Optuna integration | ✅ Active |
+| [HTF Golden Ratio](features/htf_golden_ratio.md) | Multi-timeframe analysis | ✅ Active |
 
 ---
 
-## 📊 Hızlı Erişim
+### **Trading Engine (İşlem Motoru)**
 
-### **HTF Altın Oran (Multi-Timeframe Analysis)**
-- **Dosya:** `features/htf_golden_ratio.md`
-- **Açıklama:** Dinamik çoklu zaman dilimi analizi + EMA Stack
-- **Özellikler:**
-  - Altın Oran (1:4 / 1:6) dinamik haritalama
-  - 2 seviyeli HTF analizi (Minor + Major)
-  - EMA Stack trend tespiti (EMA 20 vs EMA 50)
-  - Major HTF veto yetkisi
-  - Çoklu HTF onay mekanizması
-  - Config tabanlı dinamik mapping
-
-### **Smart Hybrid Architecture**
-- **Dosya:** `architecture/smart-hybrid-architecture.md`
-- **Açıklama:** Local DB + REST Pagination + WSS Push
-- **Özellikler:**
-  - Local DB First (0 REST çağrısı)
-  - Sınırsız Pagination (gap fill)
-  - RAM koruması (tail 1500)
-  - Yeni Mum Kilidi (%98 CPU tasarrufu)
-  - WebSocket Push (0 polling)
-
-### **1-to-N Multi-Bot Architecture**
-- **Dosya:** `architecture/1-to-N-multi-bot-architecture.md`
-- **Açıklama:** Merkezi dinleyici, dağıtık işleyici mimarisi
-- **Özellikler:**
-  - Aynı sembolde sınırsız bot çalıştırma
-  - Rate limit koruması (1 API çağrısı/sembol)
-  - Paralel bot işleme (asyncio.gather)
-  - Hata izolasyonu (bir bot çökerse diğerleri çalışır)
-  - Bot bazında pozisyon/PnL izolasyonu
-
-### **WFO (Walk-Forward Optimization)**
-- **Dosya:** `features/walk_forward_optimization.md`
-- **Açıklama:** Otonom parametre optimizasyonu
-- **Özellikler:**
-  - In-Sample / Out-of-Sample pencereler
-  - Rolling window optimizasyon
-  - Haftalık otomatik re-optimizasyon
-
-### **Auto-Grid Generator**
-- **Dosya:** `features/auto_grid_generator.md`
-- **Açıklama:** Otomatik parametre ızgarası oluşturma
-- **Özellikler:**
-  - Python stratejileri için introspection
-  - %30 esnetme ile 3'lü arama uzayları
-  - No-Code stratejiler için auto-mapping
-  - 40+ indikatör desteği
-
-### **Bayesian Optimization**
-- **Dosya:** `features/bayesian_optimization.md`
-- **Açıklama:** Optuna ile 100x hızlı optimizasyon
-- **Özellikler:**
-  - TPE (Tree-structured Parzen Estimator)
-  - 2000+ kombinasyonu 50 denemede bul
-  - %97-99 doğruluk (Grid Search'e göre)
-
-### **HTF Altın Oran (Multi-Timeframe Analysis)**
-- **Dosya:** `features/htf_golden_ratio.md` (YENİ!)
-- **Açıklama:** Dinamik çoklu zaman dilimi analizi + EMA Stack
-- **Özellikler:**
-  - Altın Oran (1:4 / 1:6) dinamik haritalama
-  - 2 seviyeli HTF analizi (Minor + Major)
-  - EMA Stack trend tespiti (EMA 20 vs EMA 50)
-  - Major HTF veto yetkisi
-  - Çoklu HTF onay mekanizması (bull/bear count)
-  - Config tabanlı dinamik mapping
-
-### **Event-Driven Architecture (EDA)**
-- **Dosya:** `architecture/event_driven_architecture.md` (YENİ!)
-- **Açıklama:** Modüler Event-Driven mimari
-- **Özellikler:**
-  - Event Bus (Pub/Sub)
-  - 40+ event tipi
-  - Loose coupling
-  - Circular dependency çözümü
-  - Async event işleme
-
-### **Value Objects (DDD)**
-- **Dosya:** `architecture/value_objects.md` (YENİ!)
-- **Açıklama:** Domain-Driven Design value objects
-- **Özellikler:**
-  - Position (immutable)
-  - Trade (immutable)
-  - Order (immutable)
-  - Type-safe dataclass'lar
-
-### **Position Manager**
-- **Dosya:** `features/position_manager.md` (YENİ!)
-- **Açıklama:** Pozisyon lifecycle yönetimi
-- **Özellikler:**
-  - Pozisyon açma/kapatma
-  - Trailing stop
-  - PnL hesaplama
-  - Likidasyon kontrolü
-
-### **Risk Engine**
-- **Dosya:** `features/risk_engine.md` (YENİ!)
-- **Açıklama:** Risk yönetimi motoru
-- **Özellikler:**
-  - Pozisyon boyutu hesaplama
-  - Dinamik kaldıraç
-  - Stop loss / take profit
-  - Kill switch
-
-### **Bot Manager**
-- **Dosya:** `features/bot_manager.md` (YENİ!)
-- **Açıklama:** Bot orkestrasyonu
-- **Özellikler:**
-  - Bot lifecycle yönetimi
-  - Bot state tracking
-  - Legacy uyumluluk
+| Document | Description | Status |
+|----------|-------------|--------|
+| **[Paper Trader](trading_engine/paper_trader.md)** | Fee + slippage simulation, trailing stop | ✅ UPDATED v4.0 |
 
 ---
 
-## 🔍 Hızlı Erişim
+### **Testing (Test)**
 
-| Konu | Dosya |
-|------|-------|
-| **Smart Hybrid** | `architecture/smart-hybrid-architecture.md` |
-| **1-to-N Bot Mimarisi** | `architecture/1-to-N-multi-bot-architecture.md` |
-| **Event-Driven** | `architecture/event_driven_architecture.md` |
-| **Value Objects** | `architecture/value_objects.md` |
-| **API Modularization** | `architecture/api_modularization.md` |
-| **Event Tracer** | `architecture/event_tracer.md` |
-| Sistem Mimarisi | `architecture/overview.md` |
-| Veri Pipeline | `architecture/data_pipeline.md` |
-| Strateji Ekleme | `strategies/concept_and_implementation.md` |
-| Paper Trading | `trading_engine/paper_trader.md` |
-| Dashboard UI | `frontend/dashboard_and_visualization.md` |
-| Yol Haritası | `planning/roadmap.md` |
-| Teknolojiler | `planning/tech_stack.md` |
-| Görevler | `planning/tasks.md` |
-| **WFO** | `features/walk_forward_optimization.md` |
-| **Auto-Grid** | `features/auto_grid_generator.md` |
-| **Bayesian Opt.** | `features/bayesian_optimization.md` |
-| **ML Model Naming** | `features/ml_model_naming_convention.md` |
-| **WFO Telemetri** | `features/wfo_zero_touch_telemetry.md` |
-| **WFO Dinamik Refresh** | `features/wfo_dynamic_refresh.md` |
-| **Sinyal Animasyonu** | `features/dynamic_signal_breathing.md` |
-| **Mart 2026 Özet** | `features/MARCH_2026_ZERO_TOUCH_SUMMARY.md` |
-| **HTF Altın Oran** | `features/htf_golden_ratio.md` |
-| **Position Manager** | `features/position_manager.md` |
-| **Risk Engine** | `features/risk_engine.md` |
-| **Bot Manager** | `features/bot_manager.md` |
-| No-Code Strateji | `features/no_code_strategy_builder.md` |
-| Strateji Oluşturucu | `features/strategy_builder_guide.md` |
-| ATR Trailing Stop | `features/ATR_TRAILING_STOP_SYSTEM.md` |
-| **Smart Money** | `strategies/smart_money_strategy.md` |
-| Son Geliştirmeler | `documentation/RECENT_IMPROVEMENTS.md` |
-| Oturum Geçmişi | `documentation/session_history.md` |
-| AI Skill | `documentation/ai_skill.md` |
-| Teknik İyileştirmeler | `documentation/technical_improvements.md` |
+| Document | Description | Status |
+|----------|-------------|--------|
+| [E2E Test Blueprint](testing/E2E_TEST_BLUEPRINT.md) | E2E test framework | ✅ Active |
+| [Critical Test Cases](testing/CRITICAL_TEST_CASES.md) | Critical test scenarios | ✅ Active |
 
 ---
 
-## 📊 Mimari Katmanlar
+## 🏗️ Architecture Layers
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ 1. Frontend (Dashboard)                                 │
-│    - Bot Yönetimi UI                                    │
-│    - ML Model Eğitimi                                   │
-│    - Strateji Oluşturucu                                │
+│    - Bot Management UI                                  │
+│    - ML Model Training                                  │
+│    - Strategy Builder                                   │
+│    - Real-time Visualization                            │
 └─────────────────────────────────────────────────────────┘
-                            ↓
+                            ↓ (HTTP/WebSocket)
 ┌─────────────────────────────────────────────────────────┐
 │ 2. API Layer (FastAPI)                                  │
-│    - /api/v1/bot/* (Bot yönetimi)                       │
-│    - /api/v1/ml/* (ML eğitim)                           │
-│    - /api/v1/strategy/* (Strateji yönetimi)             │
+│    - /api/v1/bot/* (Bot management)                     │
+│    - /api/v1/ml/* (ML training/inference)               │
+│    - /api/v1/strategy/* (Strategy management)           │
+│    - /api/v1/data/* (Data management)                   │
+│    - Routers → Services → Schemas                       │
 └─────────────────────────────────────────────────────────┘
-                            ↓
+                            ↓ (Event Bus Pub/Sub)
 ┌─────────────────────────────────────────────────────────┐
 │ 3. Core Engine                                          │
-│    - ExchangeManager (Merkezi poller)                   │
-│    - PaperTrader (Bot yönetimi)                         │
-│    - 1-to-N Broadcast Mimarisi                          │
+│    - ExchangeManager (Centralized poller)               │
+│    - PaperTrader (Virtual execution)                    │
+│    - Event Bus (Pub/Sub)                                │
+│    - 1-to-N Broadcast Architecture                      │
 └─────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────┐
 │ 4. Strategy & ML                                        │
-│    - StrategyManager (Strateji fabrikası)               │
-│    - ML Model Training (XGBoost + RF Ensemble)          │
+│    - StrategyManager (Strategy factory)                 │
+│    - ML Integration (XGBoost + RF Ensemble)             │
 │    - WFO (Walk-Forward Optimization)                    │
-│    - Auto-Grid Generator                                │
+│    - Confluence (Technical + ML signals)                │
 └─────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────┐
 │ 5. Data Layer                                           │
+│    - Parquet Data Lake (MTF-Daily partition)            │
 │    - Database Manager (SQLite/PostgreSQL)               │
-│    - Data Indicators (Teknik indikatörler)              │
-│    - Feature Engineering                                │
+│    - Feature Engineering (40+ features)                 │
+│    - Technical Indicators                               │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🚀 Başlangıç Kılavuzu
+## 🚀 Quick Start
 
-### 1. Kurulum
+### **1. Installation**
 
 ```bash
-# Bağımlılıkları yükle
+# Install dependencies
 pip install -r requirements.txt
 
-# Veritabanını başlat
+# Initialize database
 python migrate_db.py
 
-# Botu başlat
+# Start bot
 python main.py
 ```
 
-### 2. Bot Başlatma
+### **2. Start Bot**
 
-1. Dashboard'u aç: `http://localhost:8000`
-2. **Ayarlar** sekmesine git
-3. **Çoklu Bot Yönetimi** formunu doldur:
-   - Sembol: BTC/USDT:USDT
-   - Strateji: TrendMaster Pro
+1. Open Dashboard: `http://localhost:8000`
+2. Go to **Settings** tab
+3. Fill **Multi-Bot Management** form:
+   - Symbol: BTC/USDT:USDT
+   - Strategy: TrendMaster Pro
    - Timeframe: 1h
    - Market: Futures
-4. **▶ Bot Başlat** tıkla
+4. Click **▶ Start Bot**
 
-### 3. ML Model Eğitimi
+### **3. ML Model Training**
 
-1. **ML Karar Motoru** sekmesine git
-2. **ML Model Eğitimi** formunu doldur:
-   - Sembol: BTC/USDT:USDT
+1. Go to **ML Decision Engine** tab
+2. Fill **ML Model Training** form:
+   - Symbol: BTC/USDT:USDT
    - Timeframe: 1h
-   - Mum Sayısı: 10000
-3. **🚀 Modeli Eğit** tıkla
-4. Eğitim bitince model otomatik yüklenir
+   - Candles: 10000
+3. Click **🚀 Train Model**
+4. Model auto-loads after training
 
-### 4. WFO (Otonom Optimizasyon)
+### **4. WFO (Autonomous Optimization)**
 
-1. `config.yaml` içinde WFO aktif et:
+1. Enable WFO in `config.yaml`:
    ```yaml
    wfo:
      enabled: true
      train_days: 30
      test_days: 7
-     reoptimize_interval: 168  # 1 hafta
+     reoptimize_interval: 168  # 1 week
    ```
-2. Bot başlatıldığında WFO otomatik başlar
-3. Haftada 1 kez otomatik re-optimizasyon yapar
+2. WFO starts automatically on bot launch
+3. Weekly auto-reoptimization
 
 ---
 
-## 📈 Performans Metrikleri
+## 📊 Performance Metrics
 
-| Metrik | Değer | Açıklama |
-|--------|-------|----------|
-| **Bot Başlatma** | <1 saniye | API'den bot başlatma |
-| **Poller Başlatma** | <100ms | Merkezi poller başlatma |
-| **Bot İşleme** | max(bot_süreleri) | Paralel işleme sayesinde |
-| **ML Eğitim** | 30-60 saniye | 10,000 mum için |
-| **WFO Optimizasyon** | 5-10 dakika | 50 trial Bayesian Opt. |
-| **API Çağrıları** | 1/sembol | Rate limit koruması |
+| Metric | Value | Description |
+|--------|-------|-------------|
+| **Bot Launch** | <1 second | API to bot start |
+| **Poller Launch** | <100ms | Centralized poller start |
+| **Bot Processing** | max(bot_durations) | Parallel processing |
+| **ML Training** | 30-60 seconds | 10,000 candles |
+| **WFO Optimization** | 5-10 minutes | 50 trials Bayesian Opt. |
+| **API Calls** | 1/symbol | Rate limit protection |
+| **E2E Tests** | 14/14 passed | Production ready |
 
 ---
 
-## 🔧 Sorun Giderme
+## 🔧 Troubleshooting
 
-### Bot Çalışmıyor
+### **Bot Not Working**
 
-**Sorun:** Bot başlatıldı ama işlem açmıyor
+**Issue:** Bot started but no trades
 
-**Çözüm:**
-1. Terminal loglarını kontrol et
-2. `active_bots` dict'e eklendi mi kontrol et
-3. Poller başlatıldı mı kontrol et:
+**Solution:**
+1. Check terminal logs
+2. Verify bot added to `active_bots` dict
+3. Check poller started:
    ```
-   🚀 [POLLER] BTC/USDT:USDT için run_strategy_poller başlatılıyor...
-   ✅ [POLLER] BTC/USDT:USDT poller başlatıldı
-   ```
-
-### Strateji Bulunamadı
-
-**Sorun:** `⚠️ {bot_id} için strateji bulunamadı`
-
-**Çözüm:**
-1. API'de strateji instance'ı oluşturuldu mu kontrol et
-2. `paper_engine.strategies[symbol]` kaydedildi mi kontrol et
-3. Logları kontrol et:
-   ```
-   📚 [STRATEGY] BTC/USDT:USDT için trend_master instance'ı kaydedildi
+   🚀 [POLLER] BTC/USDT:USDT run_strategy_poller started...
+   ✅ [POLLER] BTC/USDT:USDT poller started
    ```
 
-### ML Model Yüklenemedi
+### **Strategy Not Found**
 
-**Sorun:** `❌ ML modeli yüklenemedi: Model dosyası bulunamadı`
+**Issue:** `⚠️ Strategy not found for {bot_id}`
 
-**Çözüm:**
-1. ML modelini eğit (ML Karar Motoru sekmesi)
-2. Model dosyası kontrol et:
+**Solution:**
+1. Verify strategy instance created in API
+2. Check `paper_engine.strategies[symbol]` registered
+3. Check logs:
+   ```
+   📚 [STRATEGY] BTC/USDT:USDT trend_master instance registered
+   ```
+
+### **ML Model Not Loading**
+
+**Issue:** `❌ ML model not loaded: Model file not found`
+
+**Solution:**
+1. Train ML model (ML Decision Engine tab)
+2. Check model file:
    ```bash
    ls artifacts/models/xgb_model_btcusdtusdt_1h.json
    ```
-3. Timeframe uyumlu mu kontrol et
+3. Verify timeframe compatibility
 
 ---
 
-## 📚 İlgili Kaynaklar
+## 📚 Related Resources
 
-- [CryptoAlgoBot Technical Report](documentation/technical_report.md)
-- [Deployment Guide](documentation/deployment.md)
-- [API Documentation](documentation/api.md)
+- [CryptoAlgoBot Technical Report](documentation/CRYPTO_ALGOBOT_TECHNICAL_REPORT.md)
+- [Deployment Guide](DEPLOYMENT_GUIDE.md)
+- [API Documentation](api/server.py)
+- [E2E Test Report](E2E_TEST_RAPORU.md)
 
 ---
 
-*Son Güncelleme: Mart 2026 (Faz 8 - 2026-03-13)*
+## 📖 Documentation Standards
+
+### **"The Art of Documenting" Principles:**
+
+1. **No Fluff:** Concise, precise technical English/Turkish
+2. **Code Examples:** Every concept has working code
+3. **Mathematical Rigor:** Formulas clearly defined
+4. **Architecture Diagrams:** Visual representation
+5. **Troubleshooting:** Common issues and solutions
+6. **Version Tracking:** v4.0 (Production-Ready)
+7. **Test Coverage:** E2E test references
+
+### **Documentation Phases:**
+
+- ✅ **FAZ 1:** System Audit & Clean (obsolete docs removed)
+- ✅ **FAZ 2:** Architecture & Communication (Event Bus, API)
+- ✅ **FAZ 3:** Data Science & Quantitative (Parquet, ML)
+- ✅ **FAZ 4:** Risk Engine & Execution (Risk, Paper Trader)
+- ✅ **FAZ 5:** Master Index & Technical Report (this file)
+
+---
+
+## 🆙 Version History
+
+| Version | Date | Status | Key Features |
+|---------|------|--------|--------------|
+| **v4.0** | March 2026 | ✅ Production | Event-Driven, ML Integration, Parquet Lake |
+| v3.0 | February 2026 | ⚠️ Legacy | WFO, Auto-Grid, Bayesian Opt. |
+| v2.0 | January 2026 | ⚠️ Legacy | Multi-Bot, HTF Analysis |
+| v1.0 | December 2025 | ❌ Deprecated | Monolithic architecture |
+
+---
+
+*Last Updated: March 2026 (v4.0 Production-Ready)*
 *CryptoAlgoBot Documentation Team*

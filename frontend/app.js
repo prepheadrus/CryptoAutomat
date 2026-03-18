@@ -63,6 +63,10 @@ async function init() {
         await loadSymbolsForML();  // Load symbols for ML training
         await loadTimeframesForML();  // Load timeframes for ML training
 
+        // XAI: ML Strateji Karar Merkezi dropdown'larını yükle
+        await loadMLStrategies();  // Stratejileri API'den yükle
+        await loadMLSymbols();  // Sembolleri API'den yükle
+
         // 5. Start auto-refresh
         startAutoRefresh();
 
@@ -2061,6 +2065,248 @@ function renderStrategyLibrary(strategies) {
 
     console.log('✅ [LIBRARY] Stratejiler render edildi');
 }
+
+// ============================================================================
+// ML VISUAL ANALYSIS (XAI - Strateji Karar Merkezi)
+// ============================================================================
+
+/**
+ * ML Stratejilerini API'den yükle ve dropdown'u doldur
+ */
+async function loadMLStrategies() {
+    const select = document.getElementById('ml-analysis-strategy');
+    if (!select) {
+        console.error('❌ [ML] Strategy dropdown bulunamadı');
+        return;
+    }
+
+    try {
+        const response = await api.get('/api/v1/strategies');
+        const strategies = response.strategies || [];
+
+        // Clear existing options (hardcoded olanları temizle)
+        select.innerHTML = '';
+
+        // Add default option
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Strateji Seçin...';
+        select.appendChild(defaultOption);
+
+        // Add strategies dynamically
+        strategies.forEach(strategy => {
+            const option = document.createElement('option');
+            option.value = strategy.id || strategy.strategy_id;
+            option.textContent = strategy.name || strategy.strategy_id;
+            select.appendChild(option);
+        });
+
+        console.log(`✅ [ML] ${strategies.length} strateji yüklendi`);
+    } catch (error) {
+        console.error('❌ [ML] Strateji yükleme hatası:', error);
+        select.innerHTML = '<option value="">Yükleme Hatası</option>';
+    }
+}
+
+/**
+ * ML Sembollerini API'den yükle ve dropdown'u doldur
+ */
+async function loadMLSymbols() {
+    const select = document.getElementById('ml-analysis-symbol');
+    if (!select) {
+        console.error('❌ [ML] Symbol dropdown bulunamadı');
+        return;
+    }
+
+    try {
+        const response = await api.get('/api/v1/data/symbols-with-data');
+        const symbols = response.symbols || [];
+
+        // Clear existing options
+        select.innerHTML = '';
+
+        // Add default option
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Sembol Seçin...';
+        select.appendChild(defaultOption);
+
+        // Add symbols dynamically
+        symbols.forEach(symbol => {
+            const option = document.createElement('option');
+            option.value = symbol.symbol || symbol;
+            option.textContent = symbol.symbol || symbol;
+            select.appendChild(option);
+        });
+
+        console.log(`✅ [ML] ${symbols.length} sembol yüklendi`);
+    } catch (error) {
+        console.error('❌ [ML] Sembol yükleme hatası:', error);
+        select.innerHTML = '<option value="">Yükleme Hatası</option>';
+    }
+}
+
+/**
+ * ML Görsel Analizi Başlat (XAI - Strateji Karar Merkezi)
+ * Global function (window objesine export edilir)
+ */
+async function runMLVisualAnalysis() {
+    console.log('🚀 [XAI] ML Görsel Analizi başlatılıyor...');
+
+    // Form değerlerini al
+    const strategyId = document.getElementById('ml-analysis-strategy')?.value;
+    const symbol = document.getElementById('ml-analysis-symbol')?.value;
+    const timeframe = document.getElementById('ml-analysis-timeframe')?.value || '1h';
+    const marketType = document.getElementById('ml-analysis-market-type')?.value || 'swap';
+
+    // Validasyon
+    if (!strategyId) {
+        showToast('⚠️ Lütfen strateji seçin!', 'warning');
+        return;
+    }
+
+    if (!symbol) {
+        showToast('⚠️ Lütfen sembol seçin!', 'warning');
+        return;
+    }
+
+    // Loading göster
+    const chartContainer = document.getElementById('ml-analysis-chart');
+    if (chartContainer) {
+        chartContainer.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100%;color:var(--neon-blue);">⏳ Analiz ediliyor...</div>';
+    }
+
+    try {
+        // API'den veri çek
+        const response = await api.get(`/api/v1/ml/visual-analysis?symbol=${encodeURIComponent(symbol)}&strategy_id=${encodeURIComponent(strategyId)}&timeframe=${timeframe}&limit=1000`);
+
+        if (response.status !== 'success') {
+            throw new Error(response.detail || 'Analiz başarısız');
+        }
+
+        const { candles, markers, feature_importance } = response;
+
+        console.log(`📊 [XAI] ${candles.length} mum, ${markers.length} marker, ${feature_importance.length} feature importance yüklendi`);
+
+        // 1. Chart'ı render et
+        if (window.chartRenderer) {
+            // Destroy existing chart
+            window.chartRenderer.destroy();
+
+            // Initialize new chart
+            window.chartRenderer.init('ml-analysis-chart', {
+                width: chartContainer.clientWidth,
+                height: 450
+            });
+
+            // Render candles
+            const formattedCandles = candles.map(c => ({
+                time: c.time / 1000, // Unix timestamp (seconds)
+                open: c.open,
+                high: c.high,
+                low: c.low,
+                close: c.close
+            }));
+
+            window.chartRenderer.updateCandles(formattedCandles);
+
+            // Render markers (ML + Strateji + Gerçek İşlemler)
+            if (markers && markers.length > 0) {
+                window.chartRenderer.updateMarkers(markers);
+                console.log(`✅ [XAI] ${markers.length} marker render edildi`);
+            }
+        }
+
+        // 2. Feature Importance grafiğini çizdir (Plotly)
+        if (feature_importance && feature_importance.length > 0) {
+            renderFeatureImportance(feature_importance);
+        }
+
+        showToast('✅ ML Görsel Analizi tamamlandı!', 'success');
+
+    } catch (error) {
+        console.error('❌ [XAI] Analiz hatası:', error);
+        showToast('❌ Analiz hatası: ' + error.message, 'error');
+
+        if (chartContainer) {
+            chartContainer.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100%;color:var(--neon-red);">❌ Hata: ' + error.message + '</div>';
+        }
+    }
+}
+
+/**
+ * Feature Importance Grafiği (Plotly - XAI)
+ * Yatay bar chart (barh) formatında
+ */
+function renderFeatureImportance(featureImportance) {
+    const chartDiv = document.getElementById('feature-importance-chart');
+    if (!chartDiv) {
+        console.error('❌ [XAI] Feature importance chart div bulunamadı');
+        return;
+    }
+
+    // Data hazırla
+    const features = featureImportance.map(f => f.feature_name || f.feature || 'Unknown');
+    const importancePct = featureImportance.map(f => f.importance_pct || f.importance || 0);
+
+    // Plotly data
+    const trace = {
+        x: importancePct,
+        y: features,
+        type: 'bar',
+        orientation: 'h', // Horizontal bar
+        marker: {
+            color: 'rgba(88, 166, 255, 0.8)',
+            line: {
+                color: 'rgba(88, 166, 255, 1)',
+                width: 1
+            }
+        }
+    };
+
+    const layout = {
+        title: '🧬 Model Ağırlık Analizi (Feature Importance)',
+        font: {
+            family: 'Inter, sans-serif',
+            size: 12,
+            color: '#fff'
+        },
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        margin: {
+            l: 150, // Left margin for feature names
+            r: 20,
+            t: 50,
+            b: 50
+        },
+        xaxis: {
+            title: 'Önem Yüzdesi (%)',
+            gridcolor: 'rgba(255,255,255,0.1)',
+            zerolinecolor: 'rgba(255,255,255,0.2)'
+        },
+        yaxis: {
+            gridcolor: 'rgba(255,255,255,0.1)',
+            automargin: true
+        }
+    };
+
+    const config = {
+        responsive: true,
+        displayModeBar: false,
+        scrollZoom: false
+    };
+
+    // Plotly.react kullan (memory leak önleme - newPlot yerine)
+    Plotly.react(chartDiv, [trace], layout, config);
+
+    console.log(`✅ [XAI] Feature Importance grafiği çizildi: ${features.length} özellik`);
+}
+
+// Export to window (global access)
+window.loadMLStrategies = loadMLStrategies;
+window.loadMLSymbols = loadMLSymbols;
+window.runMLVisualAnalysis = runMLVisualAnalysis;
+window.renderFeatureImportance = renderFeatureImportance;
 
 // ============================================================================
 // EVENT LISTENERS

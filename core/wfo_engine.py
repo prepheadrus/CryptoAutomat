@@ -29,6 +29,7 @@ import numpy as np
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, Callable, Type
 from concurrent.futures import ThreadPoolExecutor
+import multiprocessing
 import optuna
 from optuna.samplers import TPESampler
 
@@ -51,8 +52,8 @@ class WFOEngine:
     DEFAULT_N_TRIALS = 50
     DEFAULT_OPTIMIZATION_METRIC = 'sharpe'  # 'sharpe' veya 'net_pnl'
     
-    # CPU koruma
-    MAX_WORKERS = 4  # Thread pool boyutu
+    # CPU koruma (Dinamik - Donanım Agnostiği)
+    MAX_WORKERS = min(multiprocessing.cpu_count(), 8)  # Max 8 worker
     
     def __init__(self):
         self.executor = ThreadPoolExecutor(max_workers=self.MAX_WORKERS)
@@ -388,28 +389,54 @@ class WFOEngine:
         self,
         is_score: float,
         oos_score: float,
-        threshold: float = 0.3
+        optimization_metric: str = 'sharpe'
     ) -> bool:
         """
-        Overfitting kontrolü.
-        
-        Eğer Out-of-Sample skoru, In-Sample skorundan %30'dan fazla düşerse,
-        overfitting var demektir.
-        
+        Dinamik Overfitting kontrolü.
+
         Args:
             is_score: In-Sample skoru
             oos_score: Out-of-Sample skoru
-            threshold: Düşüş eşiği (%30)
-        
+            optimization_metric: Optimizasyon metriği ('sharpe' veya 'net_pnl')
+
         Returns:
             True ise overfitting var
+
+        Dinamik Eşikler:
+            - Sharpe: Maksimum %30 sapma (1.3x ratio)
+            - Net PnL: Maksimum %50 sapma (1.5x ratio)
         """
         if abs(is_score) < 0.01:  # Çok küçük skorlar için kontrol etme
             return False
-        
-        decline = abs(is_score - oos_score) / abs(is_score)
-        
-        return decline > threshold
+
+        if oos_score == 0:
+            return True  # OOS sıfır ise overfitting
+
+        # Mutlak değer al (negatif sharpe olabilir)
+        is_abs = abs(is_score)
+        oos_abs = abs(oos_score)
+
+        if oos_abs == 0:
+            return True
+
+        # Sapma oranı hesapla (ratio)
+        overfitting_ratio = is_abs / oos_abs
+
+        # Dinamik eşik
+        if optimization_metric == 'sharpe':
+            MAX_OVERFITTING_RATIO = 1.3  # Sharpe için %30 sapma
+        else:
+            MAX_OVERFITTING_RATIO = 1.5  # Net PnL için %50 sapma
+
+        is_overfitting = overfitting_ratio > MAX_OVERFITTING_RATIO
+
+        logger.debug(
+            f"🔍 [WFO] Overfitting kontrolü: IS={is_score:.4f}, OOS={oos_score:.4f}, "
+            f"Ratio={overfitting_ratio:.2f}, Max={MAX_OVERFITTING_RATIO}, "
+            f"Overfitting={is_overfitting}"
+        )
+
+        return is_overfitting
     
     def __del__(self):
         """Destructor - thread pool'ı temizle"""

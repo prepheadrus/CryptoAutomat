@@ -1,33 +1,34 @@
 # 🏗️ Event-Driven Architecture (EDA)
 
-**Son Güncelleme:** Mart 2026  
-**Durum:** ✅ Production Ready  
-**Kategori:** Mimari (Architecture)
+**Version:** v4.0 (Production-Ready)
+**Last Update:** March 2026
+**Status:** ✅ Production Ready (14/14 E2E Tests Passed)
+**Category:** Architecture
 
 ---
 
-## 🎯 Genel Bakış
+## 🎯 Overview (Genel Bakış)
 
 **Event-Driven Architecture (EDA - Olay Güdümlü Mimari)**, modüller arası sıkı bağımlılığı (tight coupling) çözmek için uygulanan mimari pattern'dir.
 
-### **Temel Felsefe:**
-> "Modüller birbirini doğrudan çağırmaz. Bunun yerine, olayları (events) yayınlar (publish) ve dinler (subscribe)."
+### **Core Philosophy:**
+> "Modules don't call each other directly. Instead, they publish and listen to events."
 
-### **Önceki Durum (Tight Coupling):**
+### **Before (Tight Coupling - Monolithic Era):**
 ```
 ┌──────────────┐     direct call     ┌──────────────┐
 │  Exchange    │────────────────────▶│  PaperTrader │
 │  Manager     │   paper_engine.     │              │
 │              │   process_bot_      │              │
 │              │   signal()          │              │
-└──────────────┘                     └──────────────┘
-       ▲                                    │
+└──────┬───────┘                     └──────────────┘
+       │                                    │
        │                                    │
        └────────────────────────────────────┘
           CIRCULAR DEPENDENCY! ❌
 ```
 
-### **Şimdiki Durum (Loose Coupling):**
+### **After (Loose Coupling - Event-Driven):**
 ```
 ┌──────────────┐
 │  Exchange    │
@@ -43,6 +44,7 @@
 │  - position.closed                      │
 │  - bot.started                          │
 │  - bot.stopped                          │
+│  - price.updated (NEW!)                 │
 └───────────────┬─────────────────────────┘
                 │
                 │ (Subscribe)
@@ -53,14 +55,22 @@
         └───────────────┘
 ```
 
+**Key Improvements in v4.0:**
+- ✅ **Circular Dependency Broken:** Event Bus ile modüller arası bağımlılık kaldırıldı
+- ✅ **Live Price Pub/Sub:** `price.updated` event'i ile tick data dağıtımı
+- ✅ **5 Parallel Workers:** Event işleme kapasitesi artırıldı
+- ✅ **RAM-Optimized:** Event'ler sadece skaler veri taşır (symbol, price, signal_direction)
+- ✅ **Asyncio Isolation:** Her event handler asenkron, hata izolasyonu sağlandı
+
 ---
 
-## 🏛️ Mimari Bileşenler
+## 🏛️ Architectural Components (Mimari Bileşenler)
 
 ### **1. Event Bus (Pub/Sub)**
 
-**Dosya:** `shared/events/event_bus.py`
+**File:** `shared/events/event_bus.py`
 
+**Implementation:**
 ```python
 from shared.events import event_bus
 
@@ -71,48 +81,74 @@ event_bus.subscribe("signal.generated", on_signal_generated)
 await event_bus.publish(event)
 ```
 
-**Özellikler:**
-- ✅ Singleton pattern (tek instance)
-- ✅ Asenkron event işleme
-- ✅ 3 parallel worker
-- ✅ Queue-based (max 10,000 event)
-- ✅ Wildcard subscription (`position.*`, `*`)
-- ✅ Priority-based handlers
-- ✅ Error isolation
+**Technical Specifications:**
+| Property | Value | Description |
+|----------|-------|-------------|
+| **Pattern** | Singleton | Tek instance (global access) |
+| **Processing** | Async | Non-blocking event handling |
+| **Workers** | 5 parallel | `num_workers=5` (production) |
+| **Queue Size** | 10,000 | Max event buffer |
+| **Wildcard** | ✅ | `position.*`, `*` support |
+| **Priority** | ✅ | Higher priority handlers first |
+| **Error Isolation** | ✅ | One handler failure doesn't affect others |
+
+**RAM-Optimized Event Payload:**
+```python
+# ✅ CORRECT: Only scalar data (no large objects)
+event = SignalGeneratedEvent(
+    bot_id="bot_123",
+    symbol="BTC/USDT",
+    signal=2,  # int
+    price=50000.0,  # float
+    timeframe="1m",  # string
+    indicators={'RSI': 65.0}  # dict of scalars
+)
+
+# ❌ WRONG: Don't pass DataFrames or large objects
+event = SignalGeneratedEvent(
+    df=large_dataframe,  # NO! Memory leak
+    strategy_instance=strategy_obj  # NO!
+)
+```
 
 ---
 
 ### **2. Event Definitions**
 
-**Dosya:** `shared/events/events.py`
+**File:** `shared/events/events.py`
 
-**Event Kategorileri:**
+**Event Categories (40+ Event Types):**
 
-| Kategori | Event Tipleri |
-|----------|--------------|
-| **BOT_EVENTS** | `bot.started`, `bot.stopped`, `bot.error` |
-| **SIGNAL_EVENTS** | `signal.generated`, `signal.confirmed` |
-| **POSITION_EVENTS** | `position.opened`, `position.closed` |
-| **TRADE_EVENTS** | `trade.recorded` |
-| **ML_EVENTS** | `ml.training_started`, `ml.prediction` |
-| **RISK_EVENTS** | `risk.killswitch_activated` |
-| **DATA_EVENTS** | `data.download_started`, `candle.closed` |
-| **SYSTEM_EVENTS** | `system.started`, `system.health_check` |
+| Category | Event Types | Payload (Scalar Only) |
+|----------|-------------|----------------------|
+| **BOT_EVENTS** | `bot.started`, `bot.stopped`, `bot.error` | `bot_id`, `symbol`, `strategy_id`, `error_msg` |
+| **SIGNAL_EVENTS** | `signal.generated`, `signal.confirmed` | `bot_id`, `symbol`, `signal`, `price`, `indicators` |
+| **POSITION_EVENTS** | `position.opened`, `position.closed` | `bot_id`, `symbol`, `direction`, `entry_price`, `size`, `pnl` |
+| **TRADE_EVENTS** | `trade.recorded` | `trade_id`, `bot_id`, `pnl`, `pnl_percent` |
+| **ML_EVENTS** | `ml.training_started`, `ml.training_completed`, `ml.prediction` | `symbol`, `timeframe`, `model_path`, `confidence` |
+| **RISK_EVENTS** | `risk.killswitch_activated` | `reason`, `consecutive_losses`, `daily_pnl` |
+| **DATA_EVENTS** | `data.download_started`, `data.download_completed`, `candle.closed` | `symbol`, `timeframe`, `candles_count` |
+| **PRICE_EVENTS** | `price.updated` (NEW!) | `symbol`, `price`, `timestamp` |
+| **SYSTEM_EVENTS** | `system.started`, `system.health_check` | `uptime`, `memory_usage`, `active_bots` |
 
-**Örnek Event:**
+**Event Structure (Pydantic-based):**
 ```python
-from shared.events.events import SignalGeneratedEvent
+from shared.events.events import SignalGeneratedEvent, PositionDirection
 
 event = SignalGeneratedEvent(
     bot_id="bot_123",
-    symbol="BTC/USDT",
-    signal=2,  # LONG
+    symbol="BTC/USDT:USDT",
+    signal=2,  # 0=SHORT, 1=HOLD, 2=LONG
     price=50000.0,
     timeframe="1m",
     indicators={
         'RSI_14': 65.0,
         'EMA_20': 49500.0,
         'ATR_14': 500.0
+    },
+    metadata={
+        'htf_trend': 'BULL',
+        'market_regime': 'TRENDING'
     }
 ).to_event()
 

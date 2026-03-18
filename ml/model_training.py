@@ -357,6 +357,52 @@ class ModelTrainer:
         else:
             return [(f"feature_{i}", imp) for i, imp in enumerate(importance)]
 
+    def get_feature_importance_df(self, top_n: int = 20) -> pd.DataFrame:
+        """
+        Feature Importance DataFrame'i normalize edilmiş şekilde döner.
+
+        XAI (Açıklanabilir Yapay Zeka) standardı:
+        - (Current_Importance / Max_Importance) * 100 formülüyle 0-100% normalize
+        - Top N özelliği döner
+
+        Args:
+            top_n: Döndürülecek özellik sayısı (default: 20)
+
+        Returns:
+            pd.DataFrame: feature_name, importance, importance_pct kolonları
+        """
+        if not self.is_trained:
+            return pd.DataFrame(columns=['feature_name', 'importance', 'importance_pct'])
+
+        importance = self.xgb_model.feature_importances_
+
+        if self.feature_names is None or len(self.feature_names) == 0:
+            self.feature_names = [f"feature_{i}" for i in range(len(importance))]
+
+        # Max importance bul (normalizasyon için)
+        max_importance = max(importance) if len(importance) > 0 else 1.0
+
+        # DataFrame oluştur
+        df = pd.DataFrame({
+            'feature_name': self.feature_names,
+            'importance': importance,
+            # NORMALIZASYON: (Current / Max) * 100
+            'importance_pct': (importance / max_importance * 100) if max_importance > 0 else 0
+        })
+
+        # En önemli özelliklere göre sırala (azalan)
+        df = df.sort_values('importance', ascending=False)
+
+        # Top N özelliği al
+        df = df.head(top_n)
+
+        # Yüzdelikleri 2 ondalığa yuvarla
+        df['importance_pct'] = df['importance_pct'].round(2)
+
+        logger.debug(f"🧬 [XAI] Feature Importance hesaplandı: {len(df)} özellik, max={max_importance:.4f}")
+
+        return df
+
     def predict_with_confidence(
         self,
         X: pd.DataFrame
