@@ -34,12 +34,28 @@ async def start_background_tasks():
         raise
 
     # 2. Her sembol için poller başlat
+    # ÖNCE: config.yaml'dan oku
     symbols = CONFIG.get('trading', {}).get('symbols', [])
 
     if not symbols:
-        logger.warning("⚠️ config.yaml'da tanımlı sembol yok! Bot işlem yapmayacak.")
-        logger.warning("   config.yaml → trading.symbols: ['BTC/USDT:USDT'] ekleyin")
-    else:
+        # YENİ: config.yaml boşsa, DB'den otomatik yükle
+        logger.info("🔄 [AUTO-SYNC] config.yaml boş, DB'den semboller yükleniyor...")
+        try:
+            from data.database import db_manager
+            await db_manager.connect()
+            db_symbols = await db_manager.get_symbols_with_data()
+
+            if db_symbols:
+                symbols = db_symbols
+                logger.info(f"✅ [AUTO-SYNC] DB'den {len(symbols)} sembol yüklendi!")
+                logger.info(f"   Semboller: {', '.join(symbols[:5])}{'...' if len(symbols) > 5 else ''}")
+            else:
+                logger.warning("⚠️ DB'de veri yok! Veri Laboratuvarı'ndan veri indirin.")
+        except Exception as e:
+            logger.error(f"❌ [AUTO-SYNC] DB'den sembol yükleme hatası: {e}")
+
+    # Sembollerle botları başlat
+    if symbols:
         logger.info(f"📊 {len(symbols)} sembol için poller başlatılıyor...")
 
         for symbol in symbols:
@@ -54,6 +70,8 @@ async def start_background_tasks():
 
             except Exception as e:
                 logger.error(f"❌ {symbol} için poller başlatma hatası: {e}")
+    else:
+        logger.info("ℹ️ Aktif sembol yok - Dashboard'dan bot başlatabilirsiniz")
 
     # 3. WFO arka plan task'ı başlat (aktifse)
     if CONFIG.get('wfo', {}).get('enabled', False):

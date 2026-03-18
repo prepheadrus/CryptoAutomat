@@ -57,8 +57,24 @@ async def lifespan(app: FastAPI):
     await exchange_manager.load_tasks_from_db()
 
     # 5. Bot task'larını başlat
+    # ÖNCE: config.yaml'dan oku
+    symbols = CONFIG.get('trading', {}).get('symbols', [])
+
+    if not symbols:
+        # YENİ: config.yaml boşsa, DB'den otomatik yükle
+        logger.info("🔄 [AUTO-SYNC] config.yaml boş, DB'den semboller yükleniyor...")
+        try:
+            db_symbols = await db_manager.get_symbols_with_data()
+            if db_symbols:
+                symbols = db_symbols
+                logger.info(f"✅ [AUTO-SYNC] DB'den {len(symbols)} sembol yüklendi!")
+            else:
+                logger.info("ℹ️ DB'de veri yok - Dashboard'dan bot başlatabilirsiniz")
+        except Exception as e:
+            logger.error(f"❌ [AUTO-SYNC] DB'den sembol yükleme hatası: {e}")
+
     tasks = []
-    for symbol in CONFIG['trading']['symbols']:
+    for symbol in symbols:
         tasks.append(asyncio.create_task(exchange_manager.watch_ticker_loop(symbol)))
         tasks.append(asyncio.create_task(exchange_manager.run_strategy_poller(symbol)))
 
@@ -72,7 +88,7 @@ async def lifespan(app: FastAPI):
             from strategy.manager import StrategyManager
 
             wfo_tasks = []
-            for symbol in CONFIG['trading']['symbols']:
+            for symbol in symbols:  # symbols değişkenini kullan
                 strategy_id = paper_engine.active_strategies.get(symbol)
                 if strategy_id:
                     strategy_instance = StrategyManager.get_strategy(strategy_id)
