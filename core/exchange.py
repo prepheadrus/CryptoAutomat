@@ -483,7 +483,15 @@ class ExchangeManager:
                             if klines_data and len(klines_data) > 0:
                                 import pandas as pd
                                 df_1m = pd.DataFrame(klines_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-                                df_1m['timestamp'] = pd.to_datetime(df_1m['timestamp'], unit='ms', utc=True)
+
+                                # [TZ FIX] Timestamp parse - SQLite string veya int olabilir
+                                if df_1m['timestamp'].dtype == 'object':
+                                    # String datetime (SQLite)
+                                    df_1m['timestamp'] = pd.to_datetime(df_1m['timestamp'], utc=True)
+                                else:
+                                    # Integer ms timestamp
+                                    df_1m['timestamp'] = pd.to_datetime(df_1m['timestamp'], unit='ms', utc=True)
+
                                 df_1m.set_index('timestamp', inplace=True)
 
                                 # Parquet'e kaydet
@@ -1245,7 +1253,7 @@ class ExchangeManager:
                                 df_tf = df_tf.dropna()
                                 if not df_tf.empty:
                                     storage.save_ohlcv(symbol, tf, df_tf)
-                            logger.info(f"✅ [STORAGE] {symbol} için tüm TF'ler güncellendi")
+                            logger.info(f"✅ [STORAGE] {symbol} için t��m TF'ler güncellendi")
 
                         except Exception as storage_err:
                             logger.warning(f"⚠️ [STORAGE] Flat file güncelleme hatası: {storage_err}")
