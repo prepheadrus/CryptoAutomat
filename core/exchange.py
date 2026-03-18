@@ -26,19 +26,26 @@ def normalize_symbol(symbol: str) -> str:
     """
     CCXT Uyumlu Sembol Normalizasyonu (Safe Parsing).
 
-    Kural 1: Gelen string'i temizle (BTC_USDT, BTC/USDT, BTCUSDT vb.)
+    Kural 1: Gelen string'i temizle (BTC_USDT, BTC/USDT, BTCUSDT, /BTC vb.)
     Kural 2: Her zaman {BASE}/{QUOTE} formatına çevir
     Kural 3: Futures aktifse {BASE}/{QUOTE}:{QUOTE} formatına çevir
     Kural 4: Fallback - Eğer / yoksa /USDT ekle
 
     Args:
-        symbol: Ham sembol (örn: BTC, BTC_USDT, BTC/USDT, BTCUSDT)
+        symbol: Ham sembol (örn: BTC, BTC_USDT, BTC/USDT, BTCUSDT, /BTC)
 
     Returns:
         CCXT uyumlu sembol (örn: BTC/USDT veya BTC/USDT:USDT)
     """
     if not symbol:
         return 'BTC/USDT'  # Default fallback
+
+    # Adım 0: Gereksiz başlangıç karakterlerini temizle (örn: /BTC → BTC)
+    symbol = symbol.strip()
+    if symbol.startswith('/'):
+        symbol = symbol[1:]
+    if symbol.startswith('_'):
+        symbol = symbol[1:]
 
     # Adım 1: Gereksiz karakterleri temizle
     symbol = symbol.strip()
@@ -75,9 +82,6 @@ def normalize_symbol(symbol: str) -> str:
     # Adım 5: Fallback kalkanı - Eğer hala / yoksa
     if '/' not in symbol:
         symbol = f"{symbol}/USDT"
-
-    # Adım 6: Büyük harfe çevir (standartlaştırma)
-    # symbol = symbol.upper()  # CCXT genelde büyük harf bekler
 
     logger.debug(f"🔧 [SYMBOL] Normalizasyon: {symbol}")
 
@@ -1412,6 +1416,19 @@ class ExchangeManager:
                     # Canlı veriyi geçmiş veriye ekle/güncelle
                     last_live_time = live_df.index[-1]
                     last_hist_time = ohlcv_df.index[-1]
+
+                    # ========================================================================
+                    # [TZ FIX] Her iki timestamp'i de UTC yap (timezone-aware)
+                    # ========================================================================
+                    if last_live_time.tzinfo is None:
+                        last_live_time = last_live_time.tz_localize('UTC')
+                    else:
+                        last_live_time = last_live_time.tz_convert('UTC')
+
+                    if last_hist_time.tzinfo is None:
+                        last_hist_time = last_hist_time.tz_localize('UTC')
+                    else:
+                        last_hist_time = last_hist_time.tz_convert('UTC')
 
                     logger.debug(f"🔥 [TZ DEBUG] last_live_time={last_live_time} (tz={last_live_time.tzinfo})")
                     logger.debug(f"🔥 [TZ DEBUG] last_hist_time={last_hist_time} (tz={last_hist_time.tzinfo})")
