@@ -58,8 +58,11 @@ def normalize_symbol(symbol: str) -> str:
     # Adım 4: USDT, USD, BTC gibi kısımları ayır
     # BTCUSDT → BTC/USDT, ETHBTC → ETH/BTC
     if '/' not in symbol:
+        # Sadece BASE sembolü (örn: BTC, ETH)
+        if len(symbol) <= 4 and symbol.upper() in ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'BNB', 'ADA', 'AVAX']:
+            symbol = f"{symbol}/USDT"
         # USDT ile bitiyorsa
-        if symbol.upper().endswith('USDT'):
+        elif symbol.upper().endswith('USDT'):
             base = symbol[:-4]
             quote = 'USDT'
             symbol = f"{base}/{quote}"
@@ -69,7 +72,7 @@ def normalize_symbol(symbol: str) -> str:
             quote = 'USD'
             symbol = f"{base}/{quote}"
         # BTC ile bitiyorsa
-        elif symbol.upper().endswith('BTC'):
+        elif symbol.upper().endswith('BTC') and len(symbol) > 3:
             base = symbol[:-3]
             quote = 'BTC'
             symbol = f"{base}/{quote}"
