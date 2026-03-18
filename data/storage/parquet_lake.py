@@ -795,7 +795,11 @@ class ParquetDataLake:
             if not symbol_dir.is_dir():
                 continue
 
-            symbol = symbol_dir.name.replace('_', '/')
+            # [SYMBOL FIX] Klasör adını normalize et (örn: /BTC → BTC/USDT)
+            symbol_raw = symbol_dir.name.replace('_', '/')
+            from core.exchange import normalize_symbol
+            symbol = normalize_symbol(symbol_raw)
+
             stats['total_symbols'] += 1
             stats['symbols'][symbol] = {
                 'timeframes': 0,

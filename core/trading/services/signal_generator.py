@@ -24,6 +24,11 @@ class SignalGeneratorService:
             # ========================================================================
             # [TZ FIX] DataFrame index UTC yap (timezone-aware)
             # ========================================================================
+            # Önce DatetimeIndex'e çevir (eğer değilse)
+            if not isinstance(df_1m.index, pd.DatetimeIndex):
+                df_1m.index = pd.to_datetime(df_1m.index, utc=True)
+
+            # Sonra timezone-aware yap
             if df_1m.index.tzinfo is None:
                 df_1m.index = df_1m.index.tz_localize('UTC')
             else:
