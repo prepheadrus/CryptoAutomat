@@ -21,6 +21,87 @@ except ImportError:
 # Order Book Imbalance threshold
 ORDER_BOOK_IMBALANCE_THRESHOLD = 0.60  # %60
 
+
+def normalize_symbol(symbol: str) -> str:
+    """
+    CCXT Uyumlu Sembol Normalizasyonu (Safe Parsing).
+
+    Kural 1: Gelen string'i temizle (BTC_USDT, BTC/USDT, BTCUSDT vb.)
+    Kural 2: Her zaman {BASE}/{QUOTE} formatına çevir
+    Kural 3: Futures aktifse {BASE}/{QUOTE}:{QUOTE} formatına çevir
+    Kural 4: Fallback - Eğer / yoksa /USDT ekle
+
+    Args:
+        symbol: Ham sembol (örn: BTC, BTC_USDT, BTC/USDT, BTCUSDT)
+
+    Returns:
+        CCXT uyumlu sembol (örn: BTC/USDT veya BTC/USDT:USDT)
+    """
+    if not symbol:
+        return 'BTC/USDT'  # Default fallback
+
+    # Adım 1: Gereksiz karakterleri temizle
+    symbol = symbol.strip()
+
+    # Adım 2: _ yerine / koy (BTC_USDT → BTC/USDT)
+    symbol = symbol.replace('_', '/')
+
+    # Adım 3: :USDT veya :USD kısmını temizle (BTC/USDT:USDT → BTC/USDT)
+    if ':' in symbol:
+        symbol = symbol.split(':')[0]
+
+    # Adım 4: USDT, USD, BTC gibi kısımları ayır
+    # BTCUSDT → BTC/USDT, ETHBTC → ETH/BTC
+    if '/' not in symbol:
+        # USDT ile bitiyorsa
+        if symbol.upper().endswith('USDT'):
+            base = symbol[:-4]
+            quote = 'USDT'
+            symbol = f"{base}/{quote}"
+        # USD ile bitiyorsa (USDT değil)
+        elif symbol.upper().endswith('USD') and not symbol.upper().endswith('USDT'):
+            base = symbol[:-3]
+            quote = 'USD'
+            symbol = f"{base}/{quote}"
+        # BTC ile bitiyorsa
+        elif symbol.upper().endswith('BTC'):
+            base = symbol[:-3]
+            quote = 'BTC'
+            symbol = f"{base}/{quote}"
+        # Hiçbiri değilse fallback
+        else:
+            symbol = f"{symbol}/USDT"
+
+    # Adım 5: Fallback kalkanı - Eğer hala / yoksa
+    if '/' not in symbol:
+        symbol = f"{symbol}/USDT"
+
+    # Adım 6: Büyük harfe çevir (standartlaştırma)
+    # symbol = symbol.upper()  # CCXT genelde büyük harf bekler
+
+    logger.debug(f"🔧 [SYMBOL] Normalizasyon: {symbol}")
+
+    return symbol
+
+
+def normalize_symbol_for_exchange(symbol: str, market_type: str = 'spot') -> str:
+    """
+    Borsa için sembol formatını ayarla (Spot vs Futures).
+
+    Args:
+        symbol: Normalized sembol (örn: BTC/USDT)
+        market_type: 'spot' veya 'future'
+
+    Returns:
+        Borsa uyumlu sembol
+    """
+    # Futures (Vadeli) için CCXT formatı: BTC/USDT:USDT
+    if market_type.lower() in ['future', 'futures', 'swap', 'perp', 'perpetual']:
+        if ':USDT' not in symbol:
+            symbol = f"{symbol}:USDT"
+
+    return symbol
+
 class ExchangeManager:
     def __init__(self):
         self.exchange_id = CONFIG['trading']['exchange']
@@ -225,6 +306,9 @@ class ExchangeManager:
             list: OHLCV verisi
         """
         try:
+            # [WSS NORMALİZASYON] Sembol CCXT formatına çevir
+            symbol = normalize_symbol(symbol)
+
             # since parametresi varsa kullan (pagination için)
             if since is not None:
                 data = await self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit, params=params, since=since)
@@ -312,10 +396,16 @@ class ExchangeManager:
         - LivePriceUpdatedEvent fırlatır (Event Bus üzerinden)
         - Paper.py bu event'i dinler ve trailing stop kontrolü yapar
         - DIRECT CALL YOK (circular dependency kırıldı!)
+
+        [WSS NORMALİZASYON] Sembol otomatik CCXT formatına çevrilir.
         """
         import time
 
-        logger.info(f"{symbol} için WebSocket Ticker akışı başlatıldı.")
+        # ========================================================================
+        # [WSS NORMALİZASYONU] Sembol CCXT formatına çevir
+        # ========================================================================
+        symbol = normalize_symbol(symbol)
+        logger.info(f"📡 [WSS] {symbol} için WebSocket Ticker akışı başlatıldı.")
 
         # Throttle (geciktirici) mekanizması - CPU koruması
         last_update_time = {}  # {symbol: last_update_timestamp}
@@ -428,8 +518,9 @@ class ExchangeManager:
         # Her zaman 1m olarak indir (timeframe parametresini yoksay)
         download_timeframe = '1m'
 
-        # Sembol ismini temizle (Giriş parametresi kirli gelmiş olabilir: BTC/USDT_spot gibi)
-        symbol = symbol.split('_')[0].strip()
+        # [WSS NORMALİZASYON] Sembol ismini temizle ve CCXT formatına çevir
+        # symbol.split('_')[0] yerine normalize_symbol kullan
+        symbol = normalize_symbol(symbol)
         
         # Piyasa tipini standardize etme işlemi API katmanında yapıldığı için burada tekrar yapılmaz.
         
@@ -724,7 +815,8 @@ class ExchangeManager:
 
                 # 1m veriyi DB'den çek
                 limit_1m = max(all_downloaded, 1000)  # En az 1000 mum
-                symbol_clean = symbol.split('_')[0]
+                # [WSS NORMALİZASYON] symbol.split('_')[0] yerine normalize_symbol kullan
+                symbol_clean = normalize_symbol(symbol)
 
                 logger.info(f"📊 [PARQUET] {symbol_clean} için Parquet oluşturuluyor... (limit={limit_1m})")
 
@@ -949,6 +1041,8 @@ class ExchangeManager:
     async def run_strategy_poller(self, symbol, timeframe='1m'):
         """
         FINAL HYBRID (Local DB + REST Pagination + WebSocket Push) Strateji Motoru
+
+        [WSS NORMALİZASYON] Sembol otomatik CCXT formatına çevrilir.
         """
         from core.paper import paper_engine
         from data.indicators import StrategyIndicators
@@ -956,6 +1050,11 @@ class ExchangeManager:
         from core.detector import MarketRegimeDetector
         from data.database import db_manager
         import ccxt
+
+        # ========================================================================
+        # [WSS NORMALİZASYON] Sembol CCXT formatına çevir
+        # ========================================================================
+        symbol = normalize_symbol(symbol)
 
         # 🔥 KRITIK LOGLAMA - Poller başlangıcını izle
         logger.info(f"🔥 [POLLER DEBUG] {symbol} run_strategy_poller BAŞLADI")
