@@ -514,3 +514,31 @@ async def start_wfo_background_task(
         except Exception as e:
             logger.error(f"❌ [WFO] Arka plan hatası: {e}")
             await asyncio.sleep(3600)  # 1 saat bekle ve tekrar dene
+
+
+# Singleton instance
+_wfo_engine_instance: Optional['WFOEngine'] = None
+
+
+def get_wfo_engine() -> Optional['WFOEngine']:
+    """
+    WFO Engine singleton instance'ını al.
+
+    Returns:
+        WFOEngine: Singleton instance veya None (WFO kapalıysa)
+    """
+    global _wfo_engine_instance
+
+    if _wfo_engine_instance is None:
+        if not CONFIG.get('wfo', {}).get('enabled', False):
+            logger.warning("⚠️ WFO kapalı, engine başlatılmadı")
+            return None
+
+        _wfo_engine_instance = WFOEngine()
+        logger.info("🧠 [WFO] Engine singleton başlatıldı")
+
+    return _wfo_engine_instance
+
+
+# Kolay import için
+__all__ = ['WFOEngine', 'get_wfo_engine', 'start_wfo_background_task']
