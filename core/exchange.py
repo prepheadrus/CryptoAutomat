@@ -52,8 +52,17 @@ def normalize_symbol(symbol: str) -> str:
     symbol = symbol.replace('_', '/')
 
     # Adım 3: :USDT veya :USD kısmını temizle (BTC/USDT:USDT → BTC/USDT)
+    # YENİ: Futures semboller için :USDT koru!
     if ':' in symbol:
-        symbol = symbol.split(':')[0]
+        parts = symbol.split(':')
+        base_part = parts[0]  # BTC/USDT
+        quote_part = parts[1] if len(parts) > 1 else ''  # USDT
+
+        # Eğer futures ise (USDT quote), :USDT'yi koru
+        if quote_part.upper() == 'USDT':
+            symbol = f"{base_part}:{quote_part}"  # BTC/USDT:USDT olarak koru
+        else:
+            symbol = base_part  # Sadece base kısmı al
 
     # Adım 4: USDT, USD, BTC gibi kısımları ayır
     # BTCUSDT → BTC/USDT, ETHBTC → ETH/BTC
