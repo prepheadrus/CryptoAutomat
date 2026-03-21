@@ -1349,6 +1349,58 @@ class ExchangeManager:
         logger.info(f"✅ [ALL CANDLES] {symbol} için {len(ohlcv_df)} mum yüklendi (TÜM veri tutuluyor)")
 
         # ============================================
+        # 3.5 BOT TASK'LARINI BAŞLAT
+        # ============================================
+        # Aktif botları kontrol et ve sinyal hesaplamalarını başlat
+        try:
+            from core.paper import paper_engine
+            
+            if paper_engine and len(paper_engine.active_bots) > 0:
+                logger.info(f"🤖 [1-to-N] {symbol} için {len(paper_engine.active_bots)} aktif bot işleniyor...")
+                
+                # Her bot için task oluştur
+                tasks = []
+                for bot_id in paper_engine.active_bots.keys():
+                    bot_info = paper_engine.active_bots.get(bot_id, {})
+                    bot_timeframe = bot_info.get('timeframe', '1m')
+                    
+                    # Sadece aynı timeframe'deki botları işle
+                    if bot_timeframe == timeframe:
+                        logger.info(f"   🔥 [BOT DEBUG] active_bot_ids={list(paper_engine.active_bots.keys())}")
+                        logger.info(f"   🚀 [BOT GATHER] {len(paper_engine.active_bots)} task çalıştırılıyor...")
+                        
+                        # Bot task'ını başlat (async)
+                        task = asyncio.create_task(
+                            self._process_bot_task(
+                                paper_engine=paper_engine,
+                                bot_id=bot_id,
+                                df=ohlcv_df,
+                                current_price=ohlcv_df['close'].iloc[-1] if not ohlcv_df.empty else 0,
+                                htf_trend='NEUTRAL',  # HTF henüz hesaplanmadı
+                                regime='UNKNOWN',     # Rejim henüz hesaplanmadı
+                                htf_trends={}
+                            )
+                        )
+                        tasks.append(task)
+                
+                # Tüm task'ları bekle
+                if tasks:
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
+                    logger.info(f"   ✅ [BOT GATHER] Tüm tasklar tamamlandı")
+                    
+                    # Hataları logla
+                    for i, result in enumerate(results):
+                        if isinstance(result, Exception):
+                            logger.error(f"❌ [BOT TASK] Task {i} hata: {result}")
+                else:
+                    logger.debug(f"⏭️ [BOT GATHER] {symbol} için bot task yok")
+            else:
+                logger.debug(f"⏭️ [BOT GATHER] {symbol} için aktif bot yok")
+        except Exception as bot_task_err:
+            logger.error(f"❌ [BOT GATHER] Bot task başlatma hatası: {bot_task_err}")
+            logger.debug(f"⚠️ [BOT GATHER] Bot task hatası atlandı, devam ediliyor")
+
+        # ============================================
         # 4. WEBSOCKET DÖNGÜSÜ (Canlı Güncelleme)
         # ============================================
         logger.info(f"📡 [WSS] {symbol} için WebSocket döngüsü başlatılıyor...")
