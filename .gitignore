@@ -20,6 +20,7 @@ cryptobot.db
 
 # OHLCV Flat Files (Superalgos Mimarisi)
 data/ohlcv/
+data/ohlcv_flat/
 
 # Logs and Debug
 *.log
