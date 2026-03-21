@@ -122,16 +122,20 @@ class TrendIndicators:
         minus_dm = -low.diff()
         plus_dm = np.where((plus_dm > minus_dm) & (plus_dm > 0), plus_dm, 0)
         minus_dm = np.where((minus_dm > plus_dm) & (minus_dm > 0), minus_dm, 0)
-        
+
         # TR hesapla
         tr = np.maximum(high - low,
                        np.maximum(abs(high - close.shift(1)),
                                  abs(low - close.shift(1))))
+
+        # Smooth - INDEX UYUMLULUĞU
+        tr_smooth = pd.Series(tr, index=high.index).rolling(period).sum()
+        plus_dm_smooth = pd.Series(plus_dm, index=high.index).rolling(period).sum()
+        minus_dm_smooth = pd.Series(minus_dm, index=high.index).rolling(period).sum()
         
-        # Smooth
-        tr_smooth = pd.Series(tr).rolling(period).sum()
-        plus_di = 100 * pd.Series(plus_dm).rolling(period).sum() / tr_smooth
-        minus_di = 100 * pd.Series(minus_dm).rolling(period).sum() / tr_smooth
+        # DI hesapla (index uyumlu)
+        plus_di = 100 * plus_dm_smooth / tr_smooth
+        minus_di = 100 * minus_dm_smooth / tr_smooth
         
         # DX ve ADX
         dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di)

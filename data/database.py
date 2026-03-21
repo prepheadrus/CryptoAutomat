@@ -454,6 +454,11 @@ class DatabaseManager:
                         logger.debug(f"✅ DB Sembol eşleşti (get_klines): {symbol} → {sym_variant} ({len(result)} mum)")
                         return result
             else:
+                # SQLite bağlantısını kontrol et
+                if self.sqlite_conn is None:
+                    logger.debug(f"⚠️ SQLite bağlantısı yok ({sym_variant})")
+                    continue
+                    
                 async with self.sqlite_conn.execute(sql, params) as cursor:
                     rows = await cursor.fetchall()
                     result = [(row[0], row[1], row[2], row[3], row[4], row[5]) for row in rows]
