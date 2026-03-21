@@ -229,15 +229,24 @@ class DataLakeStorage:
 
             if append and file_path.exists():
                 # Mevcut dosyaya ekle
-                existing_df = pd.read_parquet(file_path)
-                
+                try:
+                    existing_df = pd.read_parquet(file_path)
+                except Exception as read_err:
+                    # Bozuk dosyayı sil ve yeniden başlat
+                    logger.warning(f"⚠️ [DATA LAKE] Bozuk Parquet dosyası, siliniyor: {file_path} - {read_err}")
+                    file_path.unlink()
+                    existing_df = pd.DataFrame()
+
                 # Duplicate kayıtları temizle
-                combined_df = pd.concat([existing_df, df], ignore_index=True)
-                combined_df = combined_df.drop_duplicates(subset=['timestamp'], keep='last')
-                
+                if not existing_df.empty:
+                    combined_df = pd.concat([existing_df, df], ignore_index=True)
+                    combined_df = combined_df.drop_duplicates(subset=['timestamp'], keep='last')
+                else:
+                    combined_df = df
+
                 # Tekrar integrity kontrolü
                 combined_df = self._ensure_integrity(combined_df, timeframe)
-                
+
                 combined_df.to_parquet(file_path, compression=self.COMPRESSION, index=False)
                 logger.info(f"💾 [DATA LAKE] {symbol} {timeframe} → {len(df)} mum EKLENDI (toplam: {len(combined_df)} mum)")
             else:
