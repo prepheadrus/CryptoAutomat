@@ -919,8 +919,13 @@ class ExchangeManager:
             htf_trends: HTF trend sözlüğü (örn: {'5m': 'BULL', '15m': 'BEAR'})
         """
         try:
+            # 🔥 [BOT TASK DEBUG] Fonksiyon başlangıcı
+            logger.info(f"🔥 [BOT TASK] _process_bot_task BAŞLADI: bot_id={bot_id}")
+            
             # Bot bilgilerini al
             bot_info = paper_engine.active_bots.get(bot_id, {})
+            
+            logger.info(f"🔍 [BOT INFO] bot_id={bot_id}, bot_info={bot_info}")
 
             # 🔥 DEBUG: bot_info tipini kontrol et
             if not isinstance(bot_info, dict):
@@ -932,6 +937,8 @@ class ExchangeManager:
             symbol = bot_info.get('symbol', '')
             strategy_id = bot_info.get('strategy_id', '')
             timeframe = bot_info.get('timeframe', '1m')
+            
+            logger.info(f"📊 [BOT PARAMS] symbol={symbol}, strategy_id={strategy_id}, timeframe={timeframe}")
 
             # ========================================================================
             # KATI MUM KAPANış KİLİDİ (Strict Candle Close Lock)
@@ -971,9 +978,8 @@ class ExchangeManager:
                     if candle_age_seconds < candle_close_threshold:
                         # Mum henüz kapanmadı, sinyali atla
                         remaining_seconds = (candle_duration_minutes * 60) - candle_age_seconds
-                        logger.debug(
-                            f"[TIMEFRAME] Katı Mum Kapanış Kilidi Devrede: {symbol} ({timeframe}) | "
-                            f"Kalan: {remaining_seconds:.0f}s"
+                        logger.info(
+                            f"⏳ [CANDLE LOCK] {symbol} ({timeframe}) mum kapanmadı, bekleniyor... | Kalan: {remaining_seconds:.0f}s"
                         )
                         return  # Sinyal üretme, mum kapanışını bekle
 
