@@ -979,8 +979,13 @@ class ExchangeManager:
 
             # Strateji sinyali üret
             strategy = paper_engine.strategies.get(symbol)
+            
+            # 🔥 DEBUG: Strateji ve DataFrame kontrolü
+            logger.info(f"🔍 [DEBUG] strategy={strategy is not None}, df.empty={df.empty}, len(df)={len(df)}")
+            logger.info(f"🔍 [DEBUG] paper_engine.strategies.keys()={list(paper_engine.strategies.keys()) if paper_engine else 'None'}")
+            
             if strategy is None or df.empty or len(df) < 50:
-                logger.debug(f"⏭️ [SINYAL] {symbol} strateji yok veya veri yetersiz")
+                logger.warning(f"⏭️ [SINYAL] {symbol} strateji yok veya veri yetersiz (strategy={strategy is not None}, df_len={len(df)})")
                 return
 
             latest_candle = df.iloc[-1]
