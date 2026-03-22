@@ -58,10 +58,17 @@ async def get_trade_history(
 
         logger.info(f"📊 [TRADES] Memory'den {len(memory_trades)} işlem çekildi")
 
-        # 3. SADECE DB TRADE'LERİNİ DÖNDÜR (Memory skip - çakışma önleme)
-        # NOT: Paper engine trade'leri zaten DB'ye kaydediliyor, memory'den tekrar eklemeye gerek yok
+        # 3. DB + Memory trades'leri birleştir (duplicate önleme)
+        # Memory trades anlık göstermek için önemli (DB'ye yazılmadan önce)
         all_trades = list(db_trades)
-        logger.info(f"📊 [TRADES] Toplam {len(all_trades)} işlem döndürülecek")
+        
+        # Memory trades'leri ekle (DB'de olmayanları)
+        db_ids = set(t.get('id') for t in db_trades if t.get('id'))
+        for mem_trade in memory_trades:
+            if mem_trade.get('id') not in db_ids:
+                all_trades.append(mem_trade)
+        
+        logger.info(f"📊 [TRADES] Toplam {len(all_trades)} işlem döndürülecek (DB: {len(db_trades)}, Memory: {len(memory_trades)})")
 
         # 4. Filtreleme
         if symbol:
