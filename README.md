@@ -23,12 +23,29 @@ Detaylı teknik dokümantasyon için **[Knowledge Base](knowledge/INDEX.md)** kl
 
 ## ⚡ Hızlı Başlangıç
 
+### Önkoşullar
+
+**Gerekli:**
+- ✅ Python 3.10+ ([İndir](https://www.python.org/downloads/))
+- ✅ Git ([İndir](https://git-scm.com/downloads))
+- ✅ 4GB+ RAM
+- ✅ 10GB+ Disk Alanı
+
+**Opsiyonel (Canlı Trading için):**
+- 📝 Binance API Key ([Oluştur](https://www.binance.com/en/my/settings/api-management))
+
+---
+
 ### 1. Depoyu Klonla
 
 ```bash
 git clone https://github.com/prepheadrus/Crypto_Automat.git
 cd Crypto_Automat
 ```
+
+**Boyut:** ~50MB (klonlama sonrası ~200MB)
+
+---
 
 ### 2. Otomatik Kurulum
 
@@ -43,6 +60,17 @@ chmod +x setup.sh
 setup.bat
 ```
 
+**Süre:** 5-10 dakika (ilk kurulumda)
+
+**Ne yapar:**
+- ✅ Python virtual environment oluşturur
+- ✅ Tüm bağımlılıkları yükler (requirements.txt)
+- ✅ .env dosyası oluşturur (.env.example'dan)
+- ✅ Gerekli klasörleri oluşturur
+- ✅ PyArrow, XGBoost gibi kritik kütüphaneleri doğrular
+
+---
+
 ### 3. Yapılandırma
 
 **.env dosyası** (API anahtarları için):
@@ -52,12 +80,45 @@ nano .env  # Linux
 notepad .env  # Windows
 ```
 
+**Düzenle:**
+```env
+BINANCE_API_KEY=your_binance_api_key_here
+BINANCE_API_SECRET=your_binance_api_secret_here
+ENVIRONMENT=development
+```
+
+> 💡 **Not:** Paper trading için API anahtarı gerekmez! Canlı trading için gereklidir.
+
 **config.yaml** (Trading ayarları için):
 ```bash
 cp config.example.yaml config.yaml
 nano config.yaml  # Linux
 notepad config.yaml  # Windows
 ```
+
+**Önerilen Başlangıç Ayarları:**
+```yaml
+bot:
+  environment: development
+  log_level: INFO
+
+risk_management:
+  max_risk_per_trade_percent: 1.0
+  max_leverage: 5
+  max_open_positions: 5
+  kill_switch:
+    enabled: true
+    max_consecutive_losses: 5
+
+ml:
+  enabled: true
+  confidence_threshold: 0.5
+
+htf:
+  enabled: false  # Başlangıçta kapalı (daha fazla işlem)
+```
+
+---
 
 ### 4. Botu Başlat
 
@@ -73,12 +134,70 @@ venv\Scripts\activate
 python main.py
 ```
 
+**İlk Başlatma:**
+- ⏱️ 10-30 saniye sürer
+- 📦 Parquet Data Lake otomatik yüklenir
+- 📊 Mevcut semboller otomatik başlatılır
+
+**Beklenen Çıktı:**
+```
+✅ Event Bus başlatıldı (5 worker)
+✅ [AUTO-SYNC] Parquet'ten 2 sembol yüklendi!
+📡 [WSS] BTC/USDT için WebSocket dinleyici başlatıldı
+🚀 [POLLER] BTC/USDT için strateji poller başlatıldı
+✅ BOT TAM OLARAK BAŞLATILDI!
+Dashboard: http://localhost:3000
+```
+
+---
+
 ### 5. Dashboard'a Eriş
 
 Tarayıcınızda şu adresi açın:
 - **Local:** http://localhost:3000
 - **Swagger Docs:** http://localhost:3000/docs
 - **Health Check:** http://localhost:3000/api/v1/health
+
+> ⚠️ **Firewall Ayarı:** Port 3000'i açmayı unutmayın!
+
+**İlk Adımlar:**
+1. **Veri Laboratuvarı** → BTC/USDT, ETH/USDT indir
+2. **Bot Yönetimi** → Bot başlat (Symbol: BTC/USDT, Strategy: trend_master)
+3. **Aktif Stratejiler** → Pozisyonları izle
+4. **İşlem Geçmişi** → Kapanan işlemleri gör
+
+---
+
+### 6. İlk Trading Deneyi
+
+**Paper Trading (Önerilen):**
+```yaml
+# config.yaml
+trading:
+  exchange: binance
+  symbols:
+    - BTC/USDT
+```
+
+**Adımlar:**
+1. Dashboard → Sistem Ayarları
+2. Risk Yönetimi → Max Risk: %1.0
+3. Bot Başlat → BTC/USDT + trend_master
+4. İşlem alınca bekle (5-30 dakika)
+5. PnL izle
+
+**Canlı Trading (İleri Seviye):**
+```yaml
+# .env dosyasına API anahtarlarını ekle
+BINANCE_API_KEY=your_key
+BINANCE_API_SECRET=your_secret
+
+# config.yaml
+bot:
+  environment: production
+```
+
+> ⚠️ **Uyarı:** Canlı trading risklidir! Küçük miktarlarla başlayın.
 
 ---
 

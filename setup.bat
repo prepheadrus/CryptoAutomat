@@ -106,7 +106,9 @@ echo    venv\Scripts\activate
 echo    python main.py
 echo.
 echo 4. Tarayicidan dashboard'a erisin:
-echo    http://localhost:8000
+echo    http://localhost:3000
+echo    Swagger Docs: http://localhost:3000/docs
+echo    Health Check: http://localhost:3000/api/v1/health
 echo.
 echo ==========================================
 echo.
