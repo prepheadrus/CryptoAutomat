@@ -973,15 +973,18 @@ class ExchangeManager:
                     candle_age_seconds = (current_time - last_candle_time).total_seconds()
 
                     # Mum kapanışına ne kadar kaldı?
-                    # 🔧 DÜZELTME: %95 → %50 (mum ortasında da sinyal üretsin)
-                    candle_close_threshold = candle_duration_minutes * 60 * 0.50  # %50 kapanmış
+                    # 🔧 DÜZELTME: %50 → %30 (daha hızlı sinyal, mumun ilk yarısını atla)
+                    candle_close_threshold = candle_duration_minutes * 60 * 0.30  # %30 kapanmış
 
                     if candle_age_seconds < candle_close_threshold:
                         # Mum henüz kapanmadı, sinyali atla
                         remaining_seconds = (candle_duration_minutes * 60) - candle_age_seconds
-                        logger.info(
-                            f"⏳ [CANDLE LOCK] {symbol} ({timeframe}) mum kapanmadı, bekleniyor... | Kalan: {remaining_seconds:.0f}s"
-                        )
+                        
+                        # 🔧 SADECE ilk 10 saniyede logla (spam önleme)
+                        if candle_age_seconds < 10:
+                            logger.debug(
+                                f"⏳ [CANDLE LOCK] {symbol} ({timeframe}) mum kapanmadı | Kalan: {remaining_seconds:.0f}s"
+                            )
                         return  # Sinyal üretme, mum kapanışını bekle
 
             # Strateji sinyali üret
