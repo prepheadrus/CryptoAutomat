@@ -1001,6 +1001,18 @@ class ExchangeManager:
             latest_candle = df.iloc[-1]
             strategy_signal = strategy.generate_signal(latest_candle)
 
+            # 🔧 SİNYAL ADAPTER: int → dict dönüşümü
+            # Stratejiler int döndürür (0=SAT, 1=BEKLE, 2=AL)
+            # Ama kod dict bekliyor
+            if isinstance(strategy_signal, int):
+                signal_map = {
+                    0: {'signal': 'SHORT', 'confidence': 1.0},
+                    1: {'signal': 'HOLD', 'confidence': 0.0},
+                    2: {'signal': 'LONG', 'confidence': 1.0}
+                }
+                strategy_signal = signal_map.get(strategy_signal, {'signal': 'HOLD', 'confidence': 0.0})
+                logger.debug(f"🔧 [SIGNAL ADAPTER] int→dict: {strategy_signal}")
+
             # 🎯 SİNYAL LOGLAMA (Production Analysis)
             if strategy_signal:
                 signal_type = strategy_signal.get('signal', 'NONE')
