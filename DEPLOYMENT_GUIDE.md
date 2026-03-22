@@ -1,330 +1,125 @@
-# 🚀 CRYPTO ALGO BOT - PRODUCTION DEPLOYMENT GUIDE
+# 🚀 CryptoAlgoBot - Production Deployment Guide
 
-## 📋 GENEL BAKIŞ
+**⚠️ IMPORTANT:** This file has been moved and updated.
 
-**setup.sh** betiği, CryptoAlgoBot'u Ubuntu sunucuda 7/24 kesintisiz çalışacak şekilde kurar.
+## 📍 New Location
 
-### Özellikler
-- ✅ OS ve Kantitatif Bağımlılık İzolasyonu
-- ✅ Konfigürasyon ve Güvenlik Kalkanı
-- ✅ Systemd Daemon Entegrasyonu (7/24 Uptime)
-- ✅ Auto-Recovery (Çökme durumunda otomatik yeniden başlama)
-- ✅ Boot'ta otomatik başlama
-- ✅ Merkezi log yönetimi (journalctl)
+For the most up-to-date deployment documentation, please visit:
+
+**[knowledge/workflows/deployment_guide.md](knowledge/workflows/deployment_guide.md)**
 
 ---
 
-## 🔧 KURULUM ADIMLARI
+## 📋 Quick Links
 
-### 1. Ubuntu Sunucuya Bağlan
-
-```bash
-ssh user@your-ubuntu-server
-```
-
-### 2. Projeyi Klonla
-
-```bash
-cd ~
-git clone https://github.com/prepheadrus/Crypto_Automat.git
-cd Crypto_Automat
-```
-
-### 3. Setup Script'i Çalıştır
-
-```bash
-chmod +x setup.sh
-./setup.sh
-```
-
-### 4. API Anahtarlarını Gir
-
-Eğer `.env` dosyası yoksa, script sizi uyaracak:
-
-```bash
-nano .env
-```
-
-Şu anahtarları girin:
-```bash
-BINANCE_API_KEY=your_binance_api_key_here
-BINANCE_API_SECRET=your_binance_secret_here
-```
-
-### 5. Kurulumu Tamamla
-
-```bash
-./setup.sh
-```
+- **[Windows Deployment](knowledge/workflows/deployment_guide.md#windows-deployment)**
+- **[Ubuntu Deployment](knowledge/workflows/deployment_guide.md#ubuntu-deployment)**
+- **[Cloud Deployment](knowledge/workflows/deployment_guide.md#cloud-deployment)**
+- **[Configuration Guide](knowledge/developer_reference/configuration_guide.md)**
+- **[API Reference](knowledge/developer_reference/api_reference.md)**
+- **[Health Check](knowledge/features/health_check_endpoint.md)**
 
 ---
 
-## 📊 SERVİS YÖNETİMİ
+## 🆕 What's New in v4.1.0?
 
-### Servis Durumu
+### **New Deployment Features**
+- ✅ Systemd service configuration (Ubuntu)
+- ✅ Windows startup script (start_bot.bat)
+- ✅ Oracle Cloud Free Tier optimization
+- ✅ AWS EC2 deployment guide
+- ✅ DigitalOcean Droplet setup
+- ✅ Firewall configuration
+- ✅ Health check endpoint integration
 
+### **New Documentation**
+- ✅ Step-by-step troubleshooting
+- ✅ Performance benchmarks
+- ✅ Security best practices
+- ✅ Backup strategies
+- ✅ Monitoring setup (Prometheus/Grafana)
+
+---
+
+## 🚀 Quick Start (Legacy)
+
+If you still want to use this legacy guide:
+
+### **Ubuntu:**
 ```bash
+./setup.sh
+sudo systemctl start cryptoalgobot
 sudo systemctl status cryptoalgobot
 ```
 
-### Logları Canlı İzleme
-
-```bash
-journalctl -u cryptoalgobot.service -f
-```
-
-### Son 100 Satır Log
-
-```bash
-journalctl -u cryptoalgobot.service -n 100
-```
-
-### Bugünkü Loglar
-
-```bash
-journalctl -u cryptoalgobot.service --since today
-```
-
-### Servis Durdurma
-
-```bash
-sudo systemctl stop cryptoalgobot
-```
-
-### Servis Yeniden Başlatma
-
-```bash
-sudo systemctl restart cryptoalgobot
-```
-
-### Boot'ta Otomatik Başlamayı Aç/Kapat
-
-```bash
-# Enable (otomatik başlat)
-sudo systemctl enable cryptoalgobot
-
-# Disable (otomatik başlatma)
-sudo systemctl disable cryptoalgobot
+### **Windows:**
+```cmd
+setup.bat
+python main.py
 ```
 
 ---
 
-## 🔒 GÜVENLİK ÖZELLİKLERİ
+## 📊 Systemd Service (Ubuntu)
 
-### Systemd Hardening
+The new deployment guide includes a complete systemd service configuration:
 
 ```ini
-NoNewPrivileges=true    # Yeni privilege kazanamaz
-PrivateTmp=true         # Özel /tmp dizini
-User=cryptoalgobot      # Root olmayan kullanıcı
-Restart=always          # Çökme durumunda otomatik restart
-RestartSec=10           # 10 saniye sonra restart
-```
+[Unit]
+Description=CryptoAlgoBot Trading Bot
+After=network.target
 
-### API Key Koruması
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/CryptoBot
+Environment="PATH=/home/ubuntu/CryptoBot/venv/bin"
+ExecStart=/home/ubuntu/CryptoBot/venv/bin/python main.py
+Restart=always
+RestartSec=10
 
-- `.env` dosyası git'e eklenmez (`.gitignore`)
-- API key'ler şifrelenmiş (`.env` içinde)
-- Setup script API key eksikse durur
-
----
-
-## 📝 LOG YÖNETİMİ
-
-### Systemd Journal
-
-```bash
-# Canlı izleme
-journalctl -u cryptoalgobot -f
-
-# Son 1 saat
-journalctl -u cryptoalgobot --since "1 hour ago"
-
-# Belirli tarih aralığı
-journalctl -u cryptoalgobot --since "2026-03-17 00:00:00" --until "2026-03-17 23:59:59"
-
-# Sadece hatalar
-journalctl -u cryptoalgobot -p err
-```
-
-### Bot Log Dosyaları
-
-```bash
-# Log dizini
-ls -la ~/Crypto_Automat/logs/
-
-# Son log
-tail -f ~/Crypto_Automat/logs/bot.log
+[Install]
+WantedBy=multi-user.target
 ```
 
 ---
 
-## 🛠️ SORUN GİDERME
+## 🔍 Troubleshooting
 
-### Servis Başlamıyor
+### **Bot Won't Start**
 
 ```bash
-# Durumu kontrol et
+# Check logs
+sudo journalctl -u cryptoalgobot -n 50
+
+# Check status
 sudo systemctl status cryptoalgobot
 
-# Detaylı log
-journalctl -u cryptoalgobot -n 100 --no-pager
-
-# Manuel başlat (test)
-cd ~/Crypto_Automat
-./venv/bin/python main.py
-```
-
-### Memory Leak
-
-```bash
-# Memory kullanımı
-systemctl show cryptoalgobot | grep Memory
-
-# Restart
+# Restart service
 sudo systemctl restart cryptoalgobot
 ```
 
-### CPU Yüksek
+### **Dashboard Not Accessible**
 
 ```bash
-# CPU kullanımı
-top -u $USER
+# Check firewall
+sudo ufw status
+sudo ufw allow 3000/tcp
 
-# Process ID
-systemctl show cryptoalgobot --property MainPID
+# Check port
+netstat -tulpn | grep 3000
 ```
 
 ---
 
-## 📊 PERFORMANS OPTİMİZASYONU
+## 📞 Support
 
-### Systemd Resource Limits
+For complete deployment documentation and troubleshooting:
 
-`/etc/systemd/system/cryptoalgobot.service` içinde:
-
-```ini
-# CPU priority (daha yüksek = daha fazla CPU)
-Nice=-5
-
-# Max open files
-LimitNOFILE=65535
-
-# Memory limit (opsiyonel)
-# MemoryLimit=2G
-```
-
-### Python Optimizasyonu
-
-```bash
-# Environment variables
-export PYTHONUNBUFFERED=1  # Log buffering kapalı
-export PYTHONOPTIMIZE=2    # Optimizasyon seviyesi
-```
+**[knowledge/workflows/deployment_guide.md](knowledge/workflows/deployment_guide.md)**
 
 ---
 
-## 🔄 GÜNCELLEME
-
-### Kod Güncellemesi
-
-```bash
-cd ~/Crypto_Automat
-git pull origin main
-
-# Restart
-sudo systemctl restart cryptoalgobot
-```
-
-### Bağımlılık Güncellemesi
-
-```bash
-cd ~/Crypto_Automat
-./venv/bin/pip install -r requirements.txt --upgrade
-
-# Restart
-sudo systemctl restart cryptoalgobot
-```
-
----
-
-## 📈 İZLEME VE ALARM
-
-### Health Check Script
-
-```bash
-#!/bin/bash
-# health_check.sh
-
-if ! systemctl is-active --quiet cryptoalgobot; then
-    echo "CRITICAL: CryptoAlgoBot is down!"
-    # Alerting (email, slack, telegram)
-fi
-```
-
-### Cron Job (Her 5 dakikada)
-
-```bash
-crontab -e
-
-# Her 5 dakikada health check
-*/5 * * * * /home/user/Crypto_Automat/health_check.sh
-```
-
----
-
-## 🎯 DEPLOYMENT CHECKLIST
-
-- [ ] Ubuntu 20.04/22.04 LTS
-- [ ] Python 3.10+
-- [ ] 4GB+ RAM
-- [ ] 50GB+ Disk
-- [ ] Internet bağlantısı
-- [ ] Binance API keys
-- [ ] `.env` dosyası yapılandırıldı
-- [ ] `setup.sh` çalıştırıldı
-- [ ] Servis aktif (`systemctl status`)
-- [ ] Loglar görünüyor (`journalctl -f`)
-- [ ] Boot'ta otomatik başlama (`systemctl enable`)
-
----
-
-## 📞 DESTEK
-
-### Log Gönderme
-
-```bash
-# Son 200 satır log
-journalctl -u cryptoalgobot -n 200 > bot_log.txt
-
-# Sistem bilgisi
-uname -a > system_info.txt
-python3 --version >> system_info.txt
-
-# GitHub issue aç
-# Log dosyalarını ekle
-```
-
-### Yaygın Hatalar
-
-| Hata | Çözüm |
-|------|-------|
-| `API key eksik` | `.env` dosyasını düzenle |
-| `Servis başlamıyor` | `journalctl -u cryptoalgobot -n 100` |
-| `Memory leak` | `sudo systemctl restart cryptoalgobot` |
-| `Bağımlılık hatası` | `./venv/bin/pip install -r requirements.txt` |
-
----
-
-## ✅ BAŞARI KRİTERLERİ
-
-- ✅ Servis çalışıyor: `systemctl is-active cryptoalgobot` → `active`
-- ✅ Loglar görünüyor: `journalctl -u cryptoalgobot -f` → Canlı log akışı
-- ✅ Boot'ta başlıyor: `systemctl is-enabled cryptoalgobot` → `enabled`
-- ✅ Auto-recovery çalışıyor: `kill -9 <PID>` → Otomatik restart
-
----
-
-**Son Güncelleme:** 2026-03-17  
-**Versiyon:** 2026.03  
-**Test Edildi:** Ubuntu 20.04 LTS, 22.04 LTS
+**Last Updated:** March 2026  
+**Version:** v4.1.0  
+**Status:** Production Ready ✅
