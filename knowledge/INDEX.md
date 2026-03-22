@@ -1,15 +1,15 @@
 # 📚 CryptoAlgoBot Knowledge Base
 
-**Version:** v4.0 (Production-Ready)
-**Last Update:** March 2026
-**Status:** ✅ Production Ready (14/14 E2E Tests Passed)
+**Version:** v4.1.0 (Production-Ready)  
+**Last Update:** March 2026  
+**Status:** ✅ Production Ready (14/14 E2E Tests Passed)  
 **Architecture:** Event-Driven (Olay Güdümlü)
 
 ---
 
 ## 🎯 Overview
 
-This knowledge base contains comprehensive technical documentation for CryptoAlgoBot v4.0, a production-ready cryptocurrency trading bot with event-driven architecture, ML integration, and realistic execution simulation.
+This knowledge base contains comprehensive technical documentation for CryptoAlgoBot v4.1.0, a production-ready cryptocurrency trading bot with event-driven architecture, ML integration, and realistic execution simulation.
 
 **Key Features:**
 - ✅ **Event-Driven Architecture:** Pub/Sub pattern (loose coupling)
@@ -18,6 +18,11 @@ This knowledge base contains comprehensive technical documentation for CryptoAlg
 - ✅ **Risk Engine:** Position sizing, dynamic leverage, kill switch
 - ✅ **Paper Trader:** Fee + slippage simulation, trailing stop
 - ✅ **Modular API:** FastAPI routers, services, schemas
+- ✅ **Circuit Breaker:** Fault tolerance, auto-recovery
+- ✅ **Graceful Shutdown:** 7-step safe shutdown
+- ✅ **Structured Logging:** JSON + colored console
+- ✅ **ML Overfitting Protection:** Auto-regularization
+- ✅ **Health Check:** System monitoring
 
 ---
 
@@ -107,6 +112,11 @@ knowledge/
 | **[ML Integration](features/ml_integration.md)** | XGBoost + RF, Triple Barrier Method | ✅ NEW v4.0 |
 | **[Parquet Data Lake](features/parquet_data_lake.md)** | MTF-Daily partition, Async I/O, UTC standardization | ✅ NEW v4.0 |
 | **[Risk Engine](features/risk_engine.md)** | Position sizing, dynamic leverage, kill switch | ✅ UPDATED v4.0 |
+| **[Circuit Breaker](features/circuit_breaker.md)** | Fault tolerance, auto-recovery, cascade failure prevention | ✅ NEW v4.1 |
+| **[Graceful Shutdown](features/graceful_shutdown.md)** | 7-step safe shutdown, position protection | ✅ NEW v4.1 |
+| **[Structured Logging](features/structured_logging.md)** | JSON + colored console, ELK Stack compatible | ✅ NEW v4.1 |
+| **[ML Overfitting Protection](features/ml_overfitting_protection.md)** | Auto-regularization, 4-mode system | ✅ NEW v4.1 |
+| **[Health Check Endpoint](features/health_check_endpoint.md)** | System monitoring, Prometheus/Grafana integration | ✅ NEW v4.1 |
 | [Position Manager](features/position_manager.md) | Position lifecycle | ✅ Active |
 | [Bot Manager](features/bot_manager.md) | Bot orchestration | ✅ Active |
 | [ATR Trailing Stop](features/ATR_TRAILING_STOP_SYSTEM.md) | ATR-based trailing stop | ✅ Active |
