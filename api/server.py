@@ -43,20 +43,32 @@ async def lifespan(app: FastAPI):
     # ===== STARTUP =====
     logger.info("🚀 FastAPI Sunucusu başlatılıyor...")
 
-    # 1. Event Bus Başlat
+    # ========================================================================
+    # KRİTİK: Event Handler'ları ÖNCE kaydet (Event Loss Önleme)
+    # ========================================================================
+    # 1. PaperTrader Handler'ları ÖNCE kaydet (event'ler başlamadan)
+    logger.info("📬 [CRITICAL] Event handler'lar kayıt ediliyor...")
+    await paper_engine.start_event_handlers()
+    
+    # 2. Event Bus Başlat (handler'lar hazır)
+    logger.info("🚀 Event Bus başlatılıyor...")
     from shared.events import event_bus
     await event_bus.start(num_workers=5)
 
-    # 2. PaperTrader Handler'ları Kaydet
-    await paper_engine.start_event_handlers()
-
     # 3. Veritabanı bağlantısı
+    logger.info("💾 Veritabanı bağlantısı başlatılıyor...")
     await db_manager.connect()
+    
+    # 4. Connection verify (2 saniye bekle - DB hazır olsun)
+    logger.info("⏳ Veritabanı bağlantısı doğrulanıyor (2s)...")
+    await asyncio.sleep(2)
 
-    # 4. Yarım kalan indirme görevlerini geri yükle
+    # 5. Yarım kalan indirme görevlerini geri yükle
+    logger.info("📁 İndirme görevleri yükleniyor...")
     await exchange_manager.load_tasks_from_db()
 
-    # 5. Bot task'larını başlat
+    # 6. Bot task'larını başlat
+    logger.info("🚀 Bot task'ları başlatılıyor...")
     # ÖNCE: config.yaml'dan oku
     symbols = CONFIG.get('trading', {}).get('symbols', [])
 

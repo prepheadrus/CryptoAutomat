@@ -53,6 +53,20 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Veritabanı Başlatma Hatası: {e}")
 
+    async def ensure_connected(self):
+        """
+        Bağlantıyı doğrula, yoksa otomatik başlat.
+        Her DB işlemi öncesi çağrılmalı.
+        """
+        if self.engine_type == "sqlite":
+            if not self.sqlite_conn:
+                logger.warning("⚠️ [DB] SQLite bağlantısı yok, başlatılıyor...")
+                await self.connect()
+        elif self.engine_type == "postgres":
+            if not self.db_pool:
+                logger.warning("⚠️ [DB] PostgreSQL bağlantısı yok, başlatılıyor...")
+                await self.connect()
+
     async def initialize_db(self):
         """Gerekli tabloları oluşturur ve şema hatalarını otomatik düzeltir."""
         # 1. Önce şema doğrulama ve migration (Cross-platform uyumluluk için kritik)

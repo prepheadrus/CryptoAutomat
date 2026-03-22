@@ -174,6 +174,18 @@ async function loadDashboard() {
 
         console.log('📊 [DASHBOARD] Metrics loaded');
 
+        // ============================================
+        // SYMBOL CONFIGURATION CHECK
+        // ============================================
+        // İlk yüklemede sembol kontrolü yap
+        if (!window._symbolCheckDone) {
+            const symbols = await api.getTrackedSymbols();
+            if (!symbols || symbols.length === 0) {
+                showToast('⚠️ Hiçbir sembol yapılandırılmamış! Veri Laboratuvarı\'ndan sembol ekleyin.', 'warning');
+                window._symbolCheckDone = true;
+            }
+        }
+
         // Render positions and update performance metrics
         if (metrics.positions) {
             renderPositions(metrics.positions);
