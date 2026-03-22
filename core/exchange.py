@@ -973,7 +973,8 @@ class ExchangeManager:
                     candle_age_seconds = (current_time - last_candle_time).total_seconds()
 
                     # Mum kapanışına ne kadar kaldı?
-                    candle_close_threshold = candle_duration_minutes * 60 * 0.95  # %95 kapanmış
+                    # 🔧 DÜZELTME: %95 → %50 (mum ortasında da sinyal üretsin)
+                    candle_close_threshold = candle_duration_minutes * 60 * 0.50  # %50 kapanmış
 
                     if candle_age_seconds < candle_close_threshold:
                         # Mum henüz kapanmadı, sinyali atla

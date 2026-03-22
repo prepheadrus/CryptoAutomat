@@ -25,6 +25,7 @@ Dosya Yapısı:
 """
 
 import os
+import time  # 🔒 File lock retry için
 import pandas as pd
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple
@@ -220,45 +221,69 @@ class DataLakeStorage:
 
         file_path = self._get_file_path(symbol, timeframe)
 
-        try:
-            # Dizin oluştur
-            file_path.parent.mkdir(parents=True, exist_ok=True)
+        # 🔒 WINDOWS FILE LOCK KORUMASI: 3 deneme, exponential backoff
+        max_retries = 3
+        retry_delay = 0.5  # saniye
+        
+        for attempt in range(max_retries):
+            try:
+                # Dizin oluştur
+                file_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Data integrity sağla
-            df = self._ensure_integrity(df, timeframe)
+                # Data integrity sağla
+                df = self._ensure_integrity(df, timeframe)
 
-            if append and file_path.exists():
-                # Mevcut dosyaya ekle
-                try:
-                    existing_df = pd.read_parquet(file_path)
-                except Exception as read_err:
-                    # Bozuk dosyayı sil ve yeniden başlat
-                    logger.warning(f"⚠️ [DATA LAKE] Bozuk Parquet dosyası, siliniyor: {file_path} - {read_err}")
-                    file_path.unlink()
-                    existing_df = pd.DataFrame()
+                if append and file_path.exists():
+                    # Mevcut dosyaya ekle
+                    try:
+                        existing_df = pd.read_parquet(file_path)
+                    except Exception as read_err:
+                        # Bozuk dosyayı sil ve yeniden başlat
+                        logger.warning(f"⚠️ [DATA LAKE] Bozuk Parquet dosyası, siliniyor: {file_path} - {read_err}")
+                        file_path.unlink()
+                        existing_df = pd.DataFrame()
 
-                # Duplicate kayıtları temizle
-                if not existing_df.empty:
-                    combined_df = pd.concat([existing_df, df], ignore_index=True)
-                    combined_df = combined_df.drop_duplicates(subset=['timestamp'], keep='last')
+                    # Duplicate kayıtları temizle
+                    if not existing_df.empty:
+                        combined_df = pd.concat([existing_df, df], ignore_index=True)
+                        combined_df = combined_df.drop_duplicates(subset=['timestamp'], keep='last')
+                    else:
+                        combined_df = df
+
+                    # Tekrar integrity kontrolü
+                    combined_df = self._ensure_integrity(combined_df, timeframe)
+
+                    combined_df.to_parquet(file_path, compression=self.COMPRESSION, index=False)
+                    logger.info(f"💾 [DATA LAKE] {symbol} {timeframe} → {len(df)} mum EKLENDI (toplam: {len(combined_df)} mum)")
                 else:
-                    combined_df = df
+                    # Yeni dosya yaz
+                    df.to_parquet(file_path, compression=self.COMPRESSION, index=False)
+                    logger.info(f"💾 [DATA LAKE] {symbol} {timeframe} → {len(df)} mum KAYDEDILDI")
 
-                # Tekrar integrity kontrolü
-                combined_df = self._ensure_integrity(combined_df, timeframe)
-
-                combined_df.to_parquet(file_path, compression=self.COMPRESSION, index=False)
-                logger.info(f"💾 [DATA LAKE] {symbol} {timeframe} → {len(df)} mum EKLENDI (toplam: {len(combined_df)} mum)")
-            else:
-                # Yeni dosya yaz
-                df.to_parquet(file_path, compression=self.COMPRESSION, index=False)
-                logger.info(f"💾 [DATA LAKE] {symbol} {timeframe} → {len(df)} mum KAYDEDILDI")
-
-            return True
-
-        except Exception as e:
-            logger.error(f"❌ [DATA LAKE] Dosya yazma hatası: {e}")
-            return False
+                return True
+                
+            except PermissionError as perm_err:
+                # Windows file lock hatası - bekle ve tekrar dene
+                if attempt < max_retries - 1:
+                    logger.warning(f"⚠️ [DATA LAKE] File lock hatası ({attempt+1}/{max_retries}), {retry_delay}s bekleniyor... {file_path}")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    logger.error(f"❌ [DATA LAKE] Dosya yazma hatası (File Lock): {perm_err} - {file_path}")
+                    return False
+            except FileNotFoundError as not_found_err:
+                # Dosya silinmiş, yeniden oluştur
+                if attempt < max_retries - 1:
+                    logger.warning(f"⚠️ [DATA LAKE] Dosya bulunamadı ({attempt+1}/{max_retries}), yeniden deneniyor... {file_path}")
+                    time.sleep(retry_delay)
+                else:
+                    logger.error(f"❌ [DATA LAKE] Dosya yazma hatası (Not Found): {not_found_err} - {file_path}")
+                    return False
+            except Exception as e:
+                logger.error(f"❌ [DATA LAKE] Dosya yazma hatası: {e} - {file_path}")
+                return False
+        
+        return False
 
     def _ensure_integrity(self, df: pd.DataFrame, timeframe: str) -> pd.DataFrame:
         """
