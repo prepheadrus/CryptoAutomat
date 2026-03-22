@@ -1,24 +1,20 @@
 @echo off
-REM ==============================================================================
-REM CryptoAlgoBot - Windows Başlatma Scripti
-REM ==============================================================================
-REM Bu script botu başlatır ve dashboard'u tarayıcıda açar.
-REM Kullanım: start_bot.bat dosyasına çift tıklayın
-REM ==============================================================================
+title CryptoAlgoBot
+color 0A
 
 echo.
 echo ==========================================
-echo   CryptoAlgoBot Başlatılıyor...
+echo   CryptoAlgoBot - Windows Baslatma
 echo ==========================================
 echo.
 
-REM 1. Script dizinine git
+REM Script dizinine git
 cd /d %~dp0
 
-REM 2. Python ve Virtual Environment kontrolü
+REM Virtual Environment kontrolu
 if not exist "venv\Scripts\python.exe" (
-    echo [ERROR] Virtual environment bulunamadi!
-    echo [ERROR] Lutfen once setup.bat dosyasini calistirin.
+    echo [HATA] Virtual environment bulunamadi!
+    echo [HATA] Lutfen once setup.bat dosyasini calistirin.
     echo.
     pause
     exit /b 1
@@ -27,48 +23,49 @@ if not exist "venv\Scripts\python.exe" (
 echo [OK] Virtual environment bulundu.
 echo.
 
-REM 3. Virtual Environment'i aktif et (sessiz)
-call venv\Scripts\activate.bat
-
-REM 4. .env dosyasi kontrolu
+REM .env kontrolu
 if not exist ".env" (
-    echo [WARNING] .env dosyasi bulunamadi!
-    echo [WARNING] API anahtarlari olmadan bot calismayabilir.
-    echo [INFO] .env.example dosyasindan .env olusturuluyor...
+    echo [UYARI] .env dosyasi yok! Otomatik olusturuluyor...
     copy .env.example .env >nul
-    echo [INFO] .env dosyasi olusturuldu. Lutfen API anahtarlarini duzenleyin!
+    echo [OK] .env olusturuldu. API anahtarlarini duzenleyin!
     echo.
 )
 
-REM 5. config.yaml kontrolu
+REM config.yaml kontrolu
 if not exist "config.yaml" (
-    echo [ERROR] config.yaml dosyasi bulunamadi!
-    echo [ERROR] Lutfen config.example.yaml dosyasini config.yaml olarak kopyalayin.
+    echo [HATA] config.yaml bulunamadi!
+    echo [HATA] config.example.yaml'i config.yaml olarak kopyalayin.
     pause
     exit /b 1
 )
 
-echo [OK] Yapilandirma dosyalari bulundu.
+echo [OK] Yapilandirma hazir.
 echo.
-
-REM 6. Botu baslat
 echo ==========================================
 echo   Bot baslatiliyor...
 echo ==========================================
 echo.
-echo [INFO] Dashboard: http://localhost:3000
-echo [INFO] Durdurmak icin: CTRL+C veya pencereyi kapat
-echo.
-echo ==========================================
+echo [BİLGİ] Dashboard: http://localhost:3000
+echo [BİLGİ] Tarayici otomatik acilacak...
+echo [BİLGİ] Durdurmak icin: Bu pencereyi kapat veya CTRL+C
 echo.
 
-REM Python main.py'i calistir
-python main.py
+REM Botu arka planda baslat
+start /B call venv\Scripts\activate.bat ^&^& python main.py
 
-REM Bot kapandiginda
+REM 5 saniye bekle (bot baslasin)
+timeout /t 5 /nobreak >nul
+
+REM Tarayiciyi ac
+echo [OK] Dashboard aciliyor...
+start http://localhost:3000
+
 echo.
 echo ==========================================
-echo   Bot durduruldu.
+echo   Bot calisiyor...
 echo ==========================================
+echo.
+echo NOT: Bot penceresini acik tutun!
+echo     Kapatmak icin pencereyi kapatin veya CTRL+C yapin.
 echo.
 pause

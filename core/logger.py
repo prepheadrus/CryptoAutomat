@@ -87,7 +87,7 @@ def setup_logger(name='CryptoAlgoBot', use_json: Optional[bool] = None):
     
     Args:
         name: Logger adı
-        use_json: True ise JSON formatı, False ise renkli konsol.
+        use_json: True için JSON, False için renkli konsol.
                   None ise config.yaml'dan otomatik (production=True, development=False)
     """
     logger = logging.getLogger(name)
@@ -97,10 +97,10 @@ def setup_logger(name='CryptoAlgoBot', use_json: Optional[bool] = None):
     log_level = getattr(logging, log_level_str, logging.INFO)
     logger.setLevel(log_level)
 
-    # JSON formatı kullanılsın mı?
+    # JSON formatı kullanılsın mı? (default: False - renkli konsol)
     if use_json is None:
         environment = CONFIG.get('bot', {}).get('environment', 'development')
-        use_json = (environment == 'production')
+        use_json = (environment == 'production')  # Sadece production'da JSON
 
     # Eğer önceden eklenmiş bir handler varsa, tekrar ekleme
     if not logger.handlers:
