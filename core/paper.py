@@ -181,7 +181,7 @@ class PaperTrader:
 
             # Sinyal tipi belirle
             signal_type = "LONG" if signal == 2 else "SHORT" if signal == 0 else "HOLD"
-            
+
             # HOLD (Bekle) ise sadece DEBUG düzeyinde logla (Terminali kirletmez)
             if signal == 1:
                 logger.debug(f"📬 {symbol} ({bot_id}) Sinyal: {signal_type}")
@@ -195,32 +195,52 @@ class PaperTrader:
 
             # Bot çalışıyor mu kontrol et
             if not self.bot_manager.is_bot_running(bot_id):
-                logger.warning(f"Bot çalışmıyor: {bot_id}")
+                logger.warning(f"❌ [SİNYAL RED] Bot çalışmıyor: {bot_id}")
                 return
 
             # Strateji al
             strategy = self.strategies.get(symbol)
             if strategy is None:
-                logger.warning(f"Strateji bulunamadı: {symbol}")
+                logger.warning(f"❌ [SİNYAL RED] Strateji bulunamadı: {symbol}")
                 return
 
-            # HTF filter - Servis üzerinden çağrı
-            if not self.signal_validator.validate_htf_trend(symbol, htf_trends, signal):
+            # ============================================
+            # HTF FİLTRE - Detaylı loglama
+            # ============================================
+            htf_passed = self.signal_validator.validate_htf_trend(symbol, htf_trends, signal)
+            if not htf_passed:
+                logger.warning(f"❌ [SİNYAL RED] HTF veto: {symbol} {signal_type} | HTF={htf_trend}")
+                logger.warning(f"   ÇÖZÜM: HTF ayarlarını config.yaml'dan kapat veya HTF timeframe'i değiştir")
                 return
+            else:
+                logger.debug(f"✅ [HTF] {symbol} {signal_type} geçti: HTF={htf_trend}")
+
+            # ============================================
+            # RISK ENGINE KONTROL - Detaylı loglama
+            # ============================================
+            open_positions_count = len(self.position_manager.get_all_positions())
+            risk_ok = self.risk_engine.can_open_position(open_positions_count)
             
-            # Risk kontrolü
-            if not self.risk_engine.can_open_position(len(self.position_manager.get_all_positions())):
-                logger.warning("Risk kontrolü başarısız")
+            if not risk_ok:
+                logger.warning(f"❌ [SİNYAL RED] Risk kontrolü başarısız: {symbol}")
+                logger.warning(f"   Açık pozisyon sayısı: {open_positions_count}")
+                logger.warning(f"   Max pozisyon limiti: {self.risk_engine.config.max_open_positions}")
+                logger.warning(f"   Kill switch aktif: {self.risk_engine.kill_switch_active}")
+                logger.warning(f"   Ardışık kayıplar: {self.risk_engine.consecutive_losses}")
+                logger.warning(f"   Max consecutive losses: {self.risk_engine.config.max_consecutive_losses}")
+                logger.warning(f"   ÇÖZÜM: config.yaml → risk_management → kill_switch.enabled = false")
                 return
-            
+            else:
+                logger.debug(f"✅ [RISK] {symbol} Risk kontrolü geçti: {open_positions_count}/{self.risk_engine.config.max_open_positions} pozisyon")
+
             # Pozisyon zaten var mı?
             existing_position = self.position_manager.get_position(bot_id)
             if existing_position:
                 logger.info(f"ℹ️ Pozisyon zaten açık: {bot_id}")
                 return
-            
+
             # ============================================
-            # ML KARAR MOTORU (ML CONFIRMATION LAYER)
+            # ML KARAR MOTORU - Detaylı loglama
             # ============================================
             # Model flag güncelleniyor (çalışma zamanı senkronizasyonu)
             self.signal_validator.ml_enabled = self.ml_enabled
@@ -242,9 +262,19 @@ class PaperTrader:
                 'has_position': False  # Varsayılan: Pozisyon yok
             }
 
-            # ML onayı yoksa dur
+            # ML onayı yoksa dur - DETAYLI LOG
             if not ml_confirmed:
+                ml_threshold = CONFIG.get('ml', {}).get('confidence_threshold', 0.65)
+                logger.warning(f"❌ [SİNYAL RED] ML onayı yok: {symbol} {signal_type}")
+                logger.warning(f"   ML Recommendation: {ml_rec} (normalized: {ml_rec_norm})")
+                logger.warning(f"   ML Confidence: {ml_confidence:.2f} (threshold: {ml_threshold:.2f})")
+                logger.warning(f"   ML Enabled: {self.ml_enabled}")
+                logger.warning(f"   ÇÖZÜM 1: ML model eğit (Dashboard → ML Training)")
+                logger.warning(f"   ÇÖZÜM 2: config.yaml → ml.enabled = false (sadece teknik sinyaller)")
+                logger.warning(f"   ÇÖZÜM 3: config.yaml → ml.confidence_threshold = 0.5 (daha düşük threshold)")
                 return
+            else:
+                logger.info(f"✅ [ML] {symbol} ML onayı alındı: {ml_rec} (confidence: {ml_confidence:.2f})")
 
             # ============================================
             # POZİSYON AÇ (PositionManager'a delegate)

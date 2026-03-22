@@ -122,19 +122,49 @@ async def lifespan(app: FastAPI):
     yield
 
     # ===== SHUTDOWN =====
-    logger.info("🛑 FastAPI Sunucusu kapatılıyor...")
+    logger.info("")
+    logger.info("🛑 [API] GÜVENLI KAPATMA BAŞLATILIYOR...")
+    logger.info("=" * 60)
 
-    # Event Bus Durdur
+    # 1. Yeni işlem almayı durdur
+    logger.info("1️⃣ [API] Yeni işlem alımı durduruluyor...")
+    if hasattr(paper_engine, 'accepting_new_trades'):
+        paper_engine.accepting_new_trades = False
+    logger.info("✅ [API] Yeni işlem alımı durduruldu")
+
+    # 2. Event Bus Durdur
+    logger.info("2️⃣ [API] Event Bus durduruluyor...")
     from shared.events import event_bus
     await event_bus.stop()
+    logger.info("✅ [API] Event Bus durduruldu")
 
-    # Borsa bağlantısını kapat
+    # 3. Borsa bağlantısını kapat
+    logger.info("3️⃣ [API] Borsa bağlantısı kapatılıyor...")
     await exchange_manager.close()
-    logger.info("✅ Borsa bağlantısı kapatıldı")
+    logger.info("✅ [API] Borsa bağlantısı kapatıldı")
 
-    # Veritabanı bağlantısını kapat
+    # 4. Veritabanı bağlantısını kapat
+    logger.info("4️⃣ [API] Veritabanı bağlantısı kapatılıyor...")
     await db_manager.close()
-    logger.info("✅ Veritabanı bağlantısı kapatıldı")
+    logger.info("✅ [API] Veritabanı bağlantısı kapatıldı")
+
+    # 5. Circuit Breaker istatistikleri
+    logger.info("5️⃣ [API] Circuit Breaker istatistikleri:")
+    try:
+        from core.circuit_breaker import get_all_breakers_stats
+        stats = get_all_breakers_stats()
+        for name, breaker_stats in stats.items():
+            logger.info(
+                f"   {name}: state={breaker_stats['state']}, "
+                f"failures={breaker_stats['total_failures']}, "
+                f"rejected={breaker_stats['total_rejected']}"
+            )
+    except Exception:
+        pass
+
+    logger.info("=" * 60)
+    logger.info("✅ [API] GÜVENLİ KAPATMA TAMAMLANDI")
+    logger.info("")
 
 
 # ============================================================================

@@ -126,10 +126,15 @@ class RiskEngine:
         # Risk yüzdesini belirle
         if risk_percentage is None:
             risk_percentage = self.config.max_risk_per_trade * 100
-        
+
         # Validasyon
+        original_risk = risk_percentage
         if risk_percentage <= 0.0 or risk_percentage > 5.0:
-            risk_percentage = 1.0 # Güvenli fallback
+            logger.warning(
+                f"⚠️ [RISK] Geçersiz risk yüzdesi: {original_risk:.2f}%, "
+                f"varsayılan %1.0 kullanılıyor (max_risk_per_trade={self.config.max_risk_per_trade:.2%})"
+            )
+            risk_percentage = 1.0  # Güvenli fallback
         
         # Risk miktarı ($)
         risk_amount = account_balance * (risk_percentage / 100.0)

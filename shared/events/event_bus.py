@@ -343,11 +343,15 @@ class EventBus:
     async def _worker(self, worker_name: str):
         """
         Event worker (internal).
-        
+
         Queue'dan event'leri alır ve handler'lara gönderir.
+        Kritik hatalarda worker yeniden başlatılır.
         """
         logger.debug(f"👷 {worker_name} başlatıldı")
         
+        consecutive_errors = 0
+        max_consecutive_errors = 10
+
         while self._running:
             try:
                 # Queue'dan event al (timeout ile)
@@ -357,21 +361,47 @@ class EventBus:
                         timeout=1.0
                     )
                 except asyncio.TimeoutError:
+                    consecutive_errors = 0  # Reset counter on success
                     continue
-                
+
                 # Event işle
                 await self._process_event(event, worker_name)
-                
+
                 # Queue'ya geri bildir
                 self._event_queue.task_done()
-                
+                consecutive_errors = 0  # Reset counter on success
+
             except asyncio.CancelledError:
                 logger.debug(f"👷 {worker_name} iptal edildi")
                 break
+            except (MemoryError, ConnectionError, OSError) as critical_err:
+                # KRİTİK HATA: Worker yeniden başlatılmalı
+                consecutive_errors += 1
+                logger.critical(
+                    f"🚨 [EVENT BUS] KRİTİK HATA ({worker_name}): {critical_err} | "
+                    f"Worker yeniden başlatılıyor... (Hata: {consecutive_errors}/{max_consecutive_errors})"
+                )
+                
+                if consecutive_errors >= max_consecutive_errors:
+                    logger.critical(f"🚨 [EVENT BUS] {worker_name} çok fazla kritik hata, devre dışı bırakılıyor")
+                    self._error_count += consecutive_errors
+                    break
+                
+                # Worker'ı yeniden başlat
+                await asyncio.sleep(1.0)
+                asyncio.create_task(self._worker(f"{worker_name}_restart"))
+                break
             except Exception as e:
-                logger.error(f"👷 {worker_name} hatası: {e}")
+                # Normal hata
+                consecutive_errors += 1
+                logger.error(f"👷 {worker_name} hatası: {e} (Artış: {consecutive_errors})")
+                
+                if consecutive_errors >= max_consecutive_errors:
+                    logger.critical(f"🚨 [EVENT BUS] {worker_name} art arda {consecutive_errors} hata, yeniden başlatılıyor")
+                    consecutive_errors = 0
+                
                 await asyncio.sleep(0.1)  # CPU spike önleme
-        
+
         logger.debug(f"👷 {worker_name} durduruldu")
     
     async def _process_event(self, event: Event, worker_name: str):

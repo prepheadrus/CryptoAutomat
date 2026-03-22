@@ -1092,15 +1092,31 @@ async function saveRiskSettings() {
         return;
     }
 
+    if (data.max_leverage < 1 || data.max_leverage > 50) {
+        showToast('❌ Kaldıraç 1x - 50x arasında olmalı!', 'error');
+        return;
+    }
+
+    if (data.max_open_positions < 1 || data.max_open_positions > 20) {
+        showToast('❌ Max pozisyon 1 - 20 arasında olmalı!', 'error');
+        return;
+    }
+
     try {
+        console.log('💾 [SETTINGS] Risk ayarları gönderiliyor:', data);
         const result = await api.saveRiskSettings(data);
+        console.log('💾 [SETTINGS] Sonuç:', result);
 
         if (result.status === 'success') {
             showToast('✅ Risk ayarları güncellendi (Hot-Reload)', 'success');
+            
+            // Başarı sonrası config'i yeniden yükle
+            await loadRiskSettings();
         } else {
             showToast('❌ ' + result.message, 'error');
         }
     } catch (error) {
+        console.error('❌ [SETTINGS] Risk save error:', error);
         showToast('❌ Kaydetme hatası: ' + error.message, 'error');
     }
 }
@@ -1413,10 +1429,19 @@ async function loadTradeHistory() {
         const data = await api.getTrades();
         const trades = data.trades || [];
 
+        console.log(`📜 [HISTORY] API Response:`, data);
         console.log(`📜 [HISTORY] ${trades.length} işlem yüklendi`);
+        
+        if (trades.length === 0) {
+            console.warn('⚠️ [HISTORY] Hiç işlem yok!');
+            console.log('API Count:', data.count);
+            console.log('API Status:', data.status);
+        }
+        
         renderTradeHistory(trades);
     } catch (error) {
         console.error('❌ [HISTORY] Load error:', error);
+        console.error('Stack trace:', error.stack);
         const tbody = document.getElementById('history-body');
         if (tbody) {
             tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:40px; color:var(--neon-red);">Hata: ${error.message}</td></tr>`;

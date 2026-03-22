@@ -26,6 +26,61 @@ from api.schemas.config import (
 router = APIRouter(prefix="/api/v1", tags=["System"])
 
 
+# Global start time for uptime calculation
+import time
+START_TIME = time.time()
+
+
+@router.get("/health", operation_id="get_health_status")
+async def get_health_status() -> Dict[str, Any]:
+    """
+    Sistem sağlık durumunu döner.
+    Monitoring araçları (Prometheus, Grafana, Uptime Kuma) için.
+    """
+    try:
+        # Event Bus durumu
+        from shared.events import event_bus
+        event_bus_status = "running" if event_bus.running else "stopped"
+        
+        # Database durumu
+        from data.database import db_manager
+        db_status = "connected" if db_manager.sqlite_conn or db_manager.db_pool else "disconnected"
+        
+        # Exchange bağlantısı
+        exchange_status = "connected" if exchange_manager.exchange else "disconnected"
+        
+        # Aktif botlar
+        active_bots_count = len(paper_engine.active_bots) if hasattr(paper_engine, 'active_bots') else 0
+        
+        # Uptime hesaplama
+        uptime_seconds = time.time() - START_TIME
+        uptime_hours = uptime_seconds / 3600
+        
+        return {
+            "status": "healthy",
+            "timestamp": time.time(),
+            "components": {
+                "event_bus": event_bus_status,
+                "database": db_status,
+                "exchange": exchange_status,
+            },
+            "metrics": {
+                "active_bots": active_bots_count,
+                "uptime_hours": round(uptime_hours, 2),
+                "uptime_seconds": int(uptime_seconds)
+            },
+            "version": "4.0.0"
+        }
+    except Exception as e:
+        logger.error(f"Health check error: {e}")
+        return {
+            "status": "unhealthy",
+            "timestamp": time.time(),
+            "error": str(e),
+            "version": "4.0.0"
+        }
+
+
 @router.get("/status", operation_id="get_system_status")
 async def get_system_status() -> Dict[str, Any]:
     """
@@ -196,6 +251,8 @@ async def update_risk_config(request: RiskConfigUpdate) -> Dict[str, Any]:
         CONFIG['risk_management']['max_leverage'] = request.max_leverage
         CONFIG['risk_management']['max_open_positions'] = request.max_open_positions
         CONFIG['risk_management']['max_consecutive_losses'] = request.max_consecutive_losses
+        CONFIG['risk_management']['kill_switch'] = CONFIG.get('kill_switch', {})
+        CONFIG['risk_management']['kill_switch']['enabled'] = request.kill_switch_enabled
 
         # 2. YAML persistence
         config_path = "config.yaml"
@@ -208,7 +265,11 @@ async def update_risk_config(request: RiskConfigUpdate) -> Dict[str, Any]:
                 'max_risk_per_trade_percent': request.max_risk_per_trade_percent,
                 'max_leverage': request.max_leverage,
                 'max_open_positions': request.max_open_positions,
-                'max_consecutive_losses': request.max_consecutive_losses
+                'max_consecutive_losses': request.max_consecutive_losses,
+                'kill_switch': {
+                    'enabled': request.kill_switch_enabled,
+                    'max_consecutive_losses': request.max_consecutive_losses
+                }
             })
 
             with open(config_path, 'w', encoding='utf-8') as f:
@@ -220,8 +281,18 @@ async def update_risk_config(request: RiskConfigUpdate) -> Dict[str, Any]:
             paper_engine.risk_engine.config.max_leverage = request.max_leverage
             paper_engine.risk_engine.config.max_open_positions = request.max_open_positions
             paper_engine.risk_engine.config.max_consecutive_losses = request.max_consecutive_losses
+            
+            # Kill switch hot-reload
+            if request.kill_switch_enabled:
+                paper_engine.risk_engine.kill_switch_active = False  # Reset on config change
+                paper_engine.risk_engine.consecutive_losses = 0
+            paper_engine.risk_engine.config.kill_switch_enabled = request.kill_switch_enabled
 
-        return {"status": "success", "message": "Risk ayarları güncellendi", "config": CONFIG['risk_management']}
+        return {
+            "status": "success", 
+            "message": "Risk ayarları güncellendi", 
+            "config": CONFIG['risk_management']
+        }
     except Exception as e:
         logger.error(f"Risk config update error: {e}")
         return {"status": "error", "message": str(e)}

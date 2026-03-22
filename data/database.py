@@ -274,10 +274,54 @@ class DatabaseManager:
 
             await self.sqlite_conn.commit()
 
+    async def _execute_with_retry(self, func, *args, max_retries=3, **kwargs):
+        """
+        Database işlemlerini retry mekanizması ile yürütür.
+        "database is locked" hatası durumunda exponential backoff ile tekrar dener.
+        
+        Args:
+            func: Çalıştırılacak async fonksiyon
+            args: Fonksiyon argümanları
+            max_retries: Maksimum tekrar deneme sayısı
+            kwargs: Fonksiyon keyword argümanları
+            
+        Returns:
+            Fonksiyon sonucu
+        """
+        attempt = 0
+        while attempt < max_retries:
+            try:
+                return await func(*args, **kwargs)
+            except aiosqlite.OperationalError as e:
+                error_msg = str(e).lower()
+                if "database is locked" in error_msg and attempt < max_retries - 1:
+                    # Exponential backoff: 0.1s, 0.2s, 0.4s...
+                    retry_delay = 0.1 * (2 ** attempt)
+                    logger.warning(
+                        f"⚠️ [DB] Database locked hatası ({attempt + 1}/{max_retries}), "
+                        f"{retry_delay:.1f}s bekleniyor..."
+                    )
+                    await asyncio.sleep(retry_delay)
+                    attempt += 1
+                else:
+                    # Başka bir hata veya son deneme
+                    logger.error(f"❌ [DB] Database işlem hatası: {e}")
+                    raise
+            except Exception as e:
+                # Diğer hataları doğrudan fırlat
+                logger.error(f"❌ [DB] Beklenmeyen hata: {e}")
+                raise
+        
+        # Tüm denemeler başarısız
+        raise aiosqlite.OperationalError(f"Database locked: {max_retries} deneme sonrası başarısız")
+
     async def _execute_with_lock(self, func, *args, **kwargs):
-        """Database işlemlerini lock ile serialize eder (concurrent access önleme)."""
+        """
+        Database işlemlerini lock ile serialize eder (concurrent access önleme).
+        Retry mekanizması ile birleştirilmiştir.
+        """
         async with self._lock:
-            return await func(*args, **kwargs)
+            return await self._execute_with_retry(func, *args, **kwargs)
 
     async def save_kline(self, symbol, kline_data, timeframe='1m'):
         """Veriyi UPSERT (Varsa güncelle yoksa ekle) yöntemiyle kaydeder."""

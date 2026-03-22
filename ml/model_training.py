@@ -86,11 +86,23 @@ def get_model_paths(symbol: str, timeframe: str, base_dir: str = "artifacts/mode
 class ModelTrainer:
     """
     XGBoost + Random Forest Ensemble Model Eğitici Sınıfı
-
+    
     Triple Barrier etiketli veriler üzerinde çok sınıflı sınıflandırma
     (LONG/SHORT/NEUTRAL) yapar ve güven skoru üretir.
     Ensemble (füzyon) yaklaşımı ile daha güvenilir tahminler yapar.
+    
+    OVERFITTING PROTECTION:
+    - Veri seti boyutuna göre dinamik parametreler
+    - Regularization (L1 + L2)
+    - Early stopping
+    - Cross-validation
+    - Maximum depth sınırlaması
     """
+    
+    # Overfitting önleme için minimum veri gereksinimleri
+    MIN_SAMPLES_FOR_COMPLEX_MODEL = 5000
+    MIN_SAMPLES_FOR_MEDIUM_MODEL = 2000
+    MIN_SAMPLES_FOR_SIMPLE_MODEL = 500
 
     def __init__(
         self,
@@ -109,7 +121,9 @@ class ModelTrainer:
         # Random Forest parametreleri
         rf_n_estimators: int = 200,
         rf_max_depth: int = 10,
-        rf_min_samples_split: int = 5
+        rf_min_samples_split: int = 5,
+        # Overfitting protection
+        enable_auto_regularization: bool = True
     ):
         """
         XGBoost modelini başlatır.
@@ -128,24 +142,42 @@ class ModelTrainer:
             n_jobs: Parallel job sayısı (-1 = tüm CPU)
             early_stopping_rounds: Early stopping için round sayısı
             num_class: Sınıf sayısı (3: LONG, NEUTRAL, SHORT)
+            enable_auto_regularization: Veri boyutuna göre otomatik parametre ayarı
         """
+        # Parametreleri kaydet (auto regularization için)
+        self.base_params = {
+            'n_estimators': n_estimators,
+            'max_depth': max_depth,
+            'learning_rate': learning_rate,
+            'subsample': subsample,
+            'colsample_bytree': colsample_bytree,
+            'min_child_weight': min_child_weight,
+            'gamma': gamma,
+            'reg_alpha': reg_alpha,
+            'reg_lambda': reg_lambda,
+            'rf_n_estimators': rf_n_estimators,
+            'rf_max_depth': rf_max_depth
+        }
+        
+        self.enable_auto_regularization = enable_auto_regularization
+        
+        # Veri boyutuna göre parametreler (sonra güncellenecek)
         self.n_estimators = n_estimators
         self.max_depth = max_depth
-        self.learning_rate = learning_rate
-        self.subsample = subsample
-        self.colsample_bytree = colsample_bytree
+        self.rf_max_depth = rf_max_depth
         self.min_child_weight = min_child_weight
         self.gamma = gamma
         self.reg_alpha = reg_alpha
         self.reg_lambda = reg_lambda
+        self.subsample = subsample
+        self.colsample_bytree = colsample_bytree
+        self.rf_n_estimators = rf_n_estimators
+        self.rf_min_samples_split = rf_min_samples_split
+        
+        self.learning_rate = learning_rate
         self.random_state = random_state
         self.n_jobs = n_jobs
         self.num_class = num_class
-
-        # Random Forest parametreleri
-        self.rf_n_estimators = rf_n_estimators
-        self.rf_max_depth = rf_max_depth
-        self.rf_min_samples_split = rf_min_samples_split
 
         # XGBoost modelini başlat
         self.xgb_model = xgb.XGBClassifier(
@@ -181,6 +213,128 @@ class ModelTrainer:
         self.training_metrics = {}
         self.class_mapping = {0: 'SHORT', 1: 'LONG', 2: 'NEUTRAL'}
 
+    def apply_auto_regularization(self, data_size: int):
+        """
+        Veri seti boyutuna göre model parametrelerini otomatik ayarla.
+        Overfitting önleme mekanizması.
+        
+        Args:
+            data_size: Eğitim veri seti boyutu (satır sayısı)
+        """
+        if not self.enable_auto_regularization:
+            logger.info("ℹ️ [ML] Auto regularization kapalı, varsayılan parametreler kullanılıyor")
+            return
+        
+        logger.info(f"📊 [ML] Veri boyutu: {data_size} satır")
+        
+        # Complex model (5000+ satır)
+        if data_size >= self.MIN_SAMPLES_FOR_COMPLEX_MODEL:
+            logger.info("✅ [ML] COMPLEX mod: Büyük veri seti, tam kapasite")
+            self._apply_params(self.base_params)
+        
+        # Medium model (2000-5000 satır)
+        elif data_size >= self.MIN_SAMPLES_FOR_MEDIUM_MODEL:
+            logger.info("⚠️ [ML] MEDIUM mod: Orta veri seti, regularization artırılıyor")
+            medium_params = self.base_params.copy()
+            medium_params.update({
+                'n_estimators': 300,
+                'max_depth': 4,
+                'rf_max_depth': 6,
+                'rf_n_estimators': 150,
+                'learning_rate': 0.05,
+                'subsample': 0.75,
+                'colsample_bytree': 0.75,
+                'reg_alpha': 0.2,
+                'reg_lambda': 2.0
+            })
+            self._apply_params(medium_params)
+        
+        # Simple model (500-2000 satır)
+        elif data_size >= self.MIN_SAMPLES_FOR_SIMPLE_MODEL:
+            logger.info("⚠️ [ML] SIMPLE mod: Küçük veri seti, güçlü regularization")
+            simple_params = self.base_params.copy()
+            simple_params.update({
+                'n_estimators': 200,
+                'max_depth': 3,
+                'rf_max_depth': 4,
+                'rf_n_estimators': 100,
+                'learning_rate': 0.03,
+                'subsample': 0.7,
+                'colsample_bytree': 0.7,
+                'min_child_weight': 5,
+                'gamma': 0.2,
+                'reg_alpha': 0.5,
+                'reg_lambda': 5.0
+            })
+            self._apply_params(simple_params)
+        
+        # Too small (< 500 satır)
+        else:
+            logger.warning(f"⚠️ [ML] VERİ SETİ ÇOK KÜÇÜK ({data_size} satır)! Model eğitimi önerilmez.")
+            logger.warning("   En az 500 satır önerilir, ideal 2000+ satır")
+            ultra_simple_params = self.base_params.copy()
+            ultra_simple_params.update({
+                'n_estimators': 100,
+                'max_depth': 2,
+                'rf_max_depth': 3,
+                'rf_n_estimators': 50,
+                'learning_rate': 0.01,
+                'subsample': 0.6,
+                'colsample_bytree': 0.6,
+                'min_child_weight': 10,
+                'gamma': 0.5,
+                'reg_alpha': 1.0,
+                'reg_lambda': 10.0
+            })
+            self._apply_params(ultra_simple_params)
+        
+        # Model parametrelerini güncelle
+        self._update_models()
+    
+    def _apply_params(self, params: dict):
+        """Parametreleri uygula"""
+        self.n_estimators = params['n_estimators']
+        self.max_depth = params['max_depth']
+        self.rf_max_depth = params['rf_max_depth']
+        self.rf_n_estimators = params['rf_n_estimators']
+        self.learning_rate = params.get('learning_rate', self.learning_rate)
+        self.subsample = params.get('subsample', self.subsample)
+        self.colsample_bytree = params.get('colsample_bytree', self.colsample_bytree)
+        self.min_child_weight = params.get('min_child_weight', self.min_child_weight)
+        self.gamma = params.get('gamma', self.gamma)
+        self.reg_alpha = params.get('reg_alpha', self.reg_alpha)
+        self.reg_lambda = params.get('reg_lambda', self.reg_lambda)
+        self.rf_min_samples_split = params.get('rf_min_samples_split', self.rf_min_samples_split)
+    
+    def _update_models(self):
+        """Model parametrelerini güncelle"""
+        # XGBoost parametrelerini güncelle
+        self.xgb_model.set_params(
+            n_estimators=self.n_estimators,
+            max_depth=self.max_depth,
+            learning_rate=self.learning_rate,
+            subsample=self.subsample,
+            colsample_bytree=self.colsample_bytree,
+            min_child_weight=self.min_child_weight,
+            gamma=self.gamma,
+            reg_alpha=self.reg_alpha,
+            reg_lambda=self.reg_lambda
+        )
+        
+        # Random Forest parametrelerini güncelle
+        self.rf_model.set_params(
+            n_estimators=self.rf_n_estimators,
+            max_depth=self.rf_max_depth,
+            min_samples_split=self.rf_min_samples_split
+        )
+        
+        logger.info(
+            f"🔧 [ML] Parametreler güncellendi | "
+            f"n_estimators={self.n_estimators}, max_depth={self.max_depth}, "
+            f"rf_max_depth={self.rf_max_depth}, lr={self.learning_rate}, "
+            f"reg_alpha={self.reg_alpha}, reg_lambda={self.reg_lambda}"
+        )
+
     def train(
         self,
         X_train: pd.DataFrame,
@@ -206,6 +360,10 @@ class ModelTrainer:
         logger.info(f"  Eğitim seti: {X_train.shape}")
         logger.info(f"  Test seti: {X_test.shape}")
         logger.info(f"  Sınıf dağılımı (train): {y_train.value_counts().to_dict()}")
+        
+        # OVERFITTING PROTECTION: Veri boyutuna göre parametre ayarı
+        data_size = len(X_train)
+        self.apply_auto_regularization(data_size)
 
         # Feature names'i sakla
         if isinstance(X_train, pd.DataFrame):

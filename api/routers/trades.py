@@ -24,10 +24,15 @@ async def get_trade_history(
     """
     try:
         from core.paper import paper_engine
-        
+
         # 1. DB'den çek
         db_trades = await db_manager.get_recent_trades(limit=limit)
+        logger.info(f"📊 [TRADES] DB'den {len(db_trades)} işlem çekildi")
         
+        # Debug: İlk trade'i logla
+        if db_trades:
+            logger.info(f"🔍 [TRADES] İlk trade: {db_trades[0]}")
+
         # 2. Memory'den çek (Mevcut oturum verileri)
         memory_trades = []
         if hasattr(paper_engine.position_manager, 'trade_history'):
@@ -44,39 +49,25 @@ async def get_trade_history(
                     "size": trade_dict.get('size'),
                     "leverage": trade_dict.get('leverage'),
                     "pnl_usd": trade_dict.get('pnl'),
-                    "pnl_percent": trade_dict.get('pnl_percent', 0.0), # Convert Enum to %
+                    "pnl_percent": trade_dict.get('pnl_percent', 0.0),
                     "reason": trade_dict.get('reason'),
                     "strategy_id": trade_dict.get('strategy_id'),
-                    "closed_at": trade_dict.get('closed_at')
+                    "closed_at": trade_dict.get('closed_at'),
+                    "bot_id": trade_dict.get('bot_id')
                 })
 
-        # 3. Merge - DUPLICATE ÖNLEME (KRİTİK!)
-        # DB'deki tüm ID'leri topla (normalize edilmiş)
-        seen_ids = set()
-        for t in db_trades:
-            trade_id = t.get('id') or t.get('trade_id')
-            if trade_id:
-                # ID'yi normalize et (string'e çevir, boşlukları temizle)
-                seen_ids.add(str(trade_id).strip())
-        
-        # Memory trade'leri ekle (eğer DB'de yoksa)
-        all_trades = list(db_trades)  # DB trade'leri ile başla
-        
-        for t in memory_trades:
-            trade_id = t.get('id') or t.get('trade_id')
-            if trade_id:
-                # ID'yi normalize et
-                normalized_id = str(trade_id).strip()
-                # Eğer DB'de yoksa ekle
-                if normalized_id not in seen_ids:
-                    all_trades.append(t)
-                    seen_ids.add(normalized_id)  # Eklenenleri de işaretle
+        logger.info(f"📊 [TRADES] Memory'den {len(memory_trades)} işlem çekildi")
+
+        # 3. SADECE DB TRADE'LERİNİ DÖNDÜR (Memory skip - çakışma önleme)
+        # NOT: Paper engine trade'leri zaten DB'ye kaydediliyor, memory'den tekrar eklemeye gerek yok
+        all_trades = list(db_trades)
+        logger.info(f"📊 [TRADES] Toplam {len(all_trades)} işlem döndürülecek")
 
         # 4. Filtreleme
         if symbol:
-            all_trades = [t for t in all_trades if t['symbol'] == symbol]
-            
-        # 5. Sıralama (en yeni en üstte) - DÜZELTME
+            all_trades = [t for t in all_trades if t.get('symbol') == symbol]
+
+        # 5. Sıralama (en yeni en üstte)
         def get_sort_key(trade):
             closed_at = trade.get('closed_at')
             if isinstance(closed_at, datetime):
@@ -89,22 +80,21 @@ async def get_trade_history(
             return datetime.min
 
         all_trades.sort(key=get_sort_key, reverse=True)
-            
-        return {
+
+        response_data = {
             "status": "success",
             "count": len(all_trades),
             "trades": all_trades[:limit]
         }
+        
+        logger.info(f"✅ [TRADES] Response gönderiliyor: {len(all_trades[:limit])} işlem")
+        
+        return response_data
     except Exception as e:
         logger.error(f"Trade history error: {e}")
         import traceback
-        logger.error(traceback.format_exc())
-        return {
-            "status": "error",
-            "message": str(e),
-            "trades": []
-        }
-
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.delete("/clear")

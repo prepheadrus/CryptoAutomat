@@ -15,12 +15,13 @@ from typing import Dict, Any, Optional
 class RiskConfigUpdate(BaseModel):
     """
     Risk ayarları güncelleme isteği.
-    
+
     Attributes:
         max_risk_per_trade_percent: İşlem başına maksimum risk (%)
         max_leverage: Maksimum kaldıraç
         max_open_positions: Maksimum açık pozisyon
         max_consecutive_losses: Maksimum ardışık kayıp
+        kill_switch_enabled: Kill Switch aktif/pasif
     """
     max_risk_per_trade_percent: float = Field(
         default=1.0,
@@ -43,17 +44,22 @@ class RiskConfigUpdate(BaseModel):
     max_consecutive_losses: int = Field(
         default=5,
         ge=1,
-        le=10,
+        le=20,
         description="Maksimum ardışık kayıp"
     )
-    
+    kill_switch_enabled: bool = Field(
+        default=False,
+        description="Kill Switch aktif/pasif"
+    )
+
     class Config:
         json_schema_extra = {
             "example": {
                 "max_risk_per_trade_percent": 1.0,
                 "max_leverage": 10,
                 "max_open_positions": 5,
-                "max_consecutive_losses": 5
+                "max_consecutive_losses": 5,
+                "kill_switch_enabled": False
             }
         }
 

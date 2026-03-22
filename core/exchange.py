@@ -6,6 +6,9 @@ from typing import Dict, Any, Optional
 from core.logger import logger
 from core.config import CONFIG, BINANCE_API_KEY, BINANCE_API_SECRET
 
+# Circuit Breaker import (Dış API çağrıları için koruma)
+from core.circuit_breaker import exchange_breaker, CircuitBreakerError
+
 # Event Bus import (Circular dependency kırıldı!)
 from shared.events import event_bus
 from shared.events.events import SignalGeneratedEvent, CandleClosedEvent, LivePriceUpdatedEvent
@@ -306,8 +309,11 @@ class ExchangeManager:
                 count += 1
         logger.info(f"📁 {count} yarım kalan indirme görevi veritabanından geri yüklendi ve BAŞLATILDI.")
 
+    @exchange_breaker
     async def fetch_ohlcv(self, symbol, timeframe='1m', limit=100, params={}, since=None):
-        """Asenkron olarak geçmiş mum verilerini (REST API ile) çeker
+        """
+        Asenkron olarak geçmiş mum verilerini (REST API ile) çeker.
+        Circuit Breaker ile korunmaktadır.
 
         Args:
             symbol: Sembol adı
@@ -318,6 +324,9 @@ class ExchangeManager:
 
         Returns:
             list: OHLCV verisi
+            
+        Raises:
+            CircuitBreakerError: Circuit breaker açıkken
         """
         try:
             # [WSS NORMALİZASYON] Sembol CCXT formatına çevir
@@ -329,6 +338,9 @@ class ExchangeManager:
             else:
                 data = await self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit, params=params)
             return data
+        except CircuitBreakerError:
+            # Circuit breaker açık, bu hatayı doğrudan fırlat
+            raise
         except Exception as e:
             # API key hatası varsa, anonim moda geç ve tekrar dene
             if "-2008" in str(e) or "AuthenticationError" in str(type(e)):
@@ -989,21 +1001,27 @@ class ExchangeManager:
 
             # Strateji sinyali üret
             strategy = paper_engine.strategies.get(symbol)
-            
+
             # 🔥 DEBUG: Strateji ve DataFrame kontrolü
             logger.info(f"🔍 [DEBUG] strategy={strategy is not None}, df.empty={df.empty}, len(df)={len(df)}")
             logger.info(f"🔍 [DEBUG] paper_engine.strategies.keys()={list(paper_engine.strategies.keys()) if paper_engine else 'None'}")
-            
+
             if strategy is None or df.empty or len(df) < 50:
                 logger.warning(f"⏭️ [SINYAL] {symbol} strateji yok veya veri yetersiz (strategy={strategy is not None}, df_len={len(df)})")
                 return
 
             latest_candle = df.iloc[-1]
+
+            # ============================================
+            # INDIATORS_PAYLOAD OLUŞTUR (ML ve Event için)
+            # ============================================
+            # latest_candle'ı dict'e çevir ve indicators_payload oluştur
+            indicators_payload = latest_candle.to_dict()
+
+            # Strateji sinyali üret
             strategy_signal = strategy.generate_signal(latest_candle)
 
             # 🔧 SİNYAL ADAPTER: int → dict dönüşümü
-            # Stratejiler int döndürür (0=SAT, 1=BEKLE, 2=AL)
-            # Ama kod dict bekliyor
             if isinstance(strategy_signal, int):
                 signal_map = {
                     0: {'signal': 'SHORT', 'confidence': 1.0},
@@ -1011,53 +1029,26 @@ class ExchangeManager:
                     2: {'signal': 'LONG', 'confidence': 1.0}
                 }
                 strategy_signal = signal_map.get(strategy_signal, {'signal': 'HOLD', 'confidence': 0.0})
-                logger.debug(f"🔧 [SIGNAL ADAPTER] int→dict: {strategy_signal}")
 
-            # 🎯 SİNYAL LOGLAMA (Production Analysis)
-            if strategy_signal:
-                signal_type = strategy_signal.get('signal', 'NONE')
-                logger.info(f"🎯 [SINYAL] {symbol} | {signal_type} | Fiyat: ${current_price:.2f} | TF: {timeframe}")
-                logger.info(f"   📊 Strateji: {strategy_id} | HTF: {htf_trend} | Rejim: {regime}")
-            else:
-                logger.debug(f"⏸️ [SINYAL] {symbol} | NONE | Beklemede")
+            # 🎯 SİNYAL LOGLAMA
+            signal_type = strategy_signal.get('signal', 'NONE')
+            logger.info(f"🎯 [SINYAL] {symbol} | {signal_type} | Fiyat: ${current_price:.2f} | TF: {timeframe}")
+            logger.info(f"   📊 Strateji: {strategy_id} | HTF: {htf_trend} | Rejim: {regime}")
 
-            # 🧠 ML CONFIDENCE SCORE (Ensemble Prediction)
+            # 🧠 ML CONFIDENCE SCORE
             ml_confidence = None
             ml_prediction = 'HOLD'
-            ml_enabled = True  # 🔥 ML aktif mi?
 
-            if ml_enabled:
-                try:
-                    from ml.inference import get_ml_prediction
-                    ml_result = get_ml_prediction(symbol, timeframe, indicators_payload)
-                    if ml_result:
-                        ml_confidence = ml_result.get('confidence', 0)
-                        ml_prediction = ml_result.get('prediction', 'HOLD')
-
-                        # 🔥 ML SİNYAL ONAYLAMA (Ensemble Voting)
-                        if strategy_signal and ml_confidence:
-                            strategy_side = strategy_signal.get('signal', 'NONE')  # LONG/SHORT/NEUTRAL
-
-                            # ML ve Strateji aynı yönde mi?
-                            if ml_prediction == strategy_side and ml_confidence >= 0.50:  # %50 threshold
-                                logger.info(f"   ✅ [ML ONAY] {strategy_side} sinyali ML tarafından onaylandı! (Confidence: {ml_confidence:.2%})")
-                                strategy_signal['ml_approved'] = True
-                                strategy_signal['ml_confidence'] = ml_confidence
-                            elif ml_prediction != strategy_side:
-                                logger.warning(f"   ⚠️ [ML ÇELİŞKİ] Strateji: {strategy_side}, ML: {ml_prediction} (Confidence: {ml_confidence:.2%})")
-                                strategy_signal['ml_approved'] = False
-                                strategy_signal['ml_confidence'] = ml_confidence
-                            else:
-                                logger.info(f"   ℹ️ [ML BEKLEME] Confidence düşük: {ml_confidence:.2%} < 50%")
-                                strategy_signal['ml_approved'] = False
-                                strategy_signal['ml_confidence'] = ml_confidence
-
-                except Exception as ml_err:
-                    logger.debug(f"⚠️ [ML] Model yüklenemedi veya tahmin yapılamadı: {ml_err}")
-                    strategy_signal['ml_approved'] = None  # ML yoksa None
-            else:
-                logger.debug(f"ℹ️ [ML] ML entegrasyonu devre dışı")
-                strategy_signal['ml_approved'] = None  # ML kapalı
+            try:
+                from ml.inference import get_ml_prediction
+                ml_result = get_ml_prediction(symbol, timeframe, indicators_payload)
+                if ml_result:
+                    ml_confidence = ml_result.get('confidence', 0)
+                    ml_prediction = ml_result.get('prediction', 'HOLD')
+                    strategy_signal['ml_confidence'] = ml_confidence
+            except Exception as ml_err:
+                logger.debug(f"⚠️ [ML] Model yüklenemedi: {ml_err}")
+                strategy_signal['ml_confidence'] = None
 
             # EVENT-DRIVEN: SignalGeneratedEvent yayınla
             event = SignalGeneratedEvent(
@@ -1072,20 +1063,17 @@ class ExchangeManager:
                     'htf_trends': htf_trends,
                     'regime': regime,
                     'strategy_id': strategy_id,
-                    'ml_confidence': ml_confidence  # ML confidence ekle
+                    'ml_confidence': ml_confidence
                 }
             ).to_event(source="exchange_manager")
 
-            # Event Bus'a yayınla (Pub/Sub)
             await event_bus.publish(event)
 
-            logger.debug(f"✅ [EVENT] {symbol} sinyali yayınlandı (Event Bus)")
-
-            logger.debug(f"📤 Signal event published: {bot_id} signal={strategy_signal}")
+            logger.debug(f"✅ [EVENT] {symbol} sinyali yayınlandı")
 
         except Exception as e:
             logger.error(f"❌ [BOT TASK] {bot_id} işlem hatası: {e}")
-            raise  # Gather'da yakalanması için tekrar fırlat
+            raise
 
     async def run_strategy_poller(self, symbol, timeframe='1m'):
         """

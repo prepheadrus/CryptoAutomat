@@ -115,6 +115,105 @@ async def start_background_tasks():
     logger.info("")
 
 if __name__ == "__main__":
+    # Global shutdown flag
+    shutdown_in_progress = False
+    
+    async def graceful_shutdown():
+        """
+        Güvenli kapatma (Graceful Shutdown).
+        Açık pozisyonları kapatır, bağlantıları temizler.
+        """
+        global shutdown_in_progress
+        if shutdown_in_progress:
+            return  # Zaten kapanıyor
+        
+        shutdown_in_progress = True
+        
+        logger.info("")
+        logger.info("🛑 GÜVENLI KAPATMA BAŞLATILIYOR...")
+        logger.info("=" * 60)
+        
+        try:
+            # 1. Yeni işlem almayı durdur
+            logger.info("1️⃣ Yeni işlem alımı durduruluyor...")
+            if hasattr(paper_engine, 'accepting_new_trades'):
+                paper_engine.accepting_new_trades = False
+            logger.info("✅ Yeni işlem alımı durduruldu")
+            
+            # 2. Açık pozisyonları kapat
+            logger.info("2️⃣ Açık pozisyonlar kapatılıyor...")
+            open_positions_count = len(paper_engine.open_positions) if hasattr(paper_engine, 'open_positions') else 0
+            
+            if open_positions_count > 0:
+                logger.warning(f"⚠️ {open_positions_count} açık pozisyon var!")
+                logger.info("   Pozisyonlar dashboard'dan manuel kapatılmalı veya")
+                logger.info("   otomatik kapatma için bot ayarlarını kontrol edin.")
+            else:
+                logger.info("✅ Açık pozisyon yok")
+            
+            # 3. Event Bus'ı durdur
+            logger.info("3️⃣ Event Bus durduruluyor...")
+            from shared.events import event_bus
+            await event_bus.stop()
+            logger.info("✅ Event Bus durduruldu")
+            
+            # 4. Exchange bağlantılarını kapat
+            logger.info("4️⃣ Exchange bağlantıları kapatılıyor...")
+            await exchange_manager.close()
+            logger.info("✅ Exchange bağlantıları kapatıldı")
+            
+            # 5. Database bağlantısını kapat
+            logger.info("5️⃣ Database bağlantısı kapatılıyor...")
+            from data.database import db_manager
+            await db_manager.close()
+            logger.info("✅ Database bağlantısı kapatıldı")
+            
+            # 6. Circuit Breaker istatistiklerini logla
+            logger.info("6️⃣ Circuit Breaker istatistikleri:")
+            try:
+                from core.circuit_breaker import get_all_breakers_stats
+                stats = get_all_breakers_stats()
+                for name, breaker_stats in stats.items():
+                    logger.info(
+                        f"   {name}: state={breaker_stats['state']}, "
+                        f"failures={breaker_stats['total_failures']}, "
+                        f"rejected={breaker_stats['total_rejected']}"
+                    )
+            except Exception:
+                pass
+            
+            # 7. Event Tracer istatistiklerini göster
+            logger.info("7️⃣ Event Tracer istatistikleri:")
+            try:
+                loop = asyncio.get_event_loop()
+                loop.run_until_complete(event_tracer.stop())
+            except Exception:
+                pass
+            
+            logger.info("=" * 60)
+            logger.info("✅ GÜVENLİ KAPATMA TAMAMLANDI")
+            logger.info("")
+            
+        except Exception as e:
+            logger.error(f"❌ Kapatma sırasında hata: {e}")
+            logger.error("   Bot zorla kapatılıyor...")
+    
+    def run_graceful_shutdown(loop):
+        """Sync wrapper for graceful shutdown"""
+        try:
+            loop.run_until_complete(graceful_shutdown())
+        except Exception as e:
+            logger.error(f"Shutdown error: {e}")
+        finally:
+            # Tüm pending task'ları iptal et
+            pending = asyncio.all_tasks(loop)
+            for task in pending:
+                task.cancel()
+            
+            # Kapanana kadar bekle
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            loop.close()
+    
     try:
         if __import__('sys').platform == 'win32':
             asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -167,12 +266,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logger.info("")
         logger.info("🛑 KULLANICI BOTU DURDURUYOR (CTRL+C)...")
-
-        # Event Tracer istatistiklerini göster
-        try:
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(event_tracer.stop())
-        except Exception:
-            pass
-
-        logger.info("Kullanıcı (CTRL+C) botu ve Web Sunucusunu durdurdu.")
+        run_graceful_shutdown(loop)
