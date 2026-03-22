@@ -130,6 +130,20 @@ function switchTab(tabId) {
             content.classList.add('active-tab');
             content.style.display = 'block';
             console.log(`✅ [TAB] Showing: ${content.id}`);
+            
+            // ============================================
+            // TAB-SPECIFIC DATA LOADING
+            // ============================================
+            if (tabId === 'tab-history' || content.id === 'tab-history') {
+                console.log('📜 [TAB] History tab activated, loading trade history...');
+                loadTradeHistory();
+            } else if (tabId === 'tab-portfolio' || content.id === 'tab-portfolio') {
+                console.log('📊 [TAB] Portfolio tab activated, refreshing data...');
+                loadDashboard();
+            } else if (tabId === 'tab-orders' || content.id === 'tab-orders') {
+                console.log('📋 [TAB] Orders tab activated, refreshing data...');
+                loadDashboard();
+            }
         } else {
             content.classList.remove('active-tab');
             content.style.display = 'none';
