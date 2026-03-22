@@ -181,6 +181,10 @@ class APIClient {
         return this.get('/data/all-download-tasks');
     }
 
+    getTrackedSymbols() {
+        return this.get('/data/symbols-with-data');
+    }
+
     startDownload(symbol, timeframe, startDate) {
         return this.post('/data/download-history', {
             symbol,
