@@ -1017,9 +1017,16 @@ class ExchangeManager:
             # ============================================
             # latest_candle'ı dict'e çevir ve indicators_payload oluştur
             indicators_payload = latest_candle.to_dict()
+            
+            # 🔥 DEBUG: Indikatör kontrolü
+            logger.debug(f"🔍 [INDICATORS] latest_candle columns: {list(latest_candle.index)[:10]}...")
+            logger.debug(f"🔍 [INDICATORS] RSI_14={latest_candle.get('RSI_14', 'YOK')}, EMA_200={latest_candle.get('EMA_200', 'YOK')}")
 
             # Strateji sinyali üret
             strategy_signal = strategy.generate_signal(latest_candle)
+            
+            # 🔥 DEBUG: Strateji sinyali
+            logger.info(f"🔍 [STRATEGY] {symbol} raw signal: {strategy_signal} (type: {type(strategy_signal).__name__})")
 
             # 🔧 SİNYAL ADAPTER: int → dict dönüşümü
             if isinstance(strategy_signal, int):
@@ -1029,6 +1036,7 @@ class ExchangeManager:
                     2: {'signal': 'LONG', 'confidence': 1.0}
                 }
                 strategy_signal = signal_map.get(strategy_signal, {'signal': 'HOLD', 'confidence': 0.0})
+                logger.debug(f"🔧 [ADAPTER] int→dict: {strategy_signal}")
 
             # 🎯 SİNYAL LOGLAMA
             signal_type = strategy_signal.get('signal', 'NONE')

@@ -1123,15 +1123,31 @@ async function saveRiskSettings() {
 
         if (result.status === 'success') {
             showToast('✅ Risk ayarları güncellendi (Hot-Reload)', 'success');
-            
+
             // Başarı sonrası config'i yeniden yükle
             await loadRiskSettings();
         } else {
-            showToast('❌ ' + result.message, 'error');
+            // Hata mesajını düzgün formatla
+            let errorMsg = 'Bilinmeyen hata';
+            if (result.message) {
+                errorMsg = typeof result.message === 'string' ? result.message : JSON.stringify(result.message);
+            }
+            showToast('❌ ' + errorMsg, 'error');
         }
     } catch (error) {
         console.error('❌ [SETTINGS] Risk save error:', error);
-        showToast('❌ Kaydetme hatası: ' + error.message, 'error');
+        
+        // Hata mesajını düzgün formatla
+        let errorMsg = 'Sunucu hatası';
+        if (error.message) {
+            errorMsg = typeof error.message === 'string' ? error.message : JSON.stringify(error.message);
+        } else if (typeof error === 'string') {
+            errorMsg = error;
+        } else if (error.detail) {
+            errorMsg = typeof error.detail === 'string' ? error.detail : JSON.stringify(error.detail);
+        }
+        
+        showToast('❌ Kaydetme hatası: ' + errorMsg, 'error');
     }
 }
 
