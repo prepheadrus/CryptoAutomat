@@ -1,51 +1,74 @@
-import os
+@echo off
+REM ==============================================================================
+REM CryptoAlgoBot - Windows Başlatma Scripti
+REM ==============================================================================
+REM Bu script botu başlatır ve dashboard'u tarayıcıda açar.
+REM Kullanım: start_bot.bat dosyasına çift tıklayın
+REM ==============================================================================
 
-# 1. Ayarlar: Kaynak klasör ve çıktı dosyasının yolları
-kaynak_klasor = r"F:\Crypto Bot"
+echo.
+echo ==========================================
+echo   CryptoAlgoBot Başlatılıyor...
+echo ==========================================
+echo.
 
-# Çıktı dosyasını ana klasörün içine veya dışına kaydedebilirsin.
-# Karışıklık olmaması için doğrudan F: dizinine kaydediyoruz.
-cikis_dosyasi = r"F:\Crypto_Bot_Tum_Dokumanlar.md" 
+REM 1. Script dizinine git
+cd /d %~dp0
 
-# Kendi kendini okumasını engellemek için çıktı dosyasının adını alıyoruz
-cikis_dosyasi_adi = os.path.basename(cikis_dosyasi)
+REM 2. Python ve Virtual Environment kontrolü
+if not exist "venv\Scripts\python.exe" (
+    echo [ERROR] Virtual environment bulunamadi!
+    echo [ERROR] Lutfen once setup.bat dosyasini calistirin.
+    echo.
+    pause
+    exit /b 1
+)
 
-islenen_dosya_sayisi = 0
+echo [OK] Virtual environment bulundu.
+echo.
 
-print(f"Tarama başlatılıyor: {kaynak_klasor} ...\n")
+REM 3. Virtual Environment'i aktif et (sessiz)
+call venv\Scripts\activate.bat
 
-# Yeni (veya üzerine yazılacak) çıktı dosyasını oluştur
-with open(cikis_dosyasi, "w", encoding="utf-8") as cikis:
-    cikis.write("# 📚 CryptoAlgoBot Tüm Bilgi Bankası ve Dokümanlar\n")
-    cikis.write("Bu dosya sistemdeki tüm `.md` dosyalarının otomatik olarak birleştirilmesiyle oluşturulmuştur.\n\n---\n")
+REM 4. .env dosyasi kontrolu
+if not exist ".env" (
+    echo [WARNING] .env dosyasi bulunamadi!
+    echo [WARNING] API anahtarlari olmadan bot calismayabilir.
+    echo [INFO] .env.example dosyasindan .env olusturuluyor...
+    copy .env.example .env >nul
+    echo [INFO] .env dosyasi olusturuldu. Lutfen API anahtarlarini duzenleyin!
+    echo.
+)
 
-    # os.walk ile tüm alt klasörleri ağaç yapısında tarıyoruz
-    for kok_dizin, alt_klasorler, dosyalar in os.walk(kaynak_klasor):
-        for dosya in dosyalar:
-            
-            # Sadece .md uzantılı dosyaları al ve çıktı dosyasının kendisini atla
-            if dosya.endswith(".md") and dosya != cikis_dosyasi_adi:
-                dosya_yolu = os.path.join(kok_dizin, dosya)
-                
-                # Dosyanın projedeki göreceli (relative) yolunu bul (Örn: "klasor1\dosya.md")
-                goreceli_yol = os.path.relpath(dosya_yolu, kaynak_klasor)
-                
-                # 1. Başlık Ekleme: Dosyanın yolunu başlık olarak yaz
-                cikis.write(f"\n\n# 📄 {goreceli_yol}\n\n")
-                
-                # 2. İçeriği Okuma ve Yazma
-                try:
-                    with open(dosya_yolu, "r", encoding="utf-8") as d:
-                        icerik = d.read()
-                        cikis.write(icerik)
-                        
-                        # 3. Dosyalar arasına ayırıcı çizgi çek
-                        cikis.write("\n\n---\n")
-                        
-                        islenen_dosya_sayisi += 1
-                        print(f"Eklendi: {goreceli_yol}")
-                except Exception as e:
-                    print(f"⚠️ Hata: {goreceli_yol} okunamadı. Detay: {e}")
+REM 5. config.yaml kontrolu
+if not exist "config.yaml" (
+    echo [ERROR] config.yaml dosyasi bulunamadi!
+    echo [ERROR] Lutfen config.example.yaml dosyasini config.yaml olarak kopyalayin.
+    pause
+    exit /b 1
+)
 
-print(f"\n✅ İşlem tamamlandı! Toplam {islenen_dosya_sayisi} adet Markdown dosyası başarıyla birleştirildi.")
-print(f"📁 Birleştirilmiş Dosya Konumu: {cikis_dosyasi}")
+echo [OK] Yapilandirma dosyalari bulundu.
+echo.
+
+REM 6. Botu baslat
+echo ==========================================
+echo   Bot baslatiliyor...
+echo ==========================================
+echo.
+echo [INFO] Dashboard: http://localhost:3000
+echo [INFO] Durdurmak icin: CTRL+C veya pencereyi kapat
+echo.
+echo ==========================================
+echo.
+
+REM Python main.py'i calistir
+python main.py
+
+REM Bot kapandiginda
+echo.
+echo ==========================================
+echo   Bot durduruldu.
+echo ==========================================
+echo.
+pause
