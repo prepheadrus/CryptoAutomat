@@ -73,8 +73,9 @@ async def get_strategy_performance_report() -> Dict[str, Any]:
         }
     """
     try:
+        import asyncio
         from core.paper import paper_engine
-        report = paper_engine.get_strategy_report()
+        report = await asyncio.to_thread(paper_engine.get_strategy_report)
         return {"status": "success", "report": report}
     except Exception as e:
         logger.error(f"Strateji rapor hatası: {e}")

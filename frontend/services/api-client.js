@@ -107,6 +107,10 @@ class APIClient {
     getDashboardMetrics(params = {}) {
         return this.get('/dashboard-metrics', params);
     }
+
+    getExchangeMarkets() {
+        return this.get('/exchange/markets');
+    }
     
     // ========================================================================
     // BOT MANAGEMENT
@@ -145,6 +149,14 @@ class APIClient {
         return this.get('/strategies');
     }
 
+    saveStrategy(data) {
+        return this.post('/strategy/save', data);
+    }
+
+    getStrategyInfo(filename) {
+        return this.get(`/strategy/info/${filename}`);
+    }
+
     getStrategyReport() {
         return this.get('/strategy-report');
     }
@@ -159,6 +171,10 @@ class APIClient {
     
     trainModel(data) {
         return this.post('/ml/train', data);
+    }
+
+    runBacktest(data) {
+        return this.post('/backtest/run', data);
     }
     
     deleteMLModel(symbol, timeframe) {
@@ -199,6 +215,10 @@ class APIClient {
 
     deleteData(symbol, marketType) {
         return this.delete('/data/delete-klines', { symbol, market_type: marketType });
+    }
+
+    deleteAllData() {
+        return this.delete('/data/delete-all');
     }
 
     deleteDownloadTask(symbol, marketType) {

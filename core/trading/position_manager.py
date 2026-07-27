@@ -8,8 +8,6 @@ Bu modül, core/paper.py içindeki pozisyon yönetimi mantığını devralır.
 Position, Trade, Order Value Objects kullanır.
 
 Usage:
-    from core.trading.position_manager import PositionManager
-    from core.trading.entities import Position, PositionDirection
     
     pm = PositionManager()
     
@@ -43,6 +41,14 @@ from core.trading.entities.position import Position, PositionDirection
 from core.trading.entities.trade import Trade, TradeHistory
 from core.trading.entities.order import Order, OrderType, OrderSide, OrderStatus
 from strategy.risk import RiskManagement
+from core.trading.entities import Position, PositionDirection
+
+from shared.events import event_bus
+from shared.events.event_bus import Event
+import dataclasses
+import traceback
+
+# --- Moved from inline ---
 
 
 class PositionManager:
@@ -200,9 +206,8 @@ class PositionManager:
 
             # paper_engine.open_positions güncelle (UI sync için kritik!)
             try:
-                from core.paper import paper_engine
-                if hasattr(paper_engine, 'open_positions'):
-                    paper_engine.open_positions = list(self.legacy_positions)
+                if hasattr(core.paper.paper_engine, 'open_positions'):
+                    core.paper.paper_engine.open_positions = list(self.legacy_positions)
             except:
                 pass  # paper_engine henüz initialize edilmemiş olabilir
 
@@ -349,6 +354,13 @@ class PositionManager:
             # Legacy positions'dan sil (güvenli yöntem - remove ile)
             self._remove_legacy_position_safe(bot_id)
 
+            # paper_engine.open_positions güncelle (UI sync için)
+            try:
+                if hasattr(core.paper.paper_engine, 'open_positions'):
+                    core.paper.paper_engine.open_positions = list(self.legacy_positions)
+            except Exception:
+                pass
+
             logger.info(
                 f"❌ Pozisyon kapatıldı: {bot_id} | "
                 f"PnL: ${trade.pnl:.2f} ({trade.pnl_percent:.2%}) | "
@@ -358,8 +370,9 @@ class PositionManager:
             close_success = True  # Başarılı
 
             # Event yayınla (on_position_closed handler'ı DB'ye kaydedecek)
-            from shared.events import event_bus
-            asyncio.create_task(event_bus.publish(Event(
+            # ✅ DÜZELTME: await kullan (asyncio.create_task YASAK - race condition!)
+            
+            event = Event(
                 type="position.closed",
                 payload={
                     "bot_id": bot_id,
@@ -377,7 +390,9 @@ class PositionManager:
                     "closed_at": trade.closed_at.isoformat()
                 },
                 source="position_manager"
-            )))
+            )
+            
+            await event_bus.publish(event)
 
             # DB'ye kaydetme BURADA YAPILMIYOR (on_position_closed'da yapılacak)
             # Duplicate kayıt önleme: SADECE EVENT ÜZERİNDEN
@@ -386,7 +401,6 @@ class PositionManager:
 
         except Exception as e:
             logger.error(f"❌ Pozisyon kapatma hatası ({bot_id}): {e}")
-            import traceback
             logger.error(traceback.format_exc())
 
             # Hata durumunda kilidi AÇ (tekrar denenebilir olsun)
@@ -497,8 +511,6 @@ class PositionManager:
         Returns:
             Güncellenmiş Position (yeni instance)
         """
-        import dataclasses
-        from core.logger import logger
 
         # Mevcut fiyatı belirle (LONG için high, SHORT için low)
         current_price = current_high if position.direction == PositionDirection.LONG else current_low
@@ -778,3 +790,6 @@ class PositionManager:
             'total_pnl': self.total_pnl,
             'total_commission': self.total_commission
         }
+
+# Move circular dependencies to the bottom (still global scope to prevent Zombie Loop)
+import core.paper

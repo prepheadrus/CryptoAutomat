@@ -78,7 +78,7 @@ class KalmanConfig(BaseModel):
 class CandleLockConfig(BaseModel):
     """Mum kapanış kilidi ayarları"""
     enabled: bool = Field(default=True, description="Mum kilidi aktif")
-    interval: int = Field(default=1, ge=1, le=5, description="Kontrol aralığı (mum)")
+    interval: int = Field(default=5, ge=1, le=60, description="Kontrol aralığı (saniye)")
 
 
 class WFOConfig(BaseModel):
@@ -93,7 +93,7 @@ class WFOConfig(BaseModel):
 class MLConfig(BaseModel):
     """ML ayarları"""
     enabled: bool = Field(default=True, description="ML aktif")
-    confidence_threshold: float = Field(default=0.6, ge=0.3, le=0.9, description="Güven eşiği")
+    confidence_threshold: float = Field(default=0.6, ge=0.3, le=0.95, description="Güven eşiği")
 
 
 class HTFConfig(BaseModel):
@@ -101,6 +101,7 @@ class HTFConfig(BaseModel):
     enabled: bool = Field(default=True, description="HTF aktif")
     ema_fast: int = Field(default=20, ge=5, le=50, description="Hızlı EMA")
     ema_slow: int = Field(default=50, ge=20, le=200, description="Yavaş EMA")
+    trend_method: str = Field(default="ema_stack", description="Trend belirleme metodu")
 
 
 class BotConfigUpdate(BaseModel):
@@ -142,6 +143,13 @@ class ApiKeyUpdateRequest(BaseModel):
     """
     api_key: str = Field(..., min_length=10, description="API Key")
     api_secret: str = Field(..., min_length=10, description="API Secret")
+
+class ApiTestRequest(BaseModel):
+    """
+    API test isteği. (Boş bırakılırsa kayıtlı anahtarlar kullanılır)
+    """
+    api_key: Optional[str] = None
+    api_secret: Optional[str] = None
     
     class Config:
         json_schema_extra = {

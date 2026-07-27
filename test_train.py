@@ -1,0 +1,21 @@
+import asyncio
+from api.schemas.ml import MLTrainRequest
+from api.services.ml_service import MLService
+import logging
+from core.logger import logger
+
+logger.setLevel(logging.DEBUG)
+
+async def test():
+    req = MLTrainRequest(
+        symbol="BTC/USDT:USDT",
+        timeframe="1m",
+        limit=5000,
+        tp_multiplier=2.0,
+        sl_multiplier=2.0
+    )
+    svc = MLService()
+    res = await svc.train_model(req)
+    print("Result:", res)
+
+asyncio.run(test())

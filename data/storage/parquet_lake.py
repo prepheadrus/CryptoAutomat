@@ -239,7 +239,7 @@ class ParquetDataLake:
 
         logger.debug(f"💾 [PARQUET] {path.relative_to(self.BASE_DIR)} kaydedildi ({len(write_df)} satır)")
 
-    async def _read_parquet_thread(self, path: Path) -> Optional[pd.DataFrame]:
+    def _read_parquet_thread(self, path: Path) -> Optional[pd.DataFrame]:
         """
         Parquet okuma işlemi (thread'de çalışır).
 
@@ -309,7 +309,7 @@ class ParquetDataLake:
 
                         if append and partition_path.exists():
                             # Mevcut dosyaya ekle (async fonksiyon - doğrudan await)
-                            existing_df = await self._read_parquet_thread(partition_path)
+                            existing_df = await asyncio.to_thread(self._read_parquet_thread, partition_path)
                             if existing_df is not None and not existing_df.empty:
                                 # ⏰ TIMEZONE STANDARDIZASYONU (UTC'ye zorla)
                                 if existing_df.index.tzinfo is None:
@@ -349,7 +349,7 @@ class ParquetDataLake:
 
                     if append and partition_path.exists():
                         # Mevcut dosyaya ekle (async fonksiyon - doğrudan await)
-                        existing_df = await self._read_parquet_thread(partition_path)
+                        existing_df = await asyncio.to_thread(self._read_parquet_thread, partition_path)
                         if existing_df is not None and not existing_df.empty:
                             # ⏰ TIMEZONE STANDARDIZASYONU (UTC'ye zorla)
                             if existing_df.index.tzinfo is None:
@@ -420,7 +420,7 @@ class ParquetDataLake:
                             continue
                         month = int(month_dir.name)
 
-                        month_start = datetime(year, month, 1)
+                        month_start = datetime(year, month, 1, tzinfo=start_date.tzinfo)
                         month_end = month_start + timedelta(days=32)
                         month_end = month_end.replace(day=1) - timedelta(days=1)
 
@@ -435,7 +435,7 @@ class ParquetDataLake:
                             file_path = day_dir / "data.parquet"
 
                             if file_path.exists():
-                                file_date = datetime(year, month, day)
+                                file_date = datetime(year, month, day, tzinfo=start_date.tzinfo)
 
                                 if start_date <= file_date <= end_date:
                                     parquet_files.append(file_path)
@@ -459,10 +459,16 @@ class ParquetDataLake:
                 # RAM'de birleştir (vektörize)
                 combined_df = pd.concat(dfs)
 
+                # UTC tz kontrolü ve dönüştürme
+                if combined_df.index.tz is None:
+                    combined_df.index = combined_df.index.tz_localize('UTC')
+                elif str(combined_df.index.tz) != 'UTC':
+                    combined_df.index = combined_df.index.tz_convert('UTC')
+
                 # Tarih aralığını filtrele
                 combined_df = combined_df[
-                    (combined_df.index >= pd.Timestamp(start_date, tz='UTC')) &
-                    (combined_df.index <= pd.Timestamp(end_date, tz='UTC'))
+                    (combined_df.index >= pd.to_datetime(start_date, utc=True)) &
+                    (combined_df.index <= pd.to_datetime(end_date, utc=True))
                 ]
 
                 # NaN temizliği
@@ -490,10 +496,16 @@ class ParquetDataLake:
                 if df is None or df.empty:
                     return None
 
+                # UTC tz kontrolü ve dönüştürme
+                if df.index.tz is None:
+                    df.index = df.index.tz_localize('UTC')
+                elif str(df.index.tz) != 'UTC':
+                    df.index = df.index.tz_convert('UTC')
+
                 # Tarih aralığını filtrele
                 df = df[
-                    (df.index >= pd.Timestamp(start_date, tz='UTC')) &
-                    (df.index <= pd.Timestamp(end_date, tz='UTC'))
+                    (df.index >= pd.to_datetime(start_date, utc=True)) &
+                    (df.index <= pd.to_datetime(end_date, utc=True))
                 ]
 
                 # NaN temizliği
@@ -593,8 +605,8 @@ class ParquetDataLake:
 
                             # Tarih aralığını filtrele
                             df_batch = df_batch[
-                                (df_batch.index >= pd.Timestamp(start_date, tz='UTC')) &
-                                (df_batch.index <= pd.Timestamp(end_date, tz='UTC'))
+                                (df_batch.index >= pd.to_datetime(start_date, utc=True)) &
+                                (df_batch.index <= pd.to_datetime(end_date, utc=True))
                             ]
 
                             if not df_batch.empty:
@@ -621,8 +633,8 @@ class ParquetDataLake:
 
                     # Tarih aralığını filtrele
                     df_batch = df_batch[
-                        (df_batch.index >= pd.Timestamp(start_date, tz='UTC')) &
-                        (df_batch.index <= pd.Timestamp(end_date, tz='UTC'))
+                        (df_batch.index >= pd.to_datetime(start_date, utc=True)) &
+                        (df_batch.index <= pd.to_datetime(end_date, utc=True))
                     ]
 
                     if not df_batch.empty:
@@ -742,8 +754,8 @@ class ParquetDataLake:
                             df = await asyncio.to_thread(self._read_parquet_thread, partition_path)
                             if df is not None:
                                 mask = (
-                                    (df.index < pd.Timestamp(start_date, tz='UTC')) |
-                                    (df.index > pd.Timestamp(end_date, tz='UTC'))
+                                    (df.index < pd.to_datetime(start_date, utc=True)) |
+                                    (df.index > pd.to_datetime(end_date, utc=True))
                                 )
                                 df = df[mask]
 

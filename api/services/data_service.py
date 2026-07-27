@@ -105,7 +105,7 @@ class DataService:
         else:
             # Kısmen var - eksik günleri bul
             current = start_date
-            cached_dates = set(df_cached.normalize().index)
+            cached_dates = set(df_cached.index.normalize())
 
             while current <= end_date:
                 current_date = current.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -489,42 +489,38 @@ class DataService:
             logger.info(f"🗑️ [DATA] Tüm klines verileri temizlendi: {deleted_count} satır (DB)")
 
             # ========================================================================
-            # 2. FLAT FILE TEMİZLİĞİ (Superalgos Mimarisi)
-            # ========================================================================
-            # DİKKAT: Tüm flat file'lar da silinmeli!
+            # 2. PARQUET LAKE TEMİZLİĞİ (Yeni Mimari)
             # ========================================================================
             try:
-                from data.ohlcv_storage import get_storage
-                storage = get_storage()
+                from data.storage.parquet_lake import get_parquet_lake
+                lake = get_parquet_lake('binance')
 
-                # Tüm sembollerin flat file'larını sil
-                stats = storage.get_storage_stats()
-                total_files = stats.get('total_files', 0)
-                total_size_mb = stats.get('total_size_mb', 0)
+                import shutil
+                total_files = 0
+                
+                # data/parquet klasörünün içeriğini temizle
+                if lake.base_path.exists():
+                    for item in lake.base_path.iterdir():
+                        if item.is_dir():
+                            shutil.rmtree(item)
+                            total_files += 1
+                        elif item.is_file():
+                            item.unlink()
+                            total_files += 1
 
-                if total_files > 0:
-                    # Her sembolü tek tek sil
-                    for symbol in stats.get('symbols', {}).keys():
-                        # symbol formatı: BTC_USDT (underscore'lu)
-                        # delete_ohlcv için symbol formatı: BTC/USDT (slash'li)
-                        symbol_normalized = symbol.replace('_', '/')
-                        storage.delete_ohlcv(symbol_normalized)
-
-                    logger.info(f"🗑️ [DATA] Tüm flat file'lar silindi: {total_files} dosya, {total_size_mb:.2f} MB")
-                else:
-                    logger.info("📊 [DATA] Silinecek flat file bulunamadı")
-
-            except Exception as flat_file_err:
-                logger.warning(f"⚠️ Flat file silme hatası (devam ediliyor): {flat_file_err}")
+                logger.info(f"🗑️ [DATA] Tüm Parquet verileri temizlendi: {total_files} dosya/dizin")
+                
+            except Exception as parquet_err:
+                logger.warning(f"⚠️ Parquet temizleme hatası (devam ediliyor): {parquet_err}")
 
             # ========================================================================
             # 3. YANIT
             # ========================================================================
-            logger.info(f"📊 [DATA] Resampling Mimarisi: Artık SADECE 1m mumları indireceğiz!")
+            logger.info(f"📊 [DATA] Resampling Mimarisi: Veritabanı ve Parquet Lake sıfırlandı!")
 
             return {
                 "status": "success",
-                "message": f"Tüm veritabanı ve flat file'lar temizlendi: {deleted_count} satır (DB), {total_files if 'total_files' in locals() else 0} dosya (Flat)",
+                "message": f"Tüm veritabanı ve Parquet dosyaları temizlendi: {deleted_count} satır (DB)",
                 "deleted_count": deleted_count
             }
         except Exception as e:
@@ -772,7 +768,7 @@ class DataService:
 
     async def check_data_gaps(self, symbol: str = None) -> Dict[str, Any]:
         """
-        Veri boşluklarını kontrol et.
+        Veri boşluklarını kontrol et (Yeni SQLite/Parquet altyapısı ile).
 
         Args:
             symbol: Sembol (None ise tüm semboller)
@@ -781,39 +777,32 @@ class DataService:
             Boşluk listesi
         """
         try:
-            from data.ohlcv_storage import get_storage
-            from datetime import datetime, timedelta
-
-            storage = get_storage()
+            from datetime import datetime
+            import pandas as pd
+            
             gaps = []
-
+            
             # Hangi sembolleri kontrol edelim?
             if symbol:
                 symbols_to_check = [symbol]
             else:
-                # Tüm sembolleri al
-                symbols_to_check = list(storage.BASE_DIR.iterdir()) if storage.BASE_DIR.exists() else []
-                symbols_to_check = [d.name.replace('_', '/') for d in symbols_to_check if d.is_dir()]
-
+                symbols_to_check = await self.db_manager.get_symbols_with_data()
+                
+            end_date = datetime.utcnow()
+            
             # Her sembolü kontrol et
             for sym in symbols_to_check:
-                sym_clean = sym.replace('/', '_')
-
-                # Son 30 günü kontrol et
-                end_date = datetime.utcnow()
-                start_date = end_date - timedelta(days=30)
-
-                df = storage.load_ohlcv(sym_clean, '1m', start_date, end_date)
-
-                if df is not None and not df.empty:
-                    # Son mum zamanı
-                    last_mum_ts = df['timestamp'].max()
-                    last_mum_time = datetime.fromtimestamp(last_mum_ts / 1000)
-
-                    # Boşluk hesapla
+                # DB'den en son mumun timestamp'ini (ms) al
+                last_mum_ts = await self.db_manager.get_latest_kline_timestamp(sym, '1m')
+                
+                if last_mum_ts:
+                    # Unix timestamp (ms) -> datetime (UTC)
+                    last_mum_time = pd.to_datetime(last_mum_ts, unit='ms', utc=True).replace(tzinfo=None)
+                    
+                    # Boşluk hesapla (dakika cinsinden)
                     minutes_gap = (end_date - last_mum_time).total_seconds() / 60
-
-                    if minutes_gap > 5:  # 5 dakikadan fazla
+                    
+                    if minutes_gap > 5:  # 5 dakikadan fazla boşluk varsa
                         gaps.append({
                             "symbol": sym,
                             "gap_start": last_mum_time.strftime('%Y-%m-%d %H:%M'),
@@ -829,6 +818,7 @@ class DataService:
             }
 
         except Exception as e:
+            logger.error(f"❌ [DATA] Boşluk kontrolü hatası: {e}")
             return {"status": "error", "message": str(e)}
 
     async def fill_data_gaps(self, symbol: str = None) -> Dict[str, Any]:

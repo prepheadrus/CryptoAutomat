@@ -197,6 +197,7 @@ class ModelTrainer:
             num_class=num_class,
             use_label_encoder=False
         )
+        self.xgb_model._estimator_type = "classifier"
 
         # Random Forest modelini başlat
         self.rf_model = RandomForestClassifier(

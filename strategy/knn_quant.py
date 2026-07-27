@@ -29,6 +29,21 @@ class KNNQuantATRShield(BaseStrategy):
     def description(self) -> str:
         return "Nicel KNN Tahmin & ATR Kalkanı: Tarihsel verilere göre 'en benzer günlerin' geleceğini kopyalar. Duyguları siler."
 
+    @property
+    def indicators(self) -> list:
+        return [
+            {"name": "K-Nearest Neighbors (KNN)"},
+            {"name": "RSI 14"},
+            {"name": "ROC (Rate of Change)"},
+            {"name": "ATR (Average True Range)"}
+        ]
+
+    def get_conditions(self) -> dict:
+        return {
+            "LONG": ["KNN Tahmini Pozitif", "ATR Kalkanı Güvenli", "Momentum Yükseliyor"],
+            "SHORT": ["KNN Tahmini Negatif", "ATR Kalkanı Güvenli", "Momentum Düşüyor"]
+        }
+
     def generate_signal(self, current_row: pd.Series) -> int:
         """
         Dönüş:

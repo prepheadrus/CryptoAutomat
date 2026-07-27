@@ -28,6 +28,20 @@ class AdaptiveKoncordeX(BaseStrategy):
     def description(self) -> str:
         return "Kalman Filtresi, Akıllı Para (Koncorde) ve BTC Volatilite Endeksi (VIX) kullanan adaptif hibrit bot."
 
+    @property
+    def indicators(self) -> list:
+        return [
+            {"name": "Kalman Filter"},
+            {"name": "Koncorde (Smart Money)"},
+            {"name": "BTC VIX (Volatilite)"}
+        ]
+
+    def get_conditions(self) -> dict:
+        return {
+            "LONG": ["Fiyat > Kalman Bandı", "Koncorde Hacmi Pozitif", "BTC VIX Stabil"],
+            "SHORT": ["Fiyat < Kalman Bandı", "Koncorde Hacmi Negatif"]
+        }
+
     def generate_signal(self, current_row: pd.Series) -> int:
         # Gerekli verilerin varlığını kontrol et
         required = ['close', 'KALMAN', 'KONKORDE_AZUL', 'KONKORDE_VERDE', 'BTC_VIX', 'EWO', 'SMA_20', 'ROC_10']

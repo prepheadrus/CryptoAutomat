@@ -636,8 +636,7 @@ function renderActiveTasks(downloads) {
  */
 async function loadMarketList() {
     try {
-        const response = await fetch('/api/v1/exchange/markets');
-        const data = await response.json();
+        const data = await api.getExchangeMarkets();
 
         const marketListEl = document.getElementById('market-selection-list');
         const searchInput = document.getElementById('market-search');
@@ -830,8 +829,7 @@ window.deleteAllData = async function() {
     }
 
     try {
-        const response = await fetch('/api/v1/data/delete-all', { method: 'DELETE' });
-        const result = await response.json();
+        const result = await api.deleteAllData();
 
         if (result.status === 'success') {
             alert(`✅ ${result.message}`);
@@ -887,16 +885,7 @@ window.deleteDownloadTaskWithData = async function(symbol, marketType) {
 
         // 2. Veriyi sil (DB + Flat files)
         const symbolClean = symbol.split('_')[0].trim();
-        const deleteDataResult = await fetch('/api/v1/data/delete-klines', {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                symbol: symbolClean,
-                market_type: marketType
-            })
-        });
-
-        const deleteDataJson = await deleteDataResult.json();
+        const deleteDataJson = await api.deleteData(symbolClean, marketType);
 
         if (deleteDataJson.status === 'success') {
             alert(`✅ ${symbol} görev + TÜM veriler silindi!`);
@@ -1187,6 +1176,8 @@ async function loadAdvancedSettings() {
             const htf = data.config.htf || {};
             document.getElementById('htf-enabled').checked = htf.enabled || true;
             document.getElementById('htf-method').value = htf.trend_method || 'ema_stack';
+            document.getElementById('htf-ema-fast').value = htf.ema_fast || 20;
+            document.getElementById('htf-ema-slow').value = htf.ema_slow || 50;
 
             // Kalman
             const kalman = data.config.kalman || { enabled: true, q: 0.001, r: 0.1 };
@@ -1223,7 +1214,9 @@ async function saveAdvancedSettings() {
         },
         htf: {
             enabled: document.getElementById('htf-enabled').checked,
-            trend_method: document.getElementById('htf-method').value
+            trend_method: document.getElementById('htf-method').value,
+            ema_fast: parseInt(document.getElementById('htf-ema-fast').value),
+            ema_slow: parseInt(document.getElementById('htf-ema-slow').value)
         }
     };
 
@@ -1328,11 +1321,6 @@ async function saveApiKeys() {
 async function testApiConnection() {
     const apiKey = document.getElementById('api-key').value;
     const apiSecret = document.getElementById('api-secret').value;
-
-    if (!apiKey || !apiSecret) {
-        showToast('❌ API Key ve Secret giriniz!', 'error');
-        return;
-    }
 
     try {
         showToast('🧪 API bağlantısı test ediliyor...', 'info');
@@ -1831,8 +1819,8 @@ window.startMLTraining = async function() {
             symbol: symbol,
             timeframe: timeframe,
             limit: limit,
-            tp_multiplier: tpMultiplier,
-            sl_multiplier: slMultiplier
+            tp: tpMultiplier,
+            sl: slMultiplier
         };
 
         console.log('🧠 [ML] Eğitim başlatılıyor...', data);
@@ -1936,7 +1924,7 @@ window.loadMLTrainingHistory = async function() {
                     </thead>
                     <tbody>
                         ${history.map(item => {
-                            const date = item.timestamp || item.created_at || 'N/A';
+                            const date = item.completed_at || item.started_at || 'N/A';
                             const dateStr = typeof date === 'string' ? date.split('T')[0] : date;
                             const metrics = item.metrics || {};
 
@@ -1969,7 +1957,7 @@ window.loadMLTrainingHistory = async function() {
                                             <div>Precision: <strong style="color: var(--neon-blue);">${(precision * 100).toFixed(1)}%</strong></div>
                                             <div>Recall: <strong style="color: var(--neon-purple);">${(recall * 100).toFixed(1)}%</strong></div>
                                             <div>F1-Score: <strong style="color: var(--neon-green);">${(f1 * 100).toFixed(1)}%</strong></div>
-                                            <div>TP: <strong>${(metrics.tp_multiplier || 2.0).toFixed(1)}x</strong></div>
+                                            <div>TP: <strong>${(item.tp_multiplier || 2.0).toFixed(1)}x</strong></div>
                                         </div>
                                     </td>
                                     <td>
@@ -2434,6 +2422,274 @@ function setupEventListeners() {
 }
 
 // ============================================================================
+// WEBSOCKET CLIENT (Real-time Event Streaming)
+// ============================================================================
+
+/**
+ * WebSocket Client - Real-time event streaming from backend
+ * Connects to /ws endpoint and listens for position events
+ */
+class WebSocketClient {
+    constructor() {
+        this.ws = null;
+        this.reconnectAttempts = 0;
+        this.maxReconnectAttempts = 10;
+        this.reconnectDelay = 1000;
+        this.isConnecting = false;
+        this.lastMessageTime = null;
+    }
+
+    /**
+     * Connect to WebSocket server
+     */
+    connect() {
+        if (this.isConnecting || this.ws?.readyState === WebSocket.OPEN) {
+            console.log('🔌 [WS] Already connected or connecting');
+            return;
+        }
+
+        this.isConnecting = true;
+
+        // WebSocket URL (same host as API)
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/api/v1/ws`;
+
+        console.log(`🔌 [WS] Connecting to ${wsUrl}...`);
+
+        try {
+            this.ws = new WebSocket(wsUrl);
+
+            this.ws.onopen = () => {
+                this.isConnecting = false;
+                this.reconnectAttempts = 0;
+                console.log('✅ [WS] Connected to backend');
+                this.lastMessageTime = Date.now();
+            };
+
+            this.ws.onmessage = (event) => {
+                try {
+                    const message = JSON.parse(event.data);
+                    this.handleMessage(message);
+                    this.lastMessageTime = Date.now();
+                } catch (error) {
+                    console.error('❌ [WS] Message parse error:', error);
+                }
+            };
+
+            this.ws.onerror = (error) => {
+                console.error('❌ [WS] WebSocket error:', error);
+                this.isConnecting = false;
+            };
+
+            this.ws.onclose = () => {
+                console.log('🔌 [WS] Disconnected');
+                this.isConnecting = false;
+                this.scheduleReconnect();
+            };
+
+        } catch (error) {
+            console.error('❌ [WS] Connection error:', error);
+            this.isConnecting = false;
+            this.scheduleReconnect();
+        }
+    }
+
+    /**
+     * Handle incoming WebSocket message
+     */
+    handleMessage(message) {
+        const { type, payload } = message;
+
+        console.log(`📬 [WS] Event received: ${type}`, payload);
+
+        switch (type) {
+            case 'position.opened':
+                this.onPositionOpened(payload);
+                break;
+
+            case 'position.closed':
+                this.onPositionClosed(payload);
+                break;
+
+            case 'position.updated':
+                this.onPositionUpdated(payload);
+                break;
+
+            case 'bot.started':
+                this.onBotStarted(payload);
+                break;
+
+            case 'bot.stopped':
+                this.onBotStopped(payload);
+                break;
+
+            default:
+                console.debug(`📬 [WS] Unhandled event: ${type}`);
+        }
+    }
+
+    /**
+     * Position Opened Event Handler
+     */
+    onPositionOpened(payload) {
+        console.log('🟢 [WS] Position opened:', payload);
+
+        // Update latest decisions
+        if (payload.symbol && window.app?.latestDecisions) {
+            window.app.latestDecisions[payload.symbol] = {
+                ...window.app.latestDecisions[payload.symbol],
+                has_position: true,
+                position_opened_at: new Date().toISOString()
+            };
+        }
+
+        // Refresh dashboard immediately
+        loadDashboard();
+        showToast(`🟢 ${payload.symbol} pozisyonu açıldı`, 'success');
+    }
+
+    /**
+     * Position Closed Event Handler
+     */
+    onPositionClosed(payload) {
+        console.log('🔴 [WS] Position closed:', payload);
+
+        // Update latest decisions
+        if (payload.symbol && window.app?.latestDecisions) {
+            window.app.latestDecisions[payload.symbol] = {
+                ...window.app.latestDecisions[payload.symbol],
+                has_position: false,
+                position_closed_at: new Date().toISOString()
+            };
+        }
+
+        // Refresh dashboard immediately
+        loadDashboard();
+
+        const pnlClass = payload.pnl >= 0 ? 'success' : 'error';
+        const pnlIcon = payload.pnl >= 0 ? '✅' : '❌';
+        showToast(
+            `${pnlIcon} ${payload.symbol} pozisyonu kapatıldı | PnL: ${pnlIcon}$${payload.pnl?.toFixed(2) || '0.00'} (${(payload.pnl_percent * 100)?.toFixed(2)}%)`,
+            pnlClass
+        );
+    }
+
+    /**
+     * Position Updated Event Handler (Trailing Stop, PnL changes)
+     */
+    onPositionUpdated(payload) {
+        console.log('📊 [WS] Position updated:', payload);
+
+        // Update specific position in UI (without full refresh)
+        this.updatePositionInTable(payload);
+    }
+
+    /**
+     * Update position in table (PnL, trailing stop)
+     */
+    updatePositionInTable(payload) {
+        const { bot_id, updates } = payload;
+
+        if (!bot_id || !updates) return;
+
+        // Find position row by bot_id
+        const tbody = document.getElementById('positions-body');
+        if (!tbody) return;
+
+        const rows = tbody.querySelectorAll('tr');
+        for (const row of rows) {
+            // Check if this row matches the bot_id
+            const closeBtn = row.querySelector('button[onclick*="' + bot_id + '"]');
+            if (closeBtn) {
+                // Update PnL if available
+                if (updates.unrealized_usd !== undefined) {
+                    const pnlCell = row.cells[4]; // PnL column
+                    if (pnlCell) {
+                        const pnl = updates.unrealized_usd;
+                        const pnlClass = pnl >= 0 ? 'color:var(--neon-green)' : 'color:var(--neon-red)';
+                        const pnlSign = pnl >= 0 ? '+' : '';
+                        pnlCell.innerHTML = `
+                            <div style="font-family:monospace; font-weight:bold; ${pnlClass}">${pnlSign}$${pnl.toFixed(2)}</div>
+                            <div style="font-size:0.7rem; color:var(--text-muted);">$${(updates.current_price || 0).toFixed(2)}</div>
+                        `;
+                    }
+                }
+
+                // Update ROE if available
+                if (updates.pnl_percent !== undefined) {
+                    const roeCell = row.cells[5]; // ROE column
+                    if (roeCell) {
+                        const roe = updates.pnl_percent;
+                        const roeClass = roe >= 0 ? 'color:var(--neon-green)' : 'color:var(--neon-red)';
+                        const roeSign = roe >= 0 ? '+' : '';
+                        roeCell.textContent = `${roeSign}${roe.toFixed(2)}%`;
+                    }
+                }
+
+                // Update stop loss if available
+                if (updates.stop_loss !== undefined) {
+                    const slCell = row.cells[6]; // SL/TP column
+                    if (slCell) {
+                        const slDiv = slCell.querySelector('div[color*="neon-red"]');
+                        if (slDiv) {
+                            slDiv.textContent = `SL: $${updates.stop_loss.toFixed(2)}`;
+                        }
+                    }
+                }
+
+                break;
+            }
+        }
+    }
+
+    /**
+     * Bot Started Event Handler
+     */
+    onBotStarted(payload) {
+        console.log('🚀 [WS] Bot started:', payload);
+        loadDashboard();
+        showToast(`🚀 ${payload.symbol} botu başlatıldı`, 'success');
+    }
+
+    /**
+     * Bot Stopped Event Handler
+     */
+    onBotStopped(payload) {
+        console.log('🛑 [WS] Bot stopped:', payload);
+        loadDashboard();
+        showToast(`🛑 ${payload.symbol} botu durduruldu`, 'info');
+    }
+
+    /**
+     * Schedule reconnection
+     */
+    scheduleReconnect() {
+        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            console.error('❌ [WS] Max reconnect attempts reached, using polling only');
+            return;
+        }
+
+        const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts);
+        this.reconnectAttempts++;
+
+        console.log(`🔄 [WS] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+
+        setTimeout(() => this.connect(), delay);
+    }
+
+    /**
+     * Disconnect
+     */
+    disconnect() {
+        if (this.ws) {
+            this.ws.close();
+            this.ws = null;
+            console.log('🔌 [WS] Disconnected by user');
+        }
+    }
+}
+
+// ============================================================================
 // AUTO REFRESH
 // ============================================================================
 
@@ -2441,6 +2697,13 @@ function setupEventListeners() {
  * Start auto-refresh
  */
 function startAutoRefresh() {
+    // Start WebSocket client
+    if (!app.wsClient) {
+        app.wsClient = new WebSocketClient();
+        app.wsClient.connect();
+    }
+
+    // Fallback polling (5 seconds) - in case WebSocket fails
     app.refreshInterval = setInterval(async () => {
         if (app.initialized) {
             await loadDashboard();
@@ -2449,7 +2712,7 @@ function startAutoRefresh() {
         }
     }, 5000); // 5 seconds
 
-    console.log('🔄 [REFRESH] Auto-refresh started (5s)');
+    console.log('🔄 [REFRESH] Auto-refresh started (5s) + WebSocket real-time');
 }
 
 /**
@@ -2460,6 +2723,12 @@ function stopAutoRefresh() {
         clearInterval(app.refreshInterval);
         app.refreshInterval = null;
         console.log('⏹️ [REFRESH] Auto-refresh stopped');
+    }
+
+    if (app.wsClient) {
+        app.wsClient.disconnect();
+        app.wsClient = null;
+        console.log('🔌 [WS] WebSocket disconnected');
     }
 }
 

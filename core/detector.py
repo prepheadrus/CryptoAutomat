@@ -1,12 +1,13 @@
 import pandas as pd
 import numpy as np
-try:
-    import pandas_ta as ta
-except ImportError:
-    try:
-        import pandas_ta_classic as ta
-    except ImportError:
-        ta = None
+
+def _calculate_vhf(close: pd.Series, period: int = 28) -> float:
+    if len(close) < period:
+        return 0.5
+    recent = close.tail(period)
+    numerator = abs(recent.max() - recent.min())
+    denominator = recent.diff().abs().sum()
+    return float(numerator / denominator) if denominator != 0 else 0.0
 
 class MarketRegimeDetector:
     """
@@ -34,7 +35,7 @@ class MarketRegimeDetector:
         # VHF, fiyat hareketinin ne kadarının trende dayalı olduğunu ölçer.
         # Yüksek değer = Güçlü Trend.
         try:
-            vhf = ta.vhf(df['close'], length=28).iloc[-1]
+            vhf = _calculate_vhf(df['close'], period=28)
         except:
             vhf = 0.5 # Default orta değer
             

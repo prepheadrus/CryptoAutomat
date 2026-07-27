@@ -143,6 +143,14 @@ class MLService:
             
             logger.info(f"📊 [ML] ML pipeline başlatılıyor...")
             
+            # --- YENİ EKLENEN: ML İÇİN TEKNİK İNDİKATÖR HESAPLAMASI ---
+            from data.indicators import StrategyIndicators
+            logger.info("🧠 [ML FEATURE ENGINEERING] Ham veriye 20+ teknik indikatör (RSI, MACD, OBV vb.) ekleniyor...")
+            df = StrategyIndicators.add_all_indicators(df)
+            df = df.dropna()
+            logger.info(f"✅ [ML FEATURE ENGINEERING] İndikatörler başarıyla eklendi, yeni özellikler öğrenime hazır.")
+            # ----------------------------------------------------------
+            
             # 2-3. Feature engineering + Triple Barrier + Train/test split (hepsi bir arada)
             from ml.data_prep import prepare_ml_data
             X_train, X_test, y_train, y_test, scaler = prepare_ml_data(
@@ -301,8 +309,8 @@ class MLService:
                 "model_type": request.model_type,
                 "dataset_size": dataset_size,
                 "feature_count": feature_count,
-                "tp_multiplier": float(getattr(request, 'tp_multiplier', 2.0)),
-                "sl_multiplier": float(getattr(request, 'sl_multiplier', 2.0)),
+                "tp_multiplier": float(getattr(request, 'tp', 2.0)),
+                "sl_multiplier": float(getattr(request, 'sl', 2.0)),
                 "started_at": started_at.isoformat(),
                 "completed_at": completed_at.isoformat(),
                 "duration_seconds": duration_seconds,

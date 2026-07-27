@@ -299,17 +299,9 @@ async function saveStrategy() {
         }
         
         // API çağrısı
-        const response = await fetch('/api/v1/strategy/save', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(strategyData)
-        });
+        const result = await api.saveStrategy(strategyData);
         
-        const result = await response.json();
-        
-        if (response.ok && result.status === 'success') {
+        if (result.status === 'success') {
             console.log('[OK] Strateji kaydedildi:', result.filename);
             alert(`✅ ${result.message}`);
             
@@ -335,14 +327,13 @@ async function saveStrategy() {
 async function loadStrategies() {
     try {
         console.log('[INFO] Stratejiler yükleniyor...');
-
-        const response = await fetch('/api/v1/strategy/list');
-        const result = await response.json();
-
-        if (response.ok && result.status === 'success') {
+        
+        const result = await api.getStrategies();
+        
+        if (result.status === 'success') {
             const container = document.getElementById('saved-strategies-list');
-
-            if (!result.strategies || result.strategies.length === 0) {
+            
+            if (result.count === 0) {
                 container.innerHTML = `
                     <div style="text-align: center; padding: 20px; color: var(--text-muted);">
                         📭 Henüz kaydedilmiş strateji yok
@@ -383,10 +374,9 @@ async function loadStrategy(filename) {
     try {
         console.log('[INFO] Strateji yükleniyor:', filename);
 
-        const response = await fetch(`/api/v1/strategy/info/${filename}`);
-        const result = await response.json();
+        const result = await api.getStrategyInfo(filename);
 
-        if (response.ok && result.status === 'success') {
+        if (result.status === 'success') {
             const data = result.data;
 
             // 1. Önce formu tamamen temizle
@@ -530,24 +520,16 @@ async function testStrategy() {
         const strategyData = buildStrategyJSON();
 
         // API çağrısı
-        const response = await fetch('/api/v1/backtest/run', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                strategy: strategyData,
-                symbol: symbol,
-                timeframe: timeframe,
-                days: days,
-                initial_balance: initialBalance,
-                risk_per_trade: 0.01
-            })
+        const result = await api.runBacktest({
+            strategy: strategyData,
+            symbol: symbol,
+            timeframe: timeframe,
+            days: days,
+            initial_balance: initialBalance,
+            risk_per_trade: 0.01
         });
 
-        const result = await response.json();
-
-        if (response.ok && result.status === 'success') {
+        if (result.status === 'success') {
             console.log('[OK] Backtest tamamlandı:', result.metrics);
 
             // Test sonuçlarını göster

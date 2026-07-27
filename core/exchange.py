@@ -12,10 +12,28 @@ from core.circuit_breaker import exchange_breaker, CircuitBreakerError
 # Event Bus import (Circular dependency kırıldı!)
 from shared.events import event_bus
 from shared.events.events import SignalGeneratedEvent, CandleClosedEvent, LivePriceUpdatedEvent
+from core.config import CONFIG
+from core.detector import MarketRegimeDetector
+from core.paper import paper_engine
+from core.trading.services.data_sync import data_synchronizer
+from core.trading.services.signal_generator import signal_generator_service
+from core.wfo_engine import get_wfo_engine, start_wfo_background_task
+from data.database import db_manager
+from data.features import AdvancedFeatures
+from data.indicators import StrategyIndicators
+from data.ohlcv_storage import get_storage
+from data.storage.parquet_lake import get_parquet_lake
+from datetime import datetime, timedelta
+from ml.inference import get_ml_prediction
+import ccxt
+import datetime
+import time
+import traceback
+
+# --- Moved from inline ---
 
 # WFO Engine import (opsiyonel - WFO aktifse)
 try:
-    from core.wfo_engine import get_wfo_engine, start_wfo_background_task
     WFO_AVAILABLE = True
 except ImportError:
     WFO_AVAILABLE = False
@@ -177,6 +195,13 @@ class ExchangeManager:
         # Final log
         logger.info("🎉 [EDA] Kısır Döngü Kırıldı - %100 Olay Güdümlü Mimari Aktif")
 
+    def update_api_keys(self, api_key: str, api_secret: str):
+        """Update API keys dynamically without restarting."""
+        if hasattr(self, 'exchange') and self.exchange:
+            self.exchange.apiKey = api_key
+            self.exchange.secret = api_secret
+            logger.info("🔑 [EXCHANGE] API anahtarları aktif borsa örneği için güncellendi (Yeniden başlatmaya gerek kalmadan).")
+
     def _setup_event_subscriptions(self):
         """Event Bus'a abone ol - State senkronizasyonu"""
         try:
@@ -284,7 +309,6 @@ class ExchangeManager:
 
     async def load_tasks_from_db(self):
         """Uygulama başladığında yarım kalan görevleri veritabanından hafızaya geri yükler ve indirmeyi başlatır."""
-        from data.database import db_manager
         tasks = await db_manager.get_all_download_tasks()
         count = 0
         for t in tasks:
@@ -425,7 +449,6 @@ class ExchangeManager:
 
         [WSS NORMALİZASYON] Sembol otomatik CCXT formatına çevrilir.
         """
-        import time
 
         # ========================================================================
         # [WSS NORMALİZASYONU] Sembol CCXT formatına çevir
@@ -492,17 +515,13 @@ class ExchangeManager:
                     try:
                         # Her 60 saniyede bir yap (yeni mum kapandığında)
                         if int(current_time) % 60 < 5:  # İlk 5 saniye
-                            from data.storage.parquet_lake import get_parquet_lake
-                            from datetime import datetime, timedelta
 
                             lake = get_parquet_lake('binance')
 
-                            from data.database import db_manager
                             # Son 1 saatin 1m verisini DB'den çek
                             klines_data = await db_manager.get_klines(symbol, '1m', limit=60)
 
                             if klines_data and len(klines_data) > 0:
-                                import pandas as pd
                                 df_1m = pd.DataFrame(klines_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 
                                 # [TZ FIX] Timestamp parse - SQLite string veya int olabilir
@@ -530,6 +549,14 @@ class ExchangeManager:
                 break
             except Exception as e:
                 logger.error(f"WS Ticker İzleme Hatası ({symbol}): {e}")
+                
+                # EĞER API ANAHTARI HATALIYSA (Code -2008), Anahtarları silip anonim moda geç
+                if "AuthenticationError" in str(type(e)) or "-2008" in str(e):
+                    logger.warning(f"⚠️ {symbol} için API anahtarları geçersiz! Ticker için anonim moda geçiliyor...")
+                    if hasattr(self, 'exchange') and self.exchange:
+                        self.exchange.apiKey = None
+                        self.exchange.secret = None
+                
                 await asyncio.sleep(5)  # Hata durumunda bağlantıyı 5sn soğut
 
     async def download_historical_data(self, symbol, timeframe='1m', start_date_str="2024-01-01", market_type='future', is_resume=False):
@@ -537,9 +564,6 @@ class ExchangeManager:
         Belirli bir tarihten itibaren eksik olan tüm mum verilerini indirir.
         YENİ: SADECE 1m indirilir, diğer timeframe'ler resample ile oluşturulur (Veritabanı şişkinliği önleme).
         """
-        import pandas as pd  # YENİ: Fonksiyon içinde import
-        from data.database import db_manager
-        import datetime
 
         # ========================================================================
         # YENİ: SADECE 1m İNDİR (Diğer TF'ler resample ile oluşturulur)
@@ -645,7 +669,6 @@ class ExchangeManager:
         limit = 1000 # Binance tek seferde max 1000 mum verir
 
         # İndirme başlangıç zamanı (speed tracking için)
-        import time
         start_time = time.time()
         last_ts = since  # Son mum timestamp'i
         latest_ts = None  # DB'deki son mum (GAP CHECK için)
@@ -804,7 +827,6 @@ class ExchangeManager:
                     logger.debug(f"📥 {symbol} {len(ohlcv)} mum indirildi. Son: {pd.to_datetime(last_ts, unit='ms')}")
 
                 # Eğer son gelen mum anlık zamana çok yakınsa dur
-                import time
                 now_ms = int(time.time() * 1000)
                 if last_ts >= now_ms - 60000:  # Son 1 dakika
                     logger.info(f"🎯 {symbol} indirme işlemi güncel zamana (UTC) ulaştı.")
@@ -842,8 +864,6 @@ class ExchangeManager:
             # YENİ: PARQUET LAKE - Otomatik TF oluşturma (JSON YOK!)
             # ========================================================================
             try:
-                from data.storage.parquet_lake import get_parquet_lake
-                from datetime import datetime, timedelta
 
                 lake = get_parquet_lake('binance')
 
@@ -857,7 +877,6 @@ class ExchangeManager:
                 klines_data = await db_manager.get_klines(symbol_clean, '1m', limit=limit_1m)
 
                 if klines_data and len(klines_data) > 0:
-                    import pandas as pd
                     df_1m = pd.DataFrame(klines_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
                     df_1m['timestamp'] = pd.to_datetime(df_1m['timestamp'], unit='ms', utc=True)
                     df_1m.set_index('timestamp', inplace=True)
@@ -873,7 +892,6 @@ class ExchangeManager:
                     ]
 
                     for tf in all_timeframes:
-                        from data.indicators import StrategyIndicators
 
                         # Resampling (look-ahead bias korumalı)
                         df_tf = StrategyIndicators.resample_data(df_1m, tf)
@@ -902,7 +920,6 @@ class ExchangeManager:
             # YENİ: İndirme tamamlandı - Frontend'e haber ver (otomatik envanter yenileme)
             # ========================================================================
             try:
-                from shared.events import event_bus
                 event_bus.emit('data_download_completed', {
                     'symbol': symbol,
                     'market_type': market_type,
@@ -915,7 +932,7 @@ class ExchangeManager:
 
         return all_downloaded
 
-    async def _process_bot_task(self, paper_engine, bot_id: str, df: pd.DataFrame, current_price: float, htf_trend: str, regime: str, htf_trends: dict = None):
+    async def _process_bot_task(self, paper_engine, bot_id: str, df: pd.DataFrame, htf_trend: str, regime: str, htf_trends: dict = None):
         """
         Tek bir bot için sinyal işleme task'ı (async, izole, hata korumalı).
         EVENT-DRIVEN: Artık doğrudan fonksiyon çağrısı yerine Event Bus kullanıyor.
@@ -925,7 +942,7 @@ class ExchangeManager:
             paper_engine: PaperTrader instance (geriye dönük uyumluluk)
             bot_id: İşlenecek bot ID
             df: İndikatörlerle DataFrame
-            current_price: Güncel fiyat
+            current_price: Güncel fiyat (SADECE GERİYE UYUMLULUK - KULLANILMAZ)
             htf_trend: Yüksek timeframe trend (major HTF)
             regime: Piyasa rejimi
             htf_trends: HTF trend sözlüğü (örn: {'5m': 'BULL', '15m': 'BEAR'})
@@ -955,10 +972,13 @@ class ExchangeManager:
             # ========================================================================
             # KATI MUM KAPANış KİLİDİ (Strict Candle Close Lock)
             # ========================================================================
-            from core.config import CONFIG
 
             candle_lock_config = CONFIG.get('candle_close_lock', {})
             candle_lock_enabled = candle_lock_config.get('enabled', True)
+
+            # 🔧 CANDLE LOCK DEVRE DIŞI: WSS zaten sadece yeni mum geldiğinde tetikleniyor.
+            # last_processed_ts kilidi yeterli. Ek candle lock gereksiz gecikmeye sebep oluyor.
+            candle_lock_enabled = False  # ← FORCE DISABLE
 
             if candle_lock_enabled:
                 # Son mumun kapanış zamanını kontrol et
@@ -985,7 +1005,6 @@ class ExchangeManager:
                     candle_age_seconds = (current_time - last_candle_time).total_seconds()
 
                     # Mum kapanışına ne kadar kaldı?
-                    # 🔧 DÜZELTME: %50 → %30 (daha hızlı sinyal, mumun ilk yarısını atla)
                     candle_close_threshold = candle_duration_minutes * 60 * 0.30  # %30 kapanmış
 
                     if candle_age_seconds < candle_close_threshold:
@@ -997,7 +1016,7 @@ class ExchangeManager:
                             logger.debug(
                                 f"⏳ [CANDLE LOCK] {symbol} ({timeframe}) mum kapanmadı | Kalan: {remaining_seconds:.0f}s"
                             )
-                        return  # Sinyal üretme, mum kapanışını bekle
+                        return False  # Sinyal üretme, mum kapanışını bekle
 
             # Strateji sinyali üret
             strategy = paper_engine.strategies.get(symbol)
@@ -1008,7 +1027,7 @@ class ExchangeManager:
 
             if strategy is None or df.empty or len(df) < 50:
                 logger.warning(f"⏭️ [SINYAL] {symbol} strateji yok veya veri yetersiz (strategy={strategy is not None}, df_len={len(df)})")
-                return
+                return False
 
             latest_candle = df.iloc[-1]
 
@@ -1023,24 +1042,30 @@ class ExchangeManager:
             logger.debug(f"🔍 [INDICATORS] RSI_14={latest_candle.get('RSI_14', 'YOK')}, EMA_200={latest_candle.get('EMA_200', 'YOK')}")
 
             # Strateji sinyali üret
-            strategy_signal = strategy.generate_signal(latest_candle)
+            raw_signal_int = strategy.generate_signal(latest_candle)
             
             # 🔥 DEBUG: Strateji sinyali
-            logger.info(f"🔍 [STRATEGY] {symbol} raw signal: {strategy_signal} (type: {type(strategy_signal).__name__})")
+            logger.info(f"🔍 [STRATEGY] {symbol} raw signal: {raw_signal_int} (type: {type(raw_signal_int).__name__})")
 
-            # 🔧 SİNYAL ADAPTER: int → dict dönüşümü
-            if isinstance(strategy_signal, int):
+            # 🔧 SİNYAL ADAPTER: int → dict dönüşümü (SADECE LOGLAMA İÇİN)
+            signal_dict_for_logging = {}
+            if isinstance(raw_signal_int, int):
                 signal_map = {
                     0: {'signal': 'SHORT', 'confidence': 1.0},
                     1: {'signal': 'HOLD', 'confidence': 0.0},
                     2: {'signal': 'LONG', 'confidence': 1.0}
                 }
-                strategy_signal = signal_map.get(strategy_signal, {'signal': 'HOLD', 'confidence': 0.0})
-                logger.debug(f"🔧 [ADAPTER] int→dict: {strategy_signal}")
+                signal_dict_for_logging = signal_map.get(raw_signal_int, {'signal': 'HOLD', 'confidence': 0.0})
+                logger.debug(f"🔧 [ADAPTER] int→dict: {signal_dict_for_logging}")
+
+            # ========================================================================
+            # ✅ BUG FIX 1: Fiyatı her zaman sinyalin üretildiği mumdan al
+            # ========================================================================
+            signal_price = float(latest_candle['close'])
 
             # 🎯 SİNYAL LOGLAMA
-            signal_type = strategy_signal.get('signal', 'NONE')
-            logger.info(f"🎯 [SINYAL] {symbol} | {signal_type} | Fiyat: ${current_price:.2f} | TF: {timeframe}")
+            signal_type = signal_dict_for_logging.get('signal', 'NONE')
+            logger.info(f"🎯 [SINYAL] {symbol} | {signal_type} | Fiyat: ${signal_price:.2f} | TF: {timeframe}")
             logger.info(f"   📊 Strateji: {strategy_id} | HTF: {htf_trend} | Rejim: {regime}")
 
             # 🧠 ML CONFIDENCE SCORE
@@ -1048,22 +1073,25 @@ class ExchangeManager:
             ml_prediction = 'HOLD'
 
             try:
-                from ml.inference import get_ml_prediction
                 ml_result = get_ml_prediction(symbol, timeframe, indicators_payload)
                 if ml_result:
                     ml_confidence = ml_result.get('confidence', 0)
                     ml_prediction = ml_result.get('prediction', 'HOLD')
-                    strategy_signal['ml_confidence'] = ml_confidence
+                    if 'ml_confidence' in signal_dict_for_logging:
+                        signal_dict_for_logging['ml_confidence'] = ml_confidence
             except Exception as ml_err:
                 logger.debug(f"⚠️ [ML] Model yüklenemedi: {ml_err}")
-                strategy_signal['ml_confidence'] = None
+                if 'ml_confidence' in signal_dict_for_logging:
+                    signal_dict_for_logging['ml_confidence'] = None
 
-            # EVENT-DRIVEN: SignalGeneratedEvent yayınla
+            # ========================================================================
+            # ✅ BUG FIX 2: Event'e doğru tipleri (int, float) gönder
+            # ========================================================================
             event = SignalGeneratedEvent(
                 bot_id=bot_id,
                 symbol=symbol,
-                signal=strategy_signal,
-                price=current_price,
+                signal=raw_signal_int,
+                price=signal_price,
                 timeframe=timeframe,
                 indicators=indicators_payload,
                 metadata={
@@ -1078,6 +1106,7 @@ class ExchangeManager:
             await event_bus.publish(event)
 
             logger.debug(f"✅ [EVENT] {symbol} sinyali yayınlandı")
+            return True
 
         except Exception as e:
             logger.error(f"❌ [BOT TASK] {bot_id} işlem hatası: {e}")
@@ -1089,12 +1118,6 @@ class ExchangeManager:
 
         [WSS NORMALİZASYON] Sembol otomatik CCXT formatına çevrilir.
         """
-        from core.paper import paper_engine
-        from data.indicators import StrategyIndicators
-        from data.features import AdvancedFeatures
-        from core.detector import MarketRegimeDetector
-        from data.database import db_manager
-        import ccxt
 
         # ========================================================================
         # [WSS NORMALİZASYON] Sembol CCXT formatına çevir
@@ -1106,7 +1129,6 @@ class ExchangeManager:
         logger.info(f"🔥 [POLLER DEBUG] symbol={symbol}, timeframe={timeframe}")
         logger.info(f"🚀 [FINAL HYBRID] {symbol} için strateji poller başlatılıyor ({timeframe})...")
 
-        from core.paper import paper_engine
         logger.info(f"📊 [POLLER DEBUG] paper_engine={paper_engine is not None}")
         logger.info(f"📊 [POLLER DEBUG] active_bots={len(paper_engine.active_bots) if paper_engine else 0}")
 
@@ -1115,7 +1137,6 @@ class ExchangeManager:
         # ========================================================================
         logger.info(f"🔥 [GAP CHECK] check_and_fill_gap başlatılıyor...")
         try:
-            from core.trading.services.data_sync import data_synchronizer
             # ARKA PLANDA ÇALIŞTIR - event loop'u kilitleme!
             await asyncio.wait_for(
                 data_synchronizer.check_and_fill_gap(symbol, self),
@@ -1266,7 +1287,6 @@ class ExchangeManager:
                         # YENİ: GAP FILL SONRASI FLAT FILE GÜNCELLEME
                         # ========================================================================
                         try:
-                            from data.ohlcv_storage import get_storage
                             storage = get_storage()
 
                             # Tüm veriyi flat file'a kaydet
@@ -1280,7 +1300,6 @@ class ExchangeManager:
                             # Diğer TF'leri de güncelle (resample)
                             all_timeframes = ['5m', '15m', '1h', '4h']
                             for tf in all_timeframes:
-                                from data.indicators import StrategyIndicators
                                 df_tf = StrategyIndicators.resample_data(save_df, tf)
                                 df_tf = df_tf.dropna()
                                 if not df_tf.empty:
@@ -1300,11 +1319,9 @@ class ExchangeManager:
                     # Eğer flat file yoksa, DB'den oluştur
                     # ========================================================================
                     try:
-                        from data.ohlcv_storage import get_storage
                         storage = get_storage()
 
                         # Flat file var mı kontrol et
-                        from datetime import datetime, timedelta
                         end_date = datetime.utcnow()
                         start_date = end_date - timedelta(days=7)  # Son 7 günü kontrol et
 
@@ -1344,7 +1361,6 @@ class ExchangeManager:
                     # YENİ: REST API'DEN ÇEKİLDİKTEN SONRA FLAT FILE OLUŞTUR
                     # ========================================================================
                     try:
-                        from data.ohlcv_storage import get_storage
                         storage = get_storage()
 
                         save_df = ohlcv_df.copy()
@@ -1358,7 +1374,6 @@ class ExchangeManager:
                 else:
                     logger.warning(f"WARNING [REST] {symbol} için REST API'den veri çekilemedi.")
         except Exception as e:
-            import traceback
             logger.error(f"ERROR [HYBRID] {symbol} veri yükleme hatası: {e}")
             logger.error(traceback.format_exc())
             logger.info(f"INFO [HYBRID] Boş DataFrame ile başlanıyor.")
@@ -1376,7 +1391,6 @@ class ExchangeManager:
         # ============================================
         # Aktif botları kontrol et ve sinyal hesaplamalarını başlat
         try:
-            from core.paper import paper_engine
             
             if paper_engine and len(paper_engine.active_bots) > 0:
                 logger.info(f"🤖 [1-to-N] {symbol} için {len(paper_engine.active_bots)} aktif bot işleniyor...")
@@ -1398,7 +1412,6 @@ class ExchangeManager:
                                 paper_engine=paper_engine,
                                 bot_id=bot_id,
                                 df=ohlcv_df,
-                                current_price=ohlcv_df['close'].iloc[-1] if not ohlcv_df.empty else 0,
                                 htf_trend='NEUTRAL',  # HTF henüz hesaplanmadı
                                 regime='UNKNOWN',     # Rejim henüz hesaplanmadı
                                 htf_trends={}
@@ -1439,10 +1452,19 @@ class ExchangeManager:
             logger.debug(f"🔄 [WSS LOOP] {symbol} iteration #{loop_iteration}")
 
             try:
-                # WebSocket üzerinden OHLCV dinle (PUSH - POLLING YOK!)
+                # WebSocket üzerinden OHLCV dinle (15s timeout + REST fallback ile)
                 logger.debug(f"📡 [WSS] watch_ohlcv çağrılıyor...")
-                live_ohlcv = await self.exchange.watch_ohlcv(symbol, timeframe='1m', limit=100)
-                logger.debug(f"✅ [WSS] watch_ohlcv döndü: {len(live_ohlcv) if live_ohlcv else 0} mum")
+                try:
+                    live_ohlcv = await asyncio.wait_for(
+                        self.exchange.watch_ohlcv(symbol, timeframe=timeframe, limit=100),
+                        timeout=15.0
+                    )
+                except Exception as wss_err:
+                    logger.debug(f"⚠️ [WSS FALLBACK] {symbol} WSS zaman aşımı ({wss_err}), REST API ile çekiliyor...")
+                    live_ohlcv = await self.fetch_ohlcv(symbol, timeframe=timeframe, limit=100)
+                    await asyncio.sleep(2)
+
+                logger.debug(f"✅ [WSS/REST] Veri alındı: {len(live_ohlcv) if live_ohlcv else 0} mum")
 
                 if not live_ohlcv or len(live_ohlcv) == 0:
                     logger.warning(f"WARNING [WSS] {symbol} boş OHLCV, devam ediliyor...")
@@ -1566,7 +1588,6 @@ class ExchangeManager:
                 trend_method = htf_config.get('trend_method', 'ema_stack')
 
                 # Asenkron Thread üzerinden veri hazırlığı ve analiz
-                from core.trading.services.signal_generator import signal_generator_service
                 result = await signal_generator_service.prepare_target_data_and_detect_regime(
                     df_1m, target_tf, htf_levels, ema_fast, ema_slow, trend_method
                 )
@@ -1629,7 +1650,6 @@ class ExchangeManager:
                                     paper_engine,
                                     bot_id,
                                     df_target,
-                                    current_price,
                                     htf_trend,
                                     regime_info['regime'],
                                     htf_trends
@@ -1645,11 +1665,18 @@ class ExchangeManager:
                                 results = await asyncio.gather(*bot_tasks, return_exceptions=True)
                                 logger.info(f"   ✅ [BOT GATHER] Tüm tasklar tamamlandı")
 
+                                any_success = False
                                 for bot_id, result in zip(active_bot_ids, results):
                                     if isinstance(result, Exception):
                                         logger.error(f"   ❌ [BOT] {bot_id} işleme hatası: {result}")
                                     else:
                                         logger.debug(f"   ✅ [BOT] {bot_id} başarıyla işlendi")
+                                        if result is True:
+                                            any_success = True
+                                
+                                if any_success:
+                                    last_processed_ts = current_candle_dt
+                                    logger.debug(f"🔒 [CANDLE LOCK] Mum kilitlendi: {last_processed_ts}")
                             except Exception as gather_err:
                                 logger.error(f"   ❌ [1-to-N] Gather hatası: {gather_err}")
                     else:
@@ -1663,7 +1690,6 @@ class ExchangeManager:
                     # ========================================================================
                     # 9. DATA LAKE GÜNCELLEME - REFACTORED (Async)
                     # ========================================================================
-                    from core.trading.services.data_sync import data_synchronizer
                     await data_synchronizer.update_data_lake(symbol, df_1m)
 
                     # ========================================================================
@@ -1684,7 +1710,6 @@ class ExchangeManager:
                 logger.info(f"🛑 [WSS] {symbol} WebSocket döngüsü iptal edildi.")
                 break
             except Exception as e:
-                import traceback
                 logger.error(f"❌ [WSS] {symbol} Strateji Döngü Hatası: {e}")
                 logger.error(traceback.format_exc())
                 await asyncio.sleep(5)

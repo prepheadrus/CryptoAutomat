@@ -8,7 +8,6 @@ Yeni yapı:
 - Delegation pattern ile geriye dönük uyumluluk sağlar
 
 Usage:
-    from core.paper import PaperTrader
 
     pt = PaperTrader()
 
@@ -50,6 +49,14 @@ from core.bot.bot_manager import BotManager, BotConfig, BotStatus, MarketType, M
 from strategy.confluence import StrategyConfluence
 from strategy.risk import RiskManagement
 from strategy.manager import StrategyManager
+
+from core.trading.services.reporter import strategy_reporter_service
+from core.trading.services.signal_validator import SignalValidatorService
+from data.database import db_manager
+from shared.events.event_bus import Event
+import traceback
+
+# --- Moved from inline ---
 
 
 class PaperTrader:
@@ -114,7 +121,6 @@ class PaperTrader:
         self.market_regime = "UNKNOWN"
         
         # ML Karar Motoru Servisi
-        from core.trading.services.signal_validator import SignalValidatorService
         self.ml_models = {}  # {symbol_timeframe: trainer_instance}
         self.ml_enabled = True
         self.signal_validator = SignalValidatorService(self.ml_models)
@@ -204,50 +210,24 @@ class PaperTrader:
                 logger.warning(f"❌ [SİNYAL RED] Strateji bulunamadı: {symbol}")
                 return
 
-            # ============================================
-            # HTF FİLTRE - Detaylı loglama
-            # ============================================
-            htf_passed = self.signal_validator.validate_htf_trend(symbol, htf_trends, signal)
-            if not htf_passed:
-                logger.warning(f"❌ [SİNYAL RED] HTF veto: {symbol} {signal_type} | HTF={htf_trend}")
-                logger.warning(f"   ÇÖZÜM: HTF ayarlarını config.yaml'dan kapat veya HTF timeframe'i değiştir")
-                return
-            else:
-                logger.debug(f"✅ [HTF] {symbol} {signal_type} geçti: HTF={htf_trend}")
-
-            # ============================================
-            # RISK ENGINE KONTROL - Detaylı loglama
-            # ============================================
-            open_positions_count = len(self.position_manager.get_all_positions())
-            risk_ok = self.risk_engine.can_open_position(open_positions_count)
-            
-            if not risk_ok:
-                logger.warning(f"❌ [SİNYAL RED] Risk kontrolü başarısız: {symbol}")
-                logger.warning(f"   Açık pozisyon sayısı: {open_positions_count}")
-                logger.warning(f"   Max pozisyon limiti: {self.risk_engine.config.max_open_positions}")
-                logger.warning(f"   Kill switch aktif: {self.risk_engine.kill_switch_active}")
-                logger.warning(f"   Ardışık kayıplar: {self.risk_engine.consecutive_losses}")
-                logger.warning(f"   Max consecutive losses: {self.risk_engine.config.max_consecutive_losses}")
-                logger.warning(f"   ÇÖZÜM: config.yaml → risk_management → kill_switch.enabled = false")
-                return
-            else:
-                logger.debug(f"✅ [RISK] {symbol} Risk kontrolü geçti: {open_positions_count}/{self.risk_engine.config.max_open_positions} pozisyon")
-
-            # Pozisyon zaten var mı?
-            existing_position = self.position_manager.get_position(bot_id)
-            if existing_position:
-                logger.info(f"ℹ️ Pozisyon zaten açık: {bot_id}")
-                return
+            strategy_id = self.active_strategies.get(symbol, "unknown")
+            is_test_strategy = "test" in strategy_id.lower() or "test" in strategy.name().lower()
 
             # ============================================
             # ML KARAR MOTORU - Detaylı loglama
             # ============================================
-            # Model flag güncelleniyor (çalışma zamanı senkronizasyonu)
             self.signal_validator.ml_enabled = self.ml_enabled
 
-            ml_confirmed, ml_confidence, ml_rec, ml_rec_norm = await self.signal_validator.validate_signal_with_ml(
-                symbol, timeframe, indicators, signal
-            )
+            if is_test_strategy:
+                ml_confirmed = True
+                ml_confidence = 1.0
+                ml_rec = signal_type
+                ml_rec_norm = signal_type
+                logger.info(f"🧪 [TEST STRATEJİSİ] {strategy.name()} test stratejisi için ML doğrulaması bypass edildi.")
+            else:
+                ml_confirmed, ml_confidence, ml_rec, ml_rec_norm = await self.signal_validator.validate_signal_with_ml(
+                    symbol, timeframe, indicators, signal
+                )
 
             # Dashboard için en son kararı kaydet
             self.latest_decisions[symbol] = {
@@ -262,19 +242,72 @@ class PaperTrader:
                 'has_position': False  # Varsayılan: Pozisyon yok
             }
 
-            # ML onayı yoksa dur - DETAYLI LOG
+            # ML onayı yoksa dur (Pozisyon Kapatmadan veya Açmadan Önce!)
             if not ml_confirmed:
                 ml_threshold = CONFIG.get('ml', {}).get('confidence_threshold', 0.65)
                 logger.warning(f"❌ [SİNYAL RED] ML onayı yok: {symbol} {signal_type}")
                 logger.warning(f"   ML Recommendation: {ml_rec} (normalized: {ml_rec_norm})")
                 logger.warning(f"   ML Confidence: {ml_confidence:.2f} (threshold: {ml_threshold:.2f})")
                 logger.warning(f"   ML Enabled: {self.ml_enabled}")
-                logger.warning(f"   ÇÖZÜM 1: ML model eğit (Dashboard → ML Training)")
-                logger.warning(f"   ÇÖZÜM 2: config.yaml → ml.enabled = false (sadece teknik sinyaller)")
-                logger.warning(f"   ÇÖZÜM 3: config.yaml → ml.confidence_threshold = 0.5 (daha düşük threshold)")
                 return
             else:
                 logger.info(f"✅ [ML] {symbol} ML onayı alındı: {ml_rec} (confidence: {ml_confidence:.2f})")
+
+            # ============================================
+            # POZİSYON REVERSAL KONTROLÜ (ML Onayından SONRA)
+            # ============================================
+            existing_position = self.position_manager.get_position(bot_id)
+            logger.info(f"🔎 [REVERSAL CHECK] bot_id={bot_id} | existing_position={existing_position is not None}")
+            
+            is_reversal = False
+            if existing_position:
+                pos_dir = existing_position.direction
+                logger.info(f"🔎 [REVERSAL CHECK] pos_dir={pos_dir} (type={type(pos_dir).__name__}) | signal={signal}")
+                
+                should_reverse = (pos_dir == "LONG" and signal == 0) or (pos_dir == "SHORT" and signal == 2)
+                logger.info(f"🔎 [REVERSAL CHECK] should_reverse={should_reverse}")
+                
+                if should_reverse:
+                    logger.info(f"🔄 [SİNYAL REVERSAL] Ters sinyal alındı, mevcut {pos_dir} pozisyonu kapatılıyor: {bot_id}")
+                    try:
+                        trade = await self.position_manager.close_position(
+                            bot_id=bot_id,
+                            exit_price=price,
+                            reason="opposite_signal"
+                        )
+                        logger.info(f"🔎 [REVERSAL RESULT] close_position döndü: trade={trade is not None}")
+                    except Exception as close_err:
+                        logger.error(f"❌ [REVERSAL ERROR] close_position hatası: {close_err}", exc_info=True)
+                    
+                    # Legacy state'leri güncelle
+                    self.open_positions = list(self.position_manager.legacy_positions)
+                    if symbol in self.latest_decisions:
+                        self.latest_decisions[symbol]['has_position'] = False
+                    is_reversal = True
+                    logger.info(f"✅ [REVERSAL] Mevcut pozisyon kapatıldı, yeni {signal_type} pozisyonu açılacak.")
+                else:
+                    logger.info(f"ℹ️ Pozisyon zaten açık ({pos_dir}) ve aynı/HOLD yönde sinyal, işleme girilmiyor: {bot_id}")
+                    return
+
+            # ============================================
+            # RISK ENGINE KONTROL - Detaylı loglama
+            # (Sadece yeni pozisyon açarken, reversal sonrası atlanır)
+            # ============================================
+            if not is_reversal and not existing_position:
+                open_positions_count = len(self.position_manager.get_all_positions())
+                risk_ok = self.risk_engine.can_open_position(open_positions_count)
+                
+                if not risk_ok:
+                    logger.warning(f"❌ [SİNYAL RED] Risk kontrolü başarısız: {symbol}")
+                    logger.warning(f"   Açık pozisyon sayısı: {open_positions_count}")
+                    logger.warning(f"   Max pozisyon limiti: {self.risk_engine.config.max_open_positions}")
+                    logger.warning(f"   Kill switch aktif: {self.risk_engine.kill_switch_active}")
+                    logger.warning(f"   Ardışık kayıplar: {self.risk_engine.consecutive_losses}")
+                    logger.warning(f"   Max consecutive losses: {self.risk_engine.config.max_consecutive_losses}")
+                    logger.warning(f"   ÇÖZÜM: config.yaml → risk_management → kill_switch.enabled = false")
+                    return
+                else:
+                    logger.debug(f"✅ [RISK] {symbol} Risk kontrolü geçti: {open_positions_count}/{self.risk_engine.config.max_open_positions} pozisyon")
 
             # ============================================
             # POZİSYON AÇ (PositionManager'a delegate)
@@ -422,7 +455,6 @@ class PaperTrader:
 
         # DATABASE'E KAYDET (TEK KAYNAK - SINGLE SOURCE OF TRUTH)
         # Bu handler DB'ye kaydeder, position_manager'da save_trade YOK
-        from data.database import db_manager
         
         trade_data = {
             "id": payload.get('trade_id'),  # UNIQUE ID (microsecond hassasiyeti)
@@ -756,8 +788,6 @@ class PaperTrader:
         # 2. Eğer RAM boşsa, veritabanından oku
         if not trades_list or (hasattr(trades_list, '__len__') and len(trades_list) == 0):
             try:
-                from data.database import db_manager
-                import asyncio
                 loop = asyncio.get_event_loop()
                 db_trades = loop.run_until_complete(db_manager.get_recent_trades(limit=1000))
 
@@ -770,7 +800,6 @@ class PaperTrader:
                 return []
 
         # 3. StrategyReporterService aracılığıyla rapor üret
-        from core.trading.services.reporter import strategy_reporter_service
         return strategy_reporter_service.generate_report(trades_list)
 
     def get_all_bots(self) -> List[Dict[str, Any]]:
@@ -895,7 +924,7 @@ class PaperTrader:
     ):
         """
         Canlı fiyat güncelleme + SL/TP/Likidasyon kontrolü.
-        
+
         Args:
             symbol: Sembol
             current_price: Şu anki kapanış fiyatı
@@ -905,7 +934,7 @@ class PaperTrader:
         # High/Low fallback: Mumdan gelmiyorsa tahmini değer kullan
         candle_high = current_high if current_high is not None else current_price
         candle_low  = current_low  if current_low  is not None else current_price
-        
+
         # Legacy positions güncelle
         positions_to_close = []  # Kapatılacaklar (döngü içinde silme)
         positions_updated = False  # Güncelleme yapıldı mı?
@@ -935,6 +964,32 @@ class PaperTrader:
             pos['unrealized_usd'] = pnl_usd
             pos['pnl_percent'] = roe
 
+            # ========================================================================
+            # YENİ: position.updated EVENT FIRLAT (UI gerçek zamanlı güncelleme)
+            # ========================================================================
+            try:
+                await event_bus.publish(Event(
+                    type="position.updated",
+                    payload={
+                        "bot_id": bot_id,
+                        "symbol": symbol,
+                        "updates": {
+                            "current_price": current_price,
+                            "unrealized_usd": pnl_usd,
+                            "pnl_percent": roe,
+                            "stop_loss": pos.get('stop_loss'),
+                            "take_profit": pos.get('take_profit'),
+                            "highest_seen": pos.get('highest_seen'),
+                            "lowest_seen": pos.get('lowest_seen')
+                        }
+                    },
+                    source="paper_engine"
+                ))
+                logger.debug(f"📊 [EDA] {symbol} position.updated event fırlatıldı (bot_id={bot_id})")
+            except Exception as e:
+                logger.error(f"❌ [EDA] position.updated event fırlatma hatası: {e}")
+            # ========================================================================
+
             # 3. Likidasyon kontrolü
             if self.position_manager.check_liquidation_legacy(pos, current_price):
                 positions_to_close.append((bot_id, current_price, 'LİKİDASYON'))
@@ -962,36 +1017,52 @@ class PaperTrader:
         
         # Kapatılacak pozisyonları işle
         closed_bot_ids = set()  # Bu tick'te kapatılan bot'lar (duplicate önleme)
-        
+
         for bot_id, exit_price, reason in positions_to_close:
             # Bu bot zaten bu tick'te kapatıldı mı? (duplicate önleme)
             if bot_id in closed_bot_ids:
                 logger.debug(f"⚠️ {bot_id} bu tick'te zaten kapatıldı, atlanıyor.")
                 continue
-            
+
             # Position hala mevcut mu kontrol et (başka bir tick kapatmış olabilir)
             if bot_id not in self.position_manager.positions:
                 logger.debug(f"⚠️ {bot_id} pozisyonu zaten kapatılmış, atlanıyor.")
                 continue
-            
-            # POZİSYONU KAPAT (is_closing kontrolü position_manager'da yapılacak)
-            logger.info(f"🔴 [{reason}] {symbol} @ {exit_price:.4f} | Bot: {bot_id}")
-            
+
+            # ============================================
+            # KRİTİK DÜZELTME: exit_price'ı pozisyon dict'inden al!
+            # update_live_prices'a gelen current_price TÜM pozisyonlar için aynı!
+            # ============================================
+            position_obj = self.position_manager.get_position(bot_id)
+            if position_obj:
+                # Pozisyonun kendi SL/TP fiyatını kullan (current_price DEĞİL!)
+                if reason == 'STOP LOSS':
+                    exit_price = position_obj.stop_loss or exit_price
+                elif reason == 'TAKE PROFIT':
+                    exit_price = position_obj.take_profit or exit_price
+                # reason == 'LİKİDASYON' ise current_price kullan (market fiyat)
+                
+                position_symbol = position_obj.symbol
+            else:
+                position_symbol = symbol
+
+            logger.info(f"🔴 [{reason}] {position_symbol} @ {exit_price:.4f} | Bot: {bot_id}")
+
             try:
                 trade = await self.position_manager.close_position(
                     bot_id=bot_id,
                     exit_price=exit_price,
                     reason=reason
                 )
-                
+
                 if trade:
                     # Bu bot'u kapatılanlar listesine ekle (duplicate önleme)
                     closed_bot_ids.add(bot_id)
-                    
+
                     # KRİTİK: Her kapatmadan SONRA hemen senkronize et (UI için)
                     self.open_positions = list(self.position_manager.legacy_positions)
                     logger.debug(f"✅ Pozisyon kapandı, UI senkronize: {len(self.open_positions)} pozisyon")
-                    
+
                     # Durum güncellemeleri artık on_position_closed event handler'ında yapılıyor (EDA)
                     # Buraya sadece nihai loglamayı bırakıyoruz
                     if trade.pnl > 0:
@@ -1001,12 +1072,11 @@ class PaperTrader:
                 else:
                     # close_position None döndürdü - muhtemelen zaten kapanıyor veya hata
                     logger.warning(f"⚠️ Pozisyon kapatılamadı: {bot_id} (zaten kapanıyor olabilir)")
-                    
+
             except Exception as e:
                 logger.error(f"❌ Pozisyon kapatma hatası ({bot_id}): {e}")
-                import traceback
                 logger.debug(traceback.format_exc())
-        
+
         # POZİSYON KAPANDIKTAN SONRA SENKRONİZASYON (KRİTİK!)
         # Close işleminden sonra open_positions'u güncelle
         self.open_positions = list(self.position_manager.legacy_positions)

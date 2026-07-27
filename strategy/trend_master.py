@@ -34,6 +34,20 @@ class TrendMasterPro(BaseStrategy):
     def description(self) -> str:
         return "SMA 20, EMA 200 ve RSI 50 ile 1 dakikalık trend takibi yapar. Güvenli ve stabil bir bot setidir."
 
+    @property
+    def indicators(self) -> list:
+        return [
+            {"name": "SMA 20"},
+            {"name": "EMA 200"},
+            {"name": "RSI 14"}
+        ]
+
+    def get_conditions(self) -> dict:
+        return {
+            "LONG": ["Fiyat > EMA 200", "Fiyat > SMA 20", "RSI(14) > 30 ve < 70"],
+            "SHORT": ["Fiyat < EMA 200", "Fiyat < SMA 20", "RSI(14) < 50"]
+        }
+
     def generate_signal(self, current_row: pd.Series) -> int:
         close_p = current_row['close']
 

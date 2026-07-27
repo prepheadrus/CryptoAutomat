@@ -34,6 +34,20 @@ class ScalperNinja(BaseStrategy):
     def description(self) -> str:
         return "Aşırı satım (Oversold) koşullarında (RSI < 30, Stoch < 20) hızlı dip avcılığına odaklanır."
 
+    @property
+    def indicators(self) -> list:
+        return [
+            {"name": "RSI 14"},
+            {"name": "Stochastic 14,3,3"},
+            {"name": "Bollinger Bands 20,2"}
+        ]
+
+    def get_conditions(self) -> dict:
+        return {
+            "LONG": ["RSI(14) < 30", "Stoch. K < 20", "Fiyat Alt Bollinger Bandına Değdi/Kesti"],
+            "SHORT": ["Koşul tanımlanmadı (Sadece LONG odaklı)"]
+        }
+
     def generate_signal(self, current_row: pd.Series) -> int:
         """
         Sinyal Üretimi

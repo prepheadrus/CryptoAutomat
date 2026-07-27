@@ -1,16 +1,17 @@
-﻿"""
+"""
 System Router
 
 FastAPI router for system operations.
 Dashboard metrics, config, exchange info.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from typing import Dict, Any, List
 from pathlib import Path
 import os
 import yaml
+import asyncio
 
 from core.logger import logger
 from core.config import CONFIG
@@ -21,9 +22,96 @@ from api.schemas.config import (
     AdvancedConfigUpdate,
     ApiKeyUpdateRequest,
     BotConfigUpdate,
+    ApiTestRequest,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["System"])
+
+# ============================================================================
+# WEBSOCKET MANAGER (Frontend Broadcasting)
+# ============================================================================
+
+class WebSocketManager:
+    """
+    WebSocket connections manager for frontend broadcasting.
+    Event Bus subscriber + WebSocket broadcaster.
+    """
+
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+        self.event_handler_started = False
+
+    async def connect(self, websocket: WebSocket):
+        """Accept WebSocket connection"""
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        logger.info(f"🔌 [WS] Frontend connected ({len(self.active_connections)} clients)")
+
+        # Start event handler (first connection only)
+        if not self.event_handler_started:
+            asyncio.create_task(self.start_event_handler())
+            self.event_handler_started = True
+
+    def disconnect(self, websocket: WebSocket):
+        """Remove WebSocket connection"""
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+            logger.info(f"🔌 [WS] Frontend disconnected ({len(self.active_connections)} clients)")
+
+    async def broadcast(self, message: dict):
+        """Broadcast message to all connected clients"""
+        if not self.active_connections:
+            return
+
+        message_str = str(message)  # JSON string
+
+        # Send to all connections (fire and forget)
+        disconnected = []
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception as e:
+                logger.error(f"❌ [WS] Broadcast error: {e}")
+                disconnected.append(connection)
+
+        # Remove disconnected clients
+        for conn in disconnected:
+            self.disconnect(conn)
+
+    async def start_event_handler(self):
+        """Subscribe to Event Bus and broadcast to WebSocket clients"""
+        from shared.events import event_bus
+
+        # Subscribe to position events
+        event_bus.subscribe("position.opened", self.on_event)
+        event_bus.subscribe("position.closed", self.on_event)
+        event_bus.subscribe("position.updated", self.on_event)
+        event_bus.subscribe("bot.started", self.on_event)
+        event_bus.subscribe("bot.stopped", self.on_event)
+
+        logger.info("📬 [WS] Event Bus subscriber started (broadcasting to frontend)")
+
+    async def on_event(self, event):
+        """Event Bus handler - broadcast to WebSocket clients"""
+        try:
+            # Convert event to dict
+            message = {
+                "type": event.type,
+                "payload": event.payload,
+                "source": event.source,
+                "timestamp": event.timestamp.isoformat() if hasattr(event, 'timestamp') else None
+            }
+
+            # Broadcast to all connected WebSocket clients
+            await self.broadcast(message)
+
+            logger.debug(f"📡 [WS] Event broadcasted: {event.type}")
+        except Exception as e:
+            logger.error(f"❌ [WS] Event broadcast error: {e}")
+
+
+# Global WebSocket manager
+ws_manager = WebSocketManager()
 
 
 # Global start time for uptime calculation
@@ -94,56 +182,119 @@ async def get_system_status() -> Dict[str, Any]:
     }
 
 
+# ============================================================================
+# WEBSOCKET ENDPOINT (Frontend Real-time Events)
+# ============================================================================
+
+@router.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """
+    WebSocket endpoint for frontend real-time event streaming.
+
+    Frontend connects to this endpoint and receives:
+    - position.opened
+    - position.closed
+    - position.updated
+    - bot.started
+    - bot.stopped
+
+    Usage (Frontend):
+        const ws = new WebSocket('ws://localhost:3000/api/v1/ws');
+        ws.onmessage = (event) => {
+            const message = JSON.parse(event.data);
+            console.log('Event:', message.type, message.payload);
+        };
+    """
+    await ws_manager.connect(websocket)
+    try:
+        # Keep connection alive
+        while True:
+            # Wait for messages from client (heartbeat, commands, etc.)
+            data = await websocket.receive_text()
+            logger.debug(f"📬 [WS] Client message: {data}")
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"❌ [WS] WebSocket error: {e}")
+        ws_manager.disconnect(websocket)
+
+
+# ============================================================================
+# DASHBOARD METRICS
+# ============================================================================
+
 @router.get("/dashboard-metrics")
 async def get_dashboard_metrics() -> Dict[str, Any]:
     """
     Dashboard için tüm metrikleri döner.
+    NaN/Infinity koruması ile JSON serileştirme hatalarını önler.
     """
     try:
+        import math
+
+        def sanitize_value(value):
+            """NaN/Infinity değerlerini 0.0'a çevir"""
+            if value is None:
+                return 0.0
+            if isinstance(value, (int, float)):
+                if math.isnan(value) or math.isinf(value):
+                    logger.warning(f"⚠️ [SANITIZE] NaN/Infinity detected: {value} → 0.0")
+                    return 0.0
+            return value
+
+        def sanitize_dict(data: dict) -> dict:
+            """Dict içindeki tüm değerleri sanitize et"""
+            return {k: sanitize_value(v) for k, v in data.items()}
+
         # Paper engine'den stats al
         stats = paper_engine.get_stats()
-        
-        # Portfolio bilgisi
+
+        # Portfolio bilgisi (NaN/Infinity koruması)
         portfolio = {
-            "balance": stats.get('balance', 0.0),
-            "free_margin": stats.get('free_margin', 0.0),
-            "used_margin": stats.get('used_margin', 0.0),
-            "equity": stats.get('equity', stats.get('balance', 0.0)),
-            "unrealized_pnl": stats.get('unrealized_pnl', 0.0),
-            "total_pnl": stats.get('total_pnl', 0.0),
-            "total_trades": stats.get('total_trades', 0),
-            "win_rate": stats.get('win_rate', 0.0),
-            "total_commission": stats.get('total_commission', 0.0),
-            "total_notional": stats.get('total_notional', 0.0),
+            "balance": sanitize_value(stats.get('balance', 0.0)),
+            "free_margin": sanitize_value(stats.get('free_margin', 0.0)),
+            "used_margin": sanitize_value(stats.get('used_margin', 0.0)),
+            "equity": sanitize_value(stats.get('equity', stats.get('balance', 0.0))),
+            "unrealized_pnl": sanitize_value(stats.get('unrealized_pnl', 0.0)),
+            "total_pnl": sanitize_value(stats.get('total_pnl', 0.0)),
+            "total_trades": int(stats.get('total_trades', 0)),
+            "win_rate": sanitize_value(stats.get('win_rate', 0.0)),
+            "total_commission": sanitize_value(stats.get('total_commission', 0.0)),
+            "total_notional": sanitize_value(stats.get('total_notional', 0.0)),
         }
-        
-        # Aktif pozisyonlar
+
+        # Aktif pozisyonlar (NaN/Infinity koruması)
         positions = []
         for pos in paper_engine.open_positions:
-            positions.append({
+            positions.append(sanitize_dict({
                 "bot_id": pos.get('bot_id', 'N/A'),
                 "symbol": pos.get('symbol', ''),
                 "direction": pos.get('direction', ''),
-                "entry_price": pos.get('entry_price', 0.0),
-                "current_price": pos.get('current_price', 0.0),
-                "size": pos.get('size', 0.0),
-                "leverage": pos.get('leverage', 1.0),
-                "margin": pos.get('margin', 0.0),
-                "unrealized_usd": pos.get('unrealized_usd', 0.0),
-                "pnl_percent": pos.get('pnl_percent', 0.0),
-                "stop_loss": pos.get('stop_loss'),
-                "take_profit": pos.get('take_profit'),
-                "liquidation_price": pos.get('liquidation_price', 0.0),
+                "entry_price": sanitize_value(pos.get('entry_price', 0.0)),
+                "current_price": sanitize_value(pos.get('current_price', 0.0)),
+                "size": sanitize_value(pos.get('size', 0.0)),
+                "leverage": sanitize_value(pos.get('leverage', 1.0)),
+                "margin": sanitize_value(pos.get('margin', 0.0)),
+                "unrealized_usd": sanitize_value(pos.get('unrealized_usd', 0.0)),
+                "pnl_percent": sanitize_value(pos.get('pnl_percent', 0.0)),
+                "stop_loss": sanitize_value(pos.get('stop_loss')),
+                "take_profit": sanitize_value(pos.get('take_profit')),
+                "liquidation_price": sanitize_value(pos.get('liquidation_price', 0.0)),
                 "strategy": pos.get('strategy', 'Unknown'),
                 "strategy_id": pos.get('strategy_id', 'unknown'),
                 "timeframe": pos.get('timeframe', 'N/A')
-            })
-        
-        # Son kararlar (latest decisions)
-        latest_decisions = paper_engine.latest_decisions
-        
+            }))
+
+        # Son kararlar (latest decisions) - sanitize
+        latest_decisions = {}
+        for symbol, decision in (paper_engine.latest_decisions or {}).items():
+            if isinstance(decision, dict):
+                latest_decisions[symbol] = sanitize_dict(decision)
+            else:
+                latest_decisions[symbol] = decision
+
         # Market regime
-        market_regime = paper_engine.market_regime
+        market_regime = paper_engine.market_regime or "UNKNOWN"
 
         return JSONResponse(
             content={
@@ -160,7 +311,7 @@ async def get_dashboard_metrics() -> Dict[str, Any]:
         )
 
     except Exception as e:
-        logger.error(f"Dashboard metrics error: {e}")
+        logger.error(f"Dashboard metrics error: {e}", exc_info=True)
         return JSONResponse(
             content={
                 "portfolio": {"balance": 0.0, "free_margin": 0.0, "used_margin": 0.0},
@@ -361,20 +512,34 @@ async def save_api_keys(request: ApiKeyUpdateRequest) -> Dict[str, Any]:
         from core.security import KeyManager
         key_manager = KeyManager()
         key_manager.save_api_keys(request.api_key, request.api_secret)
-        return {"status": "success", "message": "API anahtarları şifrelenerek kaydedildi"}
+        
+        # Anında borsa nesnesine de aktar! (Yeniden başlatmaya gerek kalmadan)
+        exchange_manager.update_api_keys(request.api_key, request.api_secret)
+        
+        return {"status": "success", "message": "API anahtarları kaydedildi ve aktifleştirildi"}
     except Exception as e:
         logger.error(f"API key save error: {e}")
         return {"status": "error", "message": str(e)}
 
 
 @router.post("/config/test-api-keys")
-async def test_api_keys(request: ApiKeyUpdateRequest) -> Dict[str, Any]:
+async def test_api_keys(request: ApiTestRequest) -> Dict[str, Any]:
     """API anahtarlarını CCXT ile test et."""
     try:
+        api_key = request.api_key
+        api_secret = request.api_secret
+
+        if not api_key or not api_secret:
+            from core.security import KeyManager
+            key_manager = KeyManager()
+            api_key, api_secret = key_manager.load_api_keys()
+            if not api_key or not api_secret:
+                return {"status": "error", "message": "Kayıtlı API anahtarı bulunamadı. Lütfen önce anahtarlarınızı kaydedin.", "valid": False}
+
         import ccxt.async_support as ccxt
         exchange = ccxt.binance({
-            'apiKey': request.api_key,
-            'secret': request.api_secret,
+            'apiKey': api_key,
+            'secret': api_secret,
             'enableRateLimit': True,
             'options': {'defaultType': 'future'}
         })
