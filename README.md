@@ -6,131 +6,131 @@
 ![Status](https://img.shields.io/badge/Status-Production--Ready-success.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
-**CryptoAutomat**, kripto para piyasalarında 7/24 kesintisiz çalışmak üzere tasarlanmış; çoklu zaman dilimi (MTF) analizi, makine öğrenimi tabanlı sinyal teyidi, gelişmiş dinamik risk yönetimi ve web tabanlı modern bir kontrol paneline (Dashboard) sahip, kurumsal düzeyde bir algoritmik ticaret motorudur.
+**CryptoAutomat** is an enterprise-grade, high-performance algorithmic cryptocurrency trading engine designed for 24/7 continuous operation. It features multi-timeframe (MTF) trend confluence, machine learning-based signal confirmation, dynamic risk & capital management, and a modern real-time web dashboard.
 
 ---
 
-## 🌟 Öne Çıkan Özellikler
+## 🌟 Key Features
 
-- **⚡ Event-Driven & Modüler Mimari:** Domain-Driven Design (DDD) ve Clean Architecture prensipleriyle ayrıştırılmış çekirdek motor, bağımsız servisler ve asenkron Event Bus.
-- **🛡️ Gelişmiş Risk & Sermaye Yönetimi:**
-  - ATR tabanlı dinamik Stop-Loss ve Take-Profit (Trailing ATR Stop).
-  - Devre kesici (**Circuit Breaker**) ve acil durum koruması (**Kill Switch**).
-  - Volatiliteye ve ML güven skoruna göre dinamik pozisyon boyutlandırma (Dynamic Position Sizing).
-- **🧠 Makine Öğrenimi Entegrasyonu (ML Engine):**
-  - XGBoost ve k-NN destekli trend/momentum sinyal doğrulama.
-  - Model Drift tespiti ve Walk-Forward Optimization (WFO) ile aşırı uyum (overfitting) engelleme.
-- **📊 Çoklu Zaman Dilimi (MTF) Analizi:**
-  - Üst zaman dilimlerindeki (HTF) ana trend doğrulanmadan alt zaman dilimlerinde ters işlem açılmasını engelleyen veto mekanizması.
+- **⚡ Event-Driven & Clean Architecture:** Domain-Driven Design (DDD) with decoupled core services, asynchronous messaging via an internal Event Bus, and non-blocking asynchronous I/O.
+- **🛡️ Advanced Risk & Capital Management:**
+  - Dynamic ATR-based Stop-Loss and Take-Profit with Trailing ATR Stop capabilities.
+  - System-level protection via **Circuit Breaker** (halting on API/feed anomalies) and **Kill Switch** (loss limit guardrails).
+  - Volatility-adjusted and ML confidence-weighted Dynamic Position Sizing.
+- **🧠 Machine Learning Integration (ML Engine):**
+  - XGBoost and k-NN powered trend & momentum confirmation layers.
+  - Model Drift detection and Walk-Forward Optimization (WFO) to mitigate overfitting.
+- **📊 Multi-Timeframe (MTF) Analysis:**
+  - Golden-ratio higher-timeframe (HTF) trend filtering to prevent counter-trend entries during adverse market regimes.
 - **🎛️ No-Code Strategy Builder & Strategy Lab:**
-  - Web arayüzü üzerinden kod yazmadan indikatör ve mantıksal kurallarla strateji tasarlama, kaydetme ve anında backtest yapabilme.
-- **🖥️ Canlı Web Dashboard:**
-  - Gerçek zamanlı TradingView Lightweight Charts entegrasyonu.
-  - Açık pozisyonlar, emir defteri, bakiye dağılımı ve performans metrikleri takibi.
-- **💾 Yüksek Performanslı Veri Mimarisi:**
-  - Parquet Data Lake & Superalgos tabanlı yerel veri saklama ve SQLite ACID işlem geçmişi.
+  - Intuitive web interface to define indicators, build logical entry/exit rules, and run instant backtests without writing code.
+- **🖥️ Live Web Dashboard:**
+  - Integrated with TradingView Lightweight Charts for real-time candlestick rendering.
+  - Live order tracking, open positions, balance breakdowns, and performance analytics.
+- **💾 High-Throughput Data Infrastructure:**
+  - Local Parquet Data Lake & Superalgos-inspired flat storage with SQLite for ACID-compliant trade journaling.
 
 ---
 
-## 🏗️ Sistem Mimarisi
+## 🏗️ System Architecture
 
 ```
 CryptoAutomat/
 ├── api/                  # FastAPI Web API (Routers, Schemas, Services)
-│   ├── routers/          # Endpoint yönlendiricileri (bot, data, ml, strategy, trades)
-│   ├── schemas/          # Pydantic veri modelleri
-│   └── services/         # İş mantığı servisleri
-├── core/                 # Çekirdek Trading Motoru
-│   ├── bot/              # Bot yaşam döngüsü yöneticisi
-│   ├── diagnostics/      # Olay izleme ve sistem teşhisleri
-│   ├── risk/             # Dinamik risk motoru ve kural seti
-│   ├── trading/          # Pozisyon ve emir yöneticisi
-│   ├── exchange.py       # Borsa (Binance CCXT) asenkron adaptörü
-│   ├── paper.py          # Paper Trading (Simülasyon) motoru
-│   └── wfo_engine.py     # Walk-Forward Optimization motoru
-├── data/                 # Veri Katmanı
-│   ├── indicators/       # Teknik indikatör kütüphanesi (Trend, Momentum, Volatilite)
-│   ├── storage/          # Parquet Data Lake depolama motoru
-│   └── database.py       # Veritabanı yöneticisi
-├── frontend/             # Web Arayüzü (HTML5, Vanilla JS, CSS3, Charts)
-├── ml/                   # Makine Öğrenimi Pipeline (Eğitim, Çıkarım, Drift)
-├── models/               # Model tanımları (XGBoost, k-NN)
-├── strategy/             # Ticaret Stratejileri ve No-Code Builder
-├── tests/                # Otomatize Birim ve E2E Test Paketi
-├── config.example.yaml   # Örnek yapılandırma dosyası
-└── main.py               # Uygulama ana giriş noktası
+│   ├── routers/          # Endpoint controllers (bot, data, ml, strategy, trades)
+│   ├── schemas/          # Pydantic data schemas
+│   └── services/         # Business logic layer
+├── core/                 # Core Trading Engine
+│   ├── bot/              # Bot lifecycle & process management
+│   ├── diagnostics/      # Event tracing and system telemetry
+│   ├── risk/             # Dynamic risk engine and rule sets
+│   ├── trading/          # Order and position state managers
+│   ├── exchange.py       # Asynchronous CCXT exchange client (Binance)
+│   ├── paper.py          # Paper trading simulation engine
+│   └── wfo_engine.py     # Walk-Forward Optimization runner
+├── data/                 # Data Layer
+│   ├── indicators/       # Technical indicators (Trend, Momentum, Volatility, Volume)
+│   ├── storage/          # Parquet Data Lake storage implementation
+│   └── database.py       # Async SQLite database interface
+├── frontend/             # Responsive Web Dashboard (HTML5, Vanilla JS, CSS3, Charts)
+├── ml/                   # Machine Learning Pipeline (Training, Inference, Drift)
+├── models/               # Model architectures (XGBoost, k-NN)
+├── strategy/             # Trading Strategies & Strategy Builder engine
+├── tests/                # Automated Unit and End-to-End (E2E) Test Suite
+├── config.example.yaml   # Configuration template
+└── main.py               # Main application entry point
 ```
 
 ---
 
-## 🚀 Hızlı Başlangıç
+## 🚀 Quick Start
 
-### Gereksinimler
+### Prerequisites
 - **Python 3.10+**
 - **Git**
-- *(İsteğe bağlı)* Canlı işlem için Binance API anahtarları
+- *(Optional)* Binance API credentials for live execution
 
-### 1. Kurulum
+### 1. Installation
 
 ```bash
-# Repoyu klonlayın
+# Clone the repository
 git clone https://github.com/prepheadrus/CryptoAutomat.git
 cd CryptoAutomat
 
-# Sanal ortam oluşturun ve aktif edin
+# Create and activate a virtual environment
 python -m venv venv
 # Windows:
 .\venv\Scripts\activate
 # Linux/macOS:
 source venv/bin/activate
 
-# Bağımlılıkları yükleyin
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-### 2. Yapılandırma
+### 2. Configuration
 
-Örnek yapılandırma dosyasını kopyalayın:
+Set up your local configuration files:
 ```bash
 cp config.example.yaml config.yaml
 cp .env.example .env
 ```
-`.env` ve `config.yaml` dosyalarını kendi tercihlerinize göre düzenleyin. *(Varsayılan olarak güvenli simülasyon/paper trading modundadır).*
+Adjust `.env` and `config.yaml` to suit your trading preferences. *(The system defaults to safe simulation / paper trading mode).*
 
-### 3. Çalıştırma
+### 3. Running the Engine
 
 ```bash
-# Bot motorunu ve web arayüzünü başlatın
+# Launch the trading bot and web server
 python main.py
 ```
 
-Tarayıcınızdan **`http://localhost:8000`** adresine giderek Dashboard'a erişebilirsiniz.
+Open your browser and navigate to **`http://localhost:8000`** to access the Web Dashboard.
 
 ---
 
-## 🧪 Testleri Çalıştırma
+## 🧪 Running Tests
 
-Test paketini çalıştırmak için:
+Execute the comprehensive test suite to verify system integrity:
 
 ```bash
-# Test gereksinimlerini yükleyin
+# Install test dependencies
 pip install -r requirements-test.txt
 
-# Testleri çalıştırın
+# Run all test suites
 pytest tests/ -v
-# veya
+# or
 python run_tests.py
 ```
 
 ---
 
-## 🔒 Güvenlik
+## 🔒 Security
 
-- API anahtarları `.env` dosyasında yerel olarak **Fernet (AES-128-CBC)** şifrelemesi ile korunur.
-- `.secret.key`, `.env` ve veritabanı dosyaları git takibinden otomatik olarak dışlanmıştır.
+- Sensitive API credentials stored in `.env` are encrypted at rest using **Fernet (AES-128-CBC)** via `core/security.py`.
+- Encryption keys (`.secret.key`), `.env`, and local database files are excluded from version control by default.
 
 ---
 
-## 📄 Lisans
+## 📄 License
 
-Bu proje [MIT Lisansı](LICENSE) kapsamında lisanslanmıştır.
+This project is licensed under the [MIT License](LICENSE).
