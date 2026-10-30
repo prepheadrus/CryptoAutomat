@@ -1069,6 +1069,7 @@ async function loadBotConfig() {
  * Save general bot config
  */
 async function saveBotConfig() {
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
     const data = {
         exchange: document.getElementById('bot-config-exchange').value,
         environment: document.getElementById('bot-config-environment').value,
@@ -1078,12 +1079,12 @@ async function saveBotConfig() {
     try {
         const result = await api.saveBotConfig(data);
         if (result.status === 'success') {
-            showToast('✅ Bot ayarları güncellendi', 'success');
+            showToast(isTr ? '✅ Bot ayarları güncellendi' : '✅ Bot configuration updated', 'success');
         } else {
-            showToast('❌ ' + result.message, 'error');
+            showToast('❌ ' + (result.message || (isTr ? 'Bilinmeyen hata' : 'Unknown error')), 'error');
         }
     } catch (error) {
-        showToast('❌ Kaydetme hatası: ' + error.message, 'error');
+        showToast((isTr ? '❌ Kaydetme hatası: ' : '❌ Save error: ') + error.message, 'error');
     }
 }
 
@@ -1113,6 +1114,7 @@ async function loadRiskSettings() {
  * Save risk settings
  */
 async function saveRiskSettings() {
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
     const data = {
         max_risk_per_trade_percent: parseFloat(document.getElementById('risk-max-risk').value),
         max_leverage: parseInt(document.getElementById('risk-max-leverage').value),
@@ -1123,33 +1125,33 @@ async function saveRiskSettings() {
 
     // Validation
     if (data.max_risk_per_trade_percent < 0.1 || data.max_risk_per_trade_percent > 5.0) {
-        showToast('❌ Risk %0.1 - %5.0 arasında olmalı!', 'error');
+        showToast(isTr ? '❌ Risk %0.1 - %5.0 arasında olmalı!' : '❌ Risk must be between 0.1% and 5.0%!', 'error');
         return;
     }
 
     if (data.max_leverage < 1 || data.max_leverage > 50) {
-        showToast('❌ Kaldıraç 1x - 50x arasında olmalı!', 'error');
+        showToast(isTr ? '❌ Kaldıraç 1x - 50x arasında olmalı!' : '❌ Leverage must be between 1x and 50x!', 'error');
         return;
     }
 
     if (data.max_open_positions < 1 || data.max_open_positions > 20) {
-        showToast('❌ Max pozisyon 1 - 20 arasında olmalı!', 'error');
+        showToast(isTr ? '❌ Max pozisyon 1 - 20 arasında olmalı!' : '❌ Max positions must be between 1 and 20!', 'error');
         return;
     }
 
     try {
-        console.log('💾 [SETTINGS] Risk ayarları gönderiliyor:', data);
+        console.log('💾 [SETTINGS] Risk settings payload:', data);
         const result = await api.saveRiskSettings(data);
-        console.log('💾 [SETTINGS] Sonuç:', result);
+        console.log('💾 [SETTINGS] Result:', result);
 
         if (result.status === 'success') {
-            showToast('✅ Risk ayarları güncellendi (Hot-Reload)', 'success');
+            showToast(isTr ? '✅ Risk ayarları güncellendi (Hot-Reload)' : '✅ Risk settings updated (Hot-Reload)', 'success');
 
             // Başarı sonrası config'i yeniden yükle
             await loadRiskSettings();
         } else {
             // Hata mesajını düzgün formatla
-            let errorMsg = 'Bilinmeyen hata';
+            let errorMsg = isTr ? 'Bilinmeyen hata' : 'Unknown error';
             if (result.message) {
                 errorMsg = typeof result.message === 'string' ? result.message : JSON.stringify(result.message);
             }
@@ -1158,8 +1160,7 @@ async function saveRiskSettings() {
     } catch (error) {
         console.error('❌ [SETTINGS] Risk save error:', error);
         
-        // Hata mesajını düzgün formatla
-        let errorMsg = 'Sunucu hatası';
+        let errorMsg = isTr ? 'Sunucu hatası' : 'Server error';
         if (error.message) {
             errorMsg = typeof error.message === 'string' ? error.message : JSON.stringify(error.message);
         } else if (typeof error === 'string') {
@@ -1168,7 +1169,7 @@ async function saveRiskSettings() {
             errorMsg = typeof error.detail === 'string' ? error.detail : JSON.stringify(error.detail);
         }
         
-        showToast('❌ Kaydetme hatası: ' + errorMsg, 'error');
+        showToast((isTr ? '❌ Kaydetme hatası: ' : '❌ Save error: ') + errorMsg, 'error');
     }
 }
 
@@ -1221,6 +1222,7 @@ async function loadAdvancedSettings() {
  * Save advanced settings
  */
 async function saveAdvancedSettings() {
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
     const data = {
         wfo: {
             enabled: document.getElementById('wfo-enabled').checked,
@@ -1243,12 +1245,12 @@ async function saveAdvancedSettings() {
     try {
         const result = await api.saveAdvancedSettings(data);
         if (result.status === 'success') {
-            showToast('✅ Gelişmiş ayarlar güncellendi', 'success');
+            showToast(isTr ? '✅ Gelişmiş ayarlar güncellendi' : '✅ Advanced settings updated', 'success');
         } else {
-            showToast('❌ ' + result.message, 'error');
+            showToast('❌ ' + (result.message || (isTr ? 'Bilinmeyen hata' : 'Unknown error')), 'error');
         }
     } catch (error) {
-        showToast('❌ Kaydetme hatası: ' + error.message, 'error');
+        showToast((isTr ? '❌ Kaydetme hatası: ' : '❌ Save error: ') + error.message, 'error');
     }
 }
 
@@ -1256,6 +1258,7 @@ async function saveAdvancedSettings() {
  * Save Kalman Settings
  */
 async function saveKalmanSettings() {
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
     const data = {
         kalman: {
             enabled: document.getElementById('kalman-enabled').checked,
@@ -1267,12 +1270,12 @@ async function saveKalmanSettings() {
     try {
         const result = await api.saveAdvancedSettings(data);
         if (result.status === 'success') {
-            showToast('✅ Kalman ayarları güncellendi', 'success');
+            showToast(isTr ? '✅ Kalman ayarları güncellendi' : '✅ Kalman filter settings updated', 'success');
         } else {
-            showToast('❌ ' + result.message, 'error');
+            showToast('❌ ' + (result.message || (isTr ? 'Bilinmeyen hata' : 'Unknown error')), 'error');
         }
     } catch (error) {
-        showToast('❌ Kaydetme hatası: ' + error.message, 'error');
+        showToast((isTr ? '❌ Kaydetme hatası: ' : '❌ Save error: ') + error.message, 'error');
     }
 }
 
@@ -1286,6 +1289,7 @@ async function resetKalmanSettings() {
  * Save Candle Lock Settings
  */
 async function saveCandleLockSettings() {
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
     const data = {
         candle_lock: {
             enabled: document.getElementById('candle-lock-enabled').checked,
@@ -1296,12 +1300,12 @@ async function saveCandleLockSettings() {
     try {
         const result = await api.saveAdvancedSettings(data);
         if (result.status === 'success') {
-            showToast('✅ Mum kapanış kilidi güncellendi', 'success');
+            showToast(isTr ? '✅ Mum kapanış kilidi güncellendi' : '✅ Candle close lock settings updated', 'success');
         } else {
-            showToast('❌ ' + result.message, 'error');
+            showToast('❌ ' + (result.message || (isTr ? 'Bilinmeyen hata' : 'Unknown error')), 'error');
         }
     } catch (error) {
-        showToast('❌ Kaydetme hatası: ' + error.message, 'error');
+        showToast((isTr ? '❌ Kaydetme hatası: ' : '❌ Save error: ') + error.message, 'error');
     }
 }
 
@@ -1314,11 +1318,12 @@ async function resetCandleLockSettings() {
  * Save API keys
  */
 async function saveApiKeys() {
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
     const apiKey = document.getElementById('api-key').value;
     const apiSecret = document.getElementById('api-secret').value;
 
     if (!apiKey || !apiSecret) {
-        showToast('❌ API Key ve Secret giriniz!', 'error');
+        showToast(isTr ? '❌ API Key ve Secret giriniz!' : '❌ Please enter API Key and Secret!', 'error');
         return;
     }
 
@@ -1326,12 +1331,12 @@ async function saveApiKeys() {
         const result = await api.saveApiKeys({ api_key: apiKey, api_secret: apiSecret });
 
         if (result.status === 'success') {
-            showToast('✅ API anahtarları şifrelenerek kaydedildi', 'success');
+            showToast(isTr ? '✅ API anahtarları şifrelenerek kaydedildi' : '✅ API credentials encrypted and saved', 'success');
         } else {
-            showToast('❌ ' + result.message, 'error');
+            showToast('❌ ' + (result.message || (isTr ? 'Bilinmeyen hata' : 'Unknown error')), 'error');
         }
     } catch (error) {
-        showToast('❌ Kaydetme hatası: ' + error.message, 'error');
+        showToast((isTr ? '❌ Kaydetme hatası: ' : '❌ Save error: ') + error.message, 'error');
     }
 }
 
@@ -1339,20 +1344,21 @@ async function saveApiKeys() {
  * Test API connection
  */
 async function testApiConnection() {
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
     const apiKey = document.getElementById('api-key').value;
     const apiSecret = document.getElementById('api-secret').value;
 
     try {
-        showToast('🧪 API bağlantısı test ediliyor...', 'info');
+        showToast(isTr ? '🧪 API bağlantısı test ediliyor...' : '🧪 Testing API connection...', 'info');
         const result = await api.testApiConnection({ api_key: apiKey, api_secret: apiSecret });
 
         if (result.valid) {
-            showToast(`✅ API bağlantısı başarılı!`, 'success');
+            showToast(isTr ? '✅ API bağlantısı başarılı!' : '✅ API connection successful!', 'success');
         } else {
-            showToast('❌ ' + result.message, 'error');
+            showToast('❌ ' + (result.message || (isTr ? 'Bağlantı başarısız' : 'Connection failed')), 'error');
         }
     } catch (error) {
-        showToast('❌ Test hatası: ' + error.message, 'error');
+        showToast((isTr ? '❌ Test hatası: ' : '❌ Test error: ') + error.message, 'error');
     }
 }
 
@@ -1368,9 +1374,11 @@ async function loadSymbolsForBot() {
         symbolSelects.forEach(select => {
             // ML training symbol selection should NOT be filled here
             if (select.id !== 'market-symbol' && select.id !== 'ml-train-symbol') {
+                const currentVal = select.value;
                 const selSymbolText = (window.i18n && window.i18n.currentLang === "tr") ? "Sembol Seçin..." : "Select Symbol...";
                 select.innerHTML = `<option value="">${selSymbolText}</option>` +
                     symbols.map(s => `<option value="${s.symbol}">${s.symbol}</option>`).join('');
+                if (currentVal) select.value = currentVal;
             }
         });
 
@@ -1390,9 +1398,11 @@ async function loadSymbolsForML() {
 
         const mlSymbolSelect = document.getElementById('ml-train-symbol');
         if (mlSymbolSelect) {
+            const currentVal = mlSymbolSelect.value;
             const selSymbolText = (window.i18n && window.i18n.currentLang === "tr") ? "Sembol Seçin..." : "Select Symbol...";
             mlSymbolSelect.innerHTML = `<option value="">${selSymbolText}</option>` +
                 symbols.map(s => `<option value="${s.symbol}">${s.symbol}</option>`).join('');
+            if (currentVal) mlSymbolSelect.value = currentVal;
         }
 
         console.log(`📊 [ML] ${symbols.length} sembol ML için yüklendi`);
@@ -1413,9 +1423,11 @@ async function loadStrategiesForBot() {
         strategySelects.forEach(select => {
             // ML training symbol selection should NOT be filled here
             if (select.id !== 'ml-train-symbol' && select.id !== 'ml-analysis-symbol' && select.id !== 'ml-analysis-timeframe' && select.id !== 'ml-analysis-market-type' && select.id !== 'ml-analysis-margin-type') {
+                const currentVal = select.value;
                 const selStratText = (window.i18n && window.i18n.currentLang === "tr") ? "Strateji Seçin..." : "Select Strategy...";
                 select.innerHTML = `<option value="">${selStratText}</option>` +
                     strategies.map(s => `<option value="${s.id || s.strategy_id}">${s.name || s.strategy_id}</option>`).join('');
+                if (currentVal) select.value = currentVal;
             }
         });
 
@@ -1435,9 +1447,11 @@ async function loadTimeframesForBot() {
     timeframeSelects.forEach(select => {
         // ML training timeframe selection should NOT be filled here
         if (select.id !== 'ml-train-timeframe') {
+            const currentVal = select.value || '1h';
             const selTfText = (window.i18n && window.i18n.currentLang === 'tr') ? 'Timeframe Seçin...' : 'Select Timeframe...';
             select.innerHTML = `<option value="">${selTfText}</option>` +
                 timeframes.map(tf => `<option value="${tf}">${tf}</option>`).join('');
+            if (currentVal) select.value = currentVal;
         }
     });
 

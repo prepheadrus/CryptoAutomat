@@ -379,14 +379,14 @@ async def update_bot_config(request: BotConfigUpdate) -> Dict[str, Any]:
             with open(config_path, 'w', encoding='utf-8') as f:
                 yaml.safe_dump(full_config, f, default_flow_style=False, allow_unicode=True)
 
-        return {"status": "success", "message": "Bot ayarları güncellendi", "config": CONFIG['bot']}
+        return {"status": "success", "message": "Bot configuration updated successfully", "config": CONFIG['bot']}
     except Exception as e:
         logger.error(f"Bot config update error: {e}")
         return {"status": "error", "message": str(e)}
 
 @router.get("/config/risk")
 async def get_risk_config() -> Dict[str, Any]:
-    """Mevcut risk ayarlarını döner."""
+    """Returns current risk settings."""
     return {
         "status": "success",
         "config": CONFIG.get('risk_management', {})
@@ -395,7 +395,7 @@ async def get_risk_config() -> Dict[str, Any]:
 
 @router.post("/config/risk")
 async def update_risk_config(request: RiskConfigUpdate) -> Dict[str, Any]:
-    """Risk ayarlarını günceller."""
+    """Updates risk settings."""
     try:
         # 1. Memory update
         CONFIG['risk_management']['max_risk_per_trade_percent'] = request.max_risk_per_trade_percent
@@ -441,7 +441,7 @@ async def update_risk_config(request: RiskConfigUpdate) -> Dict[str, Any]:
 
         return {
             "status": "success", 
-            "message": "Risk ayarları güncellendi", 
+            "message": "Risk settings updated successfully", 
             "config": CONFIG['risk_management']
         }
     except Exception as e:
@@ -451,7 +451,7 @@ async def update_risk_config(request: RiskConfigUpdate) -> Dict[str, Any]:
 
 @router.get("/config/advanced")
 async def get_advanced_config() -> Dict[str, Any]:
-    """Gelişmiş ayarları çek."""
+    """Get advanced settings."""
     return {
         "status": "success",
         "config": {
@@ -466,7 +466,7 @@ async def get_advanced_config() -> Dict[str, Any]:
 
 @router.post("/config/advanced")
 async def update_advanced_config(request: AdvancedConfigUpdate) -> Dict[str, Any]:
-    """Gelişmiş ayarları güncelle."""
+    """Update advanced settings."""
     try:
         config_path = "config.yaml"
         full_config = {}
@@ -495,7 +495,7 @@ async def update_advanced_config(request: AdvancedConfigUpdate) -> Dict[str, Any
             with open(config_path, 'w', encoding='utf-8') as f:
                 yaml.safe_dump(full_config, f, default_flow_style=False, allow_unicode=True)
 
-        return {"status": "success", "message": "Gelişmiş ayarlar güncellendi", "config": CONFIG}
+        return {"status": "success", "message": "Advanced settings updated successfully", "config": CONFIG}
     except Exception as e:
         logger.error(f"Advanced config update error: {e}")
         return {"status": "error", "message": str(e)}
@@ -507,7 +507,7 @@ async def update_advanced_config(request: AdvancedConfigUpdate) -> Dict[str, Any
 
 @router.post("/config/api-keys")
 async def save_api_keys(request: ApiKeyUpdateRequest) -> Dict[str, Any]:
-    """API anahtarlarını şifreleyerek kaydet."""
+    """Encrypt and save API credentials."""
     try:
         from core.security import KeyManager
         key_manager = KeyManager()
@@ -516,7 +516,7 @@ async def save_api_keys(request: ApiKeyUpdateRequest) -> Dict[str, Any]:
         # Anında borsa nesnesine de aktar! (Yeniden başlatmaya gerek kalmadan)
         exchange_manager.update_api_keys(request.api_key, request.api_secret)
         
-        return {"status": "success", "message": "API anahtarları kaydedildi ve aktifleştirildi"}
+        return {"status": "success", "message": "API credentials saved and activated successfully"}
     except Exception as e:
         logger.error(f"API key save error: {e}")
         return {"status": "error", "message": str(e)}
@@ -524,7 +524,7 @@ async def save_api_keys(request: ApiKeyUpdateRequest) -> Dict[str, Any]:
 
 @router.post("/config/test-api-keys")
 async def test_api_keys(request: ApiTestRequest) -> Dict[str, Any]:
-    """API anahtarlarını CCXT ile test et."""
+    """Test API credentials with CCXT."""
     try:
         api_key = request.api_key
         api_secret = request.api_secret
@@ -534,7 +534,7 @@ async def test_api_keys(request: ApiTestRequest) -> Dict[str, Any]:
             key_manager = KeyManager()
             api_key, api_secret = key_manager.load_api_keys()
             if not api_key or not api_secret:
-                return {"status": "error", "message": "Kayıtlı API anahtarı bulunamadı. Lütfen önce anahtarlarınızı kaydedin.", "valid": False}
+                return {"status": "error", "message": "No saved API credentials found. Please save your API keys first.", "valid": False}
 
         import ccxt.async_support as ccxt
         exchange = ccxt.binance({
@@ -548,7 +548,7 @@ async def test_api_keys(request: ApiTestRequest) -> Dict[str, Any]:
         usdt_balance = balance.get('total', {}).get('USDT', 0)
         return {
             "status": "success",
-            "message": "API anahtarları geçerli!",
+            "message": "API credentials are valid!",
             "valid": True,
             "usdt_balance": usdt_balance
         }

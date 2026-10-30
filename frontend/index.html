@@ -738,14 +738,14 @@
 <div class="settings-form-group">
 <label class="settings-form-label"><i class="lucide-icon" data-lucide="shield"></i> <span data-tr="Marjin Tipi" data-en="Margin Type">Margin Type</span></label>
 <select class="settings-form-input" id="bot-margin-type">
-<option selected="" value="isolated"><span data-i18n="k_isolated__i̇zole_" data-tr="Isolated (İzole)" data-en="Isolated">Isolated</span></option>
-<option value="cross"><span data-i18n="k_cross__çapraz_" data-tr="Cross (Çapraz)" data-en="Cross">Cross</span></option>
+<option selected="" value="isolated"><span data-i18n="k_isolated__izole_" data-tr="Isolated (İzole)" data-en="Isolated">Isolated</span></option>
+<option value="cross"><span data-i18n="k_cross__capraz_" data-tr="Cross (Çapraz)" data-en="Cross">Cross</span></option>
 </select>
 </div>
 </div>
 <button class="settings-btn settings-btn-success auto-style-125" type="submit">
-                                    <span data-tr="▶ Bot Başlat" data-en="▶ Start Bot">▶ Start Bot</span>
-                                </button>
+    <span data-tr="▶ Bot Başlat" data-en="▶ Start Bot">▶ Start Bot</span>
+</button>
 </form>
 <div class="settings-info-box">
 <p class="settings-info-text">
@@ -755,22 +755,22 @@
 </div>
 </div>
 </div>
-<!-- CARD 2: AKTİF BOTLAR (YENİ) -->
+<!-- CARD 2: AKTİF BOTLAR -->
 <div class="settings-card auto-style-126">
 <div class="settings-card-header">
 <div>
 <h3 class="settings-card-title">🤖 <span data-tr="Aktif Botlar" data-en="Active Bots">Active Bots</span></h3>
 <p class="settings-card-description"><span data-tr="Çalışan botlarınızı izleyin ve yönetin" data-en="Monitor and manage running bots">Monitor and manage running bots</span></p>
 </div>
-<button class="settings-btn settings-btn-primary auto-style-127" onclick="botManager.loadBots()" title="Listeyi yenile">
+<button class="settings-btn settings-btn-primary auto-style-127" onclick="botManager.loadBots()" data-tr-title="Listeyi yenile" data-en-title="Refresh list" title="Refresh list">
 <i class="lucide-icon" data-lucide="refresh-cw"></i>
 </button>
 </div>
 <div class="settings-card-body">
 <div id="active-bots-container">
 <p class="auto-style-36">
-                                    <span data-tr="Aktif bot yok. Yukarıdan yeni bot başlatabilirsiniz." data-en="No active bots. You can start a new bot above.">No active bots. You can start a new bot above.</span>
-                                </p>
+    <span data-tr="Aktif bot yok. Yukarıdan yeni bot başlatabilirsiniz." data-en="No active bots. You can start a new bot above.">No active bots. You can start a new bot above.</span>
+</p>
 </div>
 </div>
 </div>
@@ -783,59 +783,59 @@
 </div>
 <button class="settings-save-btn" onclick="saveRiskSettings()">
 <i class="lucide-icon" data-lucide="database"></i> <span data-tr="Kaydet" data-en="Save">Save</span>
-                            </button>
+</button>
 </div>
 <div class="settings-card-body">
 <div class="settings-form-grid">
 <div class="settings-form-group">
 <label class="settings-form-label">
 <i class="lucide-icon" data-lucide="pie-chart"></i> <span data-tr="Maksimum Risk" data-en="Maximum Risk">Maximum Risk</span>
-                                        <span class="range-hint">(0.1 - 5.0%)</span>
+<span class="range-hint">(0.1 - 5.0%)</span>
 </label>
-<input class="settings-form-input" id="risk-max-risk" max="5.0" min="0.1" step="0.1" title="Her işlemde maksimum risk yüzdesi" type="number" value="0.2"/>
+<input class="settings-form-input" id="risk-max-risk" max="5.0" min="0.1" step="0.1" data-tr-title="Her işlemde maksimum risk yüzdesi" data-en-title="Maximum risk percentage per trade" title="Maximum risk percentage per trade" type="number" value="0.2"/>
 </div>
 <div class="settings-form-group">
 <label class="settings-form-label">
 <i class="lucide-icon" data-lucide="trending-up"></i> <span data-tr="Maksimum Kaldıraç" data-en="Maximum Leverage">Maximum Leverage</span>
-                                        <span class="range-hint">(1 - 50x)</span>
+<span class="range-hint">(1 - 50x)</span>
 </label>
-<input class="settings-form-input" id="risk-max-leverage" max="50" min="1" step="1" title="Maksimum kaldıraç çarpanı" type="number" value="10"/>
+<input class="settings-form-input" id="risk-max-leverage" max="50" min="1" step="1" data-tr-title="Maksimum kaldıraç çarpanı" data-en-title="Maximum leverage multiplier" title="Maximum leverage multiplier" type="number" value="10"/>
 </div>
 <div class="settings-form-group">
 <label class="settings-form-label">
-                                        💼 <span data-tr="Maks. Pozisyon" data-en="Max. Positions">Max. Positions</span>
-                                        <span class="range-hint">(1 - 20)</span>
+💼 <span data-tr="Maks. Pozisyon" data-en="Max. Positions">Max. Positions</span>
+<span class="range-hint">(1 - 20)</span>
 </label>
-<input class="settings-form-input" id="risk-max-positions" max="20" min="1" step="1" title="Aynı anda açık olabilecek maksimum pozisyon sayısı" type="number" value="5"/>
+<input class="settings-form-input" id="risk-max-positions" max="20" min="1" step="1" data-tr-title="Aynı anda açık olabilecek maksimum pozisyon sayısı" data-en-title="Maximum simultaneous open positions" title="Maximum simultaneous open positions" type="number" value="5"/>
 </div>
 <div class="settings-form-group">
 <label class="settings-form-label">
-                                        📉 <span data-tr="Ardışık Kayıp" data-en="Consecutive Losses">Consecutive Losses</span>
-                                        <span class="range-hint">(0 = sınırsız, 1-50)</span>
+📉 <span data-tr="Ardışık Kayıp" data-en="Consecutive Losses">Consecutive Losses</span>
+<span class="range-hint" data-tr="(0 = sınırsız, 1-50)" data-en="(0 = unlimited, 1-50)">(0 = unlimited, 1-50)</span>
 </label>
-<input class="settings-form-input" id="risk-max-losses" max="50" min="0" step="1" title="Kill switch aktif olacak ardışık kayıp sayısı (0 = sınırsız)" type="number" value="10"/>
+<input class="settings-form-input" id="risk-max-losses" max="50" min="0" step="1" data-tr-title="Kill switch aktif olacak ardışık kayıp sayısı (0 = sınırsız)" data-en-title="Consecutive losses triggering kill switch (0 = unlimited)" title="Consecutive losses triggering kill switch (0 = unlimited)" type="number" value="10"/>
 </div>
 <div class="settings-form-group auto-style-9">
 <label class="settings-form-label auto-style-128">
 <input checked="" class="auto-style-129" id="risk-kill-switch-enabled" type="checkbox"/>
-                                        <span data-tr="🚨 Kill Switch Aktif" data-en="🚨 Kill Switch Active">🚨 Kill Switch Active</span>
-                                    </label>
+<span data-tr="🚨 Kill Switch Aktif" data-en="🚨 Kill Switch Active">🚨 Kill Switch Active</span>
+</label>
 <p class="auto-style-130">
-                                        Kill Switch, ardışık kayıp limitine ulaşıldığında yeni pozisyon açmayı durdurur.
-                                        <strong class="auto-style-32">Opsiyonel:</strong> Kapalı ise limit yoktur.
-                                    </p>
+<span data-tr="Kill Switch, ardışık kayıp limitine ulaşıldığında yeni pozisyon açmayı durdurur." data-en="Kill Switch halts opening new positions when consecutive loss limit is reached.">Kill Switch halts opening new positions when consecutive loss limit is reached.</span>
+<strong class="auto-style-32" data-tr="Opsiyonel:" data-en="Optional:">Optional:</strong>
+<span data-tr="Kapalı ise limit yoktur." data-en="Disabled means unlimited.">Disabled means unlimited.</span>
+</p>
 </div>
 </div>
 <div class="settings-info-box">
 <p class="settings-info-text">
-<strong>ℹ️ Risk Yönetimi:</strong> Bu ayarlar her işlemde ne kadar risk alacağınızı
-                                    belirler.
-                                    Düşük risk (%0.5-1) uzun vadeli, yüksek risk (%2-5) agresif stratejiler içindir.
-                                </p>
+<strong data-tr="ℹ️ Risk Yönetimi:" data-en="ℹ️ Risk Management:">ℹ️ Risk Management:</strong>
+<span data-tr="Bu ayarlar her işlemde ne kadar risk alacağınızı belirler. Düşük risk (%0.5-1) uzun vadeli, yüksek risk (%2-5) agresif stratejiler içindir." data-en="These settings determine the capital at risk per trade. Low risk (0.5-1%) suits long-term, while higher risk (2-5%) is for aggressive strategies.">These settings determine the capital at risk per trade. Low risk (0.5-1%) suits long-term, while higher risk (2-5%) is for aggressive strategies.</span>
+</p>
 </div>
 </div>
 </div>
-<!-- CARD 6: BOT YAPILANDIRMASI (YENİ - RİSK'İN ALTINDA) -->
+<!-- CARD 4: BOT YAPILANDIRMASI -->
 <div class="settings-card bot-card">
 <div class="settings-card-header">
 <div>
@@ -844,26 +844,26 @@
 </div>
 <button class="settings-save-btn" onclick="saveBotConfig()">
 <i class="lucide-icon" data-lucide="database"></i> <span data-tr="Kaydet" data-en="Save">Save</span>
-                            </button>
+</button>
 </div>
 <div class="settings-card-body">
 <div class="settings-form-grid">
 <div class="settings-form-group">
-<label class="settings-form-label">🏛️ Borsa</label>
+<label class="settings-form-label">🏛️ <span data-tr="Borsa" data-en="Exchange">Exchange</span></label>
 <select class="settings-form-input" id="bot-config-exchange">
 <option value="binance">Binance</option>
 <option value="binance_testnet">Binance Testnet</option>
 </select>
 </div>
 <div class="settings-form-group">
-<label class="settings-form-label">🌍 Ortam</label>
+<label class="settings-form-label">🌍 <span data-tr="Ortam" data-en="Environment">Environment</span></label>
 <select class="settings-form-input" id="bot-config-environment">
 <option value="development">Development</option>
 <option value="production">Production</option>
 </select>
 </div>
 <div class="settings-form-group">
-<label class="settings-form-label">📝 Log Level</label>
+<label class="settings-form-label">📝 <span data-tr="Log Seviyesi" data-en="Log Level">Log Level</span></label>
 <select class="settings-form-input" id="bot-config-loglevel">
 <option value="DEBUG">DEBUG</option>
 <option value="INFO">INFO</option>
@@ -874,21 +874,21 @@
 </div>
 <div class="settings-info-box">
 <p class="settings-info-text">
-<strong>ℹ️ Not:</strong> <span data-tr="Bu ayarlar bot yeniden başlatıldığında uygulanır." data-en="These settings take effect when bot restarts.">These settings take effect when bot restarts.</span>
-                                </p>
+<strong data-tr="ℹ️ Not:" data-en="ℹ️ Note:">ℹ️ Note:</strong> <span data-tr="Bu ayarlar bot yeniden başlatıldığında uygulanır." data-en="These settings take effect when the bot restarts.">These settings take effect when the bot restarts.</span>
+</p>
 </div>
 </div>
 </div>
-<!-- CARD 4: WFO & ML AYARLARI (SOL TARAFTA - GENİŞ) -->
+<!-- CARD 5: WFO & ML AYARLARI -->
 <div class="settings-card wfo-card auto-style-131">
 <div class="settings-card-header">
 <div>
-<h3 class="settings-card-title"><i class="lucide-icon" data-lucide="brain"></i> WFO &amp; ML Ayarları</h3>
+<h3 class="settings-card-title"><i class="lucide-icon" data-lucide="brain"></i> <span data-tr="WFO &amp; ML Ayarları" data-en="WFO &amp; ML Settings">WFO &amp; ML Settings</span></h3>
 <p class="settings-card-description"><span data-i18n="k_otonom_optimizasyon_ve_yapay_z" data-tr="Otonom optimizasyon ve yapay zeka" data-en="Autonomous optimization and intelligence">Autonomous optimization and intelligence</span></p>
 </div>
 <button class="settings-save-btn" onclick="saveAdvancedSettings()">
 <i class="lucide-icon" data-lucide="database"></i> <span data-tr="Kaydet" data-en="Save">Save</span>
-                            </button>
+</button>
 </div>
 <div class="settings-card-body">
 <!-- WFO Subsection -->
@@ -896,7 +896,7 @@
 <h4 class="settings-subsection-title"><i class="lucide-icon" data-lucide="refresh-cw"></i> Walk-Forward Optimization</h4>
 <label class="settings-checkbox-label auto-style-132">
 <input id="wfo-enabled" type="checkbox"/>
-<span>WFO Aktif (Otonom Parametre Optimizasyonu)</span>
+<span data-tr="WFO Aktif (Otonom Parametre Optimizasyonu)" data-en="Enable WFO (Autonomous Parameter Optimization)">Enable WFO (Autonomous Parameter Optimization)</span>
 </label>
 <div class="settings-form-grid">
 <div class="settings-form-group">
@@ -910,40 +910,39 @@
 </div>
 <div class="settings-form-group auto-style-133">
 <label class="settings-form-label">
-                                        Re-optimizasyon
-                                        <span class="range-hint">(24 - 720 saat)</span>
+<span data-tr="Re-optimizasyon" data-en="Re-optimization">Re-optimization</span>
+<span class="range-hint" data-tr="(24 - 720 saat)" data-en="(24 - 720 hours)">(24 - 720 hours)</span>
 </label>
 <input class="settings-form-input" id="wfo-interval" max="720" min="24" step="24" type="number" value="168"/>
 <p class="settings-info-text auto-style-134">
-                                        💡 168 saat = 1 hafta (önerilen)
-                                    </p>
+<span data-tr="💡 168 saat = 1 hafta (önerilen)" data-en="💡 168 hours = 1 week (recommended)">💡 168 hours = 1 week (recommended)</span>
+</p>
 </div>
 </div>
 <!-- ML Subsection -->
 <div class="settings-subsection ml">
-<h4 class="settings-subsection-title">🤖 ML Model Ayarları</h4>
+<h4 class="settings-subsection-title">🤖 <span data-tr="ML Model Ayarları" data-en="ML Model Settings">ML Model Settings</span></h4>
 <label class="settings-checkbox-label auto-style-132">
 <input id="ml-enabled" type="checkbox"/>
-<span>ML Model Aktif (XGBoost + Random Forest Ensemble)</span>
+<span data-tr="ML Model Aktif (XGBoost + Random Forest Ensemble)" data-en="Enable ML Model (XGBoost + Random Forest Ensemble)">Enable ML Model (XGBoost + Random Forest Ensemble)</span>
 </label>
 <div class="settings-form-group">
 <label class="settings-form-label">
-                                        Confidence Threshold
-                                        <span class="range-hint">(0.50 - 0.95)</span>
+<span data-tr="Güven Eşiği (Threshold)" data-en="Confidence Threshold">Confidence Threshold</span>
+<span class="range-hint">(0.50 - 0.95)</span>
 </label>
 <input class="settings-form-input" id="ml-threshold" max="0.95" min="0.50" step="0.05" type="number" value="0.65"/>
 <p class="settings-info-text auto-style-134">
-                                        💡 ≥65% güven → İşlem açılır. Düşük threshold daha fazla sinyal, yüksek
-                                        threshold daha kaliteli sinyal.
-                                    </p>
+<span data-tr="💡 ≥65% güven → İşlem açılır. Düşük threshold daha fazla sinyal, yüksek threshold daha kaliteli sinyal." data-en="💡 ≥65% confidence → Opens trade. Lower threshold yields more signals, higher threshold yields higher quality signals.">💡 ≥65% confidence → Opens trade. Lower threshold yields more signals, higher threshold yields higher quality signals.</span>
+</p>
 </div>
 </div>
 <!-- HTF Subsection -->
 <div class="settings-subsection htf">
-<h4 class="settings-subsection-title"><i class="lucide-icon" data-lucide="pie-chart"></i> HTF (Multi-Timeframe) Analizi</h4>
+<h4 class="settings-subsection-title"><i class="lucide-icon" data-lucide="pie-chart"></i> <span data-tr="HTF (Çoklu Zaman Dilimi) Analizi" data-en="HTF (Multi-Timeframe) Analysis">HTF (Multi-Timeframe) Analysis</span></h4>
 <label class="settings-checkbox-label auto-style-132">
 <input id="htf-enabled" type="checkbox"/>
-<span>HTF Analizi Aktif (Altın Oran 1:4 / 1:6)</span>
+<span data-tr="HTF Analizi Aktif (Altın Oran 1:4 / 1:6)" data-en="Enable HTF Analysis (Golden Ratio 1:4 / 1:6)">Enable HTF Analysis (Golden Ratio 1:4 / 1:6)</span>
 </label>
 <div class="settings-form-group">
 <label class="settings-form-label"><span data-i18n="k_trend_metodu" data-tr="Trend Metodu" data-en="Trend Method">Trend Method</span></label>
@@ -965,19 +964,17 @@
 </div>
 <div class="settings-warning-box">
 <p class="settings-warning-text">
-<strong><i class="lucide-icon" data-lucide="alert-triangle"></i> <span data-tr="Altın Oran:" data-en="Golden Ratio:">Golden Ratio:</span></strong> Major HTF veto yetkisine sahiptir.
-                                        Örnek: 1m bot → 15m (Minor) + 1h (Major). Major trend ters yönde ise işlem
-                                        açılmaz.
-                                    </p>
+<strong><i class="lucide-icon" data-lucide="alert-triangle"></i> <span data-tr="Altın Oran:" data-en="Golden Ratio:">Golden Ratio:</span></strong> <span data-tr="Major HTF veto yetkisine sahiptir. Örnek: 1m bot → 15m (Minor) + 1h (Major). Major trend ters yönde ise işlem açılmaz." data-en="Major HTF has veto power. Example: 1m bot → 15m (Minor) + 1h (Major). If major trend is opposite, no trades are opened.">Major HTF has veto power. Example: 1m bot → 15m (Minor) + 1h (Major). If major trend is opposite, no trades are opened.</span>
+</p>
 </div>
 </div>
 </div>
 </div>
-<!-- CARD 4B: KALMAN FİLTRESİ (YENİ!) -->
+<!-- CARD 6: KALMAN FİLTRESİ -->
 <div class="settings-card ml-card auto-style-135">
 <div class="settings-card-header">
 <div>
-<h3 class="settings-card-title">🔮 Kalman Filtresi (Denoising)</h3>
+<h3 class="settings-card-title">🔮 <span data-tr="Kalman Filtresi (Gürültü Giderme)" data-en="Kalman Filter (Denoising)">Kalman Filter (Denoising)</span></h3>
 <p class="settings-card-description"><span data-i18n="k_fiyat_gürültüsünü_azalt__false" data-tr="Fiyat gürültüsünü azalt, false sinyalleri filtrele" data-en="Filter false signals and reduce price noise">Filter false signals and reduce price noise</span></p>
 </div>
 </div>
@@ -985,98 +982,91 @@
 <label class="settings-checkbox-label auto-style-136">
 <input id="kalman-enabled" type="checkbox"/>
 <span>
-<strong class="auto-style-137">🔮 Kalman Filtresi Aktif</strong>
+<strong class="auto-style-137" data-tr="🔮 Kalman Filtresi Aktif" data-en="🔮 Enable Kalman Filter">🔮 Enable Kalman Filter</strong>
 <br/>
-<span class="auto-style-138">
-                                        Plug &amp; Play: Tek tıkla TÜM stratejiler gürültüsüz veriyle çalışır
-                                    </span>
+<span class="auto-style-138" data-tr="Tak &amp; Çalıştır: Tek tıkla TÜM stratejiler gürültüsüz veriyle çalışır" data-en="Plug &amp; Play: All strategies run on denoised data with a single click">Plug &amp; Play: All strategies run on denoised data with a single click</span>
 </span>
 </label>
 <div class="settings-form-group">
 <label class="settings-form-label">
-                                    Process Noise (Q)
-                                    <span class="range-hint">(0.0001 - 0.01, Küçük = Daha Smooth)</span>
+Process Noise (Q)
+<span class="range-hint" data-tr="(0.0001 - 0.01, Küçük = Daha Pürüzsüz)" data-en="(0.0001 - 0.01, Smaller = Smoother)">(0.0001 - 0.01, Smaller = Smoother)</span>
 </label>
 <input class="settings-form-input" id="kalman-process-noise" max="0.01" min="0.0001" step="0.0001" type="number" value="0.001"/>
 <p class="settings-info-text auto-style-134">
-                                    💡 Küçük değer (0.001) = Daha smooth, büyük değer (0.01) = daha hızlı tepki
-                                </p>
+<span data-tr="💡 Küçük değer (0.001) = Daha pürüzsüz, büyük değer (0.01) = daha hızlı tepki" data-en="💡 Smaller value (0.001) = Smoother, larger value (0.01) = faster reaction">💡 Smaller value (0.001) = Smoother, larger value (0.01) = faster reaction</span>
+</p>
 </div>
 <div class="settings-form-group">
 <label class="settings-form-label">
-                                    Measurement Noise (R)
-                                    <span class="range-hint">(0.01 - 1.0, Büyük = Daha Agresif)</span>
+Measurement Noise (R)
+<span class="range-hint" data-tr="(0.01 - 1.0, Büyük = Daha Agresif)" data-en="(0.01 - 1.0, Larger = More Aggressive)">(0.01 - 1.0, Larger = More Aggressive)</span>
 </label>
 <input class="settings-form-input" id="kalman-measurement-noise" max="1.0" min="0.01" step="0.01" type="number" value="0.1"/>
 <p class="settings-info-text auto-style-134">
-                                    💡 Büyük değer = Fiyat değişimlerine daha agresif tepki
-                                </p>
+<span data-tr="💡 Büyük değer = Fiyat değişimlerine daha agresif tepki" data-en="💡 Larger value = More aggressive reaction to price swings">💡 Larger value = More aggressive reaction to price swings</span>
+</p>
 </div>
 <div class="settings-warning-box auto-style-139">
 <p class="settings-warning-text auto-style-137">
-<strong>🔮 Plug &amp; Play:</strong> Bu ayarı değiştirdiğinizde tüm stratejiler
-                                    otomatik olarak filtrelenmiş veriyle (smoothed_close) çalışır.
-                                    Orijinal close fiyatı korunur.
-                                </p>
+<strong data-tr="🔮 Tak &amp; Çalıştır:" data-en="🔮 Plug &amp; Play:">🔮 Plug &amp; Play:</strong> <span data-tr="Bu ayarı değiştirdiğinizde tüm stratejiler otomatik olarak filtrelenmiş veriyle (smoothed_close) çalışır. Orijinal close fiyatı korunur." data-en="When enabled, all strategies automatically operate on denoised data (smoothed_close). Original close price is preserved.">When enabled, all strategies automatically operate on denoised data (smoothed_close). Original close price is preserved.</span>
+</p>
 </div>
 <!-- Kaydet Butonu -->
 <div class="settings-button-group auto-style-140">
 <button class="settings-btn settings-btn-primary auto-style-141" onclick="saveKalmanSettings()">
-<i class="lucide-icon" data-lucide="database"></i> Kalman Ayarlarını Kaydet
-                                </button>
+<i class="lucide-icon" data-lucide="database"></i> <span data-tr="Kalman Ayarlarını Kaydet" data-en="Save Kalman Settings">Save Kalman Settings</span>
+</button>
 <button class="settings-btn settings-btn-secondary auto-style-142" onclick="resetKalmanSettings()">
-<i class="lucide-icon" data-lucide="refresh-cw"></i> Varsayılana Dön
-                                </button>
+<i class="lucide-icon" data-lucide="refresh-cw"></i> <span data-tr="Varsayılana Dön" data-en="Reset to Defaults">Reset to Defaults</span>
+</button>
 </div>
 </div>
 </div>
-<!-- CARD 4C: MUM KAPANış KİLİDİ (YENİ!) -->
+<!-- CARD 7: MUM KAPANıŞ KİLİDİ -->
 <div class="settings-card ml-card auto-style-143">
 <div class="settings-card-header">
 <div>
-<h3 class="settings-card-title">⏱️ Katı Mum Kapanış Kilidi</h3>
-<p class="settings-card-description">Sinyalleri sadece mum kapanışında üret, ara dakikalarda atla</p>
+<h3 class="settings-card-title">⏱️ <span data-tr="Katı Mum Kapanış Kilidi" data-en="Strict Candle Close Lock">Strict Candle Close Lock</span></h3>
+<p class="settings-card-description"><span data-tr="Sinyalleri sadece mum kapanışında üret, ara dakikalarda atla" data-en="Generate signals only on candle close, skip intermediate minutes">Generate signals only on candle close, skip intermediate minutes</span></p>
 </div>
 </div>
 <div class="settings-card-body">
 <label class="settings-checkbox-label auto-style-136">
 <input checked="" id="candle-lock-enabled" type="checkbox"/>
 <span>
-<strong class="auto-style-144">⏱️ Katı Mum Kapanış Kilidi Aktif</strong>
+<strong class="auto-style-144" data-tr="⏱️ Katı Mum Kapanış Kilidi Aktif" data-en="⏱️ Strict Candle Close Lock Active">⏱️ Strict Candle Close Lock Active</strong>
 <br/>
-<span class="auto-style-138">
-                                        HTF botları (15m, 1h) için kritik - ara dakikalarda false sinyal önlenir
-                                    </span>
+<span class="auto-style-138" data-tr="HTF botları (15m, 1h) için kritik - ara dakikalarda false sinyal önlenir" data-en="Crucial for HTF bots (15m, 1h) - prevents false signals during intermediate minutes">Crucial for HTF bots (15m, 1h) - prevents false signals during intermediate minutes</span>
 </span>
 </label>
 <div class="settings-form-group">
 <label class="settings-form-label">
-                                    Kontrol Aralığı (saniye)
-                                    <span class="range-hint">(5 - 60 saniye)</span>
+<span data-tr="Kontrol Aralığı (saniye)" data-en="Check Interval (seconds)">Check Interval (seconds)</span>
+<span class="range-hint" data-tr="(5 - 60 saniye)" data-en="(5 - 60 seconds)">(5 - 60 seconds)</span>
 </label>
 <input class="settings-form-input" id="candle-lock-interval" max="60" min="5" step="5" type="number" value="5"/>
 <p class="settings-info-text auto-style-134">
-                                    💡 Kaç saniyede bir mum kapanışını kontrol etsin? (Düşük = daha hızlı tepki)
-                                </p>
+<span data-tr="💡 Kaç saniyede bir mum kapanışını kontrol etsin? (Düşük = daha hızlı tepki)" data-en="💡 Frequency to check for candle close (Lower = faster reaction)">💡 Frequency to check for candle close (Lower = faster reaction)</span>
+</p>
 </div>
 <div class="settings-warning-box auto-style-145">
 <p class="settings-warning-text auto-style-144">
-<strong><i class="lucide-icon" data-lucide="alert-triangle"></i> ÖNEMLİ:</strong> Sinyal üretimi mum kapanışını bekler, ancak
-                                    çıkış (exit) ve trailing stop ASLA beklemez - anlık çalışır!
-                                </p>
+<strong><i class="lucide-icon" data-lucide="alert-triangle"></i> <span data-tr="ÖNEMLİ:" data-en="IMPORTANT:">IMPORTANT:</span></strong> <span data-tr="Sinyal üretimi mum kapanışını bekler, ancak çıkış (exit) ve trailing stop ASLA beklemez - anlık çalışır!" data-en="Signal generation waits for candle close, but exit and trailing stop NEVER wait - they execute in real time!">Signal generation waits for candle close, but exit and trailing stop NEVER wait - they execute in real time!</span>
+</p>
 </div>
 <!-- Kaydet Butonu -->
 <div class="settings-button-group auto-style-140">
 <button class="settings-btn settings-btn-primary auto-style-146" onclick="saveCandleLockSettings()">
-<i class="lucide-icon" data-lucide="database"></i> Mum Kapanış Kilidi Kaydet
-                                </button>
+<i class="lucide-icon" data-lucide="database"></i> <span data-tr="Mum Kapanış Kilidini Kaydet" data-en="Save Candle Lock Settings">Save Candle Lock Settings</span>
+</button>
 <button class="settings-btn settings-btn-secondary auto-style-147" onclick="resetCandleLockSettings()">
-<i class="lucide-icon" data-lucide="refresh-cw"></i> Varsayılana Dön
-                                </button>
+<i class="lucide-icon" data-lucide="refresh-cw"></i> <span data-tr="Varsayılana Dön" data-en="Reset to Defaults">Reset to Defaults</span>
+</button>
 </div>
 </div>
 </div>
-<!-- CARD 5: API YÖNETİMİ (GÜNCELLENMİŞ) -->
+<!-- CARD 8: API YÖNETİMİ -->
 <div class="settings-card api-card auto-style-131">
 <div class="settings-card-header">
 <div>
@@ -1089,41 +1079,39 @@
 <div class="settings-form-grid auto-style-30">
 <div class="settings-form-group">
 <label class="settings-form-label">
-                                        🔑 Binance API Key
-                                        <span class="range-hint">(Zorunlu)</span>
+🔑 Binance API Key
+<span class="range-hint" data-tr="(Zorunlu)" data-en="(Required)">(Required)</span>
 </label>
-<input class="settings-form-input" id="api-key" minlength="10" placeholder="pk_live_abc123xyz..." required="" title="Binance API Anahtarınız (min 10 karakter)" type="password"/>
+<input class="settings-form-input" id="api-key" minlength="10" placeholder="pk_live_abc123xyz..." required="" data-tr-title="Binance API Anahtarınız (min 10 karakter)" data-en-title="Your Binance API Key (min 10 characters)" title="Your Binance API Key (min 10 characters)" type="password"/>
 </div>
 <div class="settings-form-group">
 <label class="settings-form-label">
-                                        🔒 Binance Secret Key
-                                        <span class="range-hint">(Zorunlu)</span>
+🔒 Binance Secret Key
+<span class="range-hint" data-tr="(Zorunlu)" data-en="(Required)">(Required)</span>
 </label>
-<input class="settings-form-input" id="api-secret" minlength="10" placeholder="sk_live_xyz789abc..." required="" title="Binance API Gizli Anahtarınız (min 10 karakter)" type="password"/>
+<input class="settings-form-input" id="api-secret" minlength="10" placeholder="sk_live_xyz789abc..." required="" data-tr-title="Binance API Gizli Anahtarınız (min 10 karakter)" data-en-title="Your Binance API Secret Key (min 10 characters)" title="Your Binance API Secret Key (min 10 characters)" type="password"/>
 </div>
 </div>
 <!-- Action Buttons -->
 <div class="settings-button-group auto-style-148">
 <button class="settings-btn settings-btn-primary auto-style-149" onclick="saveApiKeys()">
-                                    🔑 <span data-tr="Şifrele ve Kaydet" data-en="Encrypt &amp; Save">Encrypt &amp; Save</span>
-                                </button>
+🔑 <span data-tr="Şifrele ve Kaydet" data-en="Encrypt &amp; Save">Encrypt &amp; Save</span>
+</button>
 <button class="settings-btn settings-btn-test auto-style-149" onclick="testApiConnection()">
 <i class="lucide-icon" data-lucide="refresh-cw"></i> <span data-tr="Bağlantıyı Test Et" data-en="Test Connection">Test Connection</span>
-                                </button>
+</button>
 </div>
 <!-- Security Info Boxes -->
 <div class="auto-style-150">
 <div class="settings-info-box auto-style-151">
 <p class="settings-info-text auto-style-152">
-<strong>🔒 Fernet Şifreleme:</strong> API anahtarlarınız AES-128-CBC ile
-                                        şifrelenerek <code>.env</code> dosyasında saklanır.
-                                    </p>
+<strong data-tr="🔒 Fernet Şifreleme:" data-en="🔒 Fernet Encryption:">🔒 Fernet Encryption:</strong> <span data-tr="API anahtarlarınız AES-128-CBC ile şifrelenerek .env dosyasında saklanır." data-en="Your API keys are encrypted with AES-128-CBC and stored securely in .env.">Your API keys are encrypted with AES-128-CBC and stored securely in <code>.env</code>.</span>
+</p>
 </div>
 <div class="settings-warning-box auto-style-153">
 <p class="settings-warning-text auto-style-154">
-<strong><i class="lucide-icon" data-lucide="alert-triangle"></i> <span data-tr="API İzinleri:" data-en="API Permissions:">API Permissions:</span></strong> Sadece <strong>Spot &amp; Futures Trading</strong>
-                                        izni verin. <strong>Withdrawal (Para Çekme)</strong> izni ASLA vermeyin!
-                                    </p>
+<strong><i class="lucide-icon" data-lucide="alert-triangle"></i> <span data-tr="API İzinleri:" data-en="API Permissions:">API Permissions:</span></strong> <span data-tr="Sadece Spot &amp; Futures Trading izni verin. Para Çekme (Withdrawal) izni ASLA vermeyin!" data-en="Grant only Spot &amp; Futures Trading permissions. NEVER enable Withdrawal permissions!">Grant only <strong>Spot &amp; Futures Trading</strong> permissions. NEVER enable <strong>Withdrawal</strong> permissions!</span>
+</p>
 </div>
 </div>
 </div>
