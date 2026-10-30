@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 title CryptoAlgoBot
 color 0A
 

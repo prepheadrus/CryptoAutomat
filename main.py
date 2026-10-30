@@ -185,15 +185,9 @@ if __name__ == "__main__":
             # 7. Event Tracer istatistiklerini göster
             logger.info("7️⃣ Event Tracer telemetry:")
             try:
-                try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
                 loop.run_until_complete(event_tracer.stop())
             except Exception:
                 pass
-            
             logger.info("=" * 60)
             logger.info("✅ GRACEFUL SHUTDOWN COMPLETE")
             logger.info("")
