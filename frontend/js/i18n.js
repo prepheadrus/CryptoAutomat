@@ -65,6 +65,7 @@ class I18nManager {
         document.documentElement.lang = lang;
         this.applyLanguageToDOM();
         this.updateSwitcherUI();
+        console.log(`🌐 [i18n] Language switched to: ${lang.toUpperCase()}`);
     }
 
     applyLanguageToDOM() {
@@ -72,11 +73,27 @@ class I18nManager {
         document.querySelectorAll('[data-en][data-tr]').forEach(el => {
             const val = this.currentLang === 'tr' ? el.getAttribute('data-tr') : el.getAttribute('data-en');
             if (val) {
-                el.textContent = val;
+                // If it has children icons, keep icons
+                const icon = el.querySelector('i, svg');
+                if (icon) {
+                    el.innerHTML = '';
+                    el.appendChild(icon);
+                    el.appendChild(document.createTextNode(' ' + val));
+                } else {
+                    el.textContent = val;
+                }
             }
         });
 
-        // 2. Process [data-i18n] keys if defined in dictionary
+        // 2. Process placeholder translations
+        document.querySelectorAll('[data-en-ph][data-tr-ph]').forEach(el => {
+            const val = this.currentLang === 'tr' ? el.getAttribute('data-tr-ph') : el.getAttribute('data-en-ph');
+            if (val) {
+                el.setAttribute('placeholder', val);
+            }
+        });
+
+        // 3. Process [data-i18n] keys if defined in dictionary
         document.querySelectorAll('[data-i18n]').forEach(el => {
             const key = el.getAttribute('data-i18n');
             const translation = this.t(key);
@@ -110,8 +127,18 @@ class I18nManager {
         const btnEn = document.getElementById('lang-btn-en');
         const btnTr = document.getElementById('lang-btn-tr');
 
-        if (btnEn) btnEn.addEventListener('click', () => this.setLanguage('en'));
-        if (btnTr) btnTr.addEventListener('click', () => this.setLanguage('tr'));
+        if (btnEn) {
+            btnEn.onclick = (e) => {
+                e.preventDefault();
+                this.setLanguage('en');
+            };
+        }
+        if (btnTr) {
+            btnTr.onclick = (e) => {
+                e.preventDefault();
+                this.setLanguage('tr');
+            };
+        }
     }
 }
 

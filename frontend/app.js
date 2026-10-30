@@ -1350,7 +1350,8 @@ async function loadSymbolsForBot() {
         symbolSelects.forEach(select => {
             // ML training symbol selection should NOT be filled here
             if (select.id !== 'market-symbol' && select.id !== 'ml-train-symbol') {
-                select.innerHTML = '<option value="">Sembol Seçin...</option>' +
+                const selSymbolText = (window.i18n && window.i18n.currentLang === "tr") ? "Sembol Seçin..." : "Select Symbol...";
+                select.innerHTML = `<option value="">${selSymbolText}</option>` +
                     symbols.map(s => `<option value="${s.symbol}">${s.symbol}</option>`).join('');
             }
         });
@@ -1371,7 +1372,8 @@ async function loadSymbolsForML() {
 
         const mlSymbolSelect = document.getElementById('ml-train-symbol');
         if (mlSymbolSelect) {
-            mlSymbolSelect.innerHTML = '<option value="">Sembol Seçin...</option>' +
+            const selSymbolText = (window.i18n && window.i18n.currentLang === "tr") ? "Sembol Seçin..." : "Select Symbol...";
+            mlSymbolSelect.innerHTML = `<option value="">${selSymbolText}</option>` +
                 symbols.map(s => `<option value="${s.symbol}">${s.symbol}</option>`).join('');
         }
 
@@ -1393,7 +1395,8 @@ async function loadStrategiesForBot() {
         strategySelects.forEach(select => {
             // ML training symbol selection should NOT be filled here
             if (select.id !== 'ml-train-symbol') {
-                select.innerHTML = '<option value="">Strateji Seçin...</option>' +
+                const selStratText = (window.i18n && window.i18n.currentLang === "tr") ? "Strateji Seçin..." : "Select Strategy...";
+                select.innerHTML = `<option value="">${selStratText}</option>` +
                     strategies.map(s => `<option value="${s.id || s.strategy_id}">${s.name || s.strategy_id}</option>`).join('');
             }
         });
@@ -2147,7 +2150,7 @@ async function loadMLStrategies() {
         // Add default option
         const defaultOption = document.createElement('option');
         defaultOption.value = '';
-        defaultOption.textContent = 'Strateji Seçin...';
+        defaultOption.textContent = (window.i18n && window.i18n.currentLang === "tr") ? "Strateji Seçin..." : "Select Strategy...";
         select.appendChild(defaultOption);
 
         // Add strategies dynamically
@@ -2185,7 +2188,7 @@ async function loadMLSymbols() {
         // Add default option
         const defaultOption = document.createElement('option');
         defaultOption.value = '';
-        defaultOption.textContent = 'Sembol Seçin...';
+        defaultOption.textContent = (window.i18n && window.i18n.currentLang === "tr") ? "Sembol Seçin..." : "Select Symbol...";
         select.appendChild(defaultOption);
 
         // Add symbols dynamically
