@@ -91,7 +91,7 @@
         <!-- Sol Kolon (Grafik) -->
         <div class="bento-col">
             <div class="card glass-panel bento-card">
-                <h4 class="auto-style-5"><i class="lucide-icon" data-lucide="trending-up"></i> Bakiye Gelişim Grafiği (Equity Curve)</h4>
+                <h4 class="auto-style-5"><i class="lucide-icon" data-lucide="trending-up"></i> <span data-tr="Bakiye Gelişim Grafiği (Equity Curve)" data-en="Equity Growth Curve">Equity Growth Curve</span></h4>
                 <div class="chart-container auto-style-6" id="plotly-chart"></div>
             </div>
         </div>
@@ -100,16 +100,16 @@
         <div class="bento-col">
             
             <div class="card glass-panel bento-card">
-                <h4 class="auto-style-5"><i class="lucide-icon" data-lucide="activity"></i> Envanter Özeti</h4>
+                <h4 class="auto-style-5"><i class="lucide-icon" data-lucide="activity"></i> <span data-tr="Envanter Özeti" data-en="Inventory Summary">Inventory Summary</span></h4>
                 <div class="mini-stats-grid" style="margin-top: 15px;">
-                    <div class="mini-stat"><span>Kâr Faktörü:</span> <strong id="stat-profit-factor">1.0</strong></div>
-                    <div class="mini-stat"><span>Max Drawdown:</span> <strong class="danger-text" id="stat-drawdown">0.0%</strong></div>
-                    <div class="mini-stat"><span>Sharpe Ratio:</span> <strong id="stat-sharpe">0.0</strong></div>
+                    <div class="mini-stat"><span><span data-tr="Kâr Faktörü:" data-en="Profit Factor:">Profit Factor:</span></span> <strong id="stat-profit-factor">1.0</strong></div>
+                    <div class="mini-stat"><span><span data-tr="Max Drawdown:" data-en="Max Drawdown:">Max Drawdown:</span></span> <strong class="danger-text" id="stat-drawdown">0.0%</strong></div>
+                    <div class="mini-stat"><span><span data-tr="Sharpe Ratio:" data-en="Sharpe Ratio:">Sharpe Ratio:</span></span> <strong id="stat-sharpe">0.0</strong></div>
                 </div>
             </div>
 
             <div class="card glass-panel bento-card" style="flex: 1;">
-                <h3><i class="lucide-icon" data-lucide="flame"></i> Piyasa İzleme Listesi</h3>
+                <h3><i class="lucide-icon" data-lucide="flame"></i> <span data-tr="Piyasa İzleme Listesi" data-en="Market Watchlist">Market Watchlist</span></h3>
                 <div class="heatmap-container" id="market-heatmap" style="height: 100%; min-height: 200px;"></div>
             </div>
 
@@ -121,20 +121,20 @@
 <div class="tab-content auto-style-10 bento-dashboard" id="tab-ml">
 <!-- ML MODEL EĞİTİM PANELİ -->
 <div class="card glass-panel auto-style-11">
-<h3 class="auto-style-12"><i class="lucide-icon" data-lucide="brain"></i> ML Model Eğitimi</h3>
+<h3 class="auto-style-12"><i class="lucide-icon" data-lucide="brain"></i> <span data-tr="ML Model Eğitimi" data-en="ML Model Training">ML Model Training</span></h3>
 <p class="auto-style-13">
                         XGBoost modelinizi Triple Barrier Method ile eğitin. Model, strateji sinyallerini onaylamak ve
                         dinamik kaldıraç için güven skoru üretmek için kullanılacaktır.
                     </p>
 <div class="auto-style-14">
 <div class="auto-style-15">
-<label class="auto-style-16">Sembol</label>
+<label class="auto-style-16"><span data-i18n="k_sembol" data-tr="Sembol" data-en="Symbol">Symbol</span></label>
 <select class="strategy-select symbol-select auto-style-17" id="ml-train-symbol" onchange="validateMumCount()">
 <option value="">Yükleniyor...</option>
 </select>
 </div>
 <div class="auto-style-15">
-<label class="auto-style-16">Zaman Dilimi</label>
+<label class="auto-style-16"><span data-i18n="k_zaman_dilimi" data-tr="Zaman Dilimi" data-en="Timeframe">Timeframe</span></label>
 <select class="timeframe-select auto-style-18" id="ml-train-timeframe" onchange="validateMumCount()">
 <option value="1m">1m</option>
 <option value="3m">3m</option>
@@ -194,7 +194,7 @@
 <!-- EĞİTİM GEÇMİŞİ TABLOSU -->
 <div class="card glass-panel auto-style-30">
 <div class="auto-style-31">
-<h3 class="auto-style-32"><i class="lucide-icon" data-lucide="library"></i> Eğitilmiş Modeller (Ensemble)</h3>
+<h3 class="auto-style-32"><i class="lucide-icon" data-lucide="library"></i> <span data-tr="Eğitilmiş Modeller (Ensemble)" data-en="Trained Models (Ensemble)">Trained Models (Ensemble)</span></h3>
 <div class="auto-style-33">
 <button class="btn btn-primary auto-style-34" onclick="loadMLTrainingHistory()">
 <i class="lucide-icon" data-lucide="refresh-cw"></i> Yenile
@@ -218,16 +218,16 @@
 <div class="header-row auto-style-30">
 <div class="auto-style-38">
 <div>
-<h2><i class="lucide-icon" data-lucide="brain"></i> Strateji Karar Merkezi</h2>
+<h2><i class="lucide-icon" data-lucide="brain"></i> <span data-tr="Strateji Karar Merkezi" data-en="Strategy Decision Hub">Strategy Decision Hub</span></h2>
 <p class="auto-style-39">Yapay Zeka ve Teknik Stratejilerin Karşılaştırmalı
                                 Analizi.</p>
 </div>
 <div class="auto-style-40">
 <select class="strategy-select auto-style-41" id="ml-analysis-strategy">
-<option value="">Strateji Seçin...</option>
+<option value=""><span data-i18n="k_strateji_seçin___" data-tr="Strateji Seçin..." data-en="Select Strategy...">Select Strategy...</span></option>
 </select>
 <select class="strategy-select symbol-select auto-style-17" id="ml-analysis-symbol">
-<option value="">Sembol Seçin...</option>
+<option value=""><span data-i18n="k_sembol_seçin___" data-tr="Sembol Seçin..." data-en="Select Symbol...">Select Symbol...</span></option>
 </select>
 <select class="strategy-select auto-style-42" id="ml-analysis-timeframe">
 <option value="1m">1m</option>
@@ -255,7 +255,7 @@
 <option selected="" value="isolated">İzole Marjin</option>
 <option value="cross">Çapraz Marjin</option>
 </select>
-<button class="btn btn-primary auto-style-44" onclick="runMLVisualAnalysis()"><i class="lucide-icon" data-lucide="rocket"></i> Simülasyonu Başlat</button>
+<button class="btn btn-primary auto-style-44" onclick="runMLVisualAnalysis()"><i class="lucide-icon" data-lucide="rocket"></i> <span data-tr="Simülasyonu Başlat" data-en="Run Simulation">Run Simulation</span></button>
 </div>
 </div>
 </div>
@@ -263,7 +263,7 @@
 <div class="grid-content auto-style-30">
 <div class="card glass-panel chart-span auto-style-45">
 <h3 class="auto-style-46">
-<span><i class="lucide-icon" data-lucide="search"></i> Görsel Karar Simülasyonu</span>
+<span><i class="lucide-icon" data-lucide="search"></i> <span data-tr="Görsel Karar Simülasyonu" data-en="Visual Decision Simulation">Visual Decision Simulation</span></span>
 <div class="auto-style-47">
 <span class="auto-style-48"><span class="auto-style-49"></span>GERÇEK
                                     AL</span>
@@ -288,7 +288,7 @@
 <!-- Model Analizi (Grafiğin Altında) -->
 <div class="grid-content auto-style-30">
 <div class="card glass-panel auto-style-45">
-<h3 class="auto-style-57"><i class="lucide-icon" data-lucide="dna"></i> Model Ağırlık Analizi</h3>
+<h3 class="auto-style-57"><i class="lucide-icon" data-lucide="dna"></i> <span data-tr="Model Ağırlık Analizi" data-en="Model Feature Importance">Model Feature Importance</span></h3>
 <div class="auto-style-58" id="feature-importance-chart">
 </div>
 <p class="auto-style-59">
@@ -304,7 +304,7 @@
 <div class="tab-content auto-style-10" id="tab-orders">
 <!-- SİSTEM DURUM ÖZETİ (KOMPAKT) -->
 <div class="card glass-panel auto-style-30">
-<h3 class="auto-style-60"><i class="lucide-icon" data-lucide="monitor"></i> Aktif Stratejiler</h3>
+<h3 class="auto-style-60"><i class="lucide-icon" data-lucide="monitor"></i> <span data-tr="Aktif Stratejiler" data-en="Active Strategies">Active Strategies</span></h3>
 <div class="auto-style-61" id="system-status-summary">
 <!-- Dinamik olarak doldurulacak -->
 <div class="auto-style-62" id="system-loading-msg">
@@ -320,7 +320,7 @@
 <div class="kpi-icon auto-style-67">
 <i class="lucide-icon" data-lucide="coins"></i></div>
 <div class="kpi-details">
-<span class="kpi-label auto-style-68">Bakiye</span>
+<span class="kpi-label auto-style-68"><span data-i18n="k_bakiye" data-tr="Bakiye" data-en="Balance">Balance</span></span>
 <span class="kpi-value auto-style-69" id="perf-balance">$10,000.00</span>
 </div>
 </div>
@@ -368,22 +368,22 @@
 <div class="kpi-icon auto-style-77">
 <i class="lucide-icon" data-lucide="banknote"></i></div>
 <div class="kpi-details">
-<span class="kpi-label auto-style-68">Komisyon</span>
+<span class="kpi-label auto-style-68"><span data-i18n="k_komisyon" data-tr="Komisyon" data-en="Fee">Fee</span></span>
 <span class="kpi-value auto-style-69" id="perf-total-fees">$0.00</span>
 </div>
 </div>
 </div>
 </div>
 <div class="card glass-panel chart-span auto-style-30">
-<h3><i class="lucide-icon" data-lucide="unlock"></i> Açık Pozisyonlar</h3>
+<h3><i class="lucide-icon" data-lucide="unlock"></i> <span data-tr="Açık Pozisyonlar" data-en="Open Positions">Open Positions</span></h3>
 <div class="table-container">
 <table class="positions-table auto-style-78">
 <thead>
 <tr>
 <th class="auto-style-79"><i class="lucide-icon" data-lucide="library"></i> Strateji / TF</th>
 <th>Yön / Parite</th>
-<th>Miktar / Kaldıraç</th>
-<th>Giriş / Pozisyon Değeri</th>
+<th><span data-i18n="k_miktar___kaldıraç" data-tr="Miktar / Kaldıraç" data-en="Amount / Leverage">Amount / Leverage</span></th>
+<th><span data-i18n="k_giriş___pozisyon_değeri" data-tr="Giriş / Pozisyon Değeri" data-en="Entry / Position Value">Entry / Position Value</span></th>
 <th>Mevcut / P&amp;L ($)</th>
 <th>ROE (%)</th>
 <th>SL / TP / Liq</th>
@@ -396,18 +396,18 @@
 </div>
 <div class="grid-content">
 <div class="card glass-panel chart-span">
-<h3><i class="lucide-icon" data-lucide="pie-chart"></i> Sermaye Kullanımı</h3>
+<h3><i class="lucide-icon" data-lucide="pie-chart"></i> <span data-tr="Sermaye Kullanımı" data-en="Capital Utilization">Capital Utilization</span></h3>
 <div class="usage-grid">
 <div class="usage-item">
 <span class="label"><i class="lucide-icon" data-lucide="dollar-sign"></i> Kullanılan Marjin</span>
 <h4 id="usage-used-margin">$0.00</h4>
 </div>
 <div class="usage-item">
-<span class="label"><i class="lucide-icon" data-lucide="coins"></i> Kullanılabilir Bakiye</span>
+<span class="label"><i class="lucide-icon" data-lucide="coins"></i> <span data-tr="Kullanılabilir Bakiye" data-en="Available Balance">Available Balance</span></span>
 <h4 id="usage-free-margin">$10,000.00</h4>
 </div>
 <div class="usage-item">
-<span class="label"><i class="lucide-icon" data-lucide="pie-chart"></i> Toplam Pozisyon Değeri</span>
+<span class="label"><i class="lucide-icon" data-lucide="pie-chart"></i> <span data-tr="Toplam Pozisyon Değeri" data-en="Total Position Value">Total Position Value</span></span>
 <h4 id="usage-notional">$0.00</h4>
 </div>
 <div class="usage-item">
@@ -436,7 +436,7 @@
 <div class="grid-content auto-style-82">
 <div class="card glass-panel">
 <div class="card-info">
-<h3><i class="lucide-icon" data-lucide="pie-chart"></i> Toplam İşlem</h3>
+<h3><i class="lucide-icon" data-lucide="pie-chart"></i> <span data-tr="Toplam İşlem" data-en="Total Trades">Total Trades</span></h3>
 <h1 id="hist-total-trades">0</h1>
 <p class="auto-style-2">Gerçekleşen Emirler
                             </p>
@@ -446,12 +446,12 @@
 <div class="card-info">
 <h3><i class="lucide-icon" data-lucide="target"></i> Win Rate</h3>
 <h1 id="hist-win-rate">0%</h1>
-<p class="auto-style-2">Başarı Oranı</p>
+<p class="auto-style-2"><span data-i18n="k_başarı_oranı" data-tr="Başarı Oranı" data-en="Win Rate">Win Rate</span></p>
 </div>
 </div>
 <div class="card glass-panel">
 <div class="card-info">
-<h3><i class="lucide-icon" data-lucide="coins"></i> Toplam Kâr/Zarar</h3>
+<h3><i class="lucide-icon" data-lucide="coins"></i> <span data-tr="Toplam Kâr/Zarar" data-en="Total Profit/Loss">Total Profit/Loss</span></h3>
 <h1 id="hist-total-pnl">$0.00</h1>
 <p class="auto-style-2">Net Kazanç</p>
 </div>
@@ -465,7 +465,7 @@
 </div>
 <div class="card glass-panel">
 <div class="card-info auto-style-83">
-<h3><i class="lucide-icon" data-lucide="trophy"></i> En İyi Strateji</h3>
+<h3><i class="lucide-icon" data-lucide="trophy"></i> <span data-tr="En İyi Strateji" data-en="Top Strategy">Top Strategy</span></h3>
 <h1 class="auto-style-84" id="hist-best-strategy">
                                 N/A</h1>
 <p class="auto-style-2">Performans Lideri</p>
@@ -474,7 +474,7 @@
 </div>
 <div class="card glass-panel chart-span">
 <div class="auto-style-85">
-<h3><i class="lucide-icon" data-lucide="clipboard-list"></i> Detaylı İşlem Listesi</h3>
+<h3><i class="lucide-icon" data-lucide="clipboard-list"></i> <span data-tr="Detaylı İşlem Listesi" data-en="Detailed Trade Audit">Detailed Trade Audit</span></h3>
 <div class="auto-style-40">
 <input class="lucide-icon" id="hist-filter-symbol" placeholder="&lt;i data-lucide=" search"="" type="text"/> Sembol Ara..."
                                 style="padding:8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff;"
@@ -485,15 +485,15 @@
 <table class="positions-table" id="history-table">
 <thead>
 <tr>
-<th>Tarih</th>
+<th><span data-i18n="k_tarih" data-tr="Tarih" data-en="Date">Date</span></th>
 <th>Parite</th>
-<th>Strateji</th>
+<th><span data-i18n="k_strateji" data-tr="Strateji" data-en="Strategy">Strategy</span></th>
 <th>Yön</th>
 <th>Giriş Fiyatı</th>
 <th>Çıkış Fiyatı</th>
-<th>Miktar / Kaldıraç</th>
+<th><span data-i18n="k_miktar___kaldıraç" data-tr="Miktar / Kaldıraç" data-en="Amount / Leverage">Amount / Leverage</span></th>
 <th>PnL ($)</th>
-<th>Kâr (%)</th>
+<th><span data-i18n="k_kâr____" data-tr="Kâr (%)" data-en="Profit (%)">Profit (%)</span></th>
 <th>Neden</th>
 </tr>
 </thead>
@@ -526,7 +526,7 @@
 <div class="builder-container auto-style-88">
 <!-- SOL PANEL: İndikatör Kütüphanesi -->
 <div class="panel glass-panel auto-style-89">
-<div class="panel-header"><i class="lucide-icon" data-lucide="library"></i> Gösterge Kütüphanesi</div>
+<div class="panel-header"><i class="lucide-icon" data-lucide="library"></i> <span data-tr="Gösterge Kütüphanesi" data-en="Indicator Library">Indicator Library</span></div>
 <input class="lucide-icon" id="indicator-search" placeholder="&lt;i data-lucide=" search"="" type="text"/> İndikatör ara..."
                             style="width: 100%; margin-bottom: 20px; background: rgba(255,255,255,0.05);"&gt;
 
@@ -570,7 +570,7 @@
 </div>
 </div>
 <div class="auto-style-90">
-<div class="category-title"><i class="lucide-icon" data-lucide="database"></i> KAYDEDİLMİŞ STRATEJİLER</div>
+<div class="category-title"><i class="lucide-icon" data-lucide="database"></i> <span data-tr="KAYDEDİLMİŞ STRATEJİLER" data-en="SAVED STRATEGIES">SAVED STRATEGIES</span></div>
 <div class="auto-style-91" id="saved-strategies-list">
 <div class="auto-style-92">
                                     Yükleniyor...</div>
@@ -579,31 +579,31 @@
 </div>
 <!-- ORTA PANEL: Koşul Oluşturucu -->
 <div class="panel glass-panel auto-style-89">
-<div class="panel-header"><i class="lucide-icon" data-lucide="settings"></i> Koşul Oluşturucu</div>
+<div class="panel-header"><i class="lucide-icon" data-lucide="settings"></i> <span data-tr="Koşul Oluşturucu" data-en="Condition Builder">Condition Builder</span></div>
 <div class="auto-style-30">
 <label class="auto-style-93">Strateji
                                 Adı</label>
 <input class="condition-input auto-style-94" id="strategy-name" type="text" value="Yeni Strateji"/>
-<label class="auto-style-93">Açıklama</label>
+<label class="auto-style-93"><span data-i18n="k_açıklama" data-tr="Açıklama" data-en="Description">Description</span></label>
 <textarea class="condition-input auto-style-95" id="strategy-description" placeholder="Opsiyonel açıklama..."></textarea>
 </div>
 <div class="condition-builder auto-style-96">
 <div class="condition-side long">🟢 LONG Koşulları</div>
 <div class="logic-selector" id="long-logic-selector">
-<div class="logic-btn active" data-logic="AND">VE (AND)</div>
-<div class="logic-btn" data-logic="OR">VEYA (OR)</div>
+<div class="logic-btn active" data-logic="AND"><span data-i18n="k_ve__and_" data-tr="VE (AND)" data-en="AND">AND</span></div>
+<div class="logic-btn" data-logic="OR"><span data-i18n="k_veya__or_" data-tr="VEYA (OR)" data-en="OR">OR</span></div>
 </div>
 <div id="long-conditions-container"></div>
-<button class="btn-add-rule" onclick="addCondition('long')"><i class="lucide-icon" data-lucide="plus"></i> LONG Koşulu Ekle</button>
+<button class="btn-add-rule" onclick="addCondition('long')"><i class="lucide-icon" data-lucide="plus"></i> <span data-tr="LONG Koşulu Ekle" data-en="Add LONG Condition">Add LONG Condition</span></button>
 </div>
 <div class="condition-builder auto-style-97">
 <div class="condition-side short">🔴 SHORT Koşulları</div>
 <div class="logic-selector" id="short-logic-selector">
-<div class="logic-btn active" data-logic="AND">VE (AND)</div>
-<div class="logic-btn" data-logic="OR">VEYA (OR)</div>
+<div class="logic-btn active" data-logic="AND"><span data-i18n="k_ve__and_" data-tr="VE (AND)" data-en="AND">AND</span></div>
+<div class="logic-btn" data-logic="OR"><span data-i18n="k_veya__or_" data-tr="VEYA (OR)" data-en="OR">OR</span></div>
 </div>
 <div id="short-conditions-container"></div>
-<button class="btn-add-rule" onclick="addCondition('short')"><i class="lucide-icon" data-lucide="plus"></i> SHORT Koşulu Ekle</button>
+<button class="btn-add-rule" onclick="addCondition('short')"><i class="lucide-icon" data-lucide="plus"></i> <span data-tr="SHORT Koşulu Ekle" data-en="Add SHORT Condition">Add SHORT Condition</span></button>
 </div>
 </div>
 <!-- SAĞ PANEL: Test ve Analiz -->
@@ -611,7 +611,7 @@
 <div class="panel-header"><i class="lucide-icon" data-lucide="target"></i> Backtest &amp; Risk</div>
 <div class="auto-style-98">
 <div class="auto-style-99">
-<div><label class="auto-style-100">Sembol</label><input class="condition-input auto-style-101" id="backtest-symbol" type="text" value="BTC/USDT"/></div>
+<div><label class="auto-style-100"><span data-i18n="k_sembol" data-tr="Sembol" data-en="Symbol">Symbol</span></label><input class="condition-input auto-style-101" id="backtest-symbol" type="text" value="BTC/USDT"/></div>
 <div><label class="auto-style-100">TF</label><select class="condition-select auto-style-101" id="backtest-timeframe">
 <option value="1m">1m</option>
 <option value="3m">3m</option>
@@ -632,7 +632,7 @@
 </select>
 </div>
 <div><label class="auto-style-100">Gün</label><input class="condition-input auto-style-101" id="backtest-days" type="number" value="30"/></div>
-<div><label class="auto-style-100">Bakiye</label><input class="condition-input auto-style-101" id="backtest-balance" type="number" value="10000"/></div>
+<div><label class="auto-style-100"><span data-i18n="k_bakiye" data-tr="Bakiye" data-en="Balance">Balance</span></label><input class="condition-input auto-style-101" id="backtest-balance" type="number" value="10000"/></div>
 </div>
 </div>
 <div class="auto-style-102">
@@ -685,8 +685,8 @@
                             İndikatör Detayı</div>
 <div id="modal-params"></div>
 <div class="modal-actions auto-style-120">
-<button class="btn btn-close-pos auto-style-121" onclick="closeModal()">Vazgeç</button>
-<button class="btn btn-primary auto-style-122" onclick="confirmIndicator()">Ekle</button>
+<button class="btn btn-close-pos auto-style-121" onclick="closeModal()"><span data-i18n="k_vazgeç" data-tr="Vazgeç" data-en="Cancel">Cancel</span></button>
+<button class="btn btn-primary auto-style-122" onclick="confirmIndicator()"><span data-i18n="k_ekle" data-tr="Ekle" data-en="Add">Add</span></button>
 </div>
 </div>
 </div>
@@ -696,7 +696,7 @@
 <!-- HEADER -->
 <div class="header-row auto-style-123">
 <h2><i class="lucide-icon" data-lucide="settings"></i> Sistem Ayarları &amp; Bot Yönetimi</h2>
-<p class="auto-style-39">Bot başlatın, yönetin ve sistem ayarlarını yapılandırın.</p>
+<p class="auto-style-39"><span data-i18n="k_bot_başlatın__yönetin_ve_siste" data-tr="Bot başlatın, yönetin ve sistem ayarlarını yapılandırın." data-en="Deploy, manage and configure autonomous bots and settings.">Deploy, manage and configure autonomous bots and settings.</span></p>
 </div>
 <!-- MODERN SETTINGS DASHBOARD -->
 <div class="settings-dashboard">
@@ -704,8 +704,8 @@
 <div class="settings-card auto-style-124">
 <div class="settings-card-header">
 <div>
-<h3 class="settings-card-title"><i class="lucide-icon" data-lucide="rocket"></i> Bot Başlatma Merkezi</h3>
-<p class="settings-card-description">Sembol ve strateji seçerek yeni bot başlat</p>
+<h3 class="settings-card-title"><i class="lucide-icon" data-lucide="rocket"></i> <span data-tr="Bot Başlatma Merkezi" data-en="Bot Launchpad">Bot Launchpad</span></h3>
+<p class="settings-card-description"><span data-tr="Sembol ve strateji seçerek yeni bot başlat" data-en="Launch a new bot by selecting symbol and strategy">Launch a new bot by selecting symbol and strategy</span></p>
 </div>
 </div>
 <div class="settings-card-body">
@@ -744,10 +744,10 @@
 </select>
 </div>
 <div class="settings-form-group">
-<label class="settings-form-label"><i class="lucide-icon" data-lucide="shield"></i> Marjin Tipi</label>
+<label class="settings-form-label"><i class="lucide-icon" data-lucide="shield"></i> <span data-tr="Marjin Tipi" data-en="Margin Type">Margin Type</span></label>
 <select class="settings-form-input" id="bot-margin-type">
-<option selected="" value="isolated">Isolated (İzole)</option>
-<option value="cross">Cross (Çapraz)</option>
+<option selected="" value="isolated"><span data-i18n="k_isolated__i̇zole_" data-tr="Isolated (İzole)" data-en="Isolated">Isolated</span></option>
+<option value="cross"><span data-i18n="k_cross__çapraz_" data-tr="Cross (Çapraz)" data-en="Cross">Cross</span></option>
 </select>
 </div>
 </div>
@@ -787,8 +787,8 @@
 <div class="settings-card risk-card">
 <div class="settings-card-header">
 <div>
-<h3 class="settings-card-title"><i class="lucide-icon" data-lucide="shield"></i> Risk Ayarları</h3>
-<p class="settings-card-description">Trading risk parametrelerini yapılandır</p>
+<h3 class="settings-card-title"><i class="lucide-icon" data-lucide="shield"></i> <span data-tr="Risk Ayarları" data-en="Risk Settings">Risk Settings</span></h3>
+<p class="settings-card-description"><span data-i18n="k_trading_risk_parametrelerini_y" data-tr="Trading risk parametrelerini yapılandır" data-en="Configure trading risk boundaries">Configure trading risk boundaries</span></p>
 </div>
 <button class="settings-save-btn" onclick="saveRiskSettings()">
 <i class="lucide-icon" data-lucide="database"></i> Kaydet
@@ -849,7 +849,7 @@
 <div class="settings-card-header">
 <div>
 <h3 class="settings-card-title">🤖 Bot Yapılandırması</h3>
-<p class="settings-card-description">Borsa ve sistem ayarları</p>
+<p class="settings-card-description"><span data-i18n="k_borsa_ve_sistem_ayarları" data-tr="Borsa ve sistem ayarları" data-en="Exchange & system configuration">Exchange & system configuration</span></p>
 </div>
 <button class="settings-save-btn" onclick="saveBotConfig()">
 <i class="lucide-icon" data-lucide="database"></i> Kaydet
@@ -883,7 +883,7 @@
 </div>
 <div class="settings-info-box">
 <p class="settings-info-text">
-<strong>ℹ️ Not:</strong> Bu ayarlar bot yeniden başlatıldığında uygulanır.
+<strong>ℹ️ Not:</strong> <span data-tr="Bu ayarlar bot yeniden başlatıldığında uygulanır." data-en="These settings take effect when bot restarts.">These settings take effect when bot restarts.</span>
                                 </p>
 </div>
 </div>
@@ -893,7 +893,7 @@
 <div class="settings-card-header">
 <div>
 <h3 class="settings-card-title"><i class="lucide-icon" data-lucide="brain"></i> WFO &amp; ML Ayarları</h3>
-<p class="settings-card-description">Otonom optimizasyon ve yapay zeka</p>
+<p class="settings-card-description"><span data-i18n="k_otonom_optimizasyon_ve_yapay_z" data-tr="Otonom optimizasyon ve yapay zeka" data-en="Autonomous optimization and intelligence">Autonomous optimization and intelligence</span></p>
 </div>
 <button class="settings-save-btn" onclick="saveAdvancedSettings()">
 <i class="lucide-icon" data-lucide="database"></i> Kaydet
@@ -909,11 +909,11 @@
 </label>
 <div class="settings-form-grid">
 <div class="settings-form-group">
-<label class="settings-form-label">Eğitim Günleri</label>
+<label class="settings-form-label"><span data-i18n="k_eğitim_günleri" data-tr="Eğitim Günleri" data-en="Training Days">Training Days</span></label>
 <input class="settings-form-input" id="wfo-train-days" max="90" min="7" step="1" type="number" value="30"/>
 </div>
 <div class="settings-form-group">
-<label class="settings-form-label">Test Günleri</label>
+<label class="settings-form-label"><span data-i18n="k_test_günleri" data-tr="Test Günleri" data-en="Test Days">Test Days</span></label>
 <input class="settings-form-input" id="wfo-test-days" max="30" min="1" step="1" type="number" value="7"/>
 </div>
 </div>
@@ -955,7 +955,7 @@
 <span>HTF Analizi Aktif (Altın Oran 1:4 / 1:6)</span>
 </label>
 <div class="settings-form-group">
-<label class="settings-form-label">Trend Metodu</label>
+<label class="settings-form-label"><span data-i18n="k_trend_metodu" data-tr="Trend Metodu" data-en="Trend Method">Trend Method</span></label>
 <select class="settings-form-input" id="htf-method">
 <option value="ema_stack">EMA Stack (EMA 20 vs EMA 50)</option>
 <option value="close_ema">Close vs EMA</option>
@@ -964,17 +964,17 @@
 </div>
 <div class="settings-form-grid" style="margin-top: 10px;">
 <div class="settings-form-group">
-<label class="settings-form-label">Hızlı EMA</label>
+<label class="settings-form-label"><span data-i18n="k_hızlı_ema" data-tr="Hızlı EMA" data-en="Fast EMA">Fast EMA</span></label>
 <input class="settings-form-input" id="htf-ema-fast" max="50" min="5" step="1" type="number" value="20"/>
 </div>
 <div class="settings-form-group">
-<label class="settings-form-label">Yavaş EMA</label>
+<label class="settings-form-label"><span data-i18n="k_yavaş_ema" data-tr="Yavaş EMA" data-en="Slow EMA">Slow EMA</span></label>
 <input class="settings-form-input" id="htf-ema-slow" max="200" min="20" step="1" type="number" value="50"/>
 </div>
 </div>
 <div class="settings-warning-box">
 <p class="settings-warning-text">
-<strong><i class="lucide-icon" data-lucide="alert-triangle"></i> Altın Oran:</strong> Major HTF veto yetkisine sahiptir.
+<strong><i class="lucide-icon" data-lucide="alert-triangle"></i> <span data-tr="Altın Oran:" data-en="Golden Ratio:">Golden Ratio:</span></strong> Major HTF veto yetkisine sahiptir.
                                         Örnek: 1m bot → 15m (Minor) + 1h (Major). Major trend ters yönde ise işlem
                                         açılmaz.
                                     </p>
@@ -987,7 +987,7 @@
 <div class="settings-card-header">
 <div>
 <h3 class="settings-card-title">🔮 Kalman Filtresi (Denoising)</h3>
-<p class="settings-card-description">Fiyat gürültüsünü azalt, false sinyalleri filtrele</p>
+<p class="settings-card-description"><span data-i18n="k_fiyat_gürültüsünü_azalt__false" data-tr="Fiyat gürültüsünü azalt, false sinyalleri filtrele" data-en="Filter false signals and reduce price noise">Filter false signals and reduce price noise</span></p>
 </div>
 </div>
 <div class="settings-card-body">
@@ -1090,7 +1090,7 @@
 <div class="settings-card-header">
 <div>
 <h3 class="settings-card-title">🔐 API Yönetimi</h3>
-<p class="settings-card-description">Binance API anahtarlarını güvenli şekilde yönet</p>
+<p class="settings-card-description"><span data-i18n="k_binance_api_anahtarlarını_güve" data-tr="Binance API anahtarlarını güvenli şekilde yönet" data-en="Safely manage Binance API credentials">Safely manage Binance API credentials</span></p>
 </div>
 </div>
 <div class="settings-card-body">
@@ -1117,7 +1117,7 @@
                                     🔑 Şifrele ve Kaydet
                                 </button>
 <button class="settings-btn settings-btn-test auto-style-149" onclick="testApiConnection()">
-<i class="lucide-icon" data-lucide="refresh-cw"></i> Bağlantıyı Test Et
+<i class="lucide-icon" data-lucide="refresh-cw"></i> <span data-tr="Bağlantıyı Test Et" data-en="Test Connection">Test Connection</span>
                                 </button>
 </div>
 <!-- Security Info Boxes -->
@@ -1130,7 +1130,7 @@
 </div>
 <div class="settings-warning-box auto-style-153">
 <p class="settings-warning-text auto-style-154">
-<strong><i class="lucide-icon" data-lucide="alert-triangle"></i> API İzinleri:</strong> Sadece <strong>Spot &amp; Futures Trading</strong>
+<strong><i class="lucide-icon" data-lucide="alert-triangle"></i> <span data-tr="API İzinleri:" data-en="API Permissions:">API Permissions:</span></strong> Sadece <strong>Spot &amp; Futures Trading</strong>
                                         izni verin. <strong>Withdrawal (Para Çekme)</strong> izni ASLA vermeyin!
                                     </p>
 </div>
@@ -1143,14 +1143,14 @@
 <div class="tab-content auto-style-10" id="tab-data">
 <div class="header-row auto-style-123">
 <h2><i class="lucide-icon" data-lucide="database"></i> Veri Laboratuvarı &amp; Geçmiş Veri İndirme</h2>
-<p class="auto-style-39">Yapay zekayı eğitmek için Binance üzerinden veri toplayın.</p>
+<p class="auto-style-39"><span data-i18n="k_yapay_zekayı_eğitmek_için_bina" data-tr="Yapay zekayı eğitmek için Binance üzerinden veri toplayın." data-en="Ingest historical bars from Binance to train models.">Ingest historical bars from Binance to train models.</span></p>
 </div>
 <!-- MODERN 3-CARD LAYOUT -->
 <div class="data-lab-grid">
 <!-- CARD 1: PİYASA SEÇİMİ -->
 <div class="data-card market-card">
 <div class="data-card-header">
-<h3 class="data-card-title"><span class="step-number">1</span> <i class="lucide-icon" data-lucide="search"></i> Piyasa Seçimi</h3>
+<h3 class="data-card-title"><span class="step-number">1</span> <i class="lucide-icon" data-lucide="search"></i> <span data-tr="Piyasa Seçimi" data-en="Market Selection">Market Selection</span></h3>
 <button class="data-btn data-btn-primary auto-style-127" onclick="saveMarketSelection()">
                                 ✅ Takibi Güncelle
                             </button>
@@ -1204,7 +1204,7 @@
 <li>Snappy compression (hızlı okuma/yazma)</li>
 <li>MTF-Daily (1m, 5m, 15m) → Gün bazlı partition (YYYY/MM/DD/)</li>
 <li>MTF-Market (1h, 4h, 1d) → Tek dosya (market.parquet)</li>
-<li>Look-ahead bias koruması (gelecek mumlar düşürülür)</li>
+<li><span data-i18n="k_look_ahead_bias_koruması__gele" data-tr="Look-ahead bias koruması (gelecek mumlar düşürülür)" data-en="Look-ahead bias protection (future bars dropped)">Look-ahead bias protection (future bars dropped)</span></li>
 <li>OOM koruması (50k batch stream - RAM dostu)</li>
 </ul>
 </p>
@@ -1214,7 +1214,7 @@
 </details>
 <div class="form-row">
 <div class="form-group">
-<label class="form-label">Başlangıç:</label>
+<label class="form-label"><span data-i18n="k_başlangıç_" data-tr="Başlangıç:" data-en="Start:">Start:</span></label>
 <input class="data-input" id="download-start-date" type="date" value="2025-01-01"/>
 </div>
 <!-- Timeframe seçimi KALDIRILDI - SADECE 1m -->
@@ -1228,7 +1228,7 @@
 </div>
 <!-- PROGRESS BAR -->
 <div class="progress-container auto-style-10" id="progress-container">
-<div class="progress-text" id="progress-text">Hazırlanıyor...</div>
+<div class="progress-text" id="progress-text"><span data-i18n="k_hazırlanıyor___" data-tr="Hazırlanıyor..." data-en="Preparing...">Preparing...</span></div>
 <div class="progress-bar-wrapper">
 <div class="progress-bar-fill" id="progress-bar"></div>
 </div>
@@ -1236,7 +1236,7 @@
 </div>
 <!-- HISTORY STATUS -->
 <div class="status-box" id="history-status-view">
-<p><i class="lucide-icon" data-lucide="pie-chart"></i> Veri durumu yükleniyor...</p>
+<p><i class="lucide-icon" data-lucide="pie-chart"></i> <span data-tr="Veri durumu yükleniyor..." data-en="Loading data inventory...">Loading data inventory...</span></p>
 </div>
 <div class="button-row">
 <button class="data-btn data-btn-success" id="start-download-btn" onclick="startDownload()">
@@ -1259,7 +1259,7 @@
 <!-- CARD 3: GÖREV YÖNETİCİSİ -->
 <div class="data-card tasks-card">
 <div class="data-card-header">
-<h3 class="data-card-title"><span class="step-number">3</span> <i class="lucide-icon" data-lucide="pie-chart"></i> Aktif ve Geçmiş Görevler</h3>
+<h3 class="data-card-title"><span class="step-number">3</span> <i class="lucide-icon" data-lucide="pie-chart"></i> <span data-tr="Aktif ve Geçmiş Görevler" data-en="Active & Completed Tasks">Active & Completed Tasks</span></h3>
 <div class="task-count-badge" id="active-tasks-count">0 Aktif / 0 Toplam</div>
 </div>
 <div class="data-card-body">
@@ -1284,11 +1284,11 @@
 <div class="card glass-panel auto-style-63">
 <div class="auto-style-166">
 <div>
-<h3><i class="lucide-icon" data-lucide="trending-up"></i> Gelişmiş Strateji ve Başarı Raporu (Röntgen)</h3>
+<h3><i class="lucide-icon" data-lucide="trending-up"></i> <span data-tr="Gelişmiş Strateji ve Başarı Raporu (Röntgen)" data-en="Advanced Strategy Performance Audit">Advanced Strategy Performance Audit</span></h3>
 <p class="auto-style-167">Hangi bot modelinin
                                 hangi paritelerde daha verimli olduğunu detaylı analiz eder ve tavsiye sunar.</p>
 </div>
-<button class="btn btn-select auto-style-168" onclick="loadStrategyReport()"><i class="lucide-icon" data-lucide="refresh-cw"></i> Raporu Güncelle</button>
+<button class="btn btn-select auto-style-168" onclick="loadStrategyReport()"><i class="lucide-icon" data-lucide="refresh-cw"></i> <span data-tr="Raporu Güncelle" data-en="Refresh Report">Refresh Report</span></button>
 </div>
 </div>
 <!-- Kartların yerleşeceği alan -->
@@ -1304,7 +1304,7 @@
 <div class="drawer-header">
 <div class="drawer-title-box">
 <span class="pulse-dot"></span>
-<h2 id="drawer-strategy-id">Strateji Detayı</h2>
+<h2 id="drawer-strategy-id"><span data-i18n="k_strateji_detayı" data-tr="Strateji Detayı" data-en="Strategy Details">Strategy Details</span></h2>
 <span class="badge badge-success" id="drawer-symbol-badge">--/--</span>
 </div>
 <button class="btn-close-drawer" onclick="closeStrategyDrawer()">×</button>
@@ -1321,7 +1321,7 @@
 <!-- İstatistik Özeti -->
 <div class="drawer-stats-row">
 <div class="stat-mini-card">
-<span class="label">Toplam İşlem</span>
+<span class="label"><span data-tr="Toplam İşlem" data-en="Total Trades">Total Trades</span></span>
 <span class="value" id="drawer-total-trades">0</span>
 </div>
 <div class="stat-mini-card">
@@ -1335,12 +1335,12 @@
 </div>
 <!-- İşlem Listesi Tablosu -->
 <div class="drawer-trades-section">
-<h3><i class="lucide-icon" data-lucide="scroll-text"></i> Son İşlemler</h3>
+<h3><i class="lucide-icon" data-lucide="scroll-text"></i> <span data-tr="Son İşlemler" data-en="Recent Trades">Recent Trades</span></h3>
 <div class="drawer-table-container">
 <table class="drawer-table">
 <thead>
 <tr>
-<th>Tarih</th>
+<th><span data-i18n="k_tarih" data-tr="Tarih" data-en="Date">Date</span></th>
 <th>Yön</th>
 <th>Giriş/Çıkış</th>
 <th>PnL (%)</th>
