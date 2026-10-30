@@ -46,27 +46,12 @@ echo   Starting trading engine...
 echo ==========================================
 echo.
 echo [INFO] Dashboard: http://localhost:3000
+echo [INFO] Browser will launch automatically when server is ready.
 echo [INFO] To stop: Close this window or press CTRL+C
 echo.
 
-REM Launch bot in background
-start /B call venv\Scripts\activate.bat ^&^& python main.py
+REM Activate venv and run main.py
+call venv\Scripts\activate.bat
+python main.py
 
-REM Wait until server is listening on port 3000 (prevents ERR_CONNECTION_REFUSED)
-echo [INFO] Waiting for server to become ready...
-venv\Scripts\python.exe -c "import socket, time; [time.sleep(0.5) for _ in range(60) if socket.socket().connect_ex(('127.0.0.1', 3000)) != 0]"
-timeout /t 1 /nobreak >nul
-
-REM Launch browser
-echo [OK] Server ready! Opening Dashboard...
-start http://localhost:3000
-
-echo.
-echo ==========================================
-echo   Engine running...
-echo ==========================================
-echo.
-echo NOTE: Keep this console window open!
-echo       To stop, close this console or press CTRL+C.
-echo.
 pause

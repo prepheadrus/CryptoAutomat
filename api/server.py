@@ -74,7 +74,7 @@ async def lifespan(app: FastAPI):
 
     if not symbols:
         # YENİ: config.yaml boşsa, Parquet Data Lake'den otomatik yükle
-        logger.info("🔄 [AUTO-SYNC] config.yaml boş, Parquet Data Lake'den semboller yükleniyor...")
+        logger.info("🔄 [AUTO-SYNC] config.yaml is empty, loading symbols from Parquet Data Lake...")
         try:
             from data.storage.parquet_lake import get_parquet_lake
             from core.exchange import normalize_symbol
@@ -84,12 +84,12 @@ async def lifespan(app: FastAPI):
             if stats['total_symbols'] > 0:
                 # [SYMBOL FIX] Parquet'ten gelen sembolleri normalize et (örn: /BTC → BTC/USDT)
                 symbols = [normalize_symbol(s) for s in stats['symbols'].keys()]
-                logger.info(f"✅ [AUTO-SYNC] Parquet'ten {len(symbols)} sembol yüklendi!")
+                logger.info(f"✅ [AUTO-SYNC] Loaded {len(symbols)} symbols from Parquet Data Lake!")
                 logger.info(f"   Toplam dosya: {stats['total_files']}, Boyut: {stats['total_size_mb']:.2f} MB")
             else:
-                logger.info("ℹ️ Parquet Data Lake boş - Dashboard'dan bot başlatabilirsiniz")
+                logger.info("ℹ️ Parquet Data Lake is empty - launch bots from Dashboard")
         except Exception as e:
-            logger.error(f"❌ [AUTO-SYNC] Parquet'ten sembol yükleme hatası: {e}")
+            logger.error(f"❌ [AUTO-SYNC] Error loading symbols from Parquet Lake: {e}")
 
     tasks = []
     for symbol in symbols:
@@ -125,11 +125,11 @@ async def lifespan(app: FastAPI):
                         wfo_tasks.append(wfo_task)
 
             if wfo_tasks:
-                logger.info(f"🎯 [WFO] {len(wfo_tasks)} sembol için otonom optimizasyon aktif")
+                logger.info(f"🎯 [WFO] Autonomous optimization active for {len(wfo_tasks)} symbols")
         except Exception as e:
-            logger.error(f"❌ [WFO] Başlatma hatası: {e}")
+            logger.error(f"❌ [WFO] Startup error: {e}")
     else:
-        logger.info("ℹ️ [WFO] Otonom optimizasyon devre dışı")
+        logger.info("ℹ️ [WFO] Autonomous optimization disabled")
 
     yield
 
@@ -161,7 +161,7 @@ async def lifespan(app: FastAPI):
     logger.info("✅ [API] Database connection closed")
 
     # 5. Circuit Breaker istatistikleri
-    logger.info("5️⃣ [API] Circuit Breaker istatistikleri:")
+    logger.info("5️⃣ [API] Circuit Breaker statistics:")
     try:
         from core.circuit_breaker import get_all_breakers_stats
         stats = get_all_breakers_stats()
@@ -204,28 +204,28 @@ app.add_middleware(
 # ============================================================================
 
 app.include_router(system_router)
-logger.info("✅ System router eklendi")
+logger.info("✅ System router registered")
 
 app.include_router(bot_router)
-logger.info("✅ Bot router eklendi")
+logger.info("✅ Bot router registered")
 
 app.include_router(ml_router)
-logger.info("✅ ML router eklendi")
+logger.info("✅ ML router registered")
 
 app.include_router(strategy_router)
-logger.info("✅ Strategy router eklendi")
+logger.info("✅ Strategy router registered")
 
 app.include_router(data_router)
-logger.info("✅ Data router eklendi")
+logger.info("✅ Data router registered")
 
 app.include_router(strategy_builder_router)
-logger.info("✅ Strategy Builder router eklendi")
+logger.info("✅ Strategy Builder router registered")
 
 app.include_router(backtest_router)
-logger.info("✅ Backtest router eklendi")
+logger.info("✅ Backtest router registered")
 
 app.include_router(trades_router)
-logger.info("✅ Trades router eklendi")
+logger.info("✅ Trades router registered")
 
 # ============================================================================
 # FRONTEND (STATIC FILES)
@@ -235,7 +235,7 @@ try:
     app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
     logger.info("✅ Frontend static files mounted")
 except Exception as e:
-    logger.warning(f"⚠️ Frontend mount hatası: {e}")
+    logger.warning(f"⚠️ Frontend mount error: {e}")
 
 # ============================================================================
 # MAIN ENTRY POINT
@@ -255,4 +255,4 @@ if __name__ == "__main__":
 # FINAL LOG
 # ============================================================================
 
-logger.info("🎉 [MİMARİ] Faz 2 Tamamlandı: API Katmanı Modülerleştirildi (1374 satır -> ~160 satır)")
+logger.info("🎉 [API] Modular API Layer Initialized")

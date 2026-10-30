@@ -20,6 +20,12 @@ class I18nManager {
                 "api_test_success": "Binance API connection verified!",
                 "api_test_failed": "API connection failed. Please verify credentials.",
                 "select_symbol_timeframe": "Please select a symbol and timeframe!",
+                "select_symbol": "Select Symbol...",
+                "select_strategy": "Select Strategy...",
+                "select_timeframe": "Select Timeframe...",
+                "no_active_bots": "No active bots. You can start a new bot above.",
+                "no_trade_history": "No trade history available yet.",
+                "loading": "Loading...",
                 "data_download_started": "Historical data ingestion started.",
                 "data_download_stopped": "Data ingestion stopped.",
                 "all_data_deleted": "Historical data deleted.",
@@ -40,6 +46,12 @@ class I18nManager {
                 "api_test_success": "Binance API bağlantısı doğrulandı!",
                 "api_test_failed": "API bağlantısı başarısız. Lütfen bilgilerinizi kontrol edin.",
                 "select_symbol_timeframe": "Lütfen bir sembol ve zaman dilimi seçin!",
+                "select_symbol": "Sembol Seçin...",
+                "select_strategy": "Strateji Seçin...",
+                "select_timeframe": "Timeframe Seçin...",
+                "no_active_bots": "Aktif bot yok. Yukarıdan yeni bot başlatabilirsiniz.",
+                "no_trade_history": "Henüz işlem geçmişi yok veya yükleniyor...",
+                "loading": "Yükleniyor...",
                 "data_download_started": "Geçmiş veri indirme işlemi başlatıldı.",
                 "data_download_stopped": "Veri indirme işlemi durduruldu.",
                 "all_data_deleted": "Geçmiş veriler silindi.",
@@ -65,6 +77,11 @@ class I18nManager {
         document.documentElement.lang = lang;
         this.applyLanguageToDOM();
         this.updateSwitcherUI();
+        this.updateDynamicDropdowns();
+
+        // Dispatch language change event for dynamic components
+        window.dispatchEvent(new CustomEvent('languageChanged', { detail: { lang } }));
+
         console.log(`🌐 [i18n] Language switched to: ${lang.toUpperCase()}`);
     }
 
@@ -73,7 +90,6 @@ class I18nManager {
         document.querySelectorAll('[data-en][data-tr]').forEach(el => {
             const val = this.currentLang === 'tr' ? el.getAttribute('data-tr') : el.getAttribute('data-en');
             if (val) {
-                // If it has children icons, keep icons
                 const icon = el.querySelector('i, svg');
                 if (icon) {
                     el.innerHTML = '';
@@ -110,6 +126,30 @@ class I18nManager {
         });
     }
 
+    updateDynamicDropdowns() {
+        const symbolText = this.currentLang === 'tr' ? 'Sembol Seçin...' : 'Select Symbol...';
+        const stratText = this.currentLang === 'tr' ? 'Strateji Seçin...' : 'Select Strategy...';
+        const tfText = this.currentLang === 'tr' ? 'Timeframe Seçin...' : 'Select Timeframe...';
+
+        document.querySelectorAll('select.symbol-select, #bot-symbol, #ml-symbol, #ml-sym-1, #data-symbol-select').forEach(sel => {
+            if (sel.options && sel.options.length > 0 && sel.options[0].value === "") {
+                sel.options[0].textContent = symbolText;
+            }
+        });
+
+        document.querySelectorAll('select.strategy-select, #bot-strategy, #ml-strat-1, #ml-strat-2').forEach(sel => {
+            if (sel.options && sel.options.length > 0 && sel.options[0].value === "") {
+                sel.options[0].textContent = stratText;
+            }
+        });
+
+        document.querySelectorAll('select.timeframe-select, #bot-timeframe, #ml-timeframe').forEach(sel => {
+            if (sel.options && sel.options.length > 0 && sel.options[0].value === "") {
+                sel.options[0].textContent = tfText;
+            }
+        });
+    }
+
     updateSwitcherUI() {
         const btnEn = document.getElementById('lang-btn-en');
         const btnTr = document.getElementById('lang-btn-tr');
@@ -123,19 +163,20 @@ class I18nManager {
         document.documentElement.lang = this.currentLang;
         this.applyLanguageToDOM();
         this.updateSwitcherUI();
+        this.updateDynamicDropdowns();
 
         const btnEn = document.getElementById('lang-btn-en');
         const btnTr = document.getElementById('lang-btn-tr');
 
         if (btnEn) {
             btnEn.onclick = (e) => {
-                e.preventDefault();
+                if (e) e.preventDefault();
                 this.setLanguage('en');
             };
         }
         if (btnTr) {
             btnTr.onclick = (e) => {
-                e.preventDefault();
+                if (e) e.preventDefault();
                 this.setLanguage('tr');
             };
         }
@@ -147,4 +188,5 @@ export default i18n;
 
 if (typeof window !== 'undefined') {
     window.i18n = i18n;
+    window.setLang = (lang) => i18n.setLanguage(lang);
 }

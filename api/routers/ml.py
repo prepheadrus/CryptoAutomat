@@ -241,8 +241,8 @@ async def run_visual_analysis(
                 # NaN satırları temizle (boş mumlar)
                 df = df.dropna()
 
-                logger.info(f"✅ [DATA] Resampling Mimarisi Aktif: Veritabanı %98 Optimize Edildi")
-                logger.info(f"✅ [ML] Resampling tamamlandı: {len(df)} mum ({timeframe})")
+                logger.info("✅ [DATA] Resampling Architecture Active: Storage 98% Optimized")
+                logger.info(f"✅ [ML] Resampling complete: {len(df)} candles ({timeframe})")
 
                 # Flat file'a kaydet (gelecek için)
                 try:
@@ -441,18 +441,18 @@ async def run_visual_analysis(
                     
                     # LONG/BUY mantığı
                     if trade_type in ['LONG', 'BUY'] and current_real_state != 'LONG':
-                        markers.append({'time': trade_time, 'position': 'belowBar', 'color': '#00FA9A', 'shape': 'circle', 'text': 'GERÇEK AL', 'size': 1.0})
+                        markers.append({'time': trade_time, 'position': 'belowBar', 'color': '#00FA9A', 'shape': 'circle', 'text': 'REAL BUY', 'size': 1.0})
                         current_real_state = 'LONG'
                         
                     # SHORT/SELL mantığı
                     elif trade_type in ['SHORT', 'SELL'] and current_real_state != 'SHORT':
-                        markers.append({'time': trade_time, 'position': 'aboveBar', 'color': '#FF4500', 'shape': 'circle', 'text': 'GERÇEK SAT', 'size': 1.0})
+                        markers.append({'time': trade_time, 'position': 'aboveBar', 'color': '#FF4500', 'shape': 'circle', 'text': 'REAL SELL', 'size': 1.0})
                         current_real_state = 'SHORT'
                         
                     # Kapanış için ekstra marker
                     if trade.get('status') == 'closed' and trade.get('close_time'):
                         close_time = parse_timestamp(trade['close_time'])
-                        markers.append({'time': close_time, 'position': 'aboveBar', 'color': '#FFFFFF', 'shape': 'circle', 'text': 'İŞLEM KAPANIŞ', 'size': 0.8})
+                        markers.append({'time': close_time, 'position': 'aboveBar', 'color': '#FFFFFF', 'shape': 'circle', 'text': 'CLOSE TRADE', 'size': 0.8})
                         current_real_state = None  # Pozisyon kapandığı için durumu sıfırla
                         
         except Exception as e:

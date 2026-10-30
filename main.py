@@ -1,4 +1,14 @@
-﻿import uvicorn
+import sys
+if sys.platform == 'win32':
+    try:
+        if hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        if hasattr(sys.stderr, 'reconfigure'):
+            sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
+import uvicorn
 import asyncio
 from core.logger import logger
 from core.config import CONFIG
@@ -54,17 +64,17 @@ async def start_background_tasks():
             else:
                 logger.warning("⚠️ Parquet Data Lake is empty. Download historical data via Data Lab.")
         except Exception as e:
-            logger.error(f"❌ [AUTO-SYNC] Loaded sembol yükleme hatası: {e}")
-            logger.info("ℹ️ SQLite DB'den deneniyor...")
+            logger.error(f"❌ [AUTO-SYNC] Error loading symbols from Parquet: {e}")
+            logger.info("ℹ️ Falling back to SQLite DB...")
             try:
                 from data.database import db_manager
                 await db_manager.connect()
                 db_symbols = await db_manager.get_symbols_with_data()
                 if db_symbols:
                     symbols = db_symbols
-                    logger.info(f"✅ [AUTO-SYNC] DB'den {len(symbols)} symbols from Parquet Data Lake!")
+                    logger.info(f"✅ [AUTO-SYNC] Loaded {len(symbols)} symbols from DB")
             except Exception as e2:
-                logger.error(f"❌ [AUTO-SYNC] DB'den sembol yükleme hatası: {e2}")
+                logger.error(f"❌ [AUTO-SYNC] Error loading symbols from DB: {e2}")
 
     # Sembollerle botları başlat
     if symbols:
@@ -81,7 +91,7 @@ async def start_background_tasks():
                 logger.info(f"🚀 [POLLER] {symbol} strategy poller started")
 
             except Exception as e:
-                logger.error(f"❌ {symbol} için poller başlatma hatası: {e}")
+                logger.error(f"❌ Error starting poller for {symbol}: {e}")
     else:
         logger.info("ℹ️ No active symbols configured - you can launch bots from the Dashboard")
 
@@ -105,14 +115,33 @@ async def start_background_tasks():
                     )
                     logger.info(f"🧠 [WFO] {symbol} WFO optimization worker started")
         except Exception as e:
-            logger.warning(f"⚠️ WFO başlatma hatası: {e}")
-            logger.warning("   Bot çalışmaya devam edecek, WFO olmadan")
+            logger.warning(f"⚠️ WFO initialization error: {e}")
+            logger.warning("   Bot running without autonomous WFO")
 
     logger.info("=" * 60)
     logger.info("✅ ALL BACKGROUND WORKERS STARTED!")
     logger.info("   Engine is now listening to live market feeds and executing signals...")
     logger.info("=" * 60)
     logger.info("")
+
+
+def open_browser_when_ready(port: int = 3000):
+    """Wait for server socket to accept connections, then automatically launch browser."""
+    import socket
+    import time
+    import webbrowser
+
+    target_url = f"http://localhost:{port}"
+    for _ in range(60):
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                time.sleep(0.5)
+                logger.info(f"🌐 Server ready! Launching browser at {target_url} ...")
+                webbrowser.open(target_url)
+                return
+        except (OSError, ConnectionRefusedError):
+            time.sleep(0.5)
+    logger.warning(f"⚠️ Could not automatically launch browser. Please open {target_url} manually.")
 
 if __name__ == "__main__":
     # Global shutdown flag
@@ -130,24 +159,24 @@ if __name__ == "__main__":
         shutdown_in_progress = True
         
         logger.info("")
-        logger.info("🛑 GÜVENLI KAPATMA BAŞLATILIYOR...")
+        logger.info("🛑 GRACEFUL SHUTDOWN INITIATED...")
         logger.info("=" * 60)
         
         try:
             # 1. Yeni işlem almayı durdur
-            logger.info("1️⃣ Yeni işlem alımı durduruluyor...")
+            logger.info("1️⃣ Halting new trade execution...")
             if hasattr(paper_engine, 'accepting_new_trades'):
                 paper_engine.accepting_new_trades = False
             logger.info("✅ Accepting new trades halted")
             
             # 2. Açık pozisyonları kapat
-            logger.info("2️⃣ Açık pozisyonlar kapatılıyor...")
+            logger.info("2️⃣ Checking open positions...")
             open_positions_count = len(paper_engine.open_positions) if hasattr(paper_engine, 'open_positions') else 0
             
             if open_positions_count > 0:
-                logger.warning(f"⚠️ {open_positions_count} açık pozisyon var!")
-                logger.info("   Pozisyonlar dashboard'dan manuel kapatılmalı veya")
-                logger.info("   otomatik kapatma için bot ayarlarını kontrol edin.")
+                logger.warning(f"⚠️ {open_positions_count} open position(s) detected!")
+                logger.info("   Positions can be managed or closed via dashboard")
+                logger.info("   Check risk management settings for auto-close.")
             else:
                 logger.info("✅ No open positions")
             
@@ -231,9 +260,9 @@ if __name__ == "__main__":
 
         try:
             loop.create_task(start_event_tracer())
-            logger.info("✅ Event Tracer aktif")
+            logger.info("✅ Event Tracer active")
         except Exception as e:
-            logger.warning(f"⚠️ Event Tracer başlatılamadı: {e}")
+            logger.warning(f"⚠️ Event Tracer could not be started: {e}")
 
         # BOT ARKA PLAN TASK'LARINI BAŞLAT
         # Bu fonksiyon: Event Bus, WebSocket, Poller'lar, WFO başlatır
@@ -256,6 +285,9 @@ if __name__ == "__main__":
         logger.info("   Listening to market feeds... Execution loop ready...")
         logger.info("=" * 60)
         logger.info("")
+
+        import threading
+        threading.Thread(target=open_browser_when_ready, args=(port,), daemon=True).start()
 
         uvicorn.run(
             "api.server:app",

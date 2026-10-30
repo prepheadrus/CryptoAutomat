@@ -1417,7 +1417,8 @@ async function loadTimeframesForBot() {
     timeframeSelects.forEach(select => {
         // ML training timeframe selection should NOT be filled here
         if (select.id !== 'ml-train-timeframe') {
-            select.innerHTML = '<option value="">Timeframe Seçin...</option>' +
+            const selTfText = (window.i18n && window.i18n.currentLang === 'tr') ? 'Timeframe Seçin...' : 'Select Timeframe...';
+            select.innerHTML = `<option value="">${selTfText}</option>` +
                 timeframes.map(tf => `<option value="${tf}">${tf}</option>`).join('');
         }
     });
@@ -1492,7 +1493,7 @@ function renderTradeHistory(trades) {
     if (!tbody) return;
 
     if (trades.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:40px; color:var(--text-muted);">Henüz işlem geçmişi yok</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:40px; color:var(--text-muted);">${(window.i18n && window.i18n.currentLang === "tr") ? "Henüz işlem geçmişi yok" : "No trade history available yet."}</td></tr>`;
         updateHistoryStats([]);
         return;
     }
@@ -1508,7 +1509,8 @@ function renderTradeHistory(trades) {
         if (closedAt) {
             try {
                 if (typeof closedAt === 'string') {
-                    dateStr = new Date(closedAt).toLocaleString('tr-TR');
+                    const loc = (window.i18n && window.i18n.currentLang === 'tr') ? 'tr-TR' : 'en-US';
+                    dateStr = new Date(closedAt).toLocaleString(loc);
                 } else if (closedAt instanceof Date) {
                     dateStr = closedAt.toLocaleString('tr-TR');
                 }
@@ -2785,3 +2787,10 @@ if (document.readyState === 'loading') {
 // ============================================================================
 
 console.log('🎉 [MİMARİ] Faz 3 Tamamlandı: Frontend ES6 Modüllerine Parçalandı');
+
+window.addEventListener('languageChanged', (e) => {
+    loadSymbolsForBot();
+    loadStrategiesForBot();
+    loadTimeframesForBot();
+    loadTradeHistory();
+});

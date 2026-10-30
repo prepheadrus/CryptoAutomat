@@ -1,3 +1,5 @@
+
+const isTr = () => (typeof window !== 'undefined' && window.i18n && window.i18n.currentLang === 'tr');
 /**
  * Bot Manager Component
  * 
@@ -31,6 +33,9 @@ class BotManager {
     init() {
         this.loadBots();
         this.setupEventListeners();
+
+        // Re-render on language change
+        window.addEventListener("languageChanged", () => this.render());
 
         // Subscribe to store changes
         store.subscribe((state) => {
@@ -190,7 +195,7 @@ class BotManager {
             if (this.bots.length === 0) {
                 container.innerHTML = `
                     <div style="text-align: center; padding: 40px; color: var(--text-muted);">
-                        📭 Aktif bot yok
+                        ${isTr() ? '📭 Aktif bot yok' : '📭 No active bots'}
                     </div>
                 `;
             } else {
@@ -199,27 +204,27 @@ class BotManager {
                         <div class="bot-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                             <span class="bot-symbol" style="font-weight: 700; color: var(--text-main); font-size: 1rem;">${bot.symbol}</span>
                             <span class="bot-status" style="font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; background: ${bot.status === 'running' ? 'var(--neon-green)' : 'var(--text-muted)'}; color: #000;">
-                                ${bot.status === 'running' ? '● Çalışıyor' : '● Duraklatıldı'}
+                                ${bot.status === 'running' ? (isTr() ? '● Çalışıyor' : '● Running') : (isTr() ? '● Duraklatıldı' : '● Paused')}
                             </span>
                         </div>
                         <div class="bot-info" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 0.85rem; margin-bottom: 12px;">
-                            <div><span style="color: var(--text-muted);">Strateji:</span> <span style="color: var(--text-main);">${bot.strategy_id}</span></div>
+                            <div><span style="color: var(--text-muted);">${isTr() ? 'Strateji:' : 'Strategy:'}</span> <span style="color: var(--text-main);">${bot.strategy_id}</span></div>
                             <div><span style="color: var(--text-muted);">Timeframe:</span> <span style="color: var(--text-main);">${bot.timeframe}</span></div>
                             <div><span style="color: var(--text-muted);">PnL:</span> <span style="color: ${bot.pnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'};">$${bot.pnl.toFixed(2)} (${bot.pnl_percent.toFixed(2)}%)</span></div>
-                            <div><span style="color: var(--text-muted);">İşlem:</span> <span style="color: var(--text-main);">${bot.trades} (${bot.wins} Kazanç)</span></div>
+                            <div><span style="color: var(--text-muted);">${isTr() ? 'İşlem:' : 'Trades:'}</span> <span style="color: var(--text-main);">${bot.trades} (${bot.wins} ${isTr() ? 'Kazanç' : 'Wins'})</span></div>
                         </div>
                         <div class="bot-actions" style="display: flex; gap: 8px;">
                             ${bot.status === 'running' ? `
                                 <button onclick="botManager.stopBot('${bot.bot_id}')" class="btn btn-danger" style="flex: 1; padding: 8px 12px; background: var(--neon-red); color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">
-                                    ⏹️ Durdur
+                                    ⏹️ ${isTr() ? 'Durdur' : 'Stop'}
                                 </button>
                             ` : `
                                 <button onclick="botManager.resumeBot('${bot.bot_id}')" class="btn btn-primary" style="flex: 1; padding: 8px 12px; background: var(--neon-blue); color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">
-                                    ▶️ Devam
+                                    ▶️ ${isTr() ? 'Devam' : 'Resume'}
                                 </button>
                             `}
                             <button onclick="botManager.removeBot('${bot.bot_id}')" class="btn btn-delete" style="padding: 8px 12px; background: rgba(255,255,255,0.1); color: #fff; border: none; border-radius: 4px; cursor: pointer;">
-                                🗑️ Sil
+                                🗑️ ${isTr() ? 'Sil' : 'Delete'}
                             </button>
                         </div>
                     </div>
@@ -234,7 +239,7 @@ class BotManager {
             if (this.bots.length === 0) {
                 summaryContainer.innerHTML = `
                     <div style="text-align: center; padding: 40px; color: var(--text-muted); grid-column: span 100%;">
-                        📭 Aktif strateji yok
+                        ${isTr() ? '📭 Aktif strateji yok' : '📭 No active strategies'}
                     </div>
                 `;
             } else {
@@ -243,12 +248,12 @@ class BotManager {
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                             <span style="font-weight: 700; color: var(--text-main);">${bot.symbol}</span>
                             <span style="font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; background: ${bot.status === 'running' ? 'var(--neon-green)' : 'var(--text-muted)'}; color: #000;">
-                                ${bot.status === 'running' ? '● Çalışıyor' : '● Duraklatıldı'}
+                                ${bot.status === 'running' ? (isTr() ? '● Çalışıyor' : '● Running') : (isTr() ? '● Duraklatıldı' : '● Paused')}
                             </span>
                         </div>
                         <div style="display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem;">
                             <div style="display: flex; justify-content: space-between;">
-                                <span style="color: var(--text-muted);">Strateji:</span>
+                                <span style="color: var(--text-muted);">${isTr() ? 'Strateji:' : 'Strategy:'}</span>
                                 <span style="color: var(--text-main);">${bot.strategy_id}</span>
                             </div>
                             <div style="display: flex; justify-content: space-between;">
@@ -262,18 +267,18 @@ class BotManager {
                                 </span>
                             </div>
                             <div style="display: flex; justify-content: space-between;">
-                                <span style="color: var(--text-muted);">İşlem:</span>
-                                <span style="color: var(--text-main);">${bot.trades} (${bot.wins} Kazanç)</span>
+                                <span style="color: var(--text-muted);">${isTr() ? 'İşlem:' : 'Trades:'}</span>
+                                <span style="color: var(--text-main);">${bot.trades} (${bot.wins} ${isTr() ? 'Kazanç' : 'Wins'})</span>
                             </div>
                         </div>
                         <div style="display: flex; gap: 4px; margin-top: 8px;">
                             ${bot.status === 'running' ? `
                                 <button onclick="botManager.stopBot('${bot.bot_id}')" style="flex: 1; padding: 4px 8px; font-size: 0.7rem; background: var(--neon-red); color: #fff; border: none; border-radius: 4px; cursor: pointer;">
-                                    ⏹️ Durdur
+                                    ⏹️ ${isTr() ? 'Durdur' : 'Stop'}
                                 </button>
                             ` : `
                                 <button onclick="botManager.resumeBot('${bot.bot_id}')" style="flex: 1; padding: 4px 8px; font-size: 0.7rem; background: var(--neon-blue); color: #fff; border: none; border-radius: 4px; cursor: pointer;">
-                                    ▶️ Devam
+                                    ▶️ ${isTr() ? 'Devam' : 'Resume'}
                                 </button>
                             `}
                             <button onclick="botManager.removeBot('${bot.bot_id}')" style="padding: 4px 8px; font-size: 0.7rem; background: rgba(255,255,255,0.1); color: #fff; border: none; border-radius: 4px; cursor: pointer;">

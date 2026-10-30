@@ -58,7 +58,7 @@ class WFOEngine:
     def __init__(self):
         self.executor = ThreadPoolExecutor(max_workers=self.MAX_WORKERS)
         logger.info(f"🧠 [WFO] Engine initialized (TPE Sampler, {self.MAX_WORKERS} workers)")
-        logger.info("🎉 [WFO] Zero-Touch Bayesian Optimizasyon Motoru Aktif")
+        logger.info("🎉 [WFO] Zero-Touch Bayesian Optimization Engine Active")
     
     async def optimize(
         self,
@@ -123,7 +123,7 @@ class WFOEngine:
                 logger.info(f"🔧 [WFO] Manuel param grid kullanılıyor")
             
             # 4. Bayesian Optimization (TPE)
-            logger.info(f"🧠 [WFO] Bayesian Optimization başlatılıyor (TPE Sampler)")
+            logger.info(f"🧠 [WFO] Starting Bayesian Optimization (TPE Sampler)")
             
             # Optuna study oluştur
             study = optuna.create_study(

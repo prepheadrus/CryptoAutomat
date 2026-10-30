@@ -180,12 +180,12 @@ class ExchangeManager:
                 exchange_args['secret'] = BINANCE_API_SECRET
                 logger.info("✅ Binance API credentials loaded. High rate-limit tier active.")
             else:
-                logger.warning("Binance API bilgileri bulunamadı (.env)! Sadece genel piyasa izlemesi (Ticker) yapılacak, Emir verilemez.")
+                logger.warning("Binance API credentials not found (.env)! Running in public market monitoring mode (Ticker only, no live trading).")
                 logger.warning("⚠️ Rate limit düşük olacak. API key eklemek için .env dosyasını düzenleyin.")
 
         # Asenkron borsayı başlat
         self.exchange = self.exchange_class(exchange_args)
-        logger.info(f"{self.exchange_id.upper()} borsa motoru WebSocket desteğiyle başlatıldı.")
+        logger.info(f"🚀 {self.exchange_id.upper()} exchange engine initialized with WebSocket support.")
 
         # ========================================================================
         # EVENT SUBSCRIPTIONS - Event Bus'a abone ol (circular dependency kırıldı!)
@@ -396,7 +396,7 @@ class ExchangeManager:
                 except Exception as auth_err:
                     # EĞER API ANAHTARI HATALIYSA (Code -2008), Anahtarları silip anonim dene
                     if "AuthenticationError" in str(type(auth_err)) or "-2008" in str(auth_err):
-                        logger.warning("Binance API anahtarları geçersiz! Anonim moda (Public) geçiliyor...")
+                        logger.warning("Binance API credentials invalid! Falling back to public anonymous mode...")
                         self.exchange.apiKey = None
                         self.exchange.secret = None
                         # Tekrar dene (Bu sefer şifresiz)
@@ -570,7 +570,7 @@ class ExchangeManager:
         # ========================================================================
         if timeframe != '1m':
             logger.info(f"🔄 [DATA] {symbol} için {timeframe} talep edildi, ancak SADECE 1m indiriliyor...")
-            logger.info(f"📊 [DATA] Resampling Mimarisi: Veritabanı %98 Optimize Edildi")
+            logger.info("📊 [DATA] Resampling Architecture Active: Storage 98% Optimized")
             logger.info(f"💡 [DATA] {timeframe} mumlar, 1m verisinden otomatik oluşturulacak (RAM üzerinde)")
 
         # Her zaman 1m olarak indir (timeframe parametresini yoksay)
@@ -589,7 +589,7 @@ class ExchangeManager:
             except Exception as auth_err:
                 # EĞER API ANAHTARI HATALIYSA (Code -2008), Anahtarları silip anonim dene
                 if "AuthenticationError" in str(type(auth_err)) or "-2008" in str(auth_err):
-                    logger.warning(f"⚠️ {symbol} indirme hatası: Binance API anahtarları geçersiz! Anonim moda geçiliyor...")
+                    logger.warning(f"⚠️ {symbol} download error: Binance API keys invalid! Switching to public mode...")
                     self.exchange.apiKey = None
                     self.exchange.secret = None
                     await self.exchange.load_markets({'type': market_type})
@@ -844,7 +844,7 @@ class ExchangeManager:
                     await asyncio.sleep(0.1)  # Normalde 100ms yeterli
                 
             except Exception as e:
-                logger.error(f"⚠️ {symbol} Veri İndirme Döngüsünde Hata: {e}")
+                logger.error(f"⚠️ {symbol} Data ingestion loop error: {e}")
                 await asyncio.sleep(5)
                 
         is_stopped = self.download_stops.get(key, False)
@@ -1127,7 +1127,7 @@ class ExchangeManager:
         # 🔥 KRITIK LOGLAMA - Poller başlangıcını izle
         logger.info(f"🔥 [POLLER DEBUG] {symbol} run_strategy_poller started")
         logger.info(f"🔥 [POLLER DEBUG] symbol={symbol}, timeframe={timeframe}")
-        logger.info(f"🚀 [FINAL HYBRID] {symbol} için strateji poller başlatılıyor ({timeframe})...")
+        logger.info(f"🚀 [FINAL HYBRID] Starting strategy poller for {symbol} ({timeframe})...")
 
         logger.info(f"📊 [POLLER DEBUG] paper_engine={paper_engine is not None}")
         logger.info(f"📊 [POLLER DEBUG] active_bots={len(paper_engine.active_bots) if paper_engine else 0}")
@@ -1142,12 +1142,12 @@ class ExchangeManager:
                 data_synchronizer.check_and_fill_gap(symbol, self),
                 timeout=30.0  # 30 saniye timeout
             )
-            logger.info(f"✅ [GAP CHECK] check_and_fill_gap TAMAMLANDI")
+            logger.info("✅ [GAP CHECK] check_and_fill_gap completed")
         except asyncio.TimeoutError:
-            logger.warning(f"⚠️ [GAP CHECK] check_and_fill_gap TIMEOUT (30s) - devam ediliyor")
+            logger.warning("⚠️ [GAP CHECK] check_and_fill_gap timed out (30s) - continuing")
         except Exception as gap_err:
-            logger.error(f"❌ [GAP CHECK] check_and_fill_gap HATA: {gap_err}")
-            logger.warning(f"⚠️ [GAP CHECK] Gap check atlandı, devam ediliyor")
+            logger.error(f"❌ [GAP CHECK] check_and_fill_gap error: {gap_err}")
+            logger.warning("⚠️ [GAP CHECK] Gap check skipped, continuing")
 
         # ============================================
         # 1. LOCAL DB FIRST: SQLite'dan geçmiş veriyi çek
@@ -1226,7 +1226,7 @@ class ExchangeManager:
                         page_ohlcv = await self.fetch_ohlcv(symbol, timeframe='1m', since=gap_start_ms, limit=limit)
 
                         if not page_ohlcv or len(page_ohlcv) == 0:
-                            logger.warning(f"WARNING [PAGINATION] Sayfa {page} boş geldi, döngü sonlandırılıyor.")
+                            logger.warning(f"⚠️ [PAGINATION] Page {page} returned empty, exiting pagination loop.")
                             break
 
                         all_gap_ohlcv.extend(page_ohlcv)
@@ -1439,7 +1439,7 @@ class ExchangeManager:
         # ============================================
         # 4. WEBSOCKET DÖNGÜSÜ (Canlı Güncelleme)
         # ============================================
-        logger.info(f"📡 [WSS] {symbol} için WebSocket döngüsü başlatılıyor...")
+        logger.info(f"📡 [WSS] Starting WebSocket listener loop for {symbol}...")
         logger.info(f"🔥 [WSS DEBUG] DataFrame boyutu: {len(ohlcv_df)} mum")
         logger.info(f"🔥 [WSS DEBUG] active_timeframes={paper_engine.active_timeframes}")
 
@@ -1707,10 +1707,10 @@ class ExchangeManager:
                 await asyncio.sleep(5)
                 continue
             except asyncio.CancelledError:
-                logger.info(f"🛑 [WSS] {symbol} WebSocket döngüsü iptal edildi.")
+                logger.info(f"🛑 [WSS] WebSocket loop cancelled for {symbol}")
                 break
             except Exception as e:
-                logger.error(f"❌ [WSS] {symbol} Strateji Döngü Hatası: {e}")
+                logger.error(f"❌ [WSS] Strategy loop error for {symbol}: {e}")
                 logger.error(traceback.format_exc())
                 await asyncio.sleep(5)
                 continue

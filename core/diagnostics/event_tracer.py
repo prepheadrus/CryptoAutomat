@@ -100,7 +100,7 @@ class EventTracer:
     async def start(self):
         """Event tracer'ı başlat"""
         if not self.enabled:
-            logger.info("⚠️ Event Tracer kapalı")
+            logger.info("⚠️ Event Tracer disabled")
             return
         
         logger.info("=" * 70)
@@ -120,7 +120,7 @@ class EventTracer:
         """Event tracer'ı durdur"""
         self._running = False
         self._print_statistics()
-        logger.info("🛑 Event Tracer durduruldu")
+        logger.info("🛑 Event Tracer stopped")
     
     def _subscribe_to_all_events(self):
         """Tüm event kategorilerine abone ol"""
@@ -301,10 +301,10 @@ class EventTracer:
         total_events = sum(self.event_count.values())
         
         logger.info("=" * 70)
-        logger.info("📊 EVENT İSTATİSTİKLERİ")
+        logger.info("📊 EVENT TELEMETRY STATISTICS")
         logger.info("=" * 70)
-        logger.info(f"⏱️  Çalışma Süresi: {duration}")
-        logger.info(f"📈 Toplam Event: {total_events}")
+        logger.info(f"⏱️  Uptime: {duration}")
+        logger.info(f"📈 Total Events: {total_events}")
         logger.info("-" * 70)
         
         # Kategori bazlı dağılım

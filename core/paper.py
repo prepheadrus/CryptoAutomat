@@ -1,4 +1,4 @@
-﻿"""
+"""
 PaperTrader - Refactored (Event-Driven Architecture)
 
 Eski 1,475 satırlık "God Object" iş mantığı temizlendi.
@@ -160,7 +160,7 @@ class PaperTrader:
         event_bus.subscribe("price.updated", self.on_live_price_updated)
 
         self._event_handlers_started = True
-        logger.info("📬 [EDA] Event handlers başlatıldı (signal, position, bot, price)")
+        logger.info("📬 [EDA] Event handlers initialized (signal, position, bot, price)")
     
     async def on_signal_generated(self, event):
         """
@@ -195,8 +195,8 @@ class PaperTrader:
 
             # EĞER GERÇEK BİR SİNYAL VARSA (0 veya 2) - GÖZE ÇARPACAK ŞEKİLDE LOGLA
             logger.info("=" * 60)
-            logger.info(f"🔔 [YENİ SİNYAL] {symbol} ({bot_id}) | YÖN: {signal_type} | FİYAT: {price:.4f}")
-            logger.info(f"   📊 HTF: {htf_trend} | REJİM: {self.market_regime}")
+            logger.info(f"🔔 [NEW SIGNAL] {symbol} ({bot_id}) | SIDE: {signal_type} | PRICE: {price:.4f}")
+            logger.info(f"   📊 HTF: {htf_trend} | REGIME: {self.market_regime}")
             logger.info("=" * 60)
 
             # Bot çalışıyor mu kontrol et
@@ -223,7 +223,7 @@ class PaperTrader:
                 ml_confidence = 1.0
                 ml_rec = signal_type
                 ml_rec_norm = signal_type
-                logger.info(f"🧪 [TEST STRATEJİSİ] {strategy.name()} test stratejisi için ML doğrulaması bypass edildi.")
+                logger.info(f"🧪 [TEST STRATEGY] ML validation bypassed for test strategy {strategy.name()}.")
             else:
                 ml_confirmed, ml_confidence, ml_rec, ml_rec_norm = await self.signal_validator.validate_signal_with_ml(
                     symbol, timeframe, indicators, signal
@@ -251,7 +251,7 @@ class PaperTrader:
                 logger.warning(f"   ML Enabled: {self.ml_enabled}")
                 return
             else:
-                logger.info(f"✅ [ML] {symbol} ML onayı alındı: {ml_rec} (confidence: {ml_confidence:.2f})")
+                logger.info(f"✅ [ML] {symbol} ML confirmation received: {ml_rec} (confidence: {ml_confidence:.2f})")
 
             # ============================================
             # POZİSYON REVERSAL KONTROLÜ (ML Onayından SONRA)
@@ -268,14 +268,14 @@ class PaperTrader:
                 logger.info(f"🔎 [REVERSAL CHECK] should_reverse={should_reverse}")
                 
                 if should_reverse:
-                    logger.info(f"🔄 [SİNYAL REVERSAL] Ters sinyal alındı, mevcut {pos_dir} pozisyonu kapatılıyor: {bot_id}")
+                    logger.info(f"🔄 [SIGNAL REVERSAL] Opposite signal received, closing existing {pos_dir} position: {bot_id}")
                     try:
                         trade = await self.position_manager.close_position(
                             bot_id=bot_id,
                             exit_price=price,
                             reason="opposite_signal"
                         )
-                        logger.info(f"🔎 [REVERSAL RESULT] close_position döndü: trade={trade is not None}")
+                        logger.info(f"🔎 [REVERSAL RESULT] close_position returned: trade={trade is not None}")
                     except Exception as close_err:
                         logger.error(f"❌ [REVERSAL ERROR] close_position hatası: {close_err}", exc_info=True)
                     
@@ -284,9 +284,9 @@ class PaperTrader:
                     if symbol in self.latest_decisions:
                         self.latest_decisions[symbol]['has_position'] = False
                     is_reversal = True
-                    logger.info(f"✅ [REVERSAL] Mevcut pozisyon kapatıldı, yeni {signal_type} pozisyonu açılacak.")
+                    logger.info(f"✅ [REVERSAL] Existing position closed, entering new {signal_type} position.")
                 else:
-                    logger.info(f"ℹ️ Pozisyon zaten açık ({pos_dir}) ve aynı/HOLD yönde sinyal, işleme girilmiyor: {bot_id}")
+                    logger.info(f"ℹ️ Position already open ({pos_dir}) with matching/HOLD signal, skipping: {bot_id}")
                     return
 
             # ============================================
@@ -332,13 +332,13 @@ class PaperTrader:
                 swing_low = indicators.get('SWING_LOW')
                 if swing_low and swing_low > 0:
                     stop_loss = swing_low * 0.999 # %0.1 margin below dipten likidite alımı
-                    logger.info(f"🎯 [SMC SNIPER] Bullish Sweep tespit edildi! Stop-Loss Swing Low altına çekildi: {stop_loss:.2f}")
+                    logger.info(f"🎯 [SMC SNIPER] Bullish Sweep detected! Stop-Loss moved below Swing Low: {stop_loss:.2f}")
             
             elif direction == "SHORT" and indicators.get('SWEEP_BEARISH', 0) == 1:
                 swing_high = indicators.get('SWING_HIGH')
                 if swing_high and swing_high > 0:
                     stop_loss = swing_high * 1.001 # %0.1 margin above tepeden likidite alımı
-                    logger.info(f"🎯 [SMC SNIPER] Bearish Sweep tespit edildi! Stop-Loss Swing High üstüne çekildi: {stop_loss:.2f}")
+                    logger.info(f"🎯 [SMC SNIPER] Bearish Sweep detected! Stop-Loss moved above Swing High: {stop_loss:.2f}")
             
             # 1. Önce Kaldıraç hesapla (Dinamik)
             if self.ml_enabled and ml_confirmed:
@@ -392,7 +392,7 @@ class PaperTrader:
                 if symbol in self.latest_decisions:
                     self.latest_decisions[symbol]['has_position'] = True
 
-                logger.info(f"✅ Pozisyon açıldı: {bot_id} {direction} @ {price:.2f}")
+                logger.info(f"✅ Position opened: {bot_id} {direction} @ {price:.2f}")
             
         except Exception as e:
             logger.error(f"Signal handler hatası: {e}", exc_info=True)
@@ -654,7 +654,7 @@ class PaperTrader:
             try:
                 strategy = StrategyManager.get_strategy(strategy_id)
                 self.strategies[symbol] = strategy
-                logger.info(f"✅ Strateji atandı: {symbol} -> {strategy_id} ({timeframe})")
+                logger.info(f"✅ Strategy assigned: {symbol} -> {strategy_id} ({timeframe})")
             except Exception as e:
                 logger.error(f"Strateji atama hatası: {e}")
         else:

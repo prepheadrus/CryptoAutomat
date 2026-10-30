@@ -297,7 +297,7 @@ class EventBus:
         NOT: Bu metod bir kez, uygulama başlangıcında çağrılmalı.
         """
         if self._running:
-            logger.warning("Event bus zaten çalışıyor")
+            logger.warning("Event bus already running")
             return
         
         await self._ensure_initialized()
@@ -310,7 +310,7 @@ class EventBus:
             task = asyncio.create_task(self._worker(f"worker-{i}"))
             self._worker_tasks.append(task)
         
-        logger.info(f"🚀 Event Bus başlatıldı ({num_workers} worker)")
+        logger.info(f"🚀 Event Bus started ({num_workers} workers)")
     
     async def stop(self, timeout: float = 5.0):
         """
@@ -322,7 +322,7 @@ class EventBus:
         if not self._running:
             return
         
-        logger.info("🛑 Event Bus durduruluyor...")
+        logger.info("🛑 Event Bus stopping...")
         self._running = False
         
         # Worker'ları bekle
@@ -338,7 +338,7 @@ class EventBus:
             
             self._worker_tasks.clear()
         
-        logger.info("✅ Event Bus durduruldu")
+        logger.info("✅ Event Bus stopped")
     
     async def _worker(self, worker_name: str):
         """

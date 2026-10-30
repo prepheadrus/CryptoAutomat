@@ -73,7 +73,7 @@ class StrategyManager:
             logger.info(f"✅ {len(cls.MANUALLY_IMPORTED)} manual strategies loaded (backward compatibility)")
             
         except Exception as e:
-            logger.error(f"❌ Manuel strateji yükleme hatası: {e}")
+            logger.error(f"❌ Error loading manual strategies: {e}")
             cls.MANUALLY_IMPORTED = {}
 
     @classmethod
@@ -91,10 +91,10 @@ class StrategyManager:
         discovered = {}
         
         if not folder.exists():
-            logger.debug(f"📁 Klasör bulunamadı: {folder}")
+            logger.debug(f"📁 Directory not found: {folder}")
             return discovered
         
-        logger.info(f"🔍 {folder} klasöründe strateji aranıyor...")
+        logger.info(f"🔍 Searching for strategies in {folder}...")
         
         # .py dosyalarını bul
         py_files = list(folder.glob("*.py"))
@@ -114,7 +114,7 @@ class StrategyManager:
                 # Modülü import et
                 spec = importlib.util.spec_from_file_location(module_name, py_file)
                 if spec is None or spec.loader is None:
-                    logger.warning(f"⚠️ Modül yüklenemedi: {py_file.name}")
+                    logger.warning(f"⚠️ Could not load module: {py_file.name}")
                     continue
                 
                 module = importlib.util.module_from_spec(spec)
@@ -128,7 +128,7 @@ class StrategyManager:
                         # Eğer bu sınıf MANUALLY_IMPORTED'da varsa atla
                         manual_ids = [cls.MANUALLY_IMPORTED[sid].__class__.__name__ for sid in cls.MANUALLY_IMPORTED]
                         if name in manual_ids:
-                            logger.debug(f"⏭️ Manuel strateji atlandı: {name} (zaten yüklü)")
+                            logger.debug(f"⏭️ Skipped manual strategy: {name} (already loaded)")
                             continue
                         
                         # Sınıf adını strategy_id olarak kullan (küçük harf, alt çizgi)
@@ -144,11 +144,11 @@ class StrategyManager:
                             discovered[strategy_id] = instance
                             logger.info(f"✅ Discovered strategy: {strategy_id} ({name})")
                         except Exception as e:
-                            logger.warning(f"⚠️ Strateji instance oluşturulamadı: {name} - {e}")
+                            logger.warning(f"⚠️ Could not instantiate strategy: {name} - {e}")
                 
             except Exception as e:
                 # Hatalı dosyayı atla, sistemi çökertme
-                logger.warning(f"⚠️ Strateji dosyası hatası: {py_file.name} - {e}")
+                logger.warning(f"⚠️ Error in strategy file: {py_file.name} - {e}")
                 logger.debug(f"Traceback: {e}", exc_info=True)
                 continue
         
@@ -166,17 +166,17 @@ class StrategyManager:
         # Klasör yoksa oluştur
         if not cls.JSON_STRATEGIES_DIR.exists():
             cls.JSON_STRATEGIES_DIR.mkdir(parents=True, exist_ok=True)
-            logger.info("📁 Strateji klasörü oluşturuldu: artifacts/strategies/")
+            logger.info("📁 Created strategy directory: artifacts/strategies/")
             return
 
         # JSON dosyalarını tara
         json_files = list(cls.JSON_STRATEGIES_DIR.glob("*.json"))
 
         if not json_files:
-            logger.info("📭 Kaydedilmiş strateji bulunamadı")
+            logger.info("📭 No saved strategies found")
             return
 
-        logger.info(f"📚 {len(json_files)} JSON strateji yükleniyor...")
+        logger.info(f"📚 Loading {len(json_files)} JSON strategies...")
 
         for filepath in json_files:
             try:
@@ -201,12 +201,12 @@ class StrategyManager:
 
                 cls.STRATEGY_EXECUTORS[strategy_id] = executor
 
-                logger.info(f"✅ JSON strateji yüklendi: {strategy_name} ({filepath.name})")
+                logger.info(f"✅ Loaded JSON strategy: {strategy_name} ({filepath.name})")
 
             except Exception as e:
-                logger.error(f"❌ JSON strateji yüklenemedi: {filepath.name} - {e}")
+                logger.error(f"❌ Could not load JSON strategy: {filepath.name} - {e}")
 
-        logger.info(f"✅ {len(cls.DYNAMIC_STRATEGIES)} JSON strateji yüklendi")
+        logger.info(f"✅ Loaded {len(cls.DYNAMIC_STRATEGIES)} JSON strategies")
 
     @classmethod
     def get_all_strategies(cls) -> dict:
@@ -265,7 +265,7 @@ class StrategyManager:
                     'type': 'auto_discovered',
                     'instance': instance
                 }
-                logger.info(f"🆕 Oto-keşif strateji eklendi: {strategy_id}")
+                logger.info(f"🆕 Added auto-discovered strategy: {strategy_id}")
         
         # Custom stratejiler
         for strategy_id, instance in custom_discovered.items():
@@ -332,8 +332,8 @@ class StrategyManager:
         """
         Tüm stratejileri yeniden yükle (hot-reload).
         """
-        logger.info("🔄 Stratejiler yeniden yükleniyor...")
+        logger.info("🔄 Reloading strategies...")
         cls.DYNAMIC_STRATEGIES.clear()
         cls.STRATEGY_EXECUTORS.clear()
         cls.load_dynamic_strategies()
-        logger.info("✅ Stratejiler yeniden yüklendi")
+        logger.info("✅ Strategies reloaded")
