@@ -20,9 +20,10 @@ __pycache__/
 *.db-wal
 cryptobot.db
 
-# OHLCV Flat Files (Superalgos Mimarisi)
+# OHLCV Flat Files & Parquet
 data/ohlcv/
 data/ohlcv_flat/
+data/parquet/
 
 # Logs and Debug
 *.log
@@ -36,25 +37,21 @@ linux_migration/
 home/
 scratch/
 
-# Artifacts (trained models, history)
+# Artifacts (trained models, history, local cache)
 artifacts/
 
 # Jupyter Notebooks
 *.ipynb
 .ipynb_checkpoints/
 
-# IDEs
+# IDEs & System
 .idea/
 .DS_Store
+Thumbs.db
 
-# =============================================
-# Makineye Özel Yapılandırma (Her Makine Farklı)
-# Ubuntu ve Windows config'leri birbirini ezmez.
-# Şablon: config.example.yaml dosyasını kopyala
-#          -> config.yaml olarak kullan
-# =============================================
+# Configuration
 config.yaml
 
-# Drive upload/download temp files
+# Cloud Drive temp files
 .tmp.driveupload/
 .tmp.drivedownload/
