@@ -1,10 +1,15 @@
-"""
+﻿"""
 Test Runner Script
 Testleri doğrudan Python'dan çalıştırır.
 """
 
 import sys
 import asyncio
+import io
+
+if sys.platform == 'win32':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 # Testleri import et
 sys.path.insert(0, 'f:/Crypto Bot')

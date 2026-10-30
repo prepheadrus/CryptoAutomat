@@ -66,61 +66,92 @@ CryptoAutomat/
 ## 🚀 Quick Start
 
 ### Prerequisites
-- **Python 3.10+**
+- **Python 3.10+** (Tested on Python 3.10, 3.11, 3.12)
 - **Git**
 - *(Optional)* Binance API credentials for live execution
 
-### 1. Installation
+---
+
+### Step 1: Clone the Repository
 
 ```bash
-# Clone the repository
 git clone https://github.com/prepheadrus/CryptoAutomat.git
 cd CryptoAutomat
-
-# Create and activate a virtual environment
-python -m venv venv
-# Windows:
-.\venv\Scripts\activate
-# Linux/macOS:
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
 ```
-
-### 2. Configuration
-
-Set up your local configuration files:
-```bash
-cp config.example.yaml config.yaml
-cp .env.example .env
-```
-Adjust `.env` and `config.yaml` to suit your trading preferences. *(The system defaults to safe simulation / paper trading mode).*
-
-### 3. Running the Engine
-
-```bash
-# Launch the trading bot and web server
-python main.py
-```
-
-Open your browser and navigate to **`http://localhost:8000`** to access the Web Dashboard.
 
 ---
 
-## 🧪 Running Tests
+### Step 2: Automated or Manual Setup
 
-Execute the comprehensive test suite to verify system integrity:
+#### Option A: Automated Setup (Recommended)
+
+- **Windows:**
+  Double-click `setup.bat` or run:
+  ```cmd
+  setup.bat
+  ```
+- **Linux/macOS:**
+  ```bash
+  chmod +x setup.sh
+  ./setup.sh
+  ```
+
+#### Option B: Manual Setup
+
+1. **Create and activate a virtual environment:**
+   ```bash
+   python -m venv venv
+   # Windows (CMD):
+   venv\Scripts\activate.bat
+   # Windows (PowerShell):
+   .\venv\Scripts\Activate.ps1
+   # Linux/macOS:
+   source venv/bin/activate
+   ```
+
+2. **Install project dependencies:**
+   ```bash
+   pip install --upgrade pip
+   pip install -r requirements.txt
+   ```
+
+3. **Initialize configuration files:**
+   - On Windows:
+     ```cmd
+     copy config.example.yaml config.yaml
+     copy .env.example .env
+     ```
+   - On Linux / macOS:
+     ```bash
+     cp config.example.yaml config.yaml
+     cp .env.example .env
+     ```
+
+---
+
+### Step 3: Run the Application
 
 ```bash
-# Install test dependencies
-pip install -r requirements-test.txt
+python main.py
+```
 
-# Run all test suites
-pytest tests/ -v
-# or
+- **Web Dashboard:** Open [http://localhost:3000](http://localhost:3000) in your web browser.
+- **Interactive Swagger API Docs:** Open [http://localhost:3000/docs](http://localhost:3000/docs).
+- **System Health Check:** Open [http://localhost:3000/api/v1/health](http://localhost:3000/api/v1/health).
+
+*(Note: The default port is `3000`. You can change it at any time by setting the `PORT` environment variable).*
+
+---
+
+## 🧪 Verification & Critical Tests
+
+To verify that the execution engine, concurrency protections, and double-close prevention mechanisms are functioning properly:
+
+```bash
 python run_tests.py
 ```
+
+All race-condition and zombie-position prevention tests should output `PASSED`.
 
 ---
 
