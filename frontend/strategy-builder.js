@@ -5,6 +5,9 @@
  * Backend: api/routers/strategy_builder.py
  */
 
+const getBuilderLangIsTr = () => (typeof window !== 'undefined' && window.i18n && window.i18n.currentLang === 'tr');
+
+
 // ============================================================================
 // GLOBAL DEĞİŞKENLER
 // ============================================================================
@@ -114,10 +117,11 @@ function addCondition(type, conditionData = null) {
 }
 
 function createConditionHTML(condition, type) {
+    const isTr = getBuilderLangIsTr();
     return `
         <div class="condition-row" id="${condition.id}">
             <select class="form-select condition-indicator">
-                <option value="">İndikatör Seç...</option>
+                <option value="">${isTr ? 'İndikatör Seç...' : 'Select Indicator...'}</option>
                 <option value="RSI_14">RSI (14)</option>
                 <option value="MACD_12_26_9">MACD (12, 26, 9)</option>
                 <option value="MACD_Signal_12_26_9">MACD Signal</option>
@@ -139,7 +143,7 @@ function createConditionHTML(condition, type) {
                 <option value="!=">!=</option>
             </select>
             
-            <input type="text" class="form-input condition-value" placeholder="Değer (örn: 30)">
+            <input type="text" class="form-input condition-value" placeholder="${isTr ? 'Değer (örn: 30)' : 'Value (e.g. 30)'}">
             
             <button class="btn-remove" onclick="removeCondition('${condition.id}', '${type}')">✕</button>
         </div>
@@ -294,7 +298,7 @@ async function saveStrategy() {
         // Validasyon
         if (strategyData.conditions.LONG.conditions.length === 0 && 
             strategyData.conditions.SHORT.conditions.length === 0) {
-            alert('⚠️ En az bir LONG veya SHORT koşulu eklemelisiniz!');
+            const isTr = getBuilderLangIsTr(); alert(isTr ? '⚠️ En az bir LONG veya SHORT koşulu eklemelisiniz!' : '⚠️ You must add at least one LONG or SHORT condition!');
             return;
         }
         
@@ -312,12 +316,12 @@ async function saveStrategy() {
             loadStrategies();
         } else {
             console.error('[HATA] Strateji kaydedilemedi:', result);
-            alert(`❌ Hata: ${result.detail || 'Bilinmeyen hata'}`);
+            const isTr = getBuilderLangIsTr(); alert(isTr ? `❌ Hata: ${result.detail || 'Bilinmeyen hata'}` : `❌ Error: ${result.detail || 'Unknown error'}`);
         }
         
     } catch (error) {
         console.error('[HATA] Strateji kaydetme hatası:', error);
-        alert(`❌ Bağlantı hatası: ${error.message}`);
+        const isTr = getBuilderLangIsTr(); alert(isTr ? `❌ Bağlantı hatası: ${error.message}` : `❌ Connection error: ${error.message}`);
     }
 }
 
@@ -336,7 +340,7 @@ async function loadStrategies() {
             if (result.count === 0) {
                 container.innerHTML = `
                     <div style="text-align: center; padding: 20px; color: var(--text-muted);">
-                        📭 Henüz kaydedilmiş strateji yok
+                        ${getBuilderLangIsTr() ? '📭 Henüz kaydedilmiş strateji yok' : '📭 No saved strategies yet'}
                     </div>
                 `;
                 return;
@@ -349,7 +353,7 @@ async function loadStrategies() {
                     <div class="strategy-item" onclick="loadStrategy('${strategy.filename}')">
                         <div class="strategy-item-header">
                             <span class="strategy-item-name">${strategy.name}</span>
-                            <span class="strategy-item-meta">${strategy.indicators_count} indikatör</span>
+                            <span class="strategy-item-meta">${strategy.indicators_count} ${getBuilderLangIsTr() ? "indikatör" : "indicators"}</span>
                         </div>
                         <div class="strategy-item-meta">${strategy.created_at}</div>
                     </div>
@@ -476,15 +480,15 @@ async function loadStrategy(filename) {
             }
 
             console.log('[OK] Strateji yüklendi:', filename);
-            alert(`✅ Strateji '${data.name}' yüklendi`);
+            const isTr = getBuilderLangIsTr(); alert(isTr ? `✅ Strateji '${data.name}' yüklendi` : `✅ Strategy '${data.name}' loaded successfully`);
         } else {
             console.error('[HATA] Strateji yüklenemedi:', result);
-            alert(`❌ Hata: ${result.detail || 'Bilinmeyen hata'}`);
+            const isTr = getBuilderLangIsTr(); alert(isTr ? `❌ Hata: ${result.detail || 'Bilinmeyen hata'}` : `❌ Error: ${result.detail || 'Unknown error'}`);
         }
 
     } catch (error) {
         console.error('[HATA] Strateji yükleme hatası:', error);
-        alert(`❌ Bağlantı hatası: ${error.message}`);
+        const isTr = getBuilderLangIsTr(); alert(isTr ? `❌ Bağlantı hatası: ${error.message}` : `❌ Connection error: ${error.message}`);
     }
 }
 
@@ -500,14 +504,14 @@ async function testStrategy() {
                                shortConditions.filter(c => c.indicator && c.value).length;
 
         if (totalConditions === 0) {
-            alert('⚠️ Lütfen test etmeden önce en az bir LONG veya SHORT koşulu ekleyin veya strateji yükleyin!');
+            const isTr = getBuilderLangIsTr(); alert(isTr ? '⚠️ Lütfen test etmeden önce en az bir LONG veya SHORT koşulu ekleyin veya strateji yükleyin!' : '⚠️ Please add at least one LONG or SHORT condition before testing!');
             return;
         }
 
         // UI güncelle (loading state)
         const testBtn = document.querySelector('button[onclick="testStrategy()"]');
         const originalText = testBtn.innerHTML;
-        testBtn.innerHTML = '⏳ Test ediliyor...';
+        const isTr = getBuilderLangIsTr(); testBtn.innerHTML = isTr ? '⏳ Test ediliyor...' : '⏳ Testing...';
         testBtn.disabled = true;
 
         // Form verilerini al
@@ -535,21 +539,21 @@ async function testStrategy() {
             // Test sonuçlarını göster
             displayBacktestResults(result);
 
-            testBtn.innerHTML = '✅ Test Tamamlandı';
+            testBtn.innerHTML = getBuilderLangIsTr() ? '✅ Test Tamamlandı' : '✅ Test Completed';
             testBtn.style.background = 'var(--neon-green)';
         } else {
             console.error('[HATA] Backtest başarısız:', result);
-            alert(`❌ Hata: ${result.detail || 'Bilinmeyen hata'}`);
+            const isTr = getBuilderLangIsTr(); alert(isTr ? `❌ Hata: ${result.detail || 'Bilinmeyen hata'}` : `❌ Error: ${result.detail || 'Unknown error'}`);
             testBtn.innerHTML = originalText;
             testBtn.disabled = false;
         }
 
     } catch (error) {
         console.error('[HATA] Backtest hatası:', error);
-        alert(`❌ Bağlantı hatası: ${error.message}`);
+        const isTr = getBuilderLangIsTr(); alert(isTr ? `❌ Bağlantı hatası: ${error.message}` : `❌ Connection error: ${error.message}`);
 
         const testBtn = document.querySelector('button[onclick="testStrategy()"]');
-        testBtn.innerHTML = '🧪 Test Et';
+        testBtn.innerHTML = getBuilderLangIsTr() ? '🧪 Test Et' : '🧪 Run Backtest';
         testBtn.disabled = false;
     }
 }
@@ -598,7 +602,7 @@ function drawEquityCurve(equityCurve) {
     if (!equityCurve || equityCurve.length === 0) {
         container.innerHTML = `
             <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--text-muted); font-size: 0.85rem;">
-                Veri yok
+                ${getBuilderLangIsTr() ? 'Veri yok' : 'No data'}
             </div>
         `;
         return;
@@ -679,7 +683,7 @@ function displayTradesTable(trades) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="4" style="padding: 20px; text-align: center; color: var(--text-muted);">
-                    Henüz işlem yok
+                    ${getBuilderLangIsTr() ? 'Henüz işlem yok' : 'No trades yet'}
                 </td>
             </tr>
         `;
@@ -689,10 +693,10 @@ function displayTradesTable(trades) {
     let html = '';
     trades.forEach(trade => {
         // Entry/Exit zamanlarını formatla
-        const entryTime = new Date(trade.entry_time).toLocaleString('tr-TR', {
+        const loc = getBuilderLangIsTr() ? 'tr-TR' : 'en-US'; const entryTime = new Date(trade.entry_time).toLocaleString(loc, {
             month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
         });
-        const exitTime = new Date(trade.exit_time).toLocaleString('tr-TR', {
+        const exitTime = new Date(trade.exit_time).toLocaleString(loc, {
             month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
         });
 
@@ -750,7 +754,7 @@ function clearForm() {
     console.log('[INFO] Form temizleniyor...');
 
     // 1. Strateji bilgilerini sıfırla
-    document.getElementById('strategy-name').value = 'Yeni Strateji';
+    document.getElementById('strategy-name').value = getBuilderLangIsTr() ? 'Yeni Strateji' : 'New Strategy';
     document.getElementById('strategy-description').value = '';
 
     // 2. Risk parametrelerini varsayılana döndür
@@ -822,3 +826,21 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
+
+// Dil değiştiğinde Strategy Builder bileşenlerini güncelle
+if (typeof window !== 'undefined') {
+    window.addEventListener('languageChanged', function() {
+        if (typeof loadStrategies === 'function') {
+            loadStrategies();
+        }
+        const stratNameInput = document.getElementById('strategy-name');
+        if (stratNameInput) {
+            const isTr = getBuilderLangIsTr();
+            if (stratNameInput.value === 'Yeni Strateji' && !isTr) {
+                stratNameInput.value = 'New Strategy';
+            } else if (stratNameInput.value === 'New Strategy' && isTr) {
+                stratNameInput.value = 'Yeni Strateji';
+            }
+        }
+    });
+}

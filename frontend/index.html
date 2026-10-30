@@ -522,12 +522,11 @@
 <!-- SOL PANEL: İndikatör Kütüphanesi -->
 <div class="panel glass-panel auto-style-89">
 <div class="panel-header"><i class="lucide-icon" data-lucide="library"></i> <span data-tr="Gösterge Kütüphanesi" data-en="Indicator Library">Indicator Library</span></div>
-<input type="text" id="indicator-search" class="settings-form-input" data-en-ph="Search indicator..." data-tr-ph="İndikatör ara..." placeholder="Search indicator...">
-                            style="width: 100%; margin-bottom: 20px; background: rgba(255,255,255,0.05);"&gt;
+<input type="text" id="indicator-search" class="settings-form-input" data-en-ph="Search indicator..." data-tr-ph="İndikatör ara..." placeholder="Search indicator..." style="width: 100%; margin-bottom: 20px; background: rgba(255,255,255,0.05);"/>
 
                         <div id="indicator-list">
 <div class="indicator-category">
-<div class="category-title"><i class="lucide-icon" data-lucide="trending-up"></i> TREND</div>
+<div class="category-title"><i class="lucide-icon" data-lucide="trending-up"></i> <span data-tr="TREND" data-en="TREND">TREND</span></div>
 <div class="indicator-item indicator-btn" data-params='{"period": 20}' data-type="EMA">
 <span class="indicator-name">EMA (20)</span>
 <button class="btn-add">+</button>
@@ -542,7 +541,7 @@
 </div>
 </div>
 <div class="indicator-category">
-<div class="category-title"><i class="lucide-icon" data-lucide="rocket"></i> MOMENTUM</div>
+<div class="category-title"><i class="lucide-icon" data-lucide="rocket"></i> <span data-tr="MOMENTUM" data-en="MOMENTUM">MOMENTUM</span></div>
 <div class="indicator-item indicator-btn" data-params='{"period": 14}' data-type="RSI">
 <span class="indicator-name">RSI (14)</span>
 <button class="btn-add">+</button>
@@ -553,7 +552,7 @@
 </div>
 </div>
 <div class="indicator-category">
-<div class="category-title"><i class="lucide-icon" data-lucide="pie-chart"></i> VOLATİLİTE</div>
+<div class="category-title"><i class="lucide-icon" data-lucide="pie-chart"></i> <span data-tr="VOLATİLİTE" data-en="VOLATILITY">VOLATILITY</span></div>
 <div class="indicator-item indicator-btn" data-params='{"period": 14}' data-type="ATR">
 <span class="indicator-name">ATR (14)</span>
 <button class="btn-add">+</button>
@@ -576,11 +575,10 @@
 <div class="panel glass-panel auto-style-89">
 <div class="panel-header"><i class="lucide-icon" data-lucide="settings"></i> <span data-tr="Koşul Oluşturucu" data-en="Condition Builder">Condition Builder</span></div>
 <div class="auto-style-30">
-<label class="auto-style-93">Strateji
-                                Adı</label>
-<input class="condition-input auto-style-94" id="strategy-name" type="text" value="Yeni Strateji"/>
+<label class="auto-style-93"><span data-tr="Strateji Adı" data-en="Strategy Name">Strategy Name</span></label>
+<input class="condition-input auto-style-94" id="strategy-name" type="text" value="New Strategy" data-en-val="New Strategy" data-tr-val="Yeni Strateji"/>
 <label class="auto-style-93"><span data-i18n="k_açıklama" data-tr="Açıklama" data-en="Description">Description</span></label>
-<textarea class="condition-input auto-style-95" id="strategy-description" placeholder="Opsiyonel açıklama..."></textarea>
+<textarea class="condition-input auto-style-95" id="strategy-description" data-en-ph="Optional description..." data-tr-ph="Opsiyonel açıklama..." placeholder="Optional description..."></textarea>
 </div>
 <div class="condition-builder auto-style-96">
 <div class="condition-side long">🟢 <span data-tr="LONG Koşulları" data-en="LONG Conditions">LONG Conditions</span></div>
@@ -603,7 +601,7 @@
 </div>
 <!-- SAĞ PANEL: Test ve Analiz -->
 <div class="panel glass-panel auto-style-89">
-<div class="panel-header"><i class="lucide-icon" data-lucide="target"></i> Backtest &amp; Risk</div>
+<div class="panel-header"><i class="lucide-icon" data-lucide="target"></i> <span data-tr="Backtest &amp; Risk" data-en="Backtest &amp; Risk">Backtest &amp; Risk</span></div>
 <div class="auto-style-98">
 <div class="auto-style-99">
 <div><label class="auto-style-100"><span data-i18n="k_sembol" data-tr="Sembol" data-en="Symbol">Symbol</span></label><input class="condition-input auto-style-101" id="backtest-symbol" type="text" value="BTC/USDT"/></div>
@@ -626,7 +624,7 @@
 <option value="1d">1d</option>
 </select>
 </div>
-<div><label class="auto-style-100">Gün</label><input class="condition-input auto-style-101" id="backtest-days" type="number" value="30"/></div>
+<div><label class="auto-style-100"><span data-tr="Gün" data-en="Days">Days</span></label><input class="condition-input auto-style-101" id="backtest-days" type="number" value="30"/></div>
 <div><label class="auto-style-100"><span data-i18n="k_bakiye" data-tr="Bakiye" data-en="Balance">Balance</span></label><input class="condition-input auto-style-101" id="backtest-balance" type="number" value="10000"/></div>
 </div>
 </div>
@@ -638,12 +636,12 @@
 <div class="auto-style-104">
 <button class="btn btn-primary auto-style-105" onclick="testStrategy()">🧪 <span data-tr="Backtest Başlat" data-en="Start Backtest">Start Backtest</span></button>
 <button class="btn btn-success auto-style-106" onclick="saveStrategy()"><i class="lucide-icon" data-lucide="database"></i>
-                                Stratejiyi Kaydet</button>
+                                <span data-tr="Stratejiyi Kaydet" data-en="Save Strategy">Save Strategy</span></button>
 <button class="btn auto-style-107" onclick="clearForm()"><i class="lucide-icon" data-lucide="trash-2"></i>
-                                Temizle</button>
+                                <span data-tr="Temizle" data-en="Clear">Clear</span></button>
 </div>
 <div class="auto-style-108" id="test-results">
-<div class="category-title"><i class="lucide-icon" data-lucide="pie-chart"></i> SONUÇLAR</div>
+<div class="category-title"><i class="lucide-icon" data-lucide="pie-chart"></i> <span data-tr="SONUÇLAR" data-en="RESULTS">RESULTS</span></div>
 <div class="auto-style-102">
 <div class="metric-box auto-style-109">
 <div class="auto-style-110">Win Rate</div>
@@ -664,7 +662,7 @@
 </div>
 <div class="auto-style-115" id="equity-curve-chart">
 </div>
-<div class="category-title"><i class="lucide-icon" data-lucide="clipboard-list"></i> SON İŞLEMLER</div>
+<div class="category-title"><i class="lucide-icon" data-lucide="clipboard-list"></i> <span data-tr="SON İŞLEMLER" data-en="RECENT TRADES">RECENT TRADES</span></div>
 <div class="auto-style-116">
 <table class="auto-style-117">
 <tbody id="trades-table-body"></tbody>
@@ -676,8 +674,7 @@
 <!-- Parametre Modal -->
 <div class="modal" id="param-modal">
 <div class="modal-content glass-panel auto-style-118">
-<div class="modal-header auto-style-119" id="modal-title">
-                            İndikatör Detayı</div>
+<div class="modal-header auto-style-119" id="modal-title"><span data-tr="İndikatör Detayı" data-en="Indicator Details">Indicator Details</span></div>
 <div id="modal-params"></div>
 <div class="modal-actions auto-style-120">
 <button class="btn btn-close-pos auto-style-121" onclick="closeModal()"><span data-i18n="k_vazgeç" data-tr="Vazgeç" data-en="Cancel">Cancel</span></button>

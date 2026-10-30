@@ -284,33 +284,33 @@ async def run_backtest(request: BacktestRequest):
             strategy_data = request.strategy
 
         # 2. GERÇEK VERİ ÇEK (Mock yerine)
-        logger.info("📊 Gerçek veri çekiliyor...")
+        logger.info("📊 Fetching real data...")
         try:
             df = await fetch_real_data(request.symbol, request.timeframe, request.days)
         except ValueError as e:
             # Yeterli veri yoksa anlamlı hata mesajı
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"{str(e)} Lütfen önce Veri Laboratuvarı'ndan veri indirin."
+                detail=f"{str(e)} Please download data in Data Laboratory first."
             )
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Veri çekme hatası: {str(e)}"
+                detail=f"Data fetch error: {str(e)}"
             )
 
         if df.empty:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Veri alınamadı"
+                detail="Failed to retrieve data"
             )
         
         # 3. Sinyalleri üret
-        logger.info("📈 Sinyaller hesaplanıyor...")
+        logger.info("📈 Calculating signals...")
         signals = calculate_signals(df, strategy_data)
         
         # 4. Backtest çalıştır
-        logger.info("⚙️ Backtest çalıştırılıyor...")
+        logger.info("⚙️ Running backtest...")
         backtester = VectorizedBacktester(
             initial_balance=request.initial_balance,
             fee_rate=0.0004,  # %0.04
@@ -364,11 +364,11 @@ async def run_backtest(request: BacktestRequest):
             profit_factor=clean_value(result.profit_factor)
         )
         
-        logger.info(f"✅ Backtest tamamlandı: {result.total_trades} işlem, Win Rate: {result.win_rate:.2f}%")
+        logger.info(f"✅ Backtest completed: {result.total_trades} trades, Win Rate: {result.win_rate:.2f}%")
         
         return BacktestResponse(
             status="success",
-            message=f"Backtest başarılı: {request.symbol} ({request.timeframe}, {request.days} gün)",
+            message=f"Backtest successful: {request.symbol} ({request.timeframe}, {request.days} days)",
             metrics=metrics,
             equity_curve=equity_curve,
             recent_trades=recent_trades,
@@ -378,10 +378,10 @@ async def run_backtest(request: BacktestRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Backtest hatası: {e}")
+        logger.error(f"❌ Backtest error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Backtest başarısız: {str(e)}"
+            detail=f"Backtest failed: {str(e)}"
         )
 
 

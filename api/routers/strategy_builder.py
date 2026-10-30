@@ -104,7 +104,7 @@ async def save_strategy(request: StrategySaveRequest):
     """
     try:
         # 1. JSON validasyonu
-        logger.info(f"📥 Strateji kaydetme isteği: {request.name}")
+        logger.info(f"📥 Strategy save request: {request.name}")
         
         # Strateji JSON'u oluştur
         strategy_json = {
@@ -163,7 +163,7 @@ async def save_strategy(request: StrategySaveRequest):
 
         return StrategySaveResponse(
             status="success",
-            message=f"Strateji '{request.name}' başarıyla kaydedildi",
+            message=f"Strategy '{request.name}' saved successfully",
             filename=filename,
             filepath=str(filepath)
         )
@@ -174,7 +174,7 @@ async def save_strategy(request: StrategySaveRequest):
         logger.error(f"❌ Strateji kaydetme hatası: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Strateji kaydedilemedi: {str(e)}"
+            detail=f"Failed to save strategy: {str(e)}"
         )
 
 
@@ -222,7 +222,7 @@ async def list_strategies():
                 strategies.append(strategy_info)
                 
             except Exception as e:
-                logger.warning(f"⚠️ Dosya okunamadı: {filepath.name} - {e}")
+                logger.warning(f"⚠️ Could not read file: {filepath.name} - {e}")
                 continue
         
         # Zamana göre sırala (en yeni önce)
@@ -327,11 +327,11 @@ async def test_strategy(request: StrategyTestRequest):
                 "strategy_info": executor.get_strategy_info()
             }
             
-            logger.info(f"✅ Test tamamlandı: {total_signals} sinyal üretildi")
+            logger.info(f"✅ Test completed: {total_signals} signals generated")
             
             return StrategyTestResponse(
                 status="success",
-                message=f"Strateji testi başarılı: {request.symbol} ({request.timeframe})",
+                message=f"Strategy test successful: {request.symbol} ({request.timeframe})",
                 metrics=metrics
             )
             
@@ -343,10 +343,10 @@ async def test_strategy(request: StrategyTestRequest):
                 pass
         
     except Exception as e:
-        logger.error(f"❌ Strateji test hatası: {e}")
+        logger.error(f"❌ Strategy test error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Strateji testi başarısız: {str(e)}"
+            detail=f"Strategy test failed: {str(e)}"
         )
 
 
@@ -371,7 +371,7 @@ async def get_strategy_info(filename: str):
         if not filepath.exists():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Strateji dosyası bulunamadı: {filename}"
+                detail=f"Strategy file not found: {filename}"
             )
         
         with open(filepath, 'r', encoding='utf-8') as f:
@@ -386,10 +386,10 @@ async def get_strategy_info(filename: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Strateji bilgisi okuma hatası: {e}")
+        logger.error(f"❌ Strategy info read error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Strateji bilgisi okunamadı: {str(e)}"
+            detail=f"Failed to read strategy info: {str(e)}"
         )
 
 
@@ -410,22 +410,22 @@ async def delete_strategy(filename: str):
         if not filepath.exists():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Strateji dosyası bulunamadı: {filename}"
+                detail=f"Strategy file not found: {filename}"
             )
         
         filepath.unlink()
-        logger.info(f"✅ Strateji silindi: {filename}")
+        logger.info(f"✅ Strategy deleted: {filename}")
         
         return {
             "status": "success",
-            "message": f"Strateji '{filename}' silindi"
+            "message": f"Strategy '{filename}' deleted"
         }
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Strateji silme hatası: {e}")
+        logger.error(f"❌ Strategy delete error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Strateji silinemedi: {str(e)}"
+            detail=f"Failed to delete strategy: {str(e)}"
         )
