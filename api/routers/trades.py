@@ -27,11 +27,11 @@ async def get_trade_history(
 
         # 1. DB'den çek
         db_trades = await db_manager.get_recent_trades(limit=limit)
-        logger.info(f"📊 [TRADES] DB'den {len(db_trades)} işlem çekildi")
+        logger.info(f"📊 [TRADES] Fetched {len(db_trades)} trades from DB")
         
         # Debug: İlk trade'i logla
         if db_trades:
-            logger.info(f"🔍 [TRADES] İlk trade: {db_trades[0]}")
+            logger.info(f"🔍 [TRADES] First trade: {db_trades[0]}")
 
         # 2. Memory'den çek (Mevcut oturum verileri)
         memory_trades = []
@@ -56,7 +56,7 @@ async def get_trade_history(
                     "bot_id": trade_dict.get('bot_id')
                 })
 
-        logger.info(f"📊 [TRADES] Memory'den {len(memory_trades)} işlem çekildi")
+        logger.info(f"📊 [TRADES] Fetched {len(memory_trades)} trades from memory")
 
         # 3. DB + Memory trades'leri birleştir (duplicate önleme)
         # Memory trades anlık göstermek için önemli (DB'ye yazılmadan önce)
@@ -68,7 +68,7 @@ async def get_trade_history(
             if mem_trade.get('id') not in db_ids:
                 all_trades.append(mem_trade)
         
-        logger.info(f"📊 [TRADES] Toplam {len(all_trades)} işlem döndürülecek (DB: {len(db_trades)}, Memory: {len(memory_trades)})")
+        logger.info(f"📊 [TRADES] Returning {len(all_trades)} trades (DB: {len(db_trades)}, Memory: {len(memory_trades)})")
 
         # 4. Filtreleme
         if symbol:
@@ -94,7 +94,7 @@ async def get_trade_history(
             "trades": all_trades[:limit]
         }
         
-        logger.info(f"✅ [TRADES] Response gönderiliyor: {len(all_trades[:limit])} işlem")
+        logger.info(f"✅ [TRADES] Sending response with {len(all_trades[:limit])} trades")
         
         return response_data
     except Exception as e:
@@ -113,7 +113,7 @@ async def clear_trade_history() -> Dict[str, Any]:
         await db_manager.clear_trade_history()
         return {
             "status": "success",
-            "message": "Tüm işlem geçmişi başarıyla temizlendi."
+            "message": "Trade history cleared successfully."
         }
     except Exception as e:
         logger.error(f"Clear trade history error: {e}")
@@ -187,7 +187,7 @@ async def get_trade_stats() -> Dict[str, Any]:
         # Strateji bazlı gruplama
         strategy_stats = {}
         for t in all_trades:
-            s_id = t.get('strategy_id') or 'Bilinmeyen'
+            s_id = t.get('strategy_id') or 'Unknown'
             if s_id not in strategy_stats:
                 strategy_stats[s_id] = {"count": 0, "pnl": 0}
             strategy_stats[s_id]["count"] += 1

@@ -1467,28 +1467,49 @@ async function loadStrategyLibrary() {
 /**
  * Load trade history
  */
+let _currentTradesCache = [];
+
+function formatTradeReason(reason, isTr) {
+    if (!reason) return '-';
+    const r = String(reason).toUpperCase().trim();
+    if (r === 'STOP_LOSS' || r === 'STOP LOSS' || r === 'SL') {
+        return isTr ? 'Zarar Durdur (SL)' : 'Stop Loss (SL)';
+    }
+    if (r === 'TAKE_PROFIT' || r === 'TAKE PROFIT' || r === 'TP') {
+        return isTr ? 'Kâr Al (TP)' : 'Take Profit (TP)';
+    }
+    if (r === 'OPPOSITE_SIGNAL' || r === 'OPPOSITE SIGNAL') {
+        return isTr ? 'Ters Sinyal' : 'Opposite Signal';
+    }
+    if (r === 'LIQUIDATION') {
+        return isTr ? 'Likidasyon' : 'Liquidation';
+    }
+    if (r === 'MANUAL') {
+        return isTr ? 'Manuel Kapatma' : 'Manual Close';
+    }
+    if (r === 'EMERGENCY_STOP') {
+        return isTr ? 'Acil Durdurma' : 'Emergency Stop';
+    }
+    return reason;
+}
+
 async function loadTradeHistory() {
     try {
         console.log('📜 [HISTORY] Loading trade history...');
         const data = await api.getTrades();
-        const trades = data.trades || [];
+        _currentTradesCache = data.trades || [];
 
         console.log(`📜 [HISTORY] API Response:`, data);
-        console.log(`📜 [HISTORY] ${trades.length} işlem yüklendi`);
+        console.log(`📜 [HISTORY] ${_currentTradesCache.length} trades loaded`);
         
-        if (trades.length === 0) {
-            console.warn('⚠️ [HISTORY] Hiç işlem yok!');
-            console.log('API Count:', data.count);
-            console.log('API Status:', data.status);
-        }
-        
-        renderTradeHistory(trades);
+        renderTradeHistory(_currentTradesCache);
     } catch (error) {
         console.error('❌ [HISTORY] Load error:', error);
         console.error('Stack trace:', error.stack);
         const tbody = document.getElementById('history-body');
         if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:40px; color:var(--neon-red);">Hata: ${error.message}</td></tr>`;
+            const isTr = (window.i18n && window.i18n.currentLang === 'tr');
+            tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:40px; color:var(--neon-red);">${isTr ? 'Hata: ' : 'Error: '}${error.message}</td></tr>`;
         }
     }
 }
@@ -1500,13 +1521,16 @@ function renderTradeHistory(trades) {
     const tbody = document.getElementById('history-body');
     if (!tbody) return;
 
-    if (trades.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:40px; color:var(--text-muted);">${(window.i18n && window.i18n.currentLang === "tr") ? "Henüz işlem geçmişi yok" : "No trade history available yet."}</td></tr>`;
+    const list = trades || _currentTradesCache || [];
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
+
+    if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:40px; color:var(--text-muted);">${isTr ? 'Henüz işlem geçmişi yok' : 'No trade history available yet.'}</td></tr>`;
         updateHistoryStats([]);
         return;
     }
 
-    tbody.innerHTML = trades.map(trade => {
+    tbody.innerHTML = list.map(trade => {
         const pnl = trade.pnl_usd || trade.pnl || 0;
         const pnlPercent = trade.pnl_percent || 0;
         const isProfit = pnl >= 0;
@@ -1516,16 +1540,18 @@ function renderTradeHistory(trades) {
         let dateStr = 'N/A';
         if (closedAt) {
             try {
+                const loc = isTr ? 'tr-TR' : 'en-US';
                 if (typeof closedAt === 'string') {
-                    const loc = (window.i18n && window.i18n.currentLang === 'tr') ? 'tr-TR' : 'en-US';
                     dateStr = new Date(closedAt).toLocaleString(loc);
                 } else if (closedAt instanceof Date) {
-                    dateStr = closedAt.toLocaleString('tr-TR');
+                    dateStr = closedAt.toLocaleString(loc);
                 }
             } catch (e) {
                 dateStr = closedAt;
             }
         }
+
+        const reasonDisplay = formatTradeReason(trade.reason, isTr);
 
         return `
             <tr>
@@ -1543,13 +1569,13 @@ function renderTradeHistory(trades) {
                     ${pnlPercent >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%
                 </td>
                 <td style="font-size:0.75rem; color:var(--text-muted); max-width:150px; overflow:hidden; text-overflow:ellipsis;">
-                    ${trade.reason || '-'}
+                    ${reasonDisplay}
                 </td>
             </tr>
         `;
     }).join('');
 
-    updateHistoryStats(trades);
+    updateHistoryStats(list);
     console.log('✅ [HISTORY] Table rendered');
 }
 
@@ -1557,15 +1583,16 @@ function renderTradeHistory(trades) {
  * Update trade history statistics
  */
 function updateHistoryStats(trades) {
-    const totalTrades = trades.length;
-    const winningTrades = trades.filter(t => (t.pnl_usd || t.pnl || 0) > 0).length;
+    const list = trades || [];
+    const totalTrades = list.length;
+    const winningTrades = list.filter(t => (t.pnl_usd || t.pnl || 0) > 0).length;
     const winRate = totalTrades > 0 ? (winningTrades / totalTrades * 100) : 0;
-    const totalPnl = trades.reduce((sum, t) => sum + (t.pnl_usd || t.pnl || 0), 0);
+    const totalPnl = list.reduce((sum, t) => sum + (t.pnl_usd || t.pnl || 0), 0);
     const avgPnl = totalTrades > 0 ? totalPnl / totalTrades : 0;
 
     // Calculate best strategy
     const strategyPnl = {};
-    trades.forEach(t => {
+    list.forEach(t => {
         const strat = t.strategy_id || t.strategy || 'Unknown';
         const pnl = t.pnl_usd || t.pnl || 0;
         strategyPnl[strat] = (strategyPnl[strat] || 0) + pnl;
@@ -1606,20 +1633,21 @@ function updateHistoryStats(trades) {
  * Clear trade history
  */
 async function clearTradeHistory() {
-    if (!confirm('⚠️ Tüm işlem geçmişini silmek istediğinizden emin misiniz? Bu işlem geri alınamaz!')) {
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
+    if (!confirm(isTr ? '⚠️ Tüm işlem geçmişini silmek istediğinizden emin misiniz? Bu işlem geri alınamaz!' : '⚠️ Are you sure you want to clear all trade history? This action cannot be undone!')) {
         return;
     }
 
     try {
         const result = await api.clearTrades();
         if (result.status === 'success') {
-            showToast('✅ İşlem geçmişi temizlendi', 'success');
+            showToast(isTr ? '✅ İşlem geçmişi temizlendi' : '✅ Trade history cleared successfully', 'success');
             await loadTradeHistory();
         } else {
-            showToast('❌ ' + (result.message || 'Temizleme başarısız'), 'error');
+            showToast(isTr ? '❌ ' + (result.message || 'Temizleme başarısız') : '❌ ' + (result.message || 'Failed to clear history'), 'error');
         }
     } catch (error) {
-        showToast('❌ Hata: ' + error.message, 'error');
+        showToast((isTr ? '❌ Hata: ' : '❌ Error: ') + error.message, 'error');
     }
 }
 

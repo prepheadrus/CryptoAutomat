@@ -1028,9 +1028,9 @@ class DatabaseManager:
                 await self.sqlite_conn.execute(sql, params)
                 await self.sqlite_conn.commit()
 
-            logger.info(f"✅ İşlem Hafızaya ({self.engine_type}) Kaydedildi: {trade_info['symbol']} | PnL: {trade_info.get('pnl_usd', 0):.2f}")
+            logger.info(f"✅ Trade saved to {self.engine_type} database: {trade_info['symbol']} | PnL: {trade_info.get('pnl_usd', 0):.2f}")
         except Exception as e:
-            logger.error(f"❌ İşlem kaydedilirken hata oluştu ({trade_info['symbol']}): {e}")
+            logger.error(f"❌ Error saving trade ({trade_info['symbol']}): {e}")
             import traceback
             logger.error(traceback.format_exc())
 
@@ -1068,7 +1068,7 @@ class DatabaseManager:
         else:
             await self.sqlite_conn.execute(sql)
             await self.sqlite_conn.commit()
-        logger.info("🗑️ Tüm işlem geçmişi temizlendi.")
+        logger.info("🗑️ Trade history cleared.")
 
     async def save_download_task(self, task: dict):
         """İndirme görevini veritabanına kaydeder veya günceller."""
