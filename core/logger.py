@@ -129,9 +129,9 @@ def setup_logger(name='CryptoAlgoBot', use_json: Optional[bool] = None):
                 file_handler.setLevel(log_level)
                 file_handler.setFormatter(JSONFormatter())
                 logger.addHandler(file_handler)
-                logger.info(f"📄 Log dosyası: cryptobot.log (JSON format)")
+                logger.info(f"📄 Log file: cryptobot.log (JSON format)")
             except Exception as e:
-                logger.warning(f"⚠️ Dosya logger oluşturulamadı: {e}")
+                logger.warning(f"⚠️ File logger could not be created: {e}")
 
     return logger
 

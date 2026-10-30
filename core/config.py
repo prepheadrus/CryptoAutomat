@@ -49,7 +49,7 @@ def load_api_keys():
         logger = None
         try:
             from core.logger import logger
-            logger.error(f"API key yükleme hatası: {e}, ortam değişkenlerine fallback")
+            logger.error(f"API key loading error: {e}, falling back to environment variables")
         except:
             pass
         

@@ -93,34 +93,34 @@ class WFOEngine:
         n_trials = n_trials or self.DEFAULT_N_TRIALS
         optimization_metric = optimization_metric or self.DEFAULT_OPTIMIZATION_METRIC
         
-        logger.info(f"🧠 [WFO] Optimizasyon başlatılıyor: {symbol} {timeframe}")
-        logger.info(f"   📅 In-Sample: {in_sample_days} gün, Out-of-Sample: {out_of_sample_days} gün")
+        logger.info(f"🧠 [WFO] Starting optimization: {symbol} {timeframe}")
+        logger.info(f"   📅 In-Sample: {in_sample_days} days, Out-of-Sample: {out_of_sample_days} days")
         logger.info(f"   🔬 Trials: {n_trials}, Metric: {optimization_metric}")
         
         try:
             # 1. Veriyi Parquet Lake'ten çek
-            logger.info(f"📊 [WFO] Veri çekiliyor: {symbol} {timeframe}")
+            logger.info(f"📊 [WFO] Fetching data: {symbol} {timeframe}")
             data = await self._fetch_data(symbol, timeframe, in_sample_days + out_of_sample_days)
             
             if data is None or len(data) < 100:
-                logger.warning(f"⚠️ [WFO] Yetersiz veri: {len(data) if data else 0} mum")
+                logger.warning(f"⚠️ [WFO] Insufficient data: {len(data) if data else 0} candles")
                 return {}
             
             # 2. In-Sample / Out-of-Sample böl
-            logger.info(f"📊 [WFO] Veri bölünüyor (In-Sample / Out-of-Sample)")
+            logger.info("📊 [WFO] Splitting data (In-Sample / Out-of-Sample)")
             train_data, test_data = self._split_data(data, in_sample_days, out_of_sample_days)
             
             if len(train_data) < 50 or len(test_data) < 10:
-                logger.warning(f"⚠️ [WFO] Yetersiz veri: Train={len(train_data)}, Test={len(test_data)}")
+                logger.warning(f"⚠️ [WFO] Insufficient data: Train={len(train_data)}, Test={len(test_data)}")
                 return {}
             
             # 3. Auto-Grid ile parametre uzayı oluştur
             if param_grid is None:
-                logger.info(f"🔧 [WFO] Auto-Grid ile parametre uzayı oluşturuluyor")
+                logger.info("🔧 [WFO] Generating parameter space with Auto-Grid")
                 strategy_instance = strategy_class()
                 param_grid = auto_grid.generate_from_strategy(strategy_instance)
             else:
-                logger.info(f"🔧 [WFO] Manuel param grid kullanılıyor")
+                logger.info("🔧 [WFO] Using manual parameter grid")
             
             # 4. Bayesian Optimization (TPE)
             logger.info(f"🧠 [WFO] Starting Bayesian Optimization (TPE Sampler)")
@@ -153,12 +153,12 @@ class WFOEngine:
             best_params = study.best_params
             best_value = study.best_value
             
-            logger.info(f"✅ [WFO] Optimizasyon tamamlandı!")
+            logger.info("✅ [WFO] Optimization completed!")
             logger.info(f"   🏆 Best {optimization_metric}: {best_value:.4f}")
             logger.info(f"   🎯 Best params: {best_params}")
             
             # 6. Out-of-Sample doğrulama
-            logger.info(f"🔍 [WFO] Out-of-Sample doğrulama")
+            logger.info("🔍 [WFO] Out-of-Sample validation")
             oos_metrics = await self._validate_out_of_sample(
                 best_params,
                 test_data,
@@ -185,7 +185,7 @@ class WFOEngine:
             }
             
         except Exception as e:
-            logger.error(f"❌ [WFO] Optimizasyon hatası: {e}")
+            logger.error(f"❌ [WFO] Optimization error: {e}")
             return {}
     
     async def _fetch_data(self, symbol: str, timeframe: str, days: int) -> pd.DataFrame:
@@ -209,7 +209,7 @@ class WFOEngine:
         data = await lake.load_datasets(symbol, timeframe, start_date, end_date)
         
         if data is not None:
-            logger.info(f"📊 [WFO] {len(data)} mum yüklendi")
+            logger.info(f"📊 [WFO] Loaded {len(data)} candles")
         
         return data
     
@@ -238,7 +238,7 @@ class WFOEngine:
         train_data = data.iloc[:train_end_idx].copy()
         test_data = data.iloc[train_end_idx:].copy()
         
-        logger.info(f"📊 [WFO] Split: Train={len(train_data)} mum, Test={len(test_data)} mum")
+        logger.info(f"📊 [WFO] Split: Train={len(train_data)} candles, Test={len(test_data)} candles")
         
         return train_data, test_data
     
@@ -282,7 +282,7 @@ class WFOEngine:
         try:
             metrics = self._backtest(strategy, train_data)
         except Exception as e:
-            logger.debug(f"⚠️ [WFO] Backtest hatası: {e}")
+            logger.debug(f"⚠️ [WFO] Backtest error: {e}")
             return 0.0  # Kötü skor
         
         # 4. Metriği döndür
@@ -476,8 +476,8 @@ async def start_wfo_background_task(
         out_of_sample_days: Out-of-Sample gün sayısı
         reoptimize_interval: Yeniden optimizasyon aralığı (saat)
     """
-    logger.info(f"🧠 [WFO] Arka plan görevi başlatıldı: {symbol} {timeframe}")
-    logger.info(f"   📅 Reoptimize interval: {reoptimize_interval} saat")
+    logger.info(f"🧠 [WFO] Background task started: {symbol} {timeframe}")
+    logger.info(f"   📅 Reoptimize interval: {reoptimize_interval} hours")
 
     while True:
         try:
@@ -495,24 +495,24 @@ async def start_wfo_background_task(
 
             # Eğer overfitting yoksa parametreleri güncelle
             if result and not result.get('overfitting', True):
-                logger.info(f"✅ [WFO] Parametreler güncellendi: {result.get('best_params', {})}")
+                logger.info(f"✅ [WFO] Parameters updated: {result.get('best_params', {})}")
 
                 # Strateji instance bul ve güncelle
                 from strategy.manager import StrategyManager
                 strategy = StrategyManager.get_strategy_by_symbol(symbol)
                 if strategy and hasattr(strategy, 'update_params'):
                     strategy.update_params(result['best_params'])
-                    logger.info(f"📝 [WFO] Strateji parametreleri canlı bota uygulandı")
+                    logger.info("📝 [WFO] Strategy parameters applied to live bot")
 
             # Bekle (reoptimize interval)
-            logger.info(f"⏳ [WFO] Sonraki optimizasyon: {reoptimize_interval} saat")
+            logger.info(f"⏳ [WFO] Next optimization: {reoptimize_interval} hours")
             await asyncio.sleep(reoptimize_interval * 3600)
 
         except asyncio.CancelledError:
-            logger.info(f"🛑 [WFO] Arka plan görevi durduruldu: {symbol}")
+            logger.info(f"🛑 [WFO] Background task stopped: {symbol}")
             break
         except Exception as e:
-            logger.error(f"❌ [WFO] Arka plan hatası: {e}")
+            logger.error(f"❌ [WFO] Background task error: {e}")
             await asyncio.sleep(3600)  # 1 saat bekle ve tekrar dene
 
 
@@ -531,11 +531,11 @@ def get_wfo_engine() -> Optional['WFOEngine']:
 
     if _wfo_engine_instance is None:
         if not CONFIG.get('wfo', {}).get('enabled', False):
-            logger.warning("⚠️ WFO kapalı, engine başlatılmadı")
+            logger.warning("⚠️ WFO disabled, engine not started")
             return None
 
         _wfo_engine_instance = WFOEngine()
-        logger.info("🧠 [WFO] Engine singleton başlatıldı")
+        logger.info("🧠 [WFO] Engine singleton initialized")
 
     return _wfo_engine_instance
 

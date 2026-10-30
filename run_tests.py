@@ -17,7 +17,7 @@ sys.path.insert(0, 'f:/Crypto Bot')
 async def run_double_close_tests():
     """Double-close testlerini çalıştır"""
     print("=" * 60)
-    print("🧪 DOUBLE-CLOSE TESTLERİ BAŞLIYOR")
+    print("🧪 STARTING DOUBLE-CLOSE TESTS")
     print("=" * 60)
     
     from tests.test_double_close import (
@@ -49,7 +49,7 @@ async def run_double_close_tests():
             failed += 1
     
     print(f"\n{'=' * 60}")
-    print(f"SONUÇ: {passed} PASSED, {failed} FAILED")
+    print(f"RESULT: {passed} PASSED, {failed} FAILED")
     print(f"{'=' * 60}\n")
     
     return failed == 0
@@ -58,7 +58,7 @@ async def run_double_close_tests():
 async def run_zombie_tests():
     """Zombie position testlerini çalıştır"""
     print("=" * 60)
-    print("🧟 ZOMBIE POSITION TESTLERİ BAŞLIYOR")
+    print("🧟 STARTING ZOMBIE POSITION TESTS")
     print("=" * 60)
     
     from tests.test_zombie_position import (
@@ -92,7 +92,7 @@ async def run_zombie_tests():
             failed += 1
     
     print(f"\n{'=' * 60}")
-    print(f"SONUÇ: {passed} PASSED, {failed} FAILED")
+    print(f"RESULT: {passed} PASSED, {failed} FAILED")
     print(f"{'=' * 60}\n")
     
     return failed == 0
@@ -100,7 +100,7 @@ async def run_zombie_tests():
 
 if __name__ == "__main__":
     print("\n" + "=" * 60)
-    print("🚀 KRİTİK BUG TESTLERİ BAŞLIYOR")
+    print("🚀 STARTING CRITICAL BUG TESTS")
     print("=" * 60 + "\n")
     
     # Double-close testleri
@@ -111,19 +111,19 @@ if __name__ == "__main__":
     
     # Final rapor
     print("\n" + "=" * 60)
-    print("📊 FINAL RAPOR")
+    print("📊 FINAL REPORT")
     print("=" * 60)
     
     if dc_passed and zb_passed:
-        print("\n✅✅✅ KRİTİK BUG TESTLERİ BAŞARILI! ✅✅✅\n")
-        print("Tüm race condition ve zombie position testleri PASSED!")
-        print("Sistem production-ready! 🚀\n")
+        print("\n✅✅✅ CRITICAL BUG TESTS PASSED! ✅✅✅\n")
+        print("All race condition and zombie position tests PASSED!")
+        print("System is production-ready! 🚀\n")
     else:
-        print("\n❌ BAZI TESTLER FAILED!")
+        print("\n❌ SOME TESTS FAILED!")
         if not dc_passed:
-            print("  - Double-close testleri başarısız")
+            print("  - Double-close tests failed")
         if not zb_passed:
-            print("  - Zombie position testleri başarısız")
-        print("\nLütfen hataları düzeltin ve tekrar deneyin.\n")
+            print("  - Zombie position tests failed")
+        print("\nPlease fix the errors and try again.\n")
     
     print("=" * 60 + "\n")

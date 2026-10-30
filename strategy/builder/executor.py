@@ -152,7 +152,7 @@ class StrategyExecutor:
         conditions = self.strategy_data.get('conditions')
 
         if not conditions:
-            logger.warning(f"⚠️ {self.strategy_data.get('name', 'Bilinmeyen')} stratejisi 'conditions' alanı içermiyor. Varsayılan boş koşullar ekleniyor.")
+            logger.warning(f"⚠️ Strategy {self.strategy_data.get('name', 'Unknown')} does not contain 'conditions' field. Adding default empty conditions.")
             self.strategy_data["conditions"] = {
                 "LONG": {"logic": "AND", "rules": []},
                 "SHORT": {"logic": "AND", "rules": []}
@@ -295,10 +295,10 @@ class StrategyExecutor:
                 df[f"STOCH_D_{k}_{d}"] = stoch_d
                 
             else:
-                print(f"[UYARI] Bilinmeyen indikatör: {indicator_name}. Atlandı.")
+                print(f"[WARNING] Unknown indicator: {indicator_name}. Skipped.")
                 
         except Exception as e:
-            print(f"[HATA] {indicator_name} hesaplanırken hata: {e}")
+            print(f"[ERROR] Error calculating {indicator_name}: {e}")
             # Hata olsa bile devam et
         
         return df
@@ -328,14 +328,14 @@ class StrategyExecutor:
         try:
             long_signal = self.config.long_conditions.evaluate(last_row)
         except Exception as e:
-            print(f"[HATA] LONG koşulu değerlendirilirken hata: {e}")
+            print(f"[ERROR] Error evaluating LONG condition: {e}")
         
         # SHORT koşullarını değerlendir
         short_signal = False
         try:
             short_signal = self.config.short_conditions.evaluate(last_row)
         except Exception as e:
-            print(f"[HATA] SHORT koşulu değerlendirilirken hata: {e}")
+            print(f"[ERROR] Error evaluating SHORT condition: {e}")
         
         # Sinyal üret
         if long_signal:
@@ -421,7 +421,7 @@ if __name__ == "__main__":
     with open(test_json_path, 'w', encoding='utf-8') as f:
         json.dump(example_strategy, f, indent=2, ensure_ascii=False)
     
-    print("[OK] Test stratejisi olusturuldu: test_strategy.json")
+    print("[OK] Test strategy created: test_strategy.json")
     
     # Test DataFrame oluştur
     print("\n[TEST] DataFrame olusturuluyor...")
@@ -443,8 +443,8 @@ if __name__ == "__main__":
         'volume': volumes
     })
     
-    print(f"[OK] Test DataFrame: {len(test_df)} satır")
-    print(f"     Sütunlar: {list(test_df.columns)}")
+    print(f"[OK] Test DataFrame: {len(test_df)} rows")
+    print(f"     Columns: {list(test_df.columns)}")
     
     # StrategyExecutor'ı başlat
     print("\n[TEST] StrategyExecutor baslatiliyor...")
@@ -454,26 +454,26 @@ if __name__ == "__main__":
     # Strateji bilgilerini al
     info = executor.get_strategy_info()
     print(f"\n[OK] Strateji Bilgileri:")
-    print(f"     İsim: {info['name']}")
-    print(f"     Açıklama: {info['description']}")
-    print(f"     İndikatörler: {len(info['indicators'])}")
+    print(f"     Name: {info['name']}")
+    print(f"     Description: {info['description']}")
+    print(f"     Indicators: {len(info['indicators'])}")
     print(f"     Risk Parametreleri: {info['risk_params']}")
     
     # Veriyi hazırla
-    print("\n[TEST] Veri hazırlaniyor...")
+    print("\n[TEST] Preparing data...")
     prepared_df = executor.prepare_data(test_df)
-    print(f"[OK] Hazır DataFrame: {len(prepared_df)} satır")
-    print(f"     Yeni sütunlar: {[col for col in prepared_df.columns if col not in test_df.columns]}")
+    print(f"[OK] Prepared DataFrame: {len(prepared_df)} rows")
+    print(f"     New columns: {[col for col in prepared_df.columns if col not in test_df.columns]}")
     
     # Sinyal üret
     print("\n[TEST] Sinyal uretiliyor...")
     signal = executor.generate_signal(prepared_df)
     signal_names = {0: "SAT", 1: "BEKLE", 2: "AL"}
-    print(f"[OK] Sinyal: {signal} ({signal_names.get(signal, 'BİLİNMİYOR')})")
+    print(f"[OK] Signal: {signal} ({signal_names.get(signal, 'UNKNOWN')})")
     
     # Son mumun verisini göster
     last_row = prepared_df.iloc[-1]
-    print(f"\n[OK] Son mum verisi:")
+    print(f"\n[OK] Last candle data:")
     print(f"     Close: {last_row['close']:.2f}")
     if 'RSI_14' in last_row:
         print(f"     RSI_14: {last_row['RSI_14']:.2f}")
@@ -487,5 +487,5 @@ if __name__ == "__main__":
     print(f"\n[OK] Test dosyasi temizlendi: {test_json_path}")
     
     print("\n" + "="*60)
-    print("[OK] TÜM TESTLER BAŞARILI!")
+    print("[OK] ALL TESTS PASSED!")
     print("="*60)

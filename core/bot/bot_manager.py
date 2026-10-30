@@ -256,21 +256,21 @@ class BotManager:
             True ise başarılı
         """
         if bot_id not in self.bots:
-            logger.warning(f"Bot bulunamadı: {bot_id}")
+            logger.warning(f"Bot not found: {bot_id}")
             return False
         
         bot = self.bots[bot_id]
         
         # Zaten durmuş mu?
         if bot.state.status == BotStatus.STOPPED:
-            logger.debug(f"Bot zaten durmuş: {bot_id}")
+            logger.debug(f"Bot already stopped: {bot_id}")
             return True
         
         # Durum güncelle
         bot.state.status = BotStatus.STOPPED
         self.total_bots_stopped += 1
         
-        logger.info(f"🛑 Bot durduruldu: {bot_id} | Neden: {reason}")
+        logger.info(f"🛑 Bot stopped: {bot_id} | Reason: {reason}")
         
         return True
     
@@ -285,7 +285,7 @@ class BotManager:
             True ise başarılı
         """
         if bot_id not in self.bots:
-            logger.warning(f"Bot bulunamadı: {bot_id}")
+            logger.warning(f"Bot not found: {bot_id}")
             return False
         
         bot = self.bots[bot_id]
@@ -313,20 +313,20 @@ class BotManager:
             True ise başarılı
         """
         if bot_id not in self.bots:
-            logger.warning(f"Bot bulunamadı: {bot_id}")
+            logger.warning(f"Bot not found: {bot_id}")
             return False
         
         bot = self.bots[bot_id]
         
         # Sadece running botlar duraklatılabilir
         if bot.state.status != BotStatus.RUNNING:
-            logger.warning(f"Bot duraklatılamaz: {bot_id} (status={bot.state.status.value})")
+            logger.warning(f"Bot cannot be paused: {bot_id} (status={bot.state.status.value})")
             return False
         
         # Durum güncelle
         bot.state.status = BotStatus.PAUSED
         
-        logger.info(f"⏸️ Bot duraklatıldı: {bot_id}")
+        logger.info(f"⏸️ Bot paused: {bot_id}")
         
         return True
     
@@ -341,7 +341,7 @@ class BotManager:
             True ise başarılı
         """
         if bot_id not in self.bots:
-            logger.warning(f"Bot bulunamadı: {bot_id}")
+            logger.warning(f"Bot not found: {bot_id}")
             return False
         
         # Önce durdur
@@ -350,7 +350,7 @@ class BotManager:
         # Sil
         del self.bots[bot_id]
         
-        logger.info(f"🗑️ Bot silindi: {bot_id}")
+        logger.info(f"🗑️ Bot deleted: {bot_id}")
         
         return True
     
@@ -422,7 +422,7 @@ class BotManager:
             bot.state.status = BotStatus.ERROR
             bot.state.error_message = error_message
             
-            logger.error(f"❌ Bot hatası: {bot_id} | {error_message}")
+            logger.error(f"❌ Bot error: {bot_id} | {error_message}")
     
     # ========================================================================
     # BOT QUERIES
@@ -614,14 +614,14 @@ class LegacyBotManager:
             'wins': 0
         }
         
-        logger.info(f"🚀 [1-to-N] Bot başlatıldı: {bot_id}")
+        logger.info(f"🚀 [1-to-N] Bot started: {bot_id}")
         return bot_id
     
     def stop_bot(self, bot_id: str) -> bool:
         """Legacy bot durdurma"""
         if bot_id in self.active_bots:
             self.active_bots[bot_id]['status'] = 'stopped'
-            logger.info(f"🛑 [1-to-N] Bot durduruldu: {bot_id}")
+            logger.info(f"🛑 [1-to-N] Bot stopped: {bot_id}")
             return True
         return False
     
@@ -636,7 +636,7 @@ class LegacyBotManager:
         if bot_id in self.bot_state:
             del self.bot_state[bot_id]
         
-        logger.info(f"🗑️ [1-to-N] Bot silindi: {bot_id}")
+        logger.info(f"🗑️ [1-to-N] Bot deleted: {bot_id}")
         return True
     
     def get_active_bots_for_symbol(self, symbol: str) -> List[str]:

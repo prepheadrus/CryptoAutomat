@@ -39,7 +39,7 @@ class OHLCVStorage:
     def __init__(self):
         """OHLCV Storage'ı başlat."""
         self.BASE_DIR.mkdir(parents=True, exist_ok=True)
-        logger.info(f"📦 [OHLCV_STORAGE] Legacy Flat File Uyumluluk Katmanı Aktif")
+        logger.info("📦 [OHLCV_STORAGE] Legacy Flat File Compatibility Layer Active")
         logger.info(f"📁 [OHLCV_STORAGE] Base directory: {self.BASE_DIR.absolute()}")
     
     def _symbol_to_path(self, symbol: str) -> str:
@@ -82,7 +82,7 @@ class OHLCVStorage:
         """
         try:
             if df is None or df.empty:
-                logger.warning(f"⚠️ [STORAGE] {symbol} {timeframe} için boş DataFrame")
+                logger.warning(f"⚠️ [STORAGE] Empty DataFrame for {symbol} {timeframe}")
                 return False
             
             # Dosya yolunu al
@@ -91,11 +91,11 @@ class OHLCVStorage:
             
             # CSV olarak kaydet
             df.to_csv(file_path, index=False)
-            logger.debug(f"✅ [STORAGE] {symbol} {timeframe} kaydedildi ({len(df)} satır)")
+            logger.debug(f"✅ [STORAGE] Saved {symbol} {timeframe} ({len(df)} rows)")
             return True
             
         except Exception as e:
-            logger.error(f"❌ [STORAGE] {symbol} {timeframe} kaydetme hatası: {e}")
+            logger.error(f"❌ [STORAGE] Save error for {symbol} {timeframe}: {e}")
             return False
     
     def load_ohlcv(
@@ -121,7 +121,7 @@ class OHLCVStorage:
             file_path = self._get_file_path(symbol, timeframe)
             
             if not file_path.exists():
-                logger.debug(f"📄 [STORAGE] {symbol} {timeframe} flat file bulunamadı")
+                logger.debug(f"📄 [STORAGE] Flat file not found: {symbol} {timeframe}")
                 return None
             
             # CSV olarak yükle
@@ -138,14 +138,14 @@ class OHLCVStorage:
                 df = df[mask]
             
             if df.empty:
-                logger.debug(f"📄 [STORAGE] {symbol} {timeframe} için tarih aralığında veri yok")
+                logger.debug(f"📄 [STORAGE] No data in date range for {symbol} {timeframe}")
                 return None
             
-            logger.debug(f"✅ [STORAGE] {symbol} {timeframe} yüklendi ({len(df)} satır)")
+            logger.debug(f"✅ [STORAGE] Loaded {symbol} {timeframe} ({len(df)} rows)")
             return df
             
         except Exception as e:
-            logger.error(f"❌ [STORAGE] {symbol} {timeframe} yükleme hatası: {e}")
+            logger.error(f"❌ [STORAGE] Load error for {symbol} {timeframe}: {e}")
             return None
     
     def exists(self, symbol: str, timeframe: str) -> bool:
@@ -178,14 +178,14 @@ class OHLCVStorage:
             
             if file_path.exists():
                 file_path.unlink()
-                logger.info(f"✅ [STORAGE] {symbol} {timeframe} silindi")
+                logger.info(f"✅ [STORAGE] Deleted {symbol} {timeframe}")
                 return True
             else:
-                logger.debug(f"📄 [STORAGE] {symbol} {timeframe} bulunamadı")
+                logger.debug(f"📄 [STORAGE] Not found: {symbol} {timeframe}")
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ [STORAGE] {symbol} {timeframe} silme hatası: {e}")
+            logger.error(f"❌ [STORAGE] Delete error for {symbol} {timeframe}: {e}")
             return False
     
     def list_symbols(self) -> List[str]:

@@ -143,7 +143,7 @@ def apply_triple_barrier(
     # İstatistikleri logla
     unique, counts = np.unique(labels, return_counts=True)
     label_dist = dict(zip(unique, counts))
-    logger.info(f"Etiket dağılımı: {label_dist}")
+    logger.info(f"Label distribution: {label_dist}")
     
     # Geçici ATR kolonunu temizle
     if '_atr_temp' in df.columns:
@@ -200,7 +200,7 @@ def engineer_features(
             exclude_cols = ['target', 'barrier_reason', 'upper_barrier', 'lower_barrier']
             feature_cols = [col for col in feature_cols if col not in exclude_cols]
     
-    logger.info(f"Özellik mühendisliği: {len(feature_cols)} kolon kullanılıyor")
+    logger.info(f"Feature engineering: using {len(feature_cols)} columns")
     
     # NaN ve Infinity temizliği (standartımız)
     for col in feature_cols:
@@ -264,7 +264,7 @@ def create_train_test_split(
         train_df = df.iloc[:split_idx].copy()
         test_df = df.iloc[split_idx:].copy()
         
-        logger.info(f"Kronolojik split: Train={len(train_df)} satır, Test={len(test_df)} satır")
+        logger.info(f"Chronological split: Train={len(train_df)} rows, Test={len(test_df)} rows")
     else:
         # Shuffle gerekiyorsa (dikkatli kullanın!)
         train_df, test_df = train_test_split(
@@ -273,15 +273,15 @@ def create_train_test_split(
             shuffle=shuffle,
             random_state=random_state
         )
-        logger.info(f"Random split: Train={len(train_df)} satır, Test={len(test_df)} satır")
+        logger.info(f"Random split: Train={len(train_df)} rows, Test={len(test_df)} rows")
     
     # Etiket dağılımlarını logla
     if target_col in train_df.columns:
         train_dist = train_df[target_col].value_counts().to_dict()
         test_dist = test_df[target_col].value_counts().to_dict() if target_col in test_df.columns else {}
         
-        logger.info(f"Train etiket dağılımı: {train_dist}")
-        logger.info(f"Test etiket dağılımı: {test_dist}")
+        logger.info(f"Train label distribution: {train_dist}")
+        logger.info(f"Test label distribution: {test_dist}")
     
     return train_df, test_df
 

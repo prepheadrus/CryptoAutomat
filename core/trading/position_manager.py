@@ -195,8 +195,8 @@ class PositionManager:
                     legacy_pos['stop_loss'] = stop_loss
 
             # SL/TP güvenli formatlama (None olabilir)
-            sl_str = f"{stop_loss:.2f}" if stop_loss is not None else "Yok"
-            tp_str = f"{take_profit:.2f}" if take_profit is not None else "Yok"
+            sl_str = f"{stop_loss:.2f}" if stop_loss is not None else "None"
+            tp_str = f"{take_profit:.2f}" if take_profit is not None else "None"
 
             logger.info(
                 f"📊 Position opened: {bot_id} | {direction} | "
@@ -433,7 +433,7 @@ class PositionManager:
             if pos.get('bot_id') == bot_id:
                 if pos in self.legacy_positions:  # Double check (race condition önleme)
                     self.legacy_positions.remove(pos)  # index değil, obje ile sil
-                    logger.debug(f"✅ Legacy pozisyon silindi: {bot_id}")
+                    logger.debug(f"✅ Legacy position deleted: {bot_id}")
                 break
 
     def _remove_legacy_position_safe(self, bot_id: str):

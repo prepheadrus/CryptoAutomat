@@ -69,11 +69,11 @@ class WalkForwardOptimizer:
                     best_params = current_params.copy()
                     
             except Exception as e:
-                logger.error(f"Parametre kombinasyonu başarısız oldu {current_params}: {str(e)}")
+                logger.error(f"Parameter combination failed {current_params}: {str(e)}")
                 # Hata durumunda bu kombinasyonu atla
                 continue
         
-        logger.info(f"Toplam {total_combinations} kombinasyondan {len(self.results)} başarıyla tamamlandı.")
+        logger.info(f"{len(self.results)} out of {total_combinations} total combinations completed successfully.")
         logger.info(f"En iyi skor: {best_score} | En iyi parametreler: {best_params}")
         
         return {
@@ -204,7 +204,7 @@ class WalkForwardOptimizer:
         Returns:
             Dict[str, Any]: WFO sonuçları (işlemler, metrikler, parametre geçmişi)
         """
-        logger.info(f"WFO başlatılıyor: train_days={train_days}, test_days={test_days}")
+        logger.info(f"Starting WFO: train_days={train_days}, test_days={test_days}")
 
         # DataFrame'i zamana göre sırala
         df = df.sort_index()
@@ -232,7 +232,7 @@ class WalkForwardOptimizer:
         min_window_size = train_rows + test_rows
 
         if len(df) < min_window_size:
-            logger.error(f"Veri boyutu ({len(df)} satır) minimum pencere boyutundan ({min_window_size} satır) küçük!")
+            logger.error(f"Data size ({len(df)} rows) is smaller than minimum window size ({min_window_size} rows)!")
             return {
                 'error': 'Yetersiz veri',
                 'trades': [],
@@ -258,7 +258,7 @@ class WalkForwardOptimizer:
 
             # Sınır kontrolü (out of bounds koruması)
             if train_end >= len(df):
-                logger.warning(f"Pencere {window_num}: Eğitim penceresi veri sonunu aşıyor, döngü sonlandırılıyor.")
+                logger.warning(f"Window {window_num}: Train window exceeds end of data, terminating loop.")
                 break
 
             # Veriyi böl
@@ -266,11 +266,11 @@ class WalkForwardOptimizer:
             test_df = df.iloc[train_end:test_end].copy()
 
             if len(train_df) < train_rows or len(test_df) < 1:
-                logger.warning(f"Pencere {window_num}: Geçersiz pencere boyutu, atlanıyor.")
+                logger.warning(f"Window {window_num}: Invalid window size, skipped.")
                 window_start += test_rows
                 continue
 
-            logger.info(f"Pencere {window_num}: Train[{window_start}:{train_end}] ({len(train_df)} satır), "
+            logger.info(f"Window {window_num}: Train[{window_start}:{train_end}] ({len(train_df)} rows), "
                        f"Test[{train_end}:{test_end}] ({len(test_df)} satır)")
 
             try:
@@ -278,7 +278,7 @@ class WalkForwardOptimizer:
                 grid_result = self.run_grid_search(train_df, strategy_class, param_grid)
 
                 if not grid_result.get('best_params'):
-                    logger.warning(f"Pencere {window_num}: En iyi parametre bulunamadı, atlanıyor.")
+                    logger.warning(f"Window {window_num}: Best parameters not found, skipped.")
                     window_start += test_rows
                     continue
 
@@ -317,7 +317,7 @@ class WalkForwardOptimizer:
                 logger.info(f"Pencere {window_num}: OOS PnL = {oos_result['metrics'].get('total_pnl', 0):.4f}")
 
             except Exception as e:
-                logger.error(f"Pencere {window_num}: Hata oluştu: {str(e)}")
+                logger.error(f"Window {window_num}: Error occurred: {str(e)}")
                 # Hata durumunda bu pencereyi atla
 
             # Adım C: Pencereyi ileri kaydır (test_days kadar)
@@ -337,7 +337,7 @@ class WalkForwardOptimizer:
             'test_days': test_days
         }
 
-        logger.info(f"WFO tamamlandı: {window_num} pencere, {len(all_metrics)} başarılı, "
+        logger.info(f"WFO completed: {window_num} windows, {len(all_metrics)} successful, "
                    f"Toplam PnL = {total_pnl:.4f}")
 
         return result

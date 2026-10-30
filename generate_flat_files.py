@@ -19,20 +19,20 @@ import sys
 
 async def main():
     print("=" * 70)
-    print("🔧 MANUEL FLAT FILE OLUŞTURUCU (Superalgos Mimarisi)")
+    print("🔧 MANUAL FLAT FILE GENERATOR (Superalgos Architecture)")
     print("=" * 70)
     print()
     
     # DB bağlantısı
-    print("📊 Veritabanı bağlanıyor...")
+    print("📊 Connecting to database...")
     await db_manager.connect()
-    print("✅ Veritabanı bağlantısı başarılı")
+    print("✅ Database connection successful")
     print()
     
     # Storage başlat
-    print("💾 Flat file storage başlatılıyor...")
+    print("💾 Initializing flat file storage...")
     storage = get_storage()
-    print(f"📁 Klasör: {storage.BASE_DIR.absolute()}")
+    print(f"📁 Folder: {storage.BASE_DIR.absolute()}")
     print()
     
     # DB'den sembolleri al
@@ -40,8 +40,8 @@ async def main():
     symbols = await db_manager.get_symbols_with_data()
     
     if not symbols:
-        print("❌ Veritabanında hiç sembol bulunamadı!")
-        print("   Önce veri indirmeniz gerekiyor.")
+        print("❌ No symbols found in database!")
+        print("   Please download data first.")
         return
     
     print(f"✅ {len(symbols)} sembol bulundu:")
@@ -55,16 +55,16 @@ async def main():
     
     for symbol in symbols:
         print("=" * 70)
-        print(f"🔄 {symbol} işleniyor...")
+        print(f"🔄 Processing {symbol}...")
         print("-" * 70)
         
         try:
             # 1m veriyi çek (TÜM VERİ - doğrudan SQL query ile)
-            print("   📖 1m mumlar veritabanından çekiliyor (TÜM VERİ)...")
+            print("   📖 Fetching 1m candles from database (ALL DATA)...")
 
             # Önce toplam sayıyı al
             total_count = await db_manager.get_klines_count(symbol, '1m')
-            print(f"   📊 Toplam {total_count} mum bulundu")
+            print(f"   📊 Total {total_count} candles found")
 
             # Doğrudan SQL query ile tüm veriyi çek
             if db_manager.engine_type == "sqlite":
@@ -82,11 +82,11 @@ async def main():
                     )
 
             if not klines or len(klines) == 0:
-                print(f"   ⚠️ {symbol} için veri yok, atlanıyor...")
+                print(f"   ⚠️ No data for {symbol}, skipping...")
                 error_count += 1
                 continue
 
-            print(f"   ✅ {len(klines)} mum çekildi (2025-2026 tüm veri)")
+            print(f"   ✅ Fetched {len(klines)} candles (2025-2026 all data)")
             
             # DataFrame'e çevir
             df = pd.DataFrame(klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
@@ -106,7 +106,7 @@ async def main():
             # 1m kaydet
             print("   💾 1m flat file kaydediliyor...")
             storage.save_ohlcv(symbol, '1m', df)
-            print(f"   ✅ 1m: {len(df)} mum kaydedildi")
+            print(f"   ✅ 1m: {len(df)} candles saved")
             
             # Tüm TF'leri oluştur
             timeframes = [
@@ -114,7 +114,7 @@ async def main():
                 '1h', '2h', '3h', '4h', '6h', '8h', '12h', '24h'
             ]
             
-            print("   🔄 Timeframe'ler oluşturuluyor...")
+            print("   🔄 Generating timeframes...")
             
             for tf in timeframes:
                 try:
@@ -125,53 +125,53 @@ async def main():
                     if not df_tf.empty:
                         # Kaydet
                         storage.save_ohlcv(symbol, tf, df_tf)
-                        print(f"      ✅ {tf}: {len(df_tf)} mum")
+                        print(f"      ✅ {tf}: {len(df_tf)} candles")
                     else:
-                        print(f"      ⚠️ {tf}: Boş veri, atlandı")
+                        print(f"      ⚠️ {tf}: Empty data, skipped")
                 
                 except Exception as tf_error:
-                    print(f"      ❌ {tf} hatası: {tf_error}")
+                    print(f"      ❌ {tf} error: {tf_error}")
                     error_count += 1
             
             processed_count += 1
-            print(f"✅ {symbol} BAŞARIYLA TAMAMLANDI!")
+            print(f"✅ {symbol} COMPLETED SUCCESSFULLY!")
             print()
             
         except Exception as e:
-            print(f"❌ {symbol} hatası: {e}")
+            print(f"❌ {symbol} error: {e}")
             print(f"   Stack trace: {e}", file=sys.stderr)
             error_count += 1
             continue
     
     # Özet
     print("=" * 70)
-    print("📊 İŞLEM ÖZETİ")
+    print("📊 EXECUTION SUMMARY")
     print("=" * 70)
-    print(f"✅ Başarılı: {processed_count} sembol")
-    print(f"❌ Hatalı:   {error_count} sembol")
-    print(f"📁 Klasör:  {storage.BASE_DIR.absolute()}")
+    print(f"✅ Successful: {processed_count} symbols")
+    print(f"❌ Failed:     {error_count} symbols")
+    print(f"📁 Folder:     {storage.BASE_DIR.absolute()}")
     print()
     
     # İstatistikler
     stats = storage.get_storage_stats()
-    print(f"📊 TOPLAM İSTATİSTİKLER:")
+    print(f"📊 TOTAL STATISTICS:")
     print(f"   Toplam sembol:    {stats['total_symbols']}")
     print(f"   Toplam timeframe: {stats['total_timeframes']}")
-    print(f"   Toplam dosya:     {stats['total_files']}")
+    print(f"   Total files:      {stats['total_files']}")
     print(f"   Toplam boyut:     {stats['total_size_mb']:.2f} MB")
     print()
     
     if processed_count > 0:
-        print("🎉 FLAT FILE OLUŞTURMA BAŞARIYLA TAMAMLANDI!")
+        print("🎉 FLAT FILE GENERATION COMPLETED SUCCESSFULLY!")
         print()
-        print("ŞİMDİ YAPABİLECEKLERİNİZ:")
-        print("  1. Uygulamayı restart edin: python main.py")
-        print("  2. Dashboard'da bot başlatın")
-        print("  3. ML Training yapın (0.1s içinde yüklenir!)")
+        print("NEXT STEPS:")
+        print("  1. Restart application: python main.py")
+        print("  2. Start bot from Dashboard")
+        print("  3. Run ML Training (loads in 0.1s!)")
         print()
     else:
-        print("⚠️ Hiçbir sembol işlenemedi!")
-        print("   Veritabanında veri olduğundan emin olun.")
+        print("⚠️ No symbols could be processed!")
+        print("   Ensure data exists in database.")
     
     print("=" * 70)
     
@@ -183,8 +183,8 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\n⚠️ Kullanıcı tarafından iptal edildi")
+        print("\n⚠️ Cancelled by user")
     except Exception as e:
-        print(f"\n❌ Hata: {e}")
+        print(f"\n❌ Error: {e}")
         import traceback
         traceback.print_exc()

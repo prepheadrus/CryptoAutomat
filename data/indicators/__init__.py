@@ -243,13 +243,13 @@ class StrategyIndicators:
 
         # Eğer son mum gelecekteyse (henüz kapanmadıysa) düşür
         if last_mum_time > now_utc:
-            logger.debug(f"⚠️ [RESAMPLE] Son mum henüz kapanmadı ({last_mum_time} > {now_utc}), düşürülüyor")
+            logger.debug(f"⚠️ [RESAMPLE] Last candle has not closed yet ({last_mum_time} > {now_utc}), dropping")
             resampled_df = resampled_df.iloc[:-1]  # Son mumu düşür
 
         # Alternatif: Son 1 dakika içinde kapanmış mumları da düşür (güvenlik)
         time_since_last_mum = now_utc - last_mum_time
         if time_since_last_mum.total_seconds() < 60:  # 1 dakikadan az
-            logger.debug(f"⚠️ [RESAMPLE] Son mum 1 dakika önce kapandı, güvenlik için düşürülüyor")
+            logger.debug(f"⚠️ [RESAMPLE] Last candle closed within 1 minute, dropping for safety")
             resampled_df = resampled_df.iloc[:-1]
 
         # Index'i tekrar sütuna al
@@ -326,14 +326,14 @@ class StrategyIndicators:
                     )
 
                     # Log mesajı
-                    logger.info(f"[KALMAN] Dampened Kalman & Triple Barrier Hazır | Q={process_noise}, R={measurement_noise}")
+                    logger.info(f"[KALMAN] Dampened Kalman & Triple Barrier Ready | Q={process_noise}, R={measurement_noise}")
 
                     # Stratejiler için close fiyatını smoothed_close olarak ayarla
                     # NOT: Orijinal 'close' korunur, stratejiler 'smoothed_close' kullanabilir
                 else:
-                    logger.debug("[KALMAN] Filtre devre dışı (config'den)")
+                    logger.debug("[KALMAN] Filter disabled (from config)")
             except Exception as e:
-                logger.warning(f"[KALMAN] Filtre uygulanamadı: {e}")
+                logger.warning(f"[KALMAN] Filter could not be applied: {e}")
                 df['smoothed_close'] = df['close']  # Fallback
         else:
             df['smoothed_close'] = df['close']
@@ -399,7 +399,7 @@ class StrategyIndicators:
                 df['KONKORDE_VERDE'] = koncorde['verde']
                 df['KONKORDE_MARRON'] = koncorde['marron']
             except Exception as e:
-                logger.warning(f"⚠️ [IND] Koncorde hesaplama hatası: {e}")
+                logger.warning(f"⚠️ [IND] Koncorde calculation error: {e}")
         
         # --- TREND ADVANCED ---
         # ADX
@@ -414,7 +414,7 @@ class StrategyIndicators:
             df['PSAR'] = psar
             df['PSAR_DIR'] = direction
         except Exception as e:
-            logger.warning(f"⚠️ [IND] PSAR hesaplama hatası: {e}")
+            logger.warning(f"⚠️ [IND] PSAR calculation error: {e}")
 
         # --- SMC / LIKIDITE ---
         try:
@@ -424,7 +424,7 @@ class StrategyIndicators:
             df['SWEEP_BULLISH'] = smc['sweep_bullish']
             df['SWEEP_BEARISH'] = smc['sweep_bearish']
         except Exception as e:
-            logger.warning(f"⚠️ [IND] SMC hesaplama hatası: {e}")
+            logger.warning(f"⚠️ [IND] SMC calculation error: {e}")
 
         # Veri Integrity: NaN/Inf Temizliği (SKILL.md)
         df.replace([np.inf, -np.inf], np.nan, inplace=True)

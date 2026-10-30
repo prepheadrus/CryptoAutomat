@@ -80,9 +80,9 @@ class AutoGridGenerator:
                 logger.debug(f"📊 [AUTO-GRID] {param_name}: {default_value} → {param_grid[param_name]}")
             else:
                 # Non-numeric parametreleri sabit tut
-                logger.debug(f"⏭️ [AUTO-GRID] {param_name} numeric değil, atlandı")
+                logger.debug(f"⏭️ [AUTO-GRID] {param_name} is not numeric, skipped")
         
-        logger.info(f"✅ [AUTO-GRID] {len(param_grid)} parametre için grid oluşturuldu")
+        logger.info(f"✅ [AUTO-GRID] Grid generated for {len(param_grid)} parameters")
         return param_grid
     
     def _generate_range(self, default_value: Union[int, float]) -> List[Union[int, float]]:

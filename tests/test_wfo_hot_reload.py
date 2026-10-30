@@ -101,7 +101,7 @@ async def test_wfo_hot_reload():
             wfo_ram.get('test_days') == payload['wfo']['test_days'] and
             wfo_ram.get('optimization_metric') == payload['wfo']['optimization_metric'] and
             wfo_ram.get('n_trials') == payload['wfo']['n_trials']):
-            print(f"   ✅ RAM CONFIG güncellendi (Hot-Reload başarılı)!")
+            print(f"   ✅ RAM CONFIG updated (Hot-Reload successful)!")
         else:
             print(f"   ⚠️ RAM CONFIG değerleri eşleşmiyor!")
             return False
@@ -114,13 +114,13 @@ async def test_wfo_hot_reload():
         return True
         
     except httpx.ConnectError as e:
-        print(f"\n❌ Bağlantı hatası: {e}")
+        print(f"\n❌ Connection error: {e}")
         print(f"   Sunucu çalışıyor mu? (http://localhost:8000)")
         print(f"   Test script'i çalıştırmadan önce sunucuyu başlatın.")
         return False
     
     except Exception as e:
-        print(f"\n❌ Beklenmeyen hata: {e}")
+        print(f"\n❌ Unexpected error: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -134,5 +134,5 @@ if __name__ == "__main__":
         print(f"\n✅ TEST BAŞARILI")
     else:
         print(f"\n❌ TEST BAŞARISIZ")
-        print(f"\nNOT: Sunucu çalışmıyorsa, bu test başarısız olacaktır.")
-        print(f"     Ancak yamalar (patches) başarıyla uygulandı.")
+        print(f"\nNOTE: If server is not running, this test will fail.")
+        print(f"     However patches were applied successfully.")

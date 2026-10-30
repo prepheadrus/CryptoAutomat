@@ -381,7 +381,7 @@ class MLIntegrationTest:
             status = "✅ PASS" if result else "❌ FAIL"
             logger.info(f"   {status}: {test_name}")
         
-        logger.info(f"\n📈 TOPLAM: {passed}/{total} test başarılı")
+        logger.info(f"\n📈 TOTAL: {passed}/{total} tests passed")
         
         if passed == total:
             logger.info(f"\n🎉 TÜM TESTLER BAŞARILI! ML Entegrasyonu doğrulandı.")
@@ -390,7 +390,7 @@ class MLIntegrationTest:
             logger.info(f"   ✅ ML Confluence: Strateji+ML ONAY çalışıyor")
             logger.info(f"   ✅ E2E Mock: Model eğitimi + inference OK")
         else:
-            logger.error(f"\n❌ BAZI TESTLER BAŞARISIZ! Lütfen hataları inceleyin.")
+            logger.error(f"\n❌ SOME TESTS FAILED! Please inspect errors.")
         
         # Rapor oluştur
         self._generate_report(results)

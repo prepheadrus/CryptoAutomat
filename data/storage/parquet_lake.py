@@ -52,7 +52,7 @@ try:
     PYARROW_AVAILABLE = True
 except ImportError:
     PYARROW_AVAILABLE = False
-    logger.warning("⚠️ PyArrow bulunamadı, Parquet desteği devre dışı")
+    logger.warning("⚠️ PyArrow not found, Parquet support disabled")
 
 
 class ParquetDataLake:
@@ -121,7 +121,7 @@ class ParquetDataLake:
         elif timeframe.endswith('w'):
             return int(timeframe[:-1]) * 7 * 24 * 60
         else:
-            logger.warning(f"⚠️ Bilinmeyen timeframe: {timeframe}, varsayılan 1m")
+            logger.warning(f"⚠️ Unknown timeframe: {timeframe}, defaulting to 1m")
             return 1
 
     def _is_intraday(self, timeframe: str) -> bool:
@@ -237,7 +237,7 @@ class ParquetDataLake:
             engine='pyarrow' if PYARROW_AVAILABLE else 'auto'
         )
 
-        logger.debug(f"💾 [PARQUET] {path.relative_to(self.BASE_DIR)} kaydedildi ({len(write_df)} satır)")
+        logger.debug(f"💾 [PARQUET] {path.relative_to(self.BASE_DIR)} saved ({len(write_df)} rows)")
 
     def _read_parquet_thread(self, path: Path) -> Optional[pd.DataFrame]:
         """
@@ -264,11 +264,11 @@ class ParquetDataLake:
                     df['time'] = pd.to_datetime(df['time'], utc=True)
                     df = df.set_index('time')
 
-            logger.debug(f"📖 [PARQUET] {path.relative_to(self.BASE_DIR)} okundu ({len(df)} satır)")
+            logger.debug(f"📖 [PARQUET] {path.relative_to(self.BASE_DIR)} read ({len(df)} rows)")
             return df
 
         except Exception as e:
-            logger.warning(f"⚠️ [PARQUET] Okuma hatası: {path} - {e}")
+            logger.warning(f"⚠️ [PARQUET] Read error: {path} - {e}")
             return None
 
     async def save(self, symbol: str, timeframe: str, df: pd.DataFrame, append: bool = True):
@@ -282,7 +282,7 @@ class ParquetDataLake:
             append: Mevcut dosyaya ekle (True) veya üzerine yaz (False)
         """
         if df.empty:
-            logger.warning(f"⚠️ [PARQUET] Boş veri kaydedilmedi: {symbol} {timeframe}")
+            logger.warning(f"⚠️ [PARQUET] Empty data not saved: {symbol} {timeframe}")
             return
 
         # Lock al
@@ -334,14 +334,14 @@ class ParquetDataLake:
                         except ImportError as ie:
                             # PyArrow/fastparquet eksik, uyarı ver ama devam et
                             logger.warning(f"⚠️ [PARQUET] PyArrow/fastparquet eksik, parquet kaydedilemedi: {ie}")
-                            logger.warning(f"⚠️ [PARQUET] ML eğitimi SQLite'dan devam edecek")
+                            logger.warning(f"⚠️ [PARQUET] ML training will continue from SQLite")
                             # Parquet kaydedilemedi ama işlem devam etsin
                             pass
                         except Exception as e:
-                            logger.error(f"❌ [PARQUET] Kaydetme hatası: {symbol} {timeframe} - {e}")
+                            logger.error(f"❌ [PARQUET] Save error: {symbol} {timeframe} - {e}")
                             raise  # Başka hataları yükselt
 
-                    logger.info(f"✅ [PARQUET] {symbol} {timeframe} → {len(df.groupby(df.index.date))} gün kaydedildi")
+                    logger.info(f"✅ [PARQUET] {symbol} {timeframe} → {len(df.groupby(df.index.date))} days saved")
 
                 else:
                     # Tek dosya (market.parquet)
@@ -370,10 +370,10 @@ class ParquetDataLake:
 
                     # Yazma işlemi senkron - asyncio.to_thread ile await
                     await asyncio.to_thread(self._write_parquet_thread, df, partition_path)
-                    logger.info(f"✅ [PARQUET] {symbol} {timeframe} → market.parquet kaydedildi ({len(df)} satır)")
+                    logger.info(f"✅ [PARQUET] {symbol} {timeframe} → market.parquet saved ({len(df)} rows)")
 
             except Exception as e:
-                logger.error(f"❌ [PARQUET] Kaydetme hatası: {symbol} {timeframe} - {e}")
+                logger.error(f"❌ [PARQUET] Save error: {symbol} {timeframe} - {e}")
                 raise
 
     async def load_datasets(
@@ -441,7 +441,7 @@ class ParquetDataLake:
                                     parquet_files.append(file_path)
 
                 if not parquet_files:
-                    logger.debug(f"⏭️ [PARQUET] Partition bulunamadı: {symbol} {timeframe}")
+                    logger.debug(f"⏭️ [PARQUET] Partition not found: {symbol} {timeframe}")
                     return None
 
                 # Tüm dosyaları paralel oku (thread pool)
@@ -480,7 +480,7 @@ class ParquetDataLake:
                 # Sırala
                 combined_df = combined_df.sort_index()
 
-                logger.info(f"📖 [PARQUET] {symbol} {timeframe} → {len(parquet_files)} dosya, {len(combined_df)} satır")
+                logger.info(f"📖 [PARQUET] {symbol} {timeframe} → {len(parquet_files)} files, {len(combined_df)} rows")
                 return combined_df
 
             else:
@@ -488,7 +488,7 @@ class ParquetDataLake:
                 partition_path = self._get_partition_path(symbol, timeframe, datetime.now())
 
                 if not partition_path.exists():
-                    logger.debug(f"⏭️ [PARQUET] Market dosyası yok: {partition_path}")
+                    logger.debug(f"⏭️ [PARQUET] No market file: {partition_path}")
                     return None
 
                 df = await asyncio.to_thread(self._read_parquet_thread, partition_path)
@@ -511,11 +511,11 @@ class ParquetDataLake:
                 # NaN temizliği
                 df = df.dropna(how='all')
 
-                logger.info(f"📖 [PARQUET] {symbol} {timeframe} → {len(df)} satır")
+                logger.info(f"📖 [PARQUET] {symbol} {timeframe} → {len(df)} rows")
                 return df
 
         except Exception as e:
-            logger.error(f"❌ [PARQUET] Yükleme hatası: {symbol} {timeframe} - {e}")
+            logger.error(f"❌ [PARQUET] Load error: {symbol} {timeframe} - {e}")
             return None
 
     async def stream_datasets(
@@ -588,10 +588,10 @@ class ParquetDataLake:
                                     parquet_files.append(file_path)
 
                 if not parquet_files:
-                    logger.debug(f"⏭️ [STREAM] Partition bulunamadı: {symbol} {timeframe}")
+                    logger.debug(f"⏭️ [STREAM] Partition not found: {symbol} {timeframe}")
                     return
 
-                logger.info(f"📚 [STREAM] {symbol} {timeframe} → {len(parquet_files)} dosya, batch_size={batch_size}")
+                logger.info(f"📚 [STREAM] {symbol} {timeframe} → {len(parquet_files)} files, batch_size={batch_size}")
 
                 # Her dosyayı stream et (PyArrow iter_batches)
                 for file_path in parquet_files:
@@ -613,7 +613,7 @@ class ParquetDataLake:
                                 yield df_batch
 
                     except Exception as e:
-                        logger.warning(f"⚠️ [STREAM] Dosya okuma hatası: {file_path} - {e}")
+                        logger.warning(f"⚠️ [STREAM] File read error: {file_path} - {e}")
                         continue
 
             else:
@@ -621,7 +621,7 @@ class ParquetDataLake:
                 partition_path = self._get_partition_path(symbol, timeframe, datetime.now())
 
                 if not partition_path.exists():
-                    logger.debug(f"⏭️ [STREAM] Market dosyası yok: {partition_path}")
+                    logger.debug(f"⏭️ [STREAM] No market file: {partition_path}")
                     return
 
                 # PyArrow ile aç
@@ -640,10 +640,10 @@ class ParquetDataLake:
                     if not df_batch.empty:
                         yield df_batch
 
-                logger.info(f"📚 [STREAM] {symbol} {timeframe} → Stream tamamlandı")
+                logger.info(f"📚 [STREAM] {symbol} {timeframe} → Stream completed")
 
         except Exception as e:
-            logger.error(f"❌ [STREAM] Hata: {symbol} {timeframe} - {e}")
+            logger.error(f"❌ [STREAM] Error: {symbol} {timeframe} - {e}")
             return
 
     async def exists(self, symbol: str, timeframe: str) -> bool:
@@ -681,7 +681,7 @@ class ParquetDataLake:
         """
         # Eğer timeframe None ise, TÜM timeframe'leri sil
         if timeframe is None:
-            logger.info(f"🗑️ [PARQUET] {symbol} için TÜM timeframe'ler siliniyor...")
+            logger.info(f"🗑️ [PARQUET] Deleting ALL timeframes for {symbol}...")
 
             # TÜM sembol varyasyonlarını dene (path formatları)
             symbol_variants = [
@@ -702,13 +702,13 @@ class ParquetDataLake:
                     import shutil
                     try:
                         shutil.rmtree(base_path)
-                        logger.info(f"🗑️ [PARQUET] {base_path.relative_to(self.BASE_DIR)} silindi")
+                        logger.info(f"🗑️ [PARQUET] {base_path.relative_to(self.BASE_DIR)} deleted")
                         deleted_any = True
                     except Exception as e:
-                        logger.error(f"❌ [PARQUET] Silme hatası ({base_path}): {e}")
+                        logger.error(f"❌ [PARQUET] Delete error ({base_path}): {e}")
 
             if not deleted_any:
-                logger.warning(f"⚠️ [PARQUET] Silinecek veri bulunamadı: {symbol}")
+                logger.warning(f"⚠️ [PARQUET] No data found to delete: {symbol}")
             return
 
         # Belirli bir timeframe sil
@@ -737,12 +737,12 @@ class ParquetDataLake:
                                         if start_date <= file_date <= end_date:
                                             file_path.unlink()
                                             deleted_count += 1
-                                            logger.debug(f"🗑️ [PARQUET] {file_path.relative_to(self.BASE_DIR)} silindi")
+                                            logger.debug(f"🗑️ [PARQUET] {file_path.relative_to(self.BASE_DIR)} deleted")
                     else:
                         # Tüm partition'ları sil
                         import shutil
                         shutil.rmtree(base_path)
-                        logger.info(f"🗑️ [PARQUET] {symbol} {timeframe} → TÜM partition'lar silindi")
+                        logger.info(f"🗑️ [PARQUET] {symbol} {timeframe} → ALL partitions deleted")
                         return
 
                 else:
@@ -762,21 +762,21 @@ class ParquetDataLake:
                                 if df.empty:
                                     partition_path.unlink()
                                     deleted_count = 1
-                                    logger.info(f"🗑️ [PARQUET] {symbol} {timeframe} → market.parquet silindi (boş)")
+                                    logger.info(f"🗑️ [PARQUET] {symbol} {timeframe} → market.parquet deleted (empty)")
                                 else:
                                     await asyncio.to_thread(self._write_parquet_thread, df, partition_path)
-                                    logger.info(f"🗑️ [PARQUET] {symbol} {timeframe} → market.parquet güncellendi")
+                                    logger.info(f"🗑️ [PARQUET] {symbol} {timeframe} → market.parquet updated")
                         else:
                             # Tüm dosyayı sil
                             partition_path.unlink()
                             deleted_count = 1
-                            logger.info(f"🗑️ [PARQUET] {symbol} {timeframe} → market.parquet silindi")
+                            logger.info(f"🗑️ [PARQUET] {symbol} {timeframe} → market.parquet deleted")
 
                 if deleted_count > 0:
-                    logger.info(f"🗑️ [PARQUET] {symbol} {timeframe} → {deleted_count} dosya silindi")
+                    logger.info(f"🗑️ [PARQUET] {symbol} {timeframe} → {deleted_count} file(s) deleted")
 
             except Exception as e:
-                logger.error(f"❌ [PARQUET] Silme hatası: {symbol} {timeframe} - {e}")
+                logger.error(f"❌ [PARQUET] Delete error: {symbol} {timeframe} - {e}")
                 raise
 
     def get_stats(self, symbol: str = None) -> Dict[str, Any]:

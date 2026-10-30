@@ -140,7 +140,7 @@ class PaperTrader:
         Event Bus'a subscribe et.
         """
         if self._event_handlers_started:
-            logger.warning("Event handler'lar zaten başlatıldı")
+            logger.warning("Event handlers already started")
             return
         
         # Signal handler
@@ -201,13 +201,13 @@ class PaperTrader:
 
             # Bot çalışıyor mu kontrol et
             if not self.bot_manager.is_bot_running(bot_id):
-                logger.warning(f"❌ [SİNYAL RED] Bot çalışmıyor: {bot_id}")
+                logger.warning(f"❌ [SIGNAL REJECTED] Bot not running: {bot_id}")
                 return
 
             # Strateji al
             strategy = self.strategies.get(symbol)
             if strategy is None:
-                logger.warning(f"❌ [SİNYAL RED] Strateji bulunamadı: {symbol}")
+                logger.warning(f"❌ [SIGNAL REJECTED] Strategy not found: {symbol}")
                 return
 
             strategy_id = self.active_strategies.get(symbol, "unknown")
@@ -245,7 +245,7 @@ class PaperTrader:
             # ML onayı yoksa dur (Pozisyon Kapatmadan veya Açmadan Önce!)
             if not ml_confirmed:
                 ml_threshold = CONFIG.get('ml', {}).get('confidence_threshold', 0.65)
-                logger.warning(f"❌ [SİNYAL RED] ML onayı yok: {symbol} {signal_type}")
+                logger.warning(f"❌ [SIGNAL REJECTED] No ML confirmation: {symbol} {signal_type}")
                 logger.warning(f"   ML Recommendation: {ml_rec} (normalized: {ml_rec_norm})")
                 logger.warning(f"   ML Confidence: {ml_confidence:.2f} (threshold: {ml_threshold:.2f})")
                 logger.warning(f"   ML Enabled: {self.ml_enabled}")
@@ -277,7 +277,7 @@ class PaperTrader:
                         )
                         logger.info(f"🔎 [REVERSAL RESULT] close_position returned: trade={trade is not None}")
                     except Exception as close_err:
-                        logger.error(f"❌ [REVERSAL ERROR] close_position hatası: {close_err}", exc_info=True)
+                        logger.error(f"❌ [REVERSAL ERROR] close_position error: {close_err}", exc_info=True)
                     
                     # Legacy state'leri güncelle
                     self.open_positions = list(self.position_manager.legacy_positions)
@@ -298,16 +298,16 @@ class PaperTrader:
                 risk_ok = self.risk_engine.can_open_position(open_positions_count)
                 
                 if not risk_ok:
-                    logger.warning(f"❌ [SİNYAL RED] Risk kontrolü başarısız: {symbol}")
-                    logger.warning(f"   Açık pozisyon sayısı: {open_positions_count}")
+                    logger.warning(f"❌ [SIGNAL REJECTED] Risk check failed: {symbol}")
+                    logger.warning(f"   Open position count: {open_positions_count}")
                     logger.warning(f"   Max pozisyon limiti: {self.risk_engine.config.max_open_positions}")
                     logger.warning(f"   Kill switch aktif: {self.risk_engine.kill_switch_active}")
-                    logger.warning(f"   Ardışık kayıplar: {self.risk_engine.consecutive_losses}")
+                    logger.warning(f"   Consecutive losses: {self.risk_engine.consecutive_losses}")
                     logger.warning(f"   Max consecutive losses: {self.risk_engine.config.max_consecutive_losses}")
-                    logger.warning(f"   ÇÖZÜM: config.yaml → risk_management → kill_switch.enabled = false")
+                    logger.warning(f"   SOLUTION: config.yaml → risk_management → kill_switch.enabled = false")
                     return
                 else:
-                    logger.debug(f"✅ [RISK] {symbol} Risk kontrolü geçti: {open_positions_count}/{self.risk_engine.config.max_open_positions} pozisyon")
+                    logger.debug(f"✅ [RISK] {symbol} Risk check passed: {open_positions_count}/{self.risk_engine.config.max_open_positions} positions")
 
             # ============================================
             # POZİSYON AÇ (PositionManager'a delegate)
@@ -395,7 +395,7 @@ class PaperTrader:
                 logger.info(f"✅ Position opened: {bot_id} {direction} @ {price:.2f}")
             
         except Exception as e:
-            logger.error(f"Signal handler hatası: {e}", exc_info=True)
+            logger.error(f"Signal handler error: {e}", exc_info=True)
     
     async def on_position_opened(self, event):
         """
@@ -478,7 +478,7 @@ class PaperTrader:
         # Kill switch kontrolü
         if self.risk_engine.kill_switch_active:
             self.kill_switch_activated = True
-            logger.critical("🚨 KILL SWITCH AKTİF!")
+            logger.critical("🚨 KILL SWITCH ACTIVE!")
     
     async def on_bot_started(self, event):
         """Bot Started Event Handler"""
@@ -523,10 +523,10 @@ class PaperTrader:
                 # Trailing stop ve likidasyon kontrolleri
                 await self.update_live_prices(symbol, current_price)
 
-                logger.debug(f"💰 [EDA] {symbol} fiyat güncellendi: ${current_price:.2f} ({len(positions_to_update)} pozisyon)")
+                logger.debug(f"💰 [EDA] {symbol} price updated: ${current_price:.2f} ({len(positions_to_update)} positions)")
 
         except Exception as e:
-            logger.error(f"❌ [EDA] on_live_price_updated hatası: {e}")
+            logger.error(f"❌ [EDA] on_live_price_updated error: {e}")
 
     # ========================================================================
     # DELEGATION METHODS (Legacy API Uyumluluğu)
@@ -630,12 +630,12 @@ class PaperTrader:
     def set_market_type(self, symbol: str, market_type: str):
         """Legacy compatibility: set market type for symbol"""
         self.market_types[symbol] = market_type
-        logger.debug(f"Piyasa tipi ayarlandı: {symbol} -> {market_type}")
+        logger.debug(f"Market type configured: {symbol} -> {market_type}")
 
     def set_margin_type(self, symbol: str, margin_type: str):
         """Legacy compatibility: set margin type for symbol"""
         self.margin_types[symbol] = margin_type
-        logger.debug(f"Marjin tipi ayarlandı: {symbol} -> {margin_type}")
+        logger.debug(f"Margin type configured: {symbol} -> {margin_type}")
 
     def set_strategy(self, strategy_id: str, symbol: str = None, timeframe: str = "1m"):
         """
@@ -656,7 +656,7 @@ class PaperTrader:
                 self.strategies[symbol] = strategy
                 logger.info(f"✅ Strategy assigned: {symbol} -> {strategy_id} ({timeframe})")
             except Exception as e:
-                logger.error(f"Strateji atama hatası: {e}")
+                logger.error(f"Strategy assignment error: {e}")
         else:
             logger.warning("set_strategy: Sembol belirtilmedi")
 
@@ -674,7 +674,7 @@ class PaperTrader:
             bool: Güncelleme başarılıysa True
         """
         if symbol not in self.strategies or self.strategies[symbol] is None:
-            logger.warning(f"⚠️ [WFO] {symbol} için strateji bulunamadı, parametre güncellenemedi.")
+            logger.warning(f"⚠️ [WFO] Strategy not found for {symbol}, parameters not updated.")
             return False
 
         strategy = self.strategies[symbol]
@@ -707,7 +707,7 @@ class PaperTrader:
 
                 return True
             else:
-                logger.debug(f"⚠️ [WFO] {symbol} parametre değişikliği yok.")
+                logger.debug(f"⚠️ [WFO] No parameter changes for {symbol}.")
                 return False
         else:
             logger.error(f"❌ [WFO] {symbol} stratejisi update_params() metodunu desteklemiyor!")
@@ -796,7 +796,7 @@ class PaperTrader:
                 else:
                     return []
             except Exception as e:
-                logger.error(f"❌ Veritabanından okuma hatası: {e}")
+                logger.error(f"❌ Database read error: {e}")
                 return []
 
         # 3. StrategyReporterService aracılığıyla rapor üret
@@ -985,9 +985,9 @@ class PaperTrader:
                     },
                     source="paper_engine"
                 ))
-                logger.debug(f"📊 [EDA] {symbol} position.updated event fırlatıldı (bot_id={bot_id})")
+                logger.debug(f"📊 [EDA] {symbol} position.updated event fired (bot_id={bot_id})")
             except Exception as e:
-                logger.error(f"❌ [EDA] position.updated event fırlatma hatası: {e}")
+                logger.error(f"❌ [EDA] position.updated event firing error: {e}")
             # ========================================================================
 
             # 3. Likidasyon kontrolü

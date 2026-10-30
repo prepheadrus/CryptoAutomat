@@ -98,11 +98,11 @@ async def test_closed_bot_ids_prevents_second_close():
     # 3. Gerçek update_live_prices döngüsünü simüle et
     for bid, price, reason in positions_to_close:
         if bid in closed_bot_ids:
-            print(f"⚠️ {bid} bu tick'te zaten kapatıldı, atlanıyor.")
+            print(f"⚠️ {bid} already closed in this tick, skipping.")
             continue
         
         if bid not in paper_engine.position_manager.positions:
-            print(f"⚠️ {bid} pozisyonu zaten kapatılmış, atlanıyor.")
+            print(f"⚠️ {bid} position already closed, skipping.")
             continue
         
         # Pozisyonu kapat

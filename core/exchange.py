@@ -37,7 +37,7 @@ try:
     WFO_AVAILABLE = True
 except ImportError:
     WFO_AVAILABLE = False
-    logger.warning("⚠️ WFO Engine bulunamadı, optimizasyon özellikleri devre dışı.")
+    logger.warning("⚠️ WFO Engine not found, optimization features disabled.")
 
 # Order Book Imbalance threshold
 ORDER_BOOK_IMBALANCE_THRESHOLD = 0.60  # %60
@@ -181,7 +181,7 @@ class ExchangeManager:
                 logger.info("✅ Binance API credentials loaded. High rate-limit tier active.")
             else:
                 logger.warning("Binance API credentials not found (.env)! Running in public market monitoring mode (Ticker only, no live trading).")
-                logger.warning("⚠️ Rate limit düşük olacak. API key eklemek için .env dosyasını düzenleyin.")
+                logger.warning("⚠️ Rate limit will be constrained. Edit .env to configure API credentials.")
 
         # Asenkron borsayı başlat
         self.exchange = self.exchange_class(exchange_args)
@@ -200,7 +200,7 @@ class ExchangeManager:
         if hasattr(self, 'exchange') and self.exchange:
             self.exchange.apiKey = api_key
             self.exchange.secret = api_secret
-            logger.info("🔑 [EXCHANGE] API anahtarları aktif borsa örneği için güncellendi (Yeniden başlatmaya gerek kalmadan).")
+            logger.info("🔑 [EXCHANGE] API credentials updated for active exchange instance (hot reload).")
 
     def _setup_event_subscriptions(self):
         """Event Bus'a abone ol - State senkronizasyonu"""
@@ -211,7 +211,7 @@ class ExchangeManager:
 
             logger.info("📬 [EDA] Event subscriptions configured (bot.started, bot.stopped)")
         except Exception as e:
-            logger.warning(f"⚠️ [EDA] Event subscription hatası: {e}")
+            logger.warning(f"⚠️ [EDA] Event subscription error: {e}")
 
     async def _on_bot_started(self, event):
         """Bot başladı - local state güncelle"""
@@ -219,9 +219,9 @@ class ExchangeManager:
             bot_id = event.payload.get('bot_id')
             if bot_id:
                 self.local_active_bots[bot_id] = event.payload
-                logger.debug(f"🤖 [EDA] Bot başladı (local state güncellendi): {bot_id}")
+                logger.debug(f"🤖 [EDA] Bot started (local state updated): {bot_id}")
         except Exception as e:
-            logger.error(f"❌ [EDA] _on_bot_started hatası: {e}")
+            logger.error(f"❌ [EDA] _on_bot_started error: {e}")
 
     async def _on_bot_stopped(self, event):
         """Bot durdu - local state'den sil"""
@@ -229,9 +229,9 @@ class ExchangeManager:
             bot_id = event.payload.get('bot_id')
             if bot_id and bot_id in self.local_active_bots:
                 del self.local_active_bots[bot_id]
-                logger.debug(f"🛑 [EDA] Bot durdu (local state silindi): {bot_id}")
+                logger.debug(f"🛑 [EDA] Bot stopped (local state removed): {bot_id}")
         except Exception as e:
-            logger.error(f"❌ [EDA] _on_bot_stopped hatası: {e}")
+            logger.error(f"❌ [EDA] _on_bot_stopped error: {e}")
 
     async def get_order_book_imbalance(self, symbol: str, depth: int = 20) -> Optional[float]:
         """
@@ -270,7 +270,7 @@ class ExchangeManager:
             return imbalance
 
         except Exception as e:
-            logger.error(f"❌ [ORDER BOOK] Imbalance hesaplama hatası: {e}")
+            logger.error(f"❌ [ORDER BOOK] Imbalance calculation error: {e}")
             return None
 
     def check_liquidity_sweep(self, symbol: str, imbalance: float, direction: str) -> bool:
@@ -294,17 +294,17 @@ class ExchangeManager:
         # LONG işlem için kontrol
         if direction == 'LONG':
             if imbalance > ORDER_BOOK_IMBALANCE_THRESHOLD:
-                logger.warning(f"⚠️ [LIQUIDITY] {symbol} LONG reddedildi - Ask baskın (imbalance={imbalance:.4f})")
+                logger.warning(f"⚠️ [LIQUIDITY] {symbol} LONG rejected - Ask dominant (imbalance={imbalance:.4f})")
                 return False
 
         # SHORT işlem için kontrol
         elif direction == 'SHORT':
             if imbalance < (1 - ORDER_BOOK_IMBALANCE_THRESHOLD):
-                logger.warning(f"⚠️ [LIQUIDITY] {symbol} SHORT reddedildi - Bid baskın (imbalance={imbalance:.4f})")
+                logger.warning(f"⚠️ [LIQUIDITY] {symbol} SHORT rejected - Bid dominant (imbalance={imbalance:.4f})")
                 return False
 
         # Onaylı
-        logger.debug(f"✅ [LIQUIDITY] {symbol} {direction} onaylandı (imbalance={imbalance:.4f})")
+        logger.debug(f"✅ [LIQUIDITY] {symbol} {direction} approved (imbalance={imbalance:.4f})")
         return True
 
     async def load_tasks_from_db(self):
@@ -331,7 +331,7 @@ class ExchangeManager:
                     is_resume=True
                 ))
                 count += 1
-        logger.info(f"📁 {count} yarım kalan indirme görevi veritabanından geri yüklendi ve BAŞLATILDI.")
+        logger.info(f"📁 Restored {count} pending download tasks from database and STARTED.")
 
     @exchange_breaker
     async def fetch_ohlcv(self, symbol, timeframe='1m', limit=100, params={}, since=None):
@@ -368,7 +368,7 @@ class ExchangeManager:
         except Exception as e:
             # API key hatası varsa, anonim moda geç ve tekrar dene
             if "-2008" in str(e) or "AuthenticationError" in str(type(e)):
-                logger.warning(f"⚠️ {symbol} API key hatası! Anonim moda geçiliyor...")
+                logger.warning(f"⚠️ {symbol} API key error! Switching to anonymous mode...")
                 self.exchange.apiKey = None
                 self.exchange.secret = None
                 try:
@@ -378,10 +378,10 @@ class ExchangeManager:
                         data = await self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit, params=params)
                     return data
                 except Exception as retry_err:
-                    logger.error(f"OHLCV Çekme Hatası ({symbol}): {retry_err}")
+                    logger.error(f"OHLCV Fetch Error ({symbol}): {retry_err}")
                     return []
             else:
-                logger.error(f"OHLCV Çekme Hatası ({symbol}): {e}")
+                logger.error(f"OHLCV Fetch Error ({symbol}): {e}")
                 return []
 
     async def fetch_available_markets(self):
@@ -389,7 +389,7 @@ class ExchangeManager:
         try:
             # Hem Vadeli (Future) hem Spot piyasaları yükleyelim (Binance için kritik)
             if not self.exchange.markets:
-                logger.info("Marketler henüz yüklenmemiş, Binance'ten çekiliyor...")
+                logger.info("Markets not loaded yet, fetching from Binance...")
                 try:
                     await self.exchange.load_markets({'type': 'future'})
                     await self.exchange.load_markets({'type': 'spot'})
@@ -406,7 +406,7 @@ class ExchangeManager:
                         raise auth_err
             
             markets = self.exchange.markets
-            logger.info(f"Borsadan toplam {len(markets) if markets else 0} ham market verisi çekildi.")
+            logger.info(f"Fetched {len(markets) if markets else 0} raw markets from exchange.")
             
             available = []
             for symbol, m in markets.items():
@@ -418,9 +418,9 @@ class ExchangeManager:
                     # Kullanıcı dostu etiketleme sistemi
                     display_type = "SPOT"
                     if m_type == 'swap' or m_sub_type == 'perpetual':
-                        display_type = "SÜRESİZ VADELİ (PERP)"
+                        display_type = "PERPETUAL FUTURES (PERP)"
                     elif m_type == 'future' or m_sub_type == 'delivery':
-                        display_type = f"TARİHLİ VADELİ ({m.get('info', {}).get('deliveryDate', 'DUR')})"
+                        display_type = f"DELIVERY FUTURES ({m.get('info', {}).get('deliveryDate', 'SETTLED')})"
                     
                     available.append({
                         'symbol': symbol,
@@ -430,10 +430,10 @@ class ExchangeManager:
                         'raw_type': m_type
                     })
             
-            logger.info(f"Filtreleme sonrası (Active + USDT) {len(available)} market listeye eklendi.")
+            logger.info(f"Filtered (Active + USDT): added {len(available)} markets to list.")
             return sorted(available, key=lambda x: (x['symbol'], x['type']))
         except Exception as e:
-            logger.error(f"Market Listesi Çekme Hatası: {e}")
+            logger.error(f"Market List Fetch Error: {e}")
             return []
 
     async def watch_ticker_loop(self, symbol):
@@ -504,10 +504,10 @@ class ExchangeManager:
                             self._last_prices = {}
                         self._last_prices[symbol] = current_price
 
-                        logger.debug(f"📊 [TICKER] {symbol} @ ${current_price:.2f} (Event fırlatıldı)")
+                        logger.debug(f"📊 [TICKER] {symbol} @ ${current_price:.2f} (Event dispatched)")
 
                     except Exception as event_err:
-                        logger.error(f"❌ [EVENT] LivePriceUpdatedEvent fırlatma hatası: {event_err}")
+                        logger.error(f"❌ [EVENT] LivePriceUpdatedEvent dispatch error: {event_err}")
 
                     # ========================================================================
                     # GERÇEK ZAMANLI FLAT FILE GÜNCELLEME (Superalgos Mimarisi)
@@ -537,22 +537,22 @@ class ExchangeManager:
                                 # Parquet'e kaydet
                                 await lake.save(symbol, '1m', df_1m, append=True)
 
-                                logger.debug(f"💾 [PARQUET] {symbol} gerçek zamanlı güncellendi")
+                                logger.debug(f"💾 [PARQUET] {symbol} updated in real-time")
 
                     except Exception as e:
-                        logger.debug(f"⚠️ [PARQUET] Gerçek zamanlı güncelleme hatası: {e}")
+                        logger.debug(f"⚠️ [PARQUET] Real-time update error: {e}")
 
                 # else: Güncelleme gerek yok (throttle aktif) - CPU korunuyor
 
             except asyncio.CancelledError:
-                logger.info(f"Ticker dinleme işlemi sonlandırıldı ({symbol}).")
+                logger.info(f"Ticker listener loop stopped ({symbol}).")
                 break
             except Exception as e:
-                logger.error(f"WS Ticker İzleme Hatası ({symbol}): {e}")
+                logger.error(f"WS Ticker Monitoring Error ({symbol}): {e}")
                 
                 # EĞER API ANAHTARI HATALIYSA (Code -2008), Anahtarları silip anonim moda geç
                 if "AuthenticationError" in str(type(e)) or "-2008" in str(e):
-                    logger.warning(f"⚠️ {symbol} için API anahtarları geçersiz! Ticker için anonim moda geçiliyor...")
+                    logger.warning(f"⚠️ Invalid API credentials for {symbol}! Switching to anonymous mode for ticker...")
                     if hasattr(self, 'exchange') and self.exchange:
                         self.exchange.apiKey = None
                         self.exchange.secret = None
@@ -569,9 +569,9 @@ class ExchangeManager:
         # YENİ: SADECE 1m İNDİR (Diğer TF'ler resample ile oluşturulur)
         # ========================================================================
         if timeframe != '1m':
-            logger.info(f"🔄 [DATA] {symbol} için {timeframe} talep edildi, ancak SADECE 1m indiriliyor...")
+            logger.info(f"🔄 [DATA] {timeframe} requested for {symbol}, downloading 1m primary data...")
             logger.info("📊 [DATA] Resampling Architecture Active: Storage 98% Optimized")
-            logger.info(f"💡 [DATA] {timeframe} mumlar, 1m verisinden otomatik oluşturulacak (RAM üzerinde)")
+            logger.info(f"💡 [DATA] {timeframe} candles will be resampled automatically from 1m data in memory")
 
         # Her zaman 1m olarak indir (timeframe parametresini yoksay)
         download_timeframe = '1m'
@@ -623,13 +623,13 @@ class ExchangeManager:
                     existing_end_ms = existing_end_ts
                     existing_end_dt = pd.to_datetime(existing_end_ms, unit='ms')
 
-                logger.info(f"📊 [GAP DETECTION] {symbol} için mevcut veri: ... → {existing_end_dt}")
+                logger.info(f"📊 [GAP DETECTION] Existing data for {symbol}: ... → {existing_end_dt}")
 
                 # Eğer başlangıç tarihi mevcut veriden SONRA ise, mevcut veriyi kullan
                 if target_start_ms >= existing_end_ms:
-                    logger.info(f"✅ [GAP DETECTION] {symbol} için veri zaten var! İndirme atlanıyor.")
+                    logger.info(f"✅ [GAP DETECTION] Data already exists for {symbol}! Skipping download.")
                     logger.info(f"   Mevcut: {existing_end_dt}")
-                    logger.info(f"   İstenen: {pd.to_datetime(target_start_ms, unit='ms')}")
+                    logger.info(f"   Target: {pd.to_datetime(target_start_ms, unit='ms')}")
                     return 0  # İndirme yapma, 0 mum indirildi
                 else:
                     # Kullanıcı daha eski tarih istiyor, DB'deki veriyi kontrol et
@@ -642,28 +642,28 @@ class ExchangeManager:
 
                         # Eğer kullanıcı DB'deki EN ESKİ veriden DAHA ESKİ tarih istiyorsa, indirmeye devam et
                         if target_start_ms < existing_start_ms:
-                            logger.info(f"🔄 [GAP DETECTION] Kullanıcı daha eski tarih istiyor, indirme devam ediyor...")
-                            logger.info(f"   DB en eski: {pd.to_datetime(existing_start_ms, unit='ms')}")
-                            logger.info(f"   Kullanıcı: {pd.to_datetime(target_start_ms, unit='ms')}")
+                            logger.info(f"🔄 [GAP DETECTION] Earlier date requested, continuing download...")
+                            logger.info(f"   DB earliest: {pd.to_datetime(existing_start_ms, unit='ms')}")
+                            logger.info(f"   Requested: {pd.to_datetime(target_start_ms, unit='ms')}")
                         else:
                             # DB'de zaten var, sadece eksik günleri indir
                             since = existing_end_ms  # DB'deki son mumdan devam et
-                            logger.info(f"🔄 [GAP DETECTION] DB'deki son mumdan devam ediliyor: {pd.to_datetime(since, unit='ms')}")
+                            logger.info(f"🔄 [GAP DETECTION] Resuming from latest DB candle: {pd.to_datetime(since, unit='ms')}")
         except Exception as gap_err:
-            logger.warning(f"⚠️ [GAP DETECTION] Hata: {gap_err}")
-            logger.info(f"🔄 Gap detection olmadan devam ediliyor...")
+            logger.warning(f"⚠️ [GAP DETECTION] Error: {gap_err}")
+            logger.info("🔄 Proceeding without gap detection...")
         # ========================================================================
 
         # Eğer bu işlem sıfırdan bir başlatmaysa (Kullanıcı yeni tarih seçtiyse),
         # Veritabanındaki son tarihe atlamayı DEVRE DIŞI bırakıyoruz.
         if is_resume and key in self.active_downloads and self.active_downloads[key].get('current_ts', 0) > target_start_ms:
             since = self.active_downloads[key]['current_ts']
-            logger.info(f"🔄 {key} indirme işlemi kaldığı yerden DEVAM EDİYOR: {pd.to_datetime(since, unit='ms')}")
+            logger.info(f"🔄 Resuming download for {key}: {pd.to_datetime(since, unit='ms')}")
         else:
             # Kullanıcının seçtiği tarihten başla, şu ana kadar devam et
             since = target_start_ms
-            logger.info(f"✨ {key} KULLANICININ SEÇTİĞİ TARİHTEN başlatılıyor: {pd.to_datetime(since, unit='ms')}")
-            logger.info(f"   Hedef: ŞU ANA KADAR (15/03/2026)")
+            logger.info(f"✨ Starting {key} from requested date: {pd.to_datetime(since, unit='ms')}")
+            logger.info("   Target: Current time (UTC)")
 
         all_downloaded = 0
         limit = 1000 # Binance tek seferde max 1000 mum verir
@@ -673,7 +673,7 @@ class ExchangeManager:
         last_ts = since  # Son mum timestamp'i
         latest_ts = None  # DB'deki son mum (GAP CHECK için)
 
-        logger.info(f"🚀 {key} ({timeframe}) indirme BAŞLADI: {pd.to_datetime(since, unit='ms')} (GEÇMİŞTEN GELECEĞE)")
+        logger.info(f"🚀 Download started for {key} ({timeframe}): {pd.to_datetime(since, unit='ms')}")
         self.download_stops[key] = False
         self.download_pauses[key] = False
         self.active_downloads[key] = {
@@ -695,7 +695,7 @@ class ExchangeManager:
             try:
                 # Kullanıcı durdurdu mu?
                 if self.download_stops.get(key):
-                    logger.info(f"🛑 {key} indirme işlemi kullanıcı tarafından DURDURULDU.")
+                    logger.info(f"🛑 Download halted by user: {key}")
                     if key in self.active_downloads:
                         self.active_downloads[key]['status'] = 'stopped'
                         await db_manager.save_download_task(self.active_downloads[key])
@@ -721,13 +721,13 @@ class ExchangeManager:
                     ohlcv = await self.exchange.fetch_ohlcv(symbol, download_timeframe, since=since, limit=limit)
                 except Exception as fetch_err:
                     # Binance rate limit veya network hatası
-                    logger.warning(f"⚠️ {symbol} veri çekme hatası: {fetch_err}")
-                    logger.info(f"⏳ 10 saniye bekleniyor...")
+                    logger.warning(f"⚠️ {symbol} data fetch error: {fetch_err}")
+                    logger.info("⏳ Waiting 10 seconds...")
                     await asyncio.sleep(10)
                     continue
 
                 if not ohlcv or len(ohlcv) < 1:
-                    logger.info(f"🏁 {symbol} için borsa artık veri dönmüyor (Son Tarih: {pd.to_datetime(since, unit='ms')}).")
+                    logger.info(f"🏁 Exchange returned no further data for {symbol} (Latest: {pd.to_datetime(since, unit='ms')}).")
                     break
 
                 # ========================================================================
@@ -747,9 +747,9 @@ class ExchangeManager:
                 # Eğer indirdiğimiz son mum DB'deki son mumdan SONRA ise, devam et (yeni mumlar)
                 # Eğer indirdiğimiz son mum DB'deki son mumdan ÖNCE ise, atla (eski veri)
                 if latest_ts and last_candle_ts <= latest_ts:
-                    logger.info(f"⏭️ [GAP CHECK] {symbol} bu mumlar DB'de var, atlanıyor.")
-                    logger.info(f"   İndirilen son mum: {pd.to_datetime(last_candle_ts, unit='ms')}")
-                    logger.info(f"   DB son mum: {pd.to_datetime(latest_ts, unit='ms')}")
+                    logger.info(f"⏭️ [GAP CHECK] Candles already present in DB for {symbol}, skipping.")
+                    logger.info(f"   Downloaded latest candle: {pd.to_datetime(last_candle_ts, unit='ms')}")
+                    logger.info(f"   DB latest candle: {pd.to_datetime(latest_ts, unit='ms')}")
                     # since'i güncelle, devam et
                 # ========================================================================
                 
@@ -771,10 +771,10 @@ class ExchangeManager:
                     for kline_data in klines_to_save:
                         await db_manager.save_kline(*kline_data)
                 except Exception as db_err:
-                    logger.error(f"⚠️ {symbol} DB yazma hatası: {db_err}")
+                    logger.error(f"⚠️ {symbol} DB write error: {db_err}")
                     # Locked hatası varsa 5 saniye bekle ve tekrar dene
                     if "database is locked" in str(db_err):
-                        logger.warning(f"⏳ Database locked, 5 saniye bekleniyor...")
+                        logger.warning("⏳ Database locked, waiting 5 seconds...")
                         await asyncio.sleep(5)
                         # Tekrar dene
                         for kline_data in klines_to_save:
@@ -787,7 +787,7 @@ class ExchangeManager:
                 all_downloaded += new_mum_count
 
                 if new_mum_count > 0:
-                    logger.debug(f"📝 {symbol} {new_mum_count} yeni mum kaydedildi")
+                    logger.debug(f"📝 Saved {new_mum_count} new candles for {symbol}")
                 
                 # Şu anki zaman
                 now_ms = int(time.time() * 1000)
@@ -809,7 +809,7 @@ class ExchangeManager:
                 
                 # Her 5000 mumda bir DB güncelle (daha az locked hatası)
                 if all_downloaded % 5000 == 0:
-                    logger.info(f"📥 {symbol} İlerleme: {all_downloaded} mum kaydedildi... [Şu anki Tarih: {pd.to_datetime(last_ts, unit='ms')}]")
+                    logger.info(f"📥 {symbol} Progress: {all_downloaded} candles recorded... [Current Date: {pd.to_datetime(last_ts, unit='ms')}]")
                     # DB görevini güncelle
                     if key in self.active_downloads:
                         self.active_downloads[key]['current_ts'] = last_ts
@@ -818,18 +818,18 @@ class ExchangeManager:
                         try:
                             await db_manager.save_download_task(self.active_downloads[key])
                         except Exception as db_err:
-                            logger.warning(f"⚠️ DB güncelleme hatası (devam ediliyor): {db_err}")
+                            logger.warning(f"⚠️ DB update error (continuing): {db_err}")
                 else:
                     # Her 500 mumda bir progress ve speed güncelle (RAM'de)
                     if all_downloaded % 500 == 0 and key in self.active_downloads:
                         self.active_downloads[key]['progress'] = round(progress, 2)
                         self.active_downloads[key]['speed'] = round(speed, 2)
-                    logger.debug(f"📥 {symbol} {len(ohlcv)} mum indirildi. Son: {pd.to_datetime(last_ts, unit='ms')}")
+                    logger.debug(f"📥 {symbol} downloaded {len(ohlcv)} candles. Latest: {pd.to_datetime(last_ts, unit='ms')}")
 
                 # Eğer son gelen mum anlık zamana çok yakınsa dur
                 now_ms = int(time.time() * 1000)
                 if last_ts >= now_ms - 60000:  # Son 1 dakika
-                    logger.info(f"🎯 {symbol} indirme işlemi güncel zamana (UTC) ulaştı.")
+                    logger.info(f"🎯 {symbol} download reached current time (UTC).")
                     break
 
                 # GEÇMİŞTEN GELECEĞE: Bir sonraki batch için son mumdan devam et
@@ -850,15 +850,15 @@ class ExchangeManager:
         is_stopped = self.download_stops.get(key, False)
 
         if is_stopped:
-            logger.info(f"⏸️ {key} Veri İndirme Görevi Beklemeye / İptal Edilmeye Alındı. Toplam {all_downloaded} yeni veri eklendi.")
+            logger.info(f"⏸️ Download task paused/cancelled for {key}. Added {all_downloaded} candles.")
             if key in self.active_downloads:
                 self.active_downloads[key]['status'] = 'stopped'
                 self.active_downloads[key]['progress'] = 0  # Durduruldu
                 await db_manager.save_download_task(self.active_downloads[key])
                 del self.active_downloads[key]
         else:
-            logger.info(f"✅ {key} Veri İndirme TAMAMLANDI. Toplam {all_downloaded} yeni veri eklendi.")
-            logger.info(f"🏗️ [PARQUET LAKE] Parquet Engine'e Tam Geçiş Sağlandı")
+            logger.info(f"✅ Data download COMPLETED for {key}. Added {all_downloaded} candles.")
+            logger.info("🏗️ [PARQUET LAKE] Full transition to Parquet Engine active")
 
             # ========================================================================
             # YENİ: PARQUET LAKE - Otomatik TF oluşturma (JSON YOK!)
@@ -872,7 +872,7 @@ class ExchangeManager:
                 # [WSS NORMALİZASYON] symbol.split('_')[0] yerine normalize_symbol kullan
                 symbol_clean = normalize_symbol(symbol)
 
-                logger.info(f"📊 [PARQUET] {symbol_clean} için Parquet oluşturuluyor... (limit={limit_1m})")
+                logger.info(f"📊 [PARQUET] Generating Parquet for {symbol_clean}... (limit={limit_1m})")
 
                 klines_data = await db_manager.get_klines(symbol_clean, '1m', limit=limit_1m)
 
@@ -883,7 +883,7 @@ class ExchangeManager:
 
                     # 1m'i Parquet'e kaydet
                     await lake.save(symbol_clean, '1m', df_1m, append=True)
-                    logger.info(f"✅ [PARQUET] {symbol_clean} 1m → Parquet kaydedildi ({len(df_1m)} satır)")
+                    logger.info(f"✅ [PARQUET] {symbol_clean} 1m → Saved to Parquet ({len(df_1m)} rows)")
 
                     # Diğer TF'leri oluştur ve kaydet (TÜM Superalgos timeframeleri)
                     all_timeframes = [
@@ -899,14 +899,14 @@ class ExchangeManager:
 
                         if not df_tf.empty:
                             await lake.save(symbol_clean, tf, df_tf, append=True)
-                            logger.info(f"✅ [PARQUET] {tf} → Parquet kaydedildi: {len(df_tf)} satır")
+                            logger.info(f"✅ [PARQUET] {tf} → Saved to Parquet ({len(df_tf)} rows)")
 
-                    logger.info(f"🎉 [PARQUET] {symbol} için TÜM timeframe'ler ({len(all_timeframes)}) Parquet'e kaydedildi!")
+                    logger.info(f"🎉 [PARQUET] All timeframes ({len(all_timeframes)}) for {symbol} saved to Parquet!")
                 else:
-                    logger.warning(f"⚠️ [PARQUET] DB'den 1m veri çekilemedi: {symbol}")
+                    logger.warning(f"⚠️ [PARQUET] Failed to fetch 1m data from DB for {symbol}")
 
             except Exception as e:
-                logger.error(f"❌ [PARQUET] Oluşturma hatası: {e}")
+                logger.error(f"❌ [PARQUET] Creation error: {e}")
                 logger.debug(f"Stack trace: {e}", exc_info=True)
 
             if key in self.active_downloads:
@@ -926,9 +926,9 @@ class ExchangeManager:
                     'timeframe': timeframe,
                     'candles_downloaded': all_downloaded
                 })
-                logger.debug(f"📢 [EVENT] data_download_completed event gönderildi")
+                logger.debug(f"📢 [EVENT] data_download_completed event emitted")
             except Exception as event_err:
-                logger.debug(f"⚠️ Event gönderme hatası: {event_err}")
+                logger.debug(f"⚠️ Event emission error: {event_err}")
 
         return all_downloaded
 
@@ -949,7 +949,7 @@ class ExchangeManager:
         """
         try:
             # 🔥 [BOT TASK DEBUG] Fonksiyon başlangıcı
-            logger.info(f"🔥 [BOT TASK] _process_bot_task BAŞLADI: bot_id={bot_id}")
+            logger.info(f"🔥 [BOT TASK] _process_bot_task STARTED: bot_id={bot_id}")
             
             # Bot bilgilerini al
             bot_info = paper_engine.active_bots.get(bot_id, {})
@@ -1080,7 +1080,7 @@ class ExchangeManager:
                     if 'ml_confidence' in signal_dict_for_logging:
                         signal_dict_for_logging['ml_confidence'] = ml_confidence
             except Exception as ml_err:
-                logger.debug(f"⚠️ [ML] Model yüklenemedi: {ml_err}")
+                logger.debug(f"⚠️ [ML] Model could not be loaded: {ml_err}")
                 if 'ml_confidence' in signal_dict_for_logging:
                     signal_dict_for_logging['ml_confidence'] = None
 
@@ -1105,11 +1105,11 @@ class ExchangeManager:
 
             await event_bus.publish(event)
 
-            logger.debug(f"✅ [EVENT] {symbol} sinyali yayınlandı")
+            logger.debug(f"✅ [EVENT] {symbol} signal published")
             return True
 
         except Exception as e:
-            logger.error(f"❌ [BOT TASK] {bot_id} işlem hatası: {e}")
+            logger.error(f"❌ [BOT TASK] {bot_id} processing error: {e}")
             raise
 
     async def run_strategy_poller(self, symbol, timeframe='1m'):
@@ -1152,15 +1152,15 @@ class ExchangeManager:
         # ============================================
         # 1. LOCAL DB FIRST: SQLite'dan geçmiş veriyi çek
         # ============================================
-        logger.info(f"📚 [LOCAL DB] {symbol} için yerel veritabanı kontrol ediliyor...")
+        logger.info(f"📚 [LOCAL DB] Checking local database for {symbol}...")
         ohlcv_df = pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
         ohlcv_df.index.name = 'timestamp'
-        logger.info(f"✅ [LOCAL DB] DataFrame oluşturuldu")
+        logger.info("✅ [LOCAL DB] DataFrame created")
 
         # ============================================
         # 1. LOCAL DB FIRST: SQLite'dan geçmiş veriyi çek
         # ============================================
-        logger.info(f"📚 [LOCAL DB] {symbol} için yerel veritabanı kontrol ediliyor...")
+        logger.info(f"📚 [LOCAL DB] Checking local database for {symbol}...")
         ohlcv_df = pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
         ohlcv_df.index.name = 'timestamp'
 
@@ -1169,7 +1169,7 @@ class ExchangeManager:
             db_ohlcv = await db_manager.get_klines(symbol, timeframe='1m', limit=1500)
 
             if db_ohlcv and len(db_ohlcv) > 0:
-                logger.info(f"OK [LOCAL DB] {symbol} için {len(db_ohlcv)} mum bulundu.")
+                logger.info(f"OK [LOCAL DB] Found {len(db_ohlcv)} candles for {symbol}.")
 
                 # DataFrame'e dönüştür
                 ohlcv_df = pd.DataFrame(db_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
@@ -1199,14 +1199,14 @@ class ExchangeManager:
 
                 time_diff = current_time - last_db_time
 
-                logger.info(f"OK [LOCAL DB] Son mum: {last_db_time}, Şu an: {current_time}, Fark: {time_diff}")
+                logger.info(f"OK [LOCAL DB] Latest candle: {last_db_time}, Current: {current_time}, Difference: {time_diff}")
 
                 # ============================================
                 # 2. GAP DETECTION + PAGINATION (Sınırsız Gap Fill) - KURAL 2
                 # ============================================
                 if time_diff.total_seconds() > 120:  # 2 dakikadan fazla boşluk
                     gap_minutes = time_diff.total_seconds() / 60
-                    logger.info(f"🔍 [GAP DETECT] {gap_minutes:.1f} dakika boşluk tespit edildi, REST API ile dolduruluyor...")
+                    logger.info(f"🔍 [GAP DETECT] {gap_minutes:.1f} min gap detected, filling via REST API...")
 
                     # PAGINATION: Binance limit (1000 mum) aşılırsa sayfalandır
                     gap_start_ms = int(last_db_time.timestamp() * 1000)
@@ -1216,11 +1216,11 @@ class ExchangeManager:
 
                     all_gap_ohlcv = []
 
-                    logger.info(f"📄 [PAGINATION] Gap fill başlatılıyor (limit={limit} mum/sayfa)...")
+                    logger.info(f"📄 [PAGINATION] Starting gap fill (limit={limit} candles/page)...")
 
                     while True:  # Sınırsız döngü - tüm gap dolana kadar
                         page += 1
-                        logger.debug(f"📄 [PAGINATION] Sayfa {page} çekiliyor (since={gap_start_ms})...")
+                        logger.debug(f"📄 [PAGINATION] Fetching page {page} (since={gap_start_ms})...")
 
                         # Bu sayfanın mumlarını çek
                         page_ohlcv = await self.fetch_ohlcv(symbol, timeframe='1m', since=gap_start_ms, limit=limit)
@@ -1232,11 +1232,11 @@ class ExchangeManager:
                         all_gap_ohlcv.extend(page_ohlcv)
                         total_fetched += len(page_ohlcv)
 
-                        logger.info(f"OK [PAGINATION] Sayfa {page}: {len(page_ohlcv)} mum çekildi (Toplam: {total_fetched})")
+                        logger.info(f"OK [PAGINATION] Page {page}: fetched {len(page_ohlcv)} candles (Total: {total_fetched})")
 
                         # Eğer çekilen mum sayısı limit'ten azsa, daha fazla mum yok demektir
                         if len(page_ohlcv) < limit:
-                            logger.info(f"OK [PAGINATION] Tüm gap mumları çekildi (Toplam: {total_fetched} mum)")
+                            logger.info(f"OK [PAGINATION] All gap candles fetched (Total: {total_fetched} candles)")
                             break
 
                         # Son mumun timestamp'ini al, bir sonraki sayfa için
@@ -1245,7 +1245,7 @@ class ExchangeManager:
                         # Eğer son timestamp güncel zamana yakınsa, döngüyü sonlandır
                         current_ms = int(pd.Timestamp.now(tz='UTC').timestamp() * 1000)
                         if abs(current_ms - last_fetched_ms) < 60000:  # 1 dakika tolerans
-                            logger.info(f"OK [PAGINATION] Güncel zamana ulaşıldı (Toplam: {total_fetched} mum)")
+                            logger.info(f"OK [PAGINATION] Current time reached (Total: {total_fetched} candles)")
                             break
 
                         # Bir sonraki sayfa için since parametresini güncelle
@@ -1256,14 +1256,14 @@ class ExchangeManager:
 
                     # TÜM gap mumlarını SQLite'a kaydet
                     if all_gap_ohlcv and len(all_gap_ohlcv) > 0:
-                        logger.info(f"💾 [SAVE] {len(all_gap_ohlcv)} gap mumu SQLite'a kaydediliyor...")
+                        logger.info(f"💾 [SAVE] Saving {len(all_gap_ohlcv)} gap candles to SQLite...")
 
                         try:
                             for candle in all_gap_ohlcv:
                                 await db_manager.save_kline(symbol, candle, '1m')
-                            logger.info(f"OK [SAVE] Tüm gap mumları SQLite'a kaydedildi.")
+                            logger.info("OK [SAVE] All gap candles saved to SQLite.")
                         except Exception as save_err:
-                            logger.error(f"ERROR [SAVE] SQLite kayıt hatası: {save_err}")
+                            logger.error(f"ERROR [SAVE] SQLite save error: {save_err}")
 
                         # DataFrame'e dönüştür
                         gap_df = pd.DataFrame(all_gap_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
@@ -1281,7 +1281,7 @@ class ExchangeManager:
                         ohlcv_df = ohlcv_df[~ohlcv_df.index.duplicated(keep='last')]
                         ohlcv_df = ohlcv_df.sort_index()
 
-                        logger.info(f"OK [STITCH] DB + REST birleştirildi: Toplam {len(ohlcv_df)} mum")
+                        logger.info(f"OK [STITCH] DB + REST combined: Total {len(ohlcv_df)} candles")
 
                         # ========================================================================
                         # YENİ: GAP FILL SONRASI FLAT FILE GÜNCELLEME
@@ -1295,7 +1295,7 @@ class ExchangeManager:
                             save_df['timestamp'] = pd.to_numeric(save_df['timestamp']) // 10**6
 
                             storage.save_ohlcv(symbol, '1m', save_df)
-                            logger.info(f"✅ [STORAGE] {symbol} flat file güncellendi ({len(save_df)} mum)")
+                            logger.info(f"✅ [STORAGE] {symbol} flat file updated ({len(save_df)} candles)")
 
                             # Diğer TF'leri de güncelle (resample)
                             all_timeframes = ['5m', '15m', '1h', '4h']
@@ -1304,14 +1304,14 @@ class ExchangeManager:
                                 df_tf = df_tf.dropna()
                                 if not df_tf.empty:
                                     storage.save_ohlcv(symbol, tf, df_tf)
-                            logger.info(f"✅ [STORAGE] {symbol} için t��m TF'ler güncellendi")
+                            logger.info(f"✅ [STORAGE] Updated all timeframes for {symbol}")
 
                         except Exception as storage_err:
-                            logger.warning(f"⚠️ [STORAGE] Flat file güncelleme hatası: {storage_err}")
+                            logger.warning(f"⚠️ [STORAGE] Flat file update error: {storage_err}")
                     else:
-                        logger.warning(f"WARNING [REST GAP] Eksik mum çekilemedi, sadece DB verisi kullanılıyor.")
+                        logger.warning("WARNING [REST GAP] Missing candles could not be fetched, using DB data only.")
                 else:
-                    logger.info(f"OK [NO GAP] Veritabanı güncel, REST API çağrısına gerek yok.")
+                    logger.info("OK [NO GAP] Database is up to date, no REST API call needed.")
 
                     # ========================================================================
                     # YENİ: NO GAP DURUMUNDA DA FLAT FILE OLUŞTUR
@@ -1329,7 +1329,7 @@ class ExchangeManager:
 
                         if ff_df is None or ff_df.empty:
                             # Flat file yok, DB'den oluştur
-                            logger.info(f"📊 [STORAGE] {symbol} için flat file oluşturuluyor (DB'den)...")
+                            logger.info(f"📊 [STORAGE] Creating flat file for {symbol} (from DB)...")
 
                             db_klines = await db_manager.get_klines(symbol, '1m', limit=1000)
                             if db_klines and len(db_klines) > 0:
@@ -1342,11 +1342,11 @@ class ExchangeManager:
                                 save_df['timestamp'] = pd.to_numeric(save_df['timestamp']) // 10**6
 
                                 storage.save_ohlcv(symbol, '1m', save_df)
-                                logger.info(f"✅ [STORAGE] {symbol} 1m flat file oluşturuldu ({len(save_df)} mum)")
+                                logger.info(f"✅ [STORAGE] {symbol} 1m flat file created ({len(save_df)} candles)")
                     except Exception as no_gap_err:
-                        logger.debug(f"⚠️ [STORAGE] No gap flat file oluşturma hatası: {no_gap_err}")
+                        logger.debug(f"⚠️ [STORAGE] Flat file creation error (no gap): {no_gap_err}")
             else:
-                logger.warning(f"WARNING [LOCAL DB] {symbol} için veritabanında veri bulunamadı, REST API'den çekiliyor...")
+                logger.warning(f"WARNING [LOCAL DB] No data found in database for {symbol}, fetching from REST API...")
 
                 # Veritabanı boşsa, REST API'den çek
                 historical_ohlcv = await self.fetch_ohlcv(symbol, timeframe='1m', limit=1500)
@@ -1355,7 +1355,7 @@ class ExchangeManager:
                     ohlcv_df = pd.DataFrame(historical_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
                     ohlcv_df['timestamp'] = pd.to_datetime(ohlcv_df['timestamp'], unit='ms')
                     ohlcv_df.set_index('timestamp', inplace=True)
-                    logger.info(f"OK [REST] {len(ohlcv_df)} mum REST API'den çekildi.")
+                    logger.info(f"OK [REST] Fetched {len(ohlcv_df)} candles from REST API.")
 
                     # ========================================================================
                     # YENİ: REST API'DEN ÇEKİLDİKTEN SONRA FLAT FILE OLUŞTUR
@@ -1368,15 +1368,15 @@ class ExchangeManager:
                         save_df['timestamp'] = pd.to_numeric(save_df['timestamp']) // 10**6
 
                         storage.save_ohlcv(symbol, '1m', save_df)
-                        logger.info(f"✅ [STORAGE] {symbol} 1m flat file oluşturuldu ({len(save_df)} mum)")
+                        logger.info(f"✅ [STORAGE] {symbol} 1m flat file created ({len(save_df)} candles)")
                     except Exception as rest_storage_err:
-                        logger.warning(f"⚠️ [STORAGE] REST flat file oluşturma hatası: {rest_storage_err}")
+                        logger.warning(f"⚠️ [STORAGE] REST flat file creation error: {rest_storage_err}")
                 else:
-                    logger.warning(f"WARNING [REST] {symbol} için REST API'den veri çekilemedi.")
+                    logger.warning(f"WARNING [REST] Could not fetch data from REST API for {symbol}.")
         except Exception as e:
-            logger.error(f"ERROR [HYBRID] {symbol} veri yükleme hatası: {e}")
+            logger.error(f"ERROR [HYBRID] Data loading error for {symbol}: {e}")
             logger.error(traceback.format_exc())
-            logger.info(f"INFO [HYBRID] Boş DataFrame ile başlanıyor.")
+            logger.info("INFO [HYBRID] Starting with empty DataFrame.")
 
         # ============================================
         # 3. YENİ: TÜM MumlAR TUTULUYOR (Limit YOK)
@@ -1384,7 +1384,7 @@ class ExchangeManager:
         # Kullanıcı 01/01/2026 tarihinden itibaren tüm mumları istedi
         # Sistem TÜM mumları tutacak ve işleyecek
         # ============================================
-        logger.info(f"✅ [ALL CANDLES] {symbol} için {len(ohlcv_df)} mum yüklendi (TÜM veri tutuluyor)")
+        logger.info(f"✅ [ALL CANDLES] Loaded {len(ohlcv_df)} candles for {symbol} (ALL data retained)")
 
         # ============================================
         # 3.5 BOT TASK'LARINI BAŞLAT
@@ -1393,7 +1393,7 @@ class ExchangeManager:
         try:
             
             if paper_engine and len(paper_engine.active_bots) > 0:
-                logger.info(f"🤖 [1-to-N] {symbol} için {len(paper_engine.active_bots)} aktif bot işleniyor...")
+                logger.info(f"🤖 [1-to-N] Processing {len(paper_engine.active_bots)} active bots for {symbol}...")
                 
                 # Her bot için task oluştur
                 tasks = []
@@ -1404,7 +1404,7 @@ class ExchangeManager:
                     # Sadece aynı timeframe'deki botları işle
                     if bot_timeframe == timeframe:
                         logger.info(f"   🔥 [BOT DEBUG] active_bot_ids={list(paper_engine.active_bots.keys())}")
-                        logger.info(f"   🚀 [BOT GATHER] {len(paper_engine.active_bots)} task çalıştırılıyor...")
+                        logger.info(f"   🚀 [BOT GATHER] Executing {len(paper_engine.active_bots)} tasks...")
                         
                         # Bot task'ını başlat (async)
                         task = asyncio.create_task(
@@ -1422,25 +1422,25 @@ class ExchangeManager:
                 # Tüm task'ları bekle
                 if tasks:
                     results = await asyncio.gather(*tasks, return_exceptions=True)
-                    logger.info(f"   ✅ [BOT GATHER] Tüm tasklar tamamlandı")
+                    logger.info("   ✅ [BOT GATHER] All tasks completed")
                     
                     # Hataları logla
                     for i, result in enumerate(results):
                         if isinstance(result, Exception):
-                            logger.error(f"❌ [BOT TASK] Task {i} hata: {result}")
+                            logger.error(f"❌ [BOT TASK] Task {i} error: {result}")
                 else:
-                    logger.debug(f"⏭️ [BOT GATHER] {symbol} için bot task yok")
+                    logger.debug(f"⏭️ [BOT GATHER] No bot task for {symbol}")
             else:
-                logger.debug(f"⏭️ [BOT GATHER] {symbol} için aktif bot yok")
+                logger.debug(f"⏭️ [BOT GATHER] No active bots for {symbol}")
         except Exception as bot_task_err:
-            logger.error(f"❌ [BOT GATHER] Bot task başlatma hatası: {bot_task_err}")
-            logger.debug(f"⚠️ [BOT GATHER] Bot task hatası atlandı, devam ediliyor")
+            logger.error(f"❌ [BOT GATHER] Bot task initiation error: {bot_task_err}")
+            logger.debug("⚠️ [BOT GATHER] Bot task error skipped, continuing")
 
         # ============================================
         # 4. WEBSOCKET DÖNGÜSÜ (Canlı Güncelleme)
         # ============================================
         logger.info(f"📡 [WSS] Starting WebSocket listener loop for {symbol}...")
-        logger.info(f"🔥 [WSS DEBUG] DataFrame boyutu: {len(ohlcv_df)} mum")
+        logger.info(f"🔥 [WSS DEBUG] DataFrame size: {len(ohlcv_df)} candles")
         logger.info(f"🔥 [WSS DEBUG] active_timeframes={paper_engine.active_timeframes}")
 
         # YENİ MUM KİLİDİ: Aynı mumu tekrar işlemeyi önler
@@ -1453,21 +1453,21 @@ class ExchangeManager:
 
             try:
                 # WebSocket üzerinden OHLCV dinle (15s timeout + REST fallback ile)
-                logger.debug(f"📡 [WSS] watch_ohlcv çağrılıyor...")
+                logger.debug("📡 [WSS] Calling watch_ohlcv...")
                 try:
                     live_ohlcv = await asyncio.wait_for(
                         self.exchange.watch_ohlcv(symbol, timeframe=timeframe, limit=100),
                         timeout=15.0
                     )
                 except Exception as wss_err:
-                    logger.debug(f"⚠️ [WSS FALLBACK] {symbol} WSS zaman aşımı ({wss_err}), REST API ile çekiliyor...")
+                    logger.debug(f"⚠️ [WSS FALLBACK] {symbol} WSS timeout ({wss_err}), fetching via REST API...")
                     live_ohlcv = await self.fetch_ohlcv(symbol, timeframe=timeframe, limit=100)
                     await asyncio.sleep(2)
 
-                logger.debug(f"✅ [WSS/REST] Veri alındı: {len(live_ohlcv) if live_ohlcv else 0} mum")
+                logger.debug(f"✅ [WSS/REST] Data received: {len(live_ohlcv) if live_ohlcv else 0} candles")
 
                 if not live_ohlcv or len(live_ohlcv) == 0:
-                    logger.warning(f"WARNING [WSS] {symbol} boş OHLCV, devam ediliyor...")
+                    logger.warning(f"WARNING [WSS] {symbol} empty OHLCV, continuing...")
                     await asyncio.sleep(5)
                     continue
 
@@ -1495,14 +1495,14 @@ class ExchangeManager:
                             current_low=float(last_ohlcv[3])      # low
                         )
                     except Exception as e:
-                        logger.error(f"❌ [WEBSOCKET ZIRHI] {symbol} update_live_prices hatası (same candle): {e}")
+                        logger.error(f"❌ [WEBSOCKET ARMOR] {symbol} update_live_prices error (same candle): {e}")
                         # Continue ile devam et
 
                     continue  # ⚠️ DEVAM ET - yeni mum gelene kadar bekle
 
                 # YENİ MUM GELDİ! Kilidi güncelle
                 last_processed_ts = current_candle_dt
-                logger.debug(f"🕐 [NEW CANDLE] Yeni mum: {current_candle_dt}")
+                logger.debug(f"🕐 [NEW CANDLE] New candle: {current_candle_dt}")
 
                 # Canlı veriyi DataFrame'e dönüştür
                 # live_ohlcv is a list of lists: [[timestamp, open, high, low, close, volume], ...]
@@ -1526,7 +1526,7 @@ class ExchangeManager:
                 if ohlcv_df.empty:
                     # İlk veri, direkt kullan
                     ohlcv_df = live_df.copy()
-                    logger.info(f"OK [WSS] İlk veri: {len(ohlcv_df)} mum")
+                    logger.info(f"OK [WSS] Initial data: {len(ohlcv_df)} candles")
                 else:
                     # Canlı veriyi geçmiş veriye ekle/güncelle
                     last_live_time = live_df.index[-1]
@@ -1561,14 +1561,14 @@ class ExchangeManager:
                             # Ana DataFrame'de de duplicate kontrolü
                             ohlcv_df = ohlcv_df[~ohlcv_df.index.duplicated(keep='last')]
 
-                            logger.debug(f"OK [WSS] Yeni mum eklendi: {last_live_time}")
+                            logger.debug(f"OK [WSS] New candle added: {last_live_time}")
                     elif last_live_time == last_hist_time:
                         # Son mum güncellendi, replace et
                         ohlcv_df.loc[last_live_time] = live_df.loc[last_live_time]
-                        logger.debug(f"OK [WSS] Son mum güncellendi: {last_live_time}")
+                        logger.debug(f"OK [WSS] Latest candle updated: {last_live_time}")
 
                     # YENİ: RAM limiti YOK - Tüm mumlar tutuluyor
-                    logger.debug(f"📊 [ALL CANDLES] {symbol} için toplam {len(ohlcv_df)} mum RAM'de")
+                    logger.debug(f"📊 [ALL CANDLES] Total {len(ohlcv_df)} candles for {symbol} in memory")
 
                 last_candle_time = ohlcv_df.index[-1]
                 df_1m = ohlcv_df
@@ -1621,12 +1621,12 @@ class ExchangeManager:
                         try:
                             await paper_engine.update_live_prices(symbol, current_price)
                         except Exception as e:
-                            logger.error(f"❌ [WEBSOCKET ZIRHI] {symbol} update_live_prices hatası (no strategy): {e}")
+                            logger.error(f"❌ [WEBSOCKET ARMOR] {symbol} update_live_prices error (no strategy): {e}")
 
-                        logger.debug(f"⏸️ {symbol} için strateji durduruldu ve aktif bot yok, sadece fiyat güncelleniyor.")
+                        logger.debug(f"⏸️ Strategy stopped and no active bots for {symbol}, only price is updating.")
                         continue
 
-                    logger.debug(f"▶️ {symbol} strateji aktif: {active_strat_id}, strategy={strategy}, aktif bot sayısı: {len(active_bot_ids)}")
+                    logger.debug(f"▶️ {symbol} active strategy: {active_strat_id}, active bot count: {len(active_bot_ids)}")
 
                     # ============================================
                     # YENİ 1-to-N MİMARİSİ: Merkezi Poller, Dağıtık İşleme
@@ -1638,13 +1638,13 @@ class ExchangeManager:
                     ]
 
                     if active_bot_ids:
-                        logger.info(f"🤖 [1-to-N] {symbol} için {len(active_bot_ids)} aktif bot işleniyor...")
+                        logger.info(f"🤖 [1-to-N] Processing {len(active_bot_ids)} active bots for {symbol}...")
                         logger.info(f"   🔥 [BOT DEBUG] active_bot_ids={active_bot_ids}")
 
                         # PARALEL İŞLEME: Her bot için asenkron task oluştur
                         bot_tasks = []
                         for bot_id in active_bot_ids:
-                            logger.debug(f"   📝 [BOT TASK] {bot_id} için task oluşturuluyor...")
+                            logger.debug(f"   📝 [BOT TASK] Creating task for {bot_id}...")
                             task = asyncio.create_task(
                                 self._process_bot_task(
                                     paper_engine,
@@ -1656,36 +1656,36 @@ class ExchangeManager:
                                 )
                             )
                             bot_tasks.append(task)
-                            logger.debug(f"   ✅ [BOT TASK] {bot_id} task oluşturuldu")
+                            logger.debug(f"   ✅ [BOT TASK] Task created for {bot_id}")
 
                         # Tüm botları PARALEL çalıştır
                         if bot_tasks:
-                            logger.info(f"   🚀 [BOT GATHER] {len(bot_tasks)} task çalıştırılıyor...")
+                            logger.info(f"   🚀 [BOT GATHER] Executing {len(bot_tasks)} tasks...")
                             try:
                                 results = await asyncio.gather(*bot_tasks, return_exceptions=True)
-                                logger.info(f"   ✅ [BOT GATHER] Tüm tasklar tamamlandı")
+                                logger.info("   ✅ [BOT GATHER] All tasks completed")
 
                                 any_success = False
                                 for bot_id, result in zip(active_bot_ids, results):
                                     if isinstance(result, Exception):
-                                        logger.error(f"   ❌ [BOT] {bot_id} işleme hatası: {result}")
+                                        logger.error(f"   ❌ [BOT] Error processing {bot_id}: {result}")
                                     else:
-                                        logger.debug(f"   ✅ [BOT] {bot_id} başarıyla işlendi")
+                                        logger.debug(f"   ✅ [BOT] {bot_id} processed successfully")
                                         if result is True:
                                             any_success = True
                                 
                                 if any_success:
                                     last_processed_ts = current_candle_dt
-                                    logger.debug(f"🔒 [CANDLE LOCK] Mum kilitlendi: {last_processed_ts}")
+                                    logger.debug(f"🔒 [CANDLE LOCK] Candle locked: {last_processed_ts}")
                             except Exception as gather_err:
-                                logger.error(f"   ❌ [1-to-N] Gather hatası: {gather_err}")
+                                logger.error(f"   ❌ [1-to-N] Gather error: {gather_err}")
                     else:
-                        logger.info(f"⚠️ [1-to-N] {symbol} için aktif bot yok")
+                        logger.info(f"⚠️ [1-to-N] No active bots for {symbol}")
 
                     # ESKİ MİMARİ KALDIRILDI! Sadece 1-to-N kullanılıyor
 
                     # 8. ANALİZ ÖZETİ (DEBUG seviyesinde tutulur, gürültü yapmaz)
-                    logger.debug(f"✅ {symbol} {target_tf} (HTF: {htf_trends} | REJİM: {regime_info['regime']}) analiz tamamlandı. Botlar işlendi.")
+                    logger.debug(f"✅ {symbol} {target_tf} (HTF: {htf_trends} | REGIME: {regime_info['regime']}) analysis completed. Bots processed.")
 
                     # ========================================================================
                     # 9. DATA LAKE GÜNCELLEME - REFACTORED (Async)
@@ -1699,11 +1699,11 @@ class ExchangeManager:
 
             # BAĞLANTI KOPMA VE RECONNECT KALKANI
             except ccxt.NetworkError as e:
-                logger.error(f"❌ [WSS] {symbol} NetworkError: {e}. 5 saniye sonra yeniden bağlanıyor...")
+                logger.error(f"❌ [WSS] {symbol} NetworkError: {e}. Reconnecting in 5 seconds...")
                 await asyncio.sleep(5)
                 continue
             except ccxt.ExchangeError as e:
-                logger.error(f"❌ [WSS] {symbol} ExchangeError: {e}. 5 saniye sonra yeniden bağlanıyor...")
+                logger.error(f"❌ [WSS] {symbol} ExchangeError: {e}. Reconnecting in 5 seconds...")
                 await asyncio.sleep(5)
                 continue
             except asyncio.CancelledError:
@@ -1719,7 +1719,7 @@ class ExchangeManager:
         """Borsa bağlantılarını ve WebSocket akışlarını temiz bir şekilde kapatır."""
         if self.exchange:
             await self.exchange.close()
-            logger.info(f"{self.exchange_id.upper()} borsa bağlantısı sonlandırıldı.")
+            logger.info(f"{self.exchange_id.upper()} exchange connection closed.")
 
 
 # Diğer modüllerden kolay erişim için Singleton mantığı

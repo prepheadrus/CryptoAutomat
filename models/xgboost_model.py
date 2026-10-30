@@ -35,7 +35,7 @@ class XGBoostModel:
             dval = xgb.DMatrix(X_val, label=y_val)
             evals.append((dval, 'eval'))
 
-        logger.info("XGBoost modeli eğitimi başlatılıyor...")
+        logger.info("Starting XGBoost model training...")
         # Erken durdurma mekanizmasıyla (early stopping) aşırı öğrenmeyi (overfitting) engelliyoruz
         self.model = xgb.train(
             self.params,
@@ -45,7 +45,7 @@ class XGBoostModel:
             early_stopping_rounds=10 if X_val is not None else None,
             verbose_eval=False
         )
-        logger.info("XGBoost eğitimi tamamlandı.")
+        logger.info("XGBoost training completed.")
 
     def predict_proba(self, X_test: pd.DataFrame) -> np.ndarray:
         """Yeni veriler için olasılık tahminleri dönüştürür."""

@@ -126,7 +126,7 @@ class CircuitBreaker:
             
             # Success threshold'a ulaşıldı mı?
             if self.success_count >= self.success_threshold:
-                logger.info(f"✅ [CIRCUIT BREAKER] {self.success_count} başarılı çağrı, devre kapanıyor")
+                logger.info(f"✅ [CIRCUIT BREAKER] {self.success_count} successful calls, closing circuit")
                 self._transition_to(CircuitState.CLOSED)
         
         elif self.state == CircuitState.CLOSED:
@@ -142,7 +142,7 @@ class CircuitBreaker:
         
         if self.state == CircuitState.HALF_OPEN:
             # HALF_OPEN'da hata → direkt OPEN
-            logger.warning(f"⚠️ [CIRCUIT BREAKER] HALF_OPEN'da hata, devre açılıyor: {exception}")
+            logger.warning(f"⚠️ [CIRCUIT BREAKER] Error in HALF_OPEN, opening circuit: {exception}")
             self._transition_to(CircuitState.OPEN)
         
         elif self.state == CircuitState.CLOSED:

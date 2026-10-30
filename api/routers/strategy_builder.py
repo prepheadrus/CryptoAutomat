@@ -151,14 +151,14 @@ async def save_strategy(request: StrategySaveRequest):
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(strategy_json, f, indent=2, ensure_ascii=False)
         
-        logger.info(f"✅ Strateji kaydedildi: {filepath}")
+        logger.info(f"✅ Strategy saved: {filepath}")
 
         # Stratejileri yeniden yükle (Hot Reload)
         try:
             StrategyManager.reload_strategies()
-            logger.info("🔄 Stratejiler yeniden yüklendi (Hot Reload).")
+            logger.info("🔄 Strategies reloaded (Hot Reload).")
         except Exception as e:
-            logger.error(f"🔥 Hot Reload hatası: {e}")
+            logger.error(f"🔥 Hot Reload error: {e}")
             # Bu bir hata olmamalı, sadece loglayalım. API response'u etkilemesin.
 
         return StrategySaveResponse(
@@ -171,7 +171,7 @@ async def save_strategy(request: StrategySaveRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Strateji kaydetme hatası: {e}")
+        logger.error(f"❌ Strategy save error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to save strategy: {str(e)}"
@@ -237,7 +237,7 @@ async def list_strategies():
         )
         
     except Exception as e:
-        logger.error(f"❌ Strateji listeleme hatası: {e}")
+        logger.error(f"❌ Strategy listing error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Stratejiler listelenemedi: {str(e)}"

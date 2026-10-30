@@ -45,10 +45,10 @@ class SignalValidatorService:
 
             # Conflict Resolution
             if signal == 2 and ml_rec_norm == "SHORT":
-                logger.info(f"🛡️ [ML FILTER] {symbol} LONG reddedildi: ML zıt yön gösteriyor ({ml_rec_norm}) | Conf: {ml_confidence:.2f}")
+                logger.info(f"🛡️ [ML FILTER] {symbol} LONG rejected: ML signals opposite direction ({ml_rec_norm}) | Conf: {ml_confidence:.2f}")
                 ml_confirmed = False
             elif signal == 0 and ml_rec_norm == "LONG":
-                logger.info(f"🛡️ [ML FILTER] {symbol} SHORT reddedildi: ML zıt yön gösteriyor ({ml_rec_norm}) | Conf: {ml_confidence:.2f}")
+                logger.info(f"🛡️ [ML FILTER] {symbol} SHORT rejected: ML signals opposite direction ({ml_rec_norm}) | Conf: {ml_confidence:.2f}")
                 ml_confirmed = False
             elif ml_confidence < ml_threshold:
                 logger.info(f"🛡️ [ML FILTER] {symbol} reddedildi: ML confidence {ml_confidence:.2f} < threshold {ml_threshold:.2f}")
@@ -56,7 +56,7 @@ class SignalValidatorService:
             else:
                 logger.info(f"🧠 [ML CONFIRMED] {symbol} | Rec: {ml_rec} | Conf: {ml_confidence:.2f} (threshold: {ml_threshold:.2f})")
         else:
-            logger.debug(f"ℹ️ {symbol} için aktif ML modeli bulunamadı, sadece teknik sinyal ile gidiliyor.")
+            logger.debug(f"ℹ️ No active ML model found for {symbol}, proceeding with technical signals only.")
 
         return ml_confirmed, ml_confidence, ml_rec, ml_rec_norm
 
@@ -68,7 +68,7 @@ class SignalValidatorService:
             model_path = model_paths['xgboost_path']
 
             if not os.path.exists(model_path):
-                logger.debug(f"🧠 [ML] XGBoost model bulunamadı: {model_path}")
+                logger.debug(f"🧠 [ML] XGBoost model not found: {model_path}")
                 return None
 
             if cache_key in self.ml_models:
@@ -77,7 +77,7 @@ class SignalValidatorService:
                 trainer = ModelTrainer()
                 trainer.load_model(model_path)
                 self.ml_models[cache_key] = trainer
-                logger.info(f"🧠 [ML] Model belleğe yüklendi: {model_path}")
+                logger.info(f"🧠 [ML] Model loaded into memory: {model_path}")
 
             if not trainer.is_trained or not trainer.feature_names:
                 return None
@@ -93,7 +93,7 @@ class SignalValidatorService:
             prediction = trainer.predict_single(X)
             return prediction
         except Exception:
-            logger.warning(f"⚠️ [ML] {symbol}: Model feature uyumsuzluğu - sadece teknik sinyaller kullanılıyor")
+            logger.warning(f"⚠️ [ML] {symbol}: Model feature mismatch - using technical signals only")
             return None
 
     def validate_htf_trend(self, symbol: str, htf_trends: dict, signal: int) -> bool:
@@ -123,6 +123,6 @@ class SignalValidatorService:
 
         if major_trend != 'NEUTRAL':
             signal_type = "LONG" if signal == 2 else "SHORT"
-            logger.debug(f"✅ [HTF] {symbol} Sinyal geçti: {signal_type} | HTF={major_htf}:{major_trend}")
+            logger.debug(f"✅ [HTF] {symbol} Signal passed: {signal_type} | HTF={major_htf}:{major_trend}")
 
         return True

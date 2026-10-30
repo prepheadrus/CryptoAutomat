@@ -239,7 +239,7 @@ class RiskEngine:
 
         # 1h ve üzeri: Normal yüksek kaldıraç kullanılabilir
         else:
-            logger.debug(f"✅ [TIMEFRAME-AWARE] {timeframe} için normal kaldıraç: Max {maximum}x")
+            logger.debug(f"✅ [TIMEFRAME-AWARE] Normal leverage for {timeframe}: Max {maximum}x")
 
         # Güven skoru çok düşükse base leverage
         if confidence_score < 0.50:
@@ -298,7 +298,7 @@ class RiskEngine:
             # Düşük güven (<65%): Minimum kaldıraç
             leverage = 1.0
         
-        logger.debug(f"ML kaldıraç: {ml_recommendation} -> {leverage}x")
+        logger.debug(f"ML leverage: {ml_recommendation} -> {leverage}x")
         return leverage
     
     # ========================================================================
@@ -429,7 +429,7 @@ class RiskEngine:
         
         # Maksimum pozisyon kontrolü
         if current_positions >= self.config.max_open_positions:
-            logger.debug(f"Maksimum pozisyon limitine ulaşıldı: {current_positions}")
+            logger.debug(f"Maximum position limit reached: {current_positions}")
             return False
         
         return True
@@ -477,7 +477,7 @@ class RiskEngine:
         # Ardışık kayıp sayacı
         if pnl < 0:
             self.consecutive_losses += 1
-            logger.debug(f"Ardışık kayıp: {self.consecutive_losses}")
+            logger.debug(f"Consecutive losses: {self.consecutive_losses}")
         else:
             # Kar ile sıfırla
             self.consecutive_losses = 0
@@ -505,7 +505,7 @@ class RiskEngine:
         Kill switch'i manuel sıfırla.
         Kullanıcı onayı ile çağrılmalı.
         """
-        logger.info("🔓 Kill switch manuel olarak sıfırlandı")
+        logger.info("🔓 Kill switch manually reset")
         self.kill_switch_active = False
         self.consecutive_losses = 0
     

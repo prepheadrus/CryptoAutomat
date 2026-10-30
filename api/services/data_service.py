@@ -91,10 +91,10 @@ class DataService:
             end_ts = pd.Timestamp(end_date).tz_convert('UTC') if hasattr(end_date, 'tzinfo') else pd.Timestamp(end_date, tz='UTC')
 
             if cached_start <= start_ts and cached_end >= end_ts:
-                logger.info(f"✅ [SMART CACHE] {symbol} {timeframe} → Parquet'ten TAM yüklendi ({len(df_cached)} satır)")
+                logger.info(f"✅ [SMART CACHE] {symbol} {timeframe} → FULLY loaded from Parquet ({len(df_cached)} rows)")
                 return df_cached
 
-            logger.info(f"📊 [SMART CACHE] Parquet'te KISMİ veri: {cached_start} - {cached_end}")
+            logger.info(f"📊 [SMART CACHE] PARTIAL data in Parquet: {cached_start} - {cached_end}")
 
         # 2. Eksik tarihleri tespit et
         missing_ranges = []
@@ -124,28 +124,28 @@ class DataService:
                 current += timedelta(days=1)
 
         if not missing_ranges:
-            logger.info(f"✅ [SMART CACHE] {symbol} {timeframe} → Eksik gün yok")
+            logger.info(f"✅ [SMART CACHE] {symbol} {timeframe} → No missing days")
             return df_cached
 
-        logger.info(f"🔍 [SMART CACHE] {len(missing_ranges)} eksik gün tespit edildi")
+        logger.info(f"🔍 [SMART CACHE] {len(missing_ranges)} missing day range(s) detected")
 
         # 3. Eksik günler için SQLite'dan 1m çek + resample et
         dfs_to_concat = [df_cached] if df_cached is not None else []
 
         for missing_start, missing_end in missing_ranges:
-            logger.info(f"📥 [SMART CACHE] Eksik gün: {missing_start} - {missing_end}")
+            logger.info(f"📥 [SMART CACHE] Missing days: {missing_start} - {missing_end}")
 
             # 1m veriyi SQLite'dan çek
             # Limit hesapla (1m mum sayısı)
             days_diff = (missing_end - missing_start).days + 1
             limit_1m = days_diff * 24 * 60  # 1440 mum/gün
 
-            logger.info(f"📊 [SMART CACHE] 1m çekiliyor: {symbol} (limit={limit_1m})")
+            logger.info(f"📊 [SMART CACHE] Fetching 1m: {symbol} (limit={limit_1m})")
 
             klines_1m = await self.db_manager.get_klines(symbol, '1m', limit=limit_1m)
 
             if not klines_1m or len(klines_1m) == 0:
-                logger.warning(f"⚠️ [SMART CACHE] 1m veri bulunamadı: {symbol}")
+                logger.warning(f"⚠️ [SMART CACHE] 1m data not found: {symbol}")
                 continue
 
             # DataFrame'e çevir
@@ -173,7 +173,7 @@ class DataService:
             ]
 
             if df_1m.empty:
-                logger.warning(f"⚠️ [SMART CACHE] Filtre sonrası boş: {missing_start} - {missing_end}")
+                logger.warning(f"⚠️ [SMART CACHE] Empty after filter: {missing_start} - {missing_end}")
                 continue
 
             # Resample: 1m → hedef timeframe
@@ -185,7 +185,7 @@ class DataService:
             df_resampled = df_resampled.dropna(how='all')  # Tüm kolonlar boşsa sil
 
             if df_resampled.empty:
-                logger.warning(f"⚠️ [SMART CACHE] Resample sonrası boş: {timeframe}")
+                logger.warning(f"⚠️ [SMART CACHE] Empty after resample: {timeframe}")
                 continue
 
             # 4. Parquet'e kaydet
@@ -196,7 +196,7 @@ class DataService:
 
         # 5. RAM'de birleştir
         if not dfs_to_concat:
-            logger.warning(f"⚠️ [SMART CACHE] Birleştirilecek veri yok")
+            logger.warning(f"⚠️ [SMART CACHE] No data to merge")
             return None
 
         df_combined = pd.concat(dfs_to_concat)
@@ -228,7 +228,7 @@ class DataService:
         # Son NaN temizliği
         df_combined = df_combined.ffill().dropna(how='all')
 
-        logger.info(f"✅ [SMART CACHE] {symbol} {timeframe} → TAM yüklendi ({len(df_combined)} satır)")
+        logger.info(f"✅ [SMART CACHE] {symbol} {timeframe} → FULLY loaded ({len(df_combined)} rows)")
         return df_combined
     
     def _normalize_market_type(self, market_type_str: str, symbol: str) -> str:
@@ -266,9 +266,9 @@ class DataService:
         # ========================================================================
         # YENİ: RESAMPLING MİMARİSİ - Her zaman 1m indirilir
         # ========================================================================
-        logger.info(f"🔄 [DATA] {request.symbol} için {request.timeframe} talep edildi, ancak SADECE 1m indiriliyor...")
-        logger.info(f"📊 [DATA] Resampling Mimarisi: Veritabanı %98 Optimize Edildi")
-        logger.info(f"💡 [DATA] Diğer TF'ler (5m, 15m, 1h, vb.) RAM üzerinde otomatik oluşturulacak")
+        logger.info(f"🔄 [DATA] {request.timeframe} requested for {request.symbol}, but downloading ONLY 1m...")
+        logger.info(f"📊 [DATA] Resampling Architecture: Database 98% Optimized")
+        logger.info(f"💡 [DATA] Other TFs (5m, 15m, 1h, etc.) will be dynamically generated in memory")
 
         # Timeframe'i 1m'ye zorla (kullanıcı ne seçerse seçsin)
         download_timeframe = '1m'
@@ -346,9 +346,9 @@ class DataService:
             # ========================================================================
             symbol_clean = request.symbol.strip()
 
-            logger.info(f"🗑️ [DELETE] Veri silme isteği: {request.symbol}")
+            logger.info(f"🗑️ [DELETE] Data deletion request: {request.symbol}")
             logger.info(f"   - Sembol (ham): {symbol_clean}")
-            logger.info(f"   - Timeframe: {request.timeframe if request.timeframe else 'TÜM TF'}")
+            logger.info(f"   - Timeframe: {request.timeframe if request.timeframe else 'ALL TFs'}")
 
             # ========================================================================
             # 1. VERİTABANI TEMİZLİĞİ
@@ -374,12 +374,12 @@ class DataService:
                 # Eğer hiç sembol bulunamadıysa, kullanıcıya bilgi ver
                 # AMA FLAT FILE'LARI YİNE DE SİL!
                 if not found_symbols:
-                    logger.warning(f"⚠️ [DELETE] DB'de {symbol_clean} için veri bulunamadı, ama flat file'lar silinecek")
+                    logger.warning(f"⚠️ [DELETE] No data found in DB for {symbol_clean}, but flat files will be deleted")
                     # Flat file silmek için symbol_clean kullan
                     found_symbols = [symbol_clean]
 
             except Exception as find_err:
-                logger.warning(f"⚠️ [DELETE] Sembol bulma hatası: {find_err}")
+                logger.warning(f"⚠️ [DELETE] Symbol lookup error: {find_err}")
                 found_symbols = [symbol_clean]  # Varsayılan
 
             # Her bulunan sembol için DB'den sil
@@ -389,13 +389,13 @@ class DataService:
                     if request.timeframe:
                         deleted_count = await self.db_manager.delete_klines(sym, request.timeframe)
                         total_deleted += deleted_count
-                        logger.info(f"🗑️ {sym} {request.timeframe} silindi: {deleted_count} mum")
+                        logger.info(f"🗑️ {sym} {request.timeframe} deleted: {deleted_count} candles")
                     else:
                         deleted_count = await self.db_manager.delete_klines(sym)
                         total_deleted += deleted_count
-                        logger.info(f"🗑️ {sym} TÜM verileri silindi: {deleted_count} mum")
+                        logger.info(f"🗑️ {sym} ALL data deleted: {deleted_count} candles")
                 except Exception as db_err:
-                    logger.warning(f"⚠️ [DELETE] DB silme hatası ({sym}): {db_err}")
+                    logger.warning(f"⚠️ [DELETE] DB deletion error ({sym}): {db_err}")
 
             if total_deleted > 0:
                 db_message = f"Deleted {total_deleted} candle(s) for {symbol_clean}"
@@ -434,17 +434,17 @@ class DataService:
                         # Parquet'ten sil
                         await lake.delete(symbol_for_lake, request.timeframe)
                         total_pq_deleted += 1
-                        logger.info(f"🗑️ {symbol_for_lake} Parquet'ten silindi")
+                        logger.info(f"🗑️ {symbol_for_lake} deleted from Parquet")
                     except Exception as pq_err:
-                        logger.debug(f"   - Hata ({symbol_for_lake}): {pq_err}")
+                        logger.debug(f"   - Error ({symbol_for_lake}): {pq_err}")
 
                 if total_pq_deleted > 0:
-                    logger.info(f"✅ [PARQUET] Toplam {total_pq_deleted} sembol Parquet'ten silindi")
+                    logger.info(f"✅ [PARQUET] Total {total_pq_deleted} symbols deleted from Parquet")
                 else:
-                    logger.warning(f"⚠️ [PARQUET] Hiçbir Parquet dosyası bulunamadı veya silinmedi")
+                    logger.warning(f"⚠️ [PARQUET] No Parquet files found or deleted")
 
             except Exception as parquet_err:
-                logger.error(f"❌ [PARQUET] Silme hatası: {parquet_err}")
+                logger.error(f"❌ [PARQUET] Deletion error: {parquet_err}")
                 logger.error(f"   - Sembol: {symbol_clean}")
                 import traceback
                 logger.error(f"   - Traceback: {traceback.format_exc()}")
@@ -458,7 +458,7 @@ class DataService:
                 "deleted_count": total_deleted
             }
         except Exception as e:
-            logger.error(f"❌ [DELETE] Silme hatası: {e}")
+            logger.error(f"❌ [DELETE] Deletion error: {e}")
             logger.error(f"Exception type: {type(e).__name__}")
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
@@ -486,7 +486,7 @@ class DataService:
                     result = await conn.execute("DELETE FROM klines")
                     deleted_count = int(result.split()[-1]) if result else 0
 
-            logger.info(f"🗑️ [DATA] Tüm klines verileri temizlendi: {deleted_count} satır (DB)")
+            logger.info(f"🗑️ [DATA] All klines data cleared: {deleted_count} rows (DB)")
 
             # ========================================================================
             # 2. PARQUET LAKE TEMİZLİĞİ (Yeni Mimari)
@@ -508,15 +508,15 @@ class DataService:
                             item.unlink()
                             total_files += 1
 
-                logger.info(f"🗑️ [DATA] Tüm Parquet verileri temizlendi: {total_files} dosya/dizin")
+                logger.info(f"🗑️ [DATA] All Parquet data cleared: {total_files} files/directories")
                 
             except Exception as parquet_err:
-                logger.warning(f"⚠️ Parquet temizleme hatası (devam ediliyor): {parquet_err}")
+                logger.warning(f"⚠️ Parquet cleanup error (continuing): {parquet_err}")
 
             # ========================================================================
             # 3. YANIT
             # ========================================================================
-            logger.info(f"📊 [DATA] Resampling Mimarisi: Veritabanı ve Parquet Lake sıfırlandı!")
+            logger.info(f"📊 [DATA] Resampling Architecture: Database and Parquet Lake reset!")
 
             return {
                 "status": "success",
@@ -524,7 +524,7 @@ class DataService:
                 "deleted_count": deleted_count
             }
         except Exception as e:
-            logger.error(f"❌ Tüm verileri silme hatası: {e}")
+            logger.error(f"❌ Error deleting all data: {e}")
             return {"status": "error", "message": str(e)}
 
     async def delete_download_task(self, request: DataDeleteRequest) -> Dict[str, Any]:
@@ -551,7 +551,7 @@ class DataService:
             )
 
             if is_invalid_symbol:
-                logger.warning(f"⚠️ Geçersiz sembol temizleniyor: {request.symbol}")
+                logger.warning(f"⚠️ Cleaning invalid symbol: {request.symbol}")
 
             # DB'den bu sembolün tüm market_type'larını al
             sql_find = "SELECT market_type FROM download_tasks WHERE symbol = ?"
@@ -562,7 +562,7 @@ class DataService:
                     rows = await cursor.fetchall()
                     found_types = [row[0] for row in rows]
 
-            logger.info(f"🗑️ Silme isteği: {request.symbol}")
+            logger.info(f"🗑️ Deletion request: {request.symbol}")
             logger.info(f"   - Sembol (temiz): {symbol_clean}")
             logger.info(f"   - Request market_type: {request.market_type}")
             logger.info(f"   - DB'de bulunan market_type'lar: {found_types}")
@@ -572,7 +572,7 @@ class DataService:
                 # Sembol bulunamadı, normalize edilmiş hali dene
                 market_type = self._normalize_market_type(request.market_type, request.symbol)
                 found_types = [market_type]
-                logger.info(f"   - Sembol bulunamadı, normalize ediliyor: {market_type}")
+                logger.info(f"   - Symbol not found, normalizing: {market_type}")
 
             # Her bulunan market_type'ı sil
             deleted_count = 0
@@ -586,7 +586,7 @@ class DataService:
                     if key in self.exchange_manager.download_stops:
                         self.exchange_manager.download_stops[key] = True
                     del self.exchange_manager.active_downloads[key]
-                    logger.info(f"🗑️ RAM'den silindi: {key}")
+                    logger.info(f"🗑️ Deleted from RAM: {key}")
 
                 # Geçersiz semboller için özel temizleme (tüm varyasyonları sil)
                 if is_invalid_symbol:
@@ -600,13 +600,13 @@ class DataService:
                                 db_mt = row[1]
                                 if '-- SEÇİNİZ --' in db_symbol or 'SEÇİNİZ' in db_symbol or db_symbol == '':
                                     await self.db_manager.delete_download_task(db_symbol, db_mt)
-                                    logger.info(f"🗑️ Geçersiz görev temizlendi: {db_symbol}_{db_mt}")
+                                    logger.info(f"🗑️ Invalid task cleared: {db_symbol}_{db_mt}")
                                     deleted_count += 1
                 else:
                     # DB'den sil
                     await self.db_manager.delete_download_task(symbol_clean, mt)
                     deleted_count += 1
-                    logger.info(f"🗑️ DB'den silindi: {symbol_clean}_{mt}")
+                    logger.info(f"🗑️ Deleted from DB: {symbol_clean}_{mt}")
 
                 # ========================================================================
                 # YENİ: Eğer timeframe belirtilmişse, data da silinsin
@@ -618,17 +618,17 @@ class DataService:
 
                         # 1. DB'den sil
                         db_deleted = await self.db_manager.delete_klines(symbol_clean, request.timeframe)
-                        logger.info(f"🗑️ DB'den {db_deleted} mum silindi")
+                        logger.info(f"🗑️ {db_deleted} candles deleted from DB")
 
                         # 2. Flat file'dan sil
                         # OHLCVStorage kendi içinde format çevirisi yapar
                         from data.ohlcv_storage import get_storage
                         storage = get_storage()
                         ff_deleted = storage.delete_ohlcv(request.symbol, request.timeframe)
-                        logger.info(f"🗑️ Flat file'dan {ff_deleted} dosya silindi")
+                        logger.info(f"🗑️ {ff_deleted} files deleted from flat storage")
 
                     except Exception as data_err:
-                        logger.warning(f"⚠️ Data silme hatası (devam ediliyor): {data_err}")
+                        logger.warning(f"⚠️ Data deletion error (continuing): {data_err}")
 
             return {
                 "status": "success",
@@ -818,7 +818,7 @@ class DataService:
             }
 
         except Exception as e:
-            logger.error(f"❌ [DATA] Boşluk kontrolü hatası: {e}")
+            logger.error(f"❌ [DATA] Gap check error: {e}")
             return {"status": "error", "message": str(e)}
 
     async def fill_data_gaps(self, symbol: str = None) -> Dict[str, Any]:
@@ -848,7 +848,7 @@ class DataService:
             # Her boşluğu doldur
             for gap in gaps:
                 try:
-                    logger.info(f"🔄 [GAP FILL] {gap['symbol']} için {gap['gap_days']} günlük boşluk dolduruluyor...")
+                    logger.info(f"🔄 [GAP FILL] Filling {gap['gap_days']} days gap for {gap['symbol']}...")
 
                     await self.exchange_manager.download_historical_data(
                         symbol=gap['symbol'],
@@ -864,10 +864,10 @@ class DataService:
                         "status": "completed"
                     })
 
-                    logger.info(f"✅ [GAP FILL] {gap['symbol']} için boşluk dolduruldu!")
+                    logger.info(f"✅ [GAP FILL] Gap filled for {gap['symbol']}!")
 
                 except Exception as e:
-                    logger.error(f"❌ [GAP FILL] {gap['symbol']} hata: {e}")
+                    logger.error(f"❌ [GAP FILL] {gap['symbol']} error: {e}")
                     filled.append({
                         "symbol": gap['symbol'],
                         "gap_days": gap['gap_days'],

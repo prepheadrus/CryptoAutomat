@@ -38,7 +38,7 @@ try:
     PYARROW_AVAILABLE = True
 except ImportError:
     PYARROW_AVAILABLE = False
-    logger.warning("⚠️ PyArrow bulunamadı, parquet desteği sınırlı olacak")
+    logger.warning("⚠️ PyArrow not found, Parquet support will be limited")
 
 
 class DataLakeStorage:
@@ -152,7 +152,7 @@ class DataLakeStorage:
             return None
 
         except Exception as e:
-            logger.warning(f"⚠️ [DATA LAKE] Son timestamp okuma hatası: {e}")
+            logger.warning(f"⚠️ [DATA LAKE] Last timestamp read error: {e}")
             return None
 
     def load(self, symbol: str, timeframe: str, start_date: datetime = None, end_date: datetime = None) -> Optional[pd.DataFrame]:
@@ -171,7 +171,7 @@ class DataLakeStorage:
         file_path = self._get_file_path(symbol, timeframe)
 
         if not file_path.exists():
-            logger.debug(f"⏭️ [DATA LAKE] Dosya yok: {file_path}")
+            logger.debug(f"⏭️ [DATA LAKE] File does not exist: {file_path}")
             return None
 
         try:
@@ -189,17 +189,17 @@ class DataLakeStorage:
                 df = pd.read_parquet(file_path)
 
             if df.empty:
-                logger.debug(f"⏭️ [DATA LAKE] Dosya boş: {file_path}")
+                logger.debug(f"⏭️ [DATA LAKE] File is empty: {file_path}")
                 return None
 
             # Data integrity kontrolü
             df = self._ensure_integrity(df, timeframe)
 
-            logger.info(f"📖 [DATA LAKE] {symbol} {timeframe} → {len(df)} mum yüklendi ({file_path.name})")
+            logger.info(f"📖 [DATA LAKE] {symbol} {timeframe} → {len(df)} candles loaded ({file_path.name})")
             return df
 
         except Exception as e:
-            logger.warning(f"⚠️ [DATA LAKE] Dosya okuma hatası: {e}")
+            logger.warning(f"⚠️ [DATA LAKE] File read error: {e}")
             return None
 
     def save(self, symbol: str, timeframe: str, df: pd.DataFrame, append: bool = False) -> bool:
@@ -216,7 +216,7 @@ class DataLakeStorage:
             True/False
         """
         if df.empty:
-            logger.warning(f"⚠️ [DATA LAKE] Boş veri kaydedilmedi: {symbol} {timeframe}")
+            logger.warning(f"⚠️ [DATA LAKE] Empty data not saved: {symbol} {timeframe}")
             return False
 
         file_path = self._get_file_path(symbol, timeframe)
@@ -239,7 +239,7 @@ class DataLakeStorage:
                         existing_df = pd.read_parquet(file_path)
                     except Exception as read_err:
                         # Bozuk dosyayı sil ve yeniden başlat
-                        logger.warning(f"⚠️ [DATA LAKE] Bozuk Parquet dosyası, siliniyor: {file_path} - {read_err}")
+                        logger.warning(f"⚠️ [DATA LAKE] Corrupted Parquet file, deleting: {file_path} - {read_err}")
                         file_path.unlink()
                         existing_df = pd.DataFrame()
 
@@ -254,33 +254,33 @@ class DataLakeStorage:
                     combined_df = self._ensure_integrity(combined_df, timeframe)
 
                     combined_df.to_parquet(file_path, compression=self.COMPRESSION, index=False)
-                    logger.info(f"💾 [DATA LAKE] {symbol} {timeframe} → {len(df)} mum EKLENDI (toplam: {len(combined_df)} mum)")
+                    logger.info(f"💾 [DATA LAKE] {symbol} {timeframe} → {len(df)} candles APPENDED (total: {len(combined_df)} candles)")
                 else:
                     # Yeni dosya yaz
                     df.to_parquet(file_path, compression=self.COMPRESSION, index=False)
-                    logger.info(f"💾 [DATA LAKE] {symbol} {timeframe} → {len(df)} mum KAYDEDILDI")
+                    logger.info(f"💾 [DATA LAKE] {symbol} {timeframe} → {len(df)} candles SAVED")
 
                 return True
                 
             except PermissionError as perm_err:
                 # Windows file lock hatası - bekle ve tekrar dene
                 if attempt < max_retries - 1:
-                    logger.warning(f"⚠️ [DATA LAKE] File lock hatası ({attempt+1}/{max_retries}), {retry_delay}s bekleniyor... {file_path}")
+                    logger.warning(f"⚠️ [DATA LAKE] File lock error ({attempt+1}/{max_retries}), retrying in {retry_delay}s... {file_path}")
                     time.sleep(retry_delay)
                     retry_delay *= 2  # Exponential backoff
                 else:
-                    logger.error(f"❌ [DATA LAKE] Dosya yazma hatası (File Lock): {perm_err} - {file_path}")
+                    logger.error(f"❌ [DATA LAKE] File write error (File Lock): {perm_err} - {file_path}")
                     return False
             except FileNotFoundError as not_found_err:
                 # Dosya silinmiş, yeniden oluştur
                 if attempt < max_retries - 1:
-                    logger.warning(f"⚠️ [DATA LAKE] Dosya bulunamadı ({attempt+1}/{max_retries}), yeniden deneniyor... {file_path}")
+                    logger.warning(f"⚠️ [DATA LAKE] File not found ({attempt+1}/{max_retries}), retrying... {file_path}")
                     time.sleep(retry_delay)
                 else:
-                    logger.error(f"❌ [DATA LAKE] Dosya yazma hatası (Not Found): {not_found_err} - {file_path}")
+                    logger.error(f"❌ [DATA LAKE] File write error (Not Found): {not_found_err} - {file_path}")
                     return False
             except Exception as e:
-                logger.error(f"❌ [DATA LAKE] Dosya yazma hatası: {e} - {file_path}")
+                logger.error(f"❌ [DATA LAKE] File write error: {e} - {file_path}")
                 return False
         
         return False
@@ -337,7 +337,7 @@ class DataLakeStorage:
 
                     df['timestamp'] = pd.to_datetime(df['timestamp'], unit=unit, utc=True)
                 except Exception as ts_err:
-                    logger.warning(f"⚠️ [DATA LAKE] Timestamp dönüşüm hatası: {ts_err}, defaulting to 'ms'")
+                    logger.warning(f"⚠️ [DATA LAKE] Timestamp conversion error: {ts_err}, defaulting to 'ms'")
                     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms', utc=True)
 
         # NaN değerleri temizle
@@ -356,7 +356,7 @@ class DataLakeStorage:
         # Index'i reset le
         df = df.reset_index(drop=True)
 
-        logger.debug(f"✅ [DATA LAKE] Integrity check: ({len(df)} mum)")
+        logger.debug(f"✅ [DATA LAKE] Integrity check: ({len(df)} candles)")
         return df
 
     async def load_or_resample(self, symbol: str, timeframe: str, db_manager,
@@ -378,11 +378,11 @@ class DataLakeStorage:
         if not force_resample and self.exists(symbol, timeframe):
             df = self.load(symbol, timeframe)
             if df is not None and len(df) >= limit:
-                logger.info(f"✅ [DATA LAKE] {symbol} {timeframe} → Dosyadan yüklendi ({len(df)} mum)")
+                logger.info(f"✅ [DATA LAKE] {symbol} {timeframe} → Loaded from file ({len(df)} candles)")
                 return df.tail(limit)
 
         # 2. Dosya yoksa veya yetersizse, DB'den 1m çek ve resample yap
-        logger.info(f"🔄 [DATA LAKE] {symbol} {timeframe} → Dosya yok/yetersiz, 1m'den resample yapılıyor...")
+        logger.info(f"🔄 [DATA LAKE] {symbol} {timeframe} → File missing or insufficient, resampling from 1m...")
 
         # 1m için limit ayarla (timeframe multiplier)
         multiplier = self._get_timeframe_multiplier(timeframe)
@@ -395,7 +395,7 @@ class DataLakeStorage:
             klines = None
 
         if not klines or len(klines) == 0:
-            logger.warning(f"⚠️ [DATA LAKE] {symbol} için 1m veri bulunamadı")
+            logger.warning(f"⚠️ [DATA LAKE] 1m data not found for {symbol}")
             return None
 
         # List of tuples'u DataFrame'e çevir
@@ -414,7 +414,7 @@ class DataLakeStorage:
             df_reset = df.copy()
             df_reset.reset_index(inplace=True)
             self.save(symbol, timeframe, df_reset)
-            logger.info(f"✅ [DATA LAKE] {symbol} {timeframe} → Resample edildi ve kaydedildi ({len(df)} mum)")
+            logger.info(f"✅ [DATA LAKE] {symbol} {timeframe} → Resampled and saved ({len(df)} candles)")
 
         return df.tail(limit) if len(df) >= limit else df
 

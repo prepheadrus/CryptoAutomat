@@ -345,7 +345,7 @@ class ExecutionE2ETest:
                 logger.info(f"   ✅ Net PnL doğru hesaplandı: ${net_pnl:,.2f}")
                 return True
             else:
-                logger.error(f"❌ [FAIL] Hesaplama hatalı!")
+                logger.error(f"❌ [FAIL] Calculation error!")
                 logger.error(f"   Slippage fark: ${price_diff:.4f}, Komisyon fark: ${fee_diff:.4f}")
                 return False
 
@@ -381,7 +381,7 @@ class ExecutionE2ETest:
             status = "✅ PASS" if result else "❌ FAIL"
             logger.info(f"   {status}: {test_name}")
         
-        logger.info(f"\n📈 TOPLAM: {passed}/{total} test başarılı")
+        logger.info(f"\n📈 TOTAL: {passed}/{total} tests passed")
         
         if passed == total:
             logger.info(f"\n🎉 TÜM TESTLER BAŞARILI!")
@@ -394,7 +394,7 @@ class ExecutionE2ETest:
             logger.info("✅ [EXECUTION] Adım 4: Risk Motoru ve Kağıt Ticareti İcrası Doğrulandı")
             logger.info("="*80)
         else:
-            logger.error(f"\n❌ BAZI TESTLER BAŞARISIZ! Lütfen hataları inceleyin.")
+            logger.error(f"\n❌ SOME TESTS FAILED! Please inspect errors.")
         
         # Rapor oluştur
         self._generate_report(results)

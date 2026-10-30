@@ -85,7 +85,7 @@ async def lifespan(app: FastAPI):
                 # [SYMBOL FIX] Parquet'ten gelen sembolleri normalize et (örn: /BTC → BTC/USDT)
                 symbols = [normalize_symbol(s) for s in stats['symbols'].keys()]
                 logger.info(f"✅ [AUTO-SYNC] Loaded {len(symbols)} symbols from Parquet Data Lake!")
-                logger.info(f"   Toplam dosya: {stats['total_files']}, Boyut: {stats['total_size_mb']:.2f} MB")
+                logger.info(f"   Total files: {stats['total_files']}, Size: {stats['total_size_mb']:.2f} MB")
             else:
                 logger.info("ℹ️ Parquet Data Lake is empty - launch bots from Dashboard")
         except Exception as e:

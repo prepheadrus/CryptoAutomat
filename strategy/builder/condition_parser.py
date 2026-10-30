@@ -399,13 +399,13 @@ if __name__ == "__main__":
 
     # JSON'dan RuleGroup oluştur
     rule_group = parse_condition_json(example_json)
-    print("[OK] RuleGroup olusturuldu:")
+    print("[OK] RuleGroup created:")
     print(f"   Logic: {rule_group.logic}")
     print(f"   Conditions: {len(rule_group.conditions)}")
 
     # Dictionary'e çevir
     rule_dict = rule_group.to_dict()
-    print(f"\n[OK] Dictionary'e çevrildi:")
+    print(f"\n[OK] Converted to dictionary:")
     print(f"   {rule_dict}")
 
     # Test DataFrame oluştur
@@ -418,6 +418,6 @@ if __name__ == "__main__":
     # Stratejiyi değerlendir
     result = evaluate_strategy(test_df, rule_group)
     print(f"\n[OK] Strateji sonucu: {result}")
-    print(f"   Son mum: RSI={test_df['RSI_14'].iloc[-1]}, MACD={test_df['MACD_12_26_9'].iloc[-1]}, Signal={test_df['MACD_Signal_12_26_9'].iloc[-1]}")
+    print(f"   Last candle: RSI={test_df['RSI_14'].iloc[-1]}, MACD={test_df['MACD_12_26_9'].iloc[-1]}, Signal={test_df['MACD_Signal_12_26_9'].iloc[-1]}")
     print(f"   Kosul 1: RSI < 30 -> {test_df['RSI_14'].iloc[-1]} < 30 = {test_df['RSI_14'].iloc[-1] < 30}")
     print(f"   Kosul 2: MACD > Signal -> {test_df['MACD_12_26_9'].iloc[-1]} > {test_df['MACD_Signal_12_26_9'].iloc[-1]} = {test_df['MACD_12_26_9'].iloc[-1] > test_df['MACD_Signal_12_26_9'].iloc[-1]}")

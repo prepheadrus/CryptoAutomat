@@ -178,7 +178,7 @@ class EventBus:
         
         Örnek:
             def on_position_opened(event: Event):
-                logger.info(f"Pozisyon açıldı: {event.payload}")
+                logger.info(f"Position opened: {event.payload}")
             
             event_bus.subscribe("position.opened", on_position_opened)
         """
@@ -229,7 +229,7 @@ class EventBus:
                 logger.debug(f"🧹 Subscribers temizlendi: {event_type}")
         else:
             self._subscribers.clear()
-            logger.info("🧹 Tüm subscribers temizlendi")
+            logger.info("🧹 All subscribers cleared")
     
     # ========================================================================
     # EVENT PUBLISHING
@@ -265,7 +265,7 @@ class EventBus:
             logger.debug(f"📤 Event published: {event}")
             
         except asyncio.QueueFull:
-            logger.warning(f"⚠️ Event queue dolu! Event atılıyor: {event.type}")
+            logger.warning(f"⚠️ Event queue full! Dropping event: {event.type}")
             self._error_count += 1
             raise
     
@@ -280,7 +280,7 @@ class EventBus:
             self._event_count += 1
             logger.debug(f"📤 Event published (sync): {event}")
         except asyncio.QueueFull:
-            logger.warning(f"⚠️ Event queue dolu! Event atılıyor: {event.type}")
+            logger.warning(f"⚠️ Event queue full! Dropping event: {event.type}")
             self._error_count += 1
     
     # ========================================================================
@@ -347,7 +347,7 @@ class EventBus:
         Queue'dan event'leri alır ve handler'lara gönderir.
         Kritik hatalarda worker yeniden başlatılır.
         """
-        logger.debug(f"👷 {worker_name} başlatıldı")
+        logger.debug(f"👷 {worker_name} started")
         
         consecutive_errors = 0
         max_consecutive_errors = 10
@@ -383,7 +383,7 @@ class EventBus:
                 )
                 
                 if consecutive_errors >= max_consecutive_errors:
-                    logger.critical(f"🚨 [EVENT BUS] {worker_name} çok fazla kritik hata, devre dışı bırakılıyor")
+                    logger.critical(f"🚨 [EVENT BUS] {worker_name} too many critical errors, disabling worker")
                     self._error_count += consecutive_errors
                     break
                 
@@ -394,15 +394,15 @@ class EventBus:
             except Exception as e:
                 # Normal hata
                 consecutive_errors += 1
-                logger.error(f"👷 {worker_name} hatası: {e} (Artış: {consecutive_errors})")
+                logger.error(f"👷 {worker_name} error: {e} (Streak: {consecutive_errors})")
                 
                 if consecutive_errors >= max_consecutive_errors:
-                    logger.critical(f"🚨 [EVENT BUS] {worker_name} art arda {consecutive_errors} hata, yeniden başlatılıyor")
+                    logger.critical(f"🚨 [EVENT BUS] {worker_name} {consecutive_errors} consecutive errors, restarting")
                     consecutive_errors = 0
                 
                 await asyncio.sleep(0.1)  # CPU spike önleme
 
-        logger.debug(f"👷 {worker_name} durduruldu")
+        logger.debug(f"👷 {worker_name} stopped")
     
     async def _process_event(self, event: Event, worker_name: str):
         """
@@ -414,10 +414,10 @@ class EventBus:
         handlers = await self._get_handlers_for_event(event_type)
         
         if not handlers:
-            logger.debug(f"📭 {event_type} için abone yok")
+            logger.debug(f"📭 No subscribers for {event_type}")
             return
         
-        logger.debug(f"🔧 {worker_name}: {event_type} işleniyor ({len(handlers)} handler)")
+        logger.debug(f"🔧 {worker_name}: processing {event_type} ({len(handlers)} handlers)")
         
         for handler in handlers:
             try:
@@ -548,7 +548,7 @@ def on_event(event_type: str, priority: int = 0):
     Kullanım:
         @on_event("position.opened")
         async def handle_position_opened(event: Event):
-            logger.info(f"Pozisyon açıldı: {event.payload}")
+            logger.info(f"Position opened: {event.payload}")
     """
     def decorator(handler: Callable):
         event_bus.subscribe(event_type, handler, priority)

@@ -56,9 +56,9 @@ class KeyManager:
                 with open(self.key_file, 'rb') as f:
                     key = f.read()
                 self.fernet = Fernet(key)
-                logger.debug("🔑 [SECURITY] Şifreleme anahtarı yüklendi")
+                logger.debug("🔑 [SECURITY] Encryption key loaded")
             except Exception as e:
-                logger.error(f"❌ [SECURITY] Anahtar yükleme hatası: {e}")
+                logger.error(f"❌ [SECURITY] Key loading error: {e}")
                 self._create_new_key()
         else:
             # Yeni anahtar oluştur
@@ -82,11 +82,11 @@ class KeyManager:
             
             self.fernet = Fernet(key)
             
-            logger.info("🔑 [SECURITY] Yeni şifreleme anahtarı oluşturuldu (.secret.key)")
-            logger.info(f"📁 [SECURITY] Dosya izinleri: 0o600 (sadece owner)")
+            logger.info("🔑 [SECURITY] New encryption key generated (.secret.key)")
+            logger.info(f"📁 [SECURITY] File permissions: 0o600 (owner only)")
             
         except Exception as e:
-            logger.error(f"❌ [SECURITY] Anahtar oluşturma hatası: {e}")
+            logger.error(f"❌ [SECURITY] Key generation error: {e}")
             raise
     
     def encrypt(self, data: str) -> str:
@@ -103,7 +103,7 @@ class KeyManager:
             encrypted = self.fernet.encrypt(data.encode('utf-8'))
             return encrypted.decode('utf-8')
         except Exception as e:
-            logger.error(f"❌ [SECURITY] Şifreleme hatası: {e}")
+            logger.error(f"❌ [SECURITY] Encryption error: {e}")
             raise
     
     def decrypt(self, encrypted_data: str) -> str:
@@ -120,7 +120,7 @@ class KeyManager:
             decrypted = self.fernet.decrypt(encrypted_data.encode('utf-8'))
             return decrypted.decode('utf-8')
         except Exception as e:
-            logger.error(f"❌ [SECURITY] Şifre çözme hatası: {e}")
+            logger.error(f"❌ [SECURITY] Decryption error: {e}")
             raise
     
     def save_api_keys(self, api_key: str, api_secret: str):
@@ -154,10 +154,10 @@ class KeyManager:
                 for key, value in env_data.items():
                     f.write(f"{key}={value}\n")
             
-            logger.info("✅ [SECURITY] API anahtarları şifrelenerek kaydedildi")
+            logger.info("✅ [SECURITY] API keys encrypted and saved")
             
         except Exception as e:
-            logger.error(f"❌ [SECURITY] API anahtarı kaydetme hatası: {e}")
+            logger.error(f"❌ [SECURITY] API key saving error: {e}")
             raise
     
     def load_api_keys(self) -> tuple:
@@ -169,7 +169,7 @@ class KeyManager:
         """
         try:
             if not self.env_file.exists():
-                logger.warning("⚠️ [SECURITY] .env dosyası yok")
+                logger.warning("⚠️ [SECURITY] .env file not found")
                 return None, None
             
             # .env dosyasını oku
@@ -185,19 +185,19 @@ class KeyManager:
             encrypted_secret = env_data.get('BINANCE_API_SECRET')
             
             if not encrypted_key or not encrypted_secret:
-                logger.warning("⚠️ [SECURITY] API anahtarları bulunamadı")
+                logger.warning("⚠️ [SECURITY] API keys not found")
                 return None, None
             
             # Çöz
             api_key = self.decrypt(encrypted_key)
             api_secret = self.decrypt(encrypted_secret)
             
-            logger.debug("🔓 [SECURITY] API anahtarları çözüldü")
+            logger.debug("🔓 [SECURITY] API keys decrypted")
             
             return api_key, api_secret
             
         except Exception as e:
-            logger.error(f"❌ [SECURITY] API anahtarı yükleme hatası: {e}")
+            logger.error(f"❌ [SECURITY] API key loading error: {e}")
             return None, None
 
 

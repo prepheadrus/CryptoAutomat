@@ -23,11 +23,11 @@ async def download_and_prepare_data(symbols=["BTC/USDT", "ETH/USDT", "SOL/USDT",
     exchange = ExchangeManager()
     
     for symbol in symbols:
-        logger.info(f"{symbol} için {limit} mum indiriliyor...")
+        logger.info(f"Downloading {limit} candles for {symbol}...")
         try:
             ohlcv = await exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
             if not ohlcv or len(ohlcv) < 500:
-                logger.warning(f"{symbol} için yeterli veri yok, atlanıyor.")
+                logger.warning(f"Insufficient data for {symbol}, skipped.")
                 continue
                 
             df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
@@ -54,10 +54,10 @@ async def download_and_prepare_data(symbols=["BTC/USDT", "ETH/USDT", "SOL/USDT",
             
             all_X.append(X)
             all_y.append(y)
-            logger.info(f"{symbol} hazır. ({len(df)} temiz mum)")
+            logger.info(f"{symbol} ready. ({len(df)} clean candles)")
             
         except Exception as e:
-            logger.error(f"{symbol} indirilirken hata: {e}")
+            logger.error(f"Error downloading {symbol}: {e}")
 
     await exchange.close()
     
@@ -68,12 +68,12 @@ async def download_and_prepare_data(symbols=["BTC/USDT", "ETH/USDT", "SOL/USDT",
     final_X = pd.concat(all_X)
     final_y = pd.concat(all_y)
     
-    logger.info(f"TÜM PARİTELER BİRLEŞTİRİLDİ. Toplam Veri: {len(final_X)} Mum.")
+    logger.info(f"ALL PAIRS MERGED. Total Data: {len(final_X)} Candles.")
     return final_X, final_y
 
 def train_and_save_model(X, y):
     """XGBoost modelini eğitir ve diske kaydeder."""
-    logger.info("Çoklu Parite (Multi-Asset) Eğitimi Başlıyor...")
+    logger.info("Multi-Asset Training Starting...")
     
     # Karıştırarak eğitim (Shuffling) - Pariteler arası öğrenmeyi güçlendirir
     indices = np.random.permutation(len(X))
@@ -90,10 +90,10 @@ def train_and_save_model(X, y):
     with open(filepath, 'wb') as f:
         pickle.dump(xgb_wrapper, f)
         
-    logger.info(f"Süper Model Eğitildi ve Başarıyla Kaydedildi! -> {filepath}")
+    logger.info(f"Super Model Trained and Saved Successfully! -> {filepath}")
 
 async def main():
-    logger.info("🤖 KRİPTO BOT - ÇOKLU PARİTE EĞİTİM KONSOLU")
+    logger.info("🤖 CRYPTO BOT - MULTI-ASSET TRAINING CONSOLE")
     # ETH, SOL ve XRP'yi de dahil eden genişletilmiş eğitim
     X, y = await download_and_prepare_data(
         symbols=["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT"], 
@@ -104,7 +104,7 @@ async def main():
     if X is not None:
         train_and_save_model(X, y)
     else:
-        logger.error("Hüp! Veri seti oluşturulamadı.")
+        logger.error("Error: Dataset could not be created.")
 
 if __name__ == "__main__":
     if os.name == 'nt':

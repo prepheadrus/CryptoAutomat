@@ -32,7 +32,7 @@ Kullanım:
     
     # Trade sonuçlarını al
     result = trade.get_result()
-    print(f"Kar: ${result.pnl}, Yüzde: {result.pnl_percent:.2%}")
+    print(f"Profit: ${result.pnl}, Percent: {result.pnl_percent:.2%}")
 """
 
 from dataclasses import dataclass, field

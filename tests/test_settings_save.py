@@ -173,7 +173,7 @@ async def test_settings():
         print("⚠️ Test client için 'pytest' ve 'httpx' gerekli")
         print("   pip install pytest httpx")
     except Exception as e:
-        print(f"❌ API test hatası: {e}")
+        print(f"❌ API test error: {e}")
     
     print("\n" + "=" * 80)
     print("✅ TEST TAMAMLANDI")

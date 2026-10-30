@@ -25,9 +25,9 @@ class DatabaseManager:
                 try:
                     self.db_pool = await asyncpg.create_pool(dsn=TIMESCALE_DB_URL, min_size=2, max_size=10)
                     self.engine_type = "postgres"
-                    logger.info("Aşama 1.5: Kalıcı Veritabanı (PostgreSQL) bağlantı havuzu oluşturuldu.")
+                    logger.info("Stage 1.5: Persistent Database (PostgreSQL) connection pool created.")
                 except Exception as pg_err:
-                    logger.warning(f"PostgreSQL bağlantısı başarısız, SQLite'a geçiliyor: {pg_err}")
+                    logger.warning(f"PostgreSQL connection failed, falling back to SQLite: {pg_err}")
 
             # 2. SQLite Fallback (Docker/Postgres yoksa devreye girer)
             if self.engine_type == "sqlite":
@@ -44,14 +44,14 @@ class DatabaseManager:
                 await self.sqlite_conn.execute("PRAGMA synchronous=NORMAL")  # Daha hızlı yazma
                 await self.sqlite_conn.execute("PRAGMA cache_size=10000")  # 10MB cache
 
-                logger.info(f"Aşama 1.5: Docker Gerektirmeyen Yerel Hafıza (SQLite) aktif -> {self.sqlite_path}")
-                logger.info("SQLite optimizasyonları aktif: WAL mode, 60s timeout, busy_timeout=60000")
+                logger.info(f"Stage 1.5: Local Serverless Storage (SQLite) active -> {self.sqlite_path}")
+                logger.info("SQLite optimizations active: WAL mode, 60s timeout, busy_timeout=60000")
 
             # Tabloları ayağa kaldır
             await self.initialize_db()
 
         except Exception as e:
-            logger.error(f"Veritabanı Başlatma Hatası: {e}")
+            logger.error(f"Database Initialization Error: {e}")
 
     async def ensure_connected(self):
         """
@@ -60,11 +60,11 @@ class DatabaseManager:
         """
         if self.engine_type == "sqlite":
             if not self.sqlite_conn:
-                logger.warning("⚠️ [DB] SQLite bağlantısı yok, başlatılıyor...")
+                logger.warning("⚠️ [DB] No SQLite connection, initializing...")
                 await self.connect()
         elif self.engine_type == "postgres":
             if not self.db_pool:
-                logger.warning("⚠️ [DB] PostgreSQL bağlantısı yok, başlatılıyor...")
+                logger.warning("⚠️ [DB] No PostgreSQL connection, initializing...")
                 await self.connect()
 
     async def initialize_db(self):
@@ -75,7 +75,7 @@ class DatabaseManager:
         # 2. Standart tabloları oluştur
         await self._create_standard_tables()
 
-        logger.info(f"Veritabanı şeması ({self.engine_type}) doğrulandı.")
+        logger.info(f"Database schema ({self.engine_type}) verified.")
 
     async def _validate_and_migrate_schemas(self):
         """Veritabanı şemalarını doğrular ve gerekirse otomatik düzeltir."""
@@ -101,12 +101,12 @@ class DatabaseManager:
                     )
 
                     if not has_correct_pk:
-                        logger.warning("⚠️ download_tasks şeması hatalı, otomatik düzeltiliyor...")
+                        logger.warning("⚠️ download_tasks schema invalid, auto-repairing...")
                         await self._migrate_download_tasks_schema()
                 # Tablo yoksa, _create_standard_tables oluşturacak
 
         except Exception as e:
-            logger.error(f"download_tasks şema doğrulama hatası: {e}")
+            logger.error(f"download_tasks schema validation error: {e}")
 
     async def _migrate_download_tasks_schema(self):
         """download_tasks tablosunu doğru şema ile yeniden oluşturur, verileri korur."""
@@ -119,7 +119,7 @@ class DatabaseManager:
                     columns = [d[0] for d in cursor.description]
                     saved_data = [dict(zip(columns, row)) for row in rows]
 
-            logger.info(f"📦 {len(saved_data)} indirme görevi yedeklendi.")
+            logger.info(f"📦 Backed up {len(saved_data)} download tasks.")
 
             # Eski tabloyu sil
             await self.sqlite_conn.execute("DROP TABLE IF EXISTS download_tasks")
@@ -152,10 +152,10 @@ class DatabaseManager:
                     ))
 
             await self.sqlite_conn.commit()
-            logger.info("✅ download_tasks şeması düzeltildi ve veriler korundu!")
+            logger.info("✅ download_tasks schema repaired and data preserved!")
 
         except Exception as e:
-            logger.error(f"download_tasks migration hatası: {e}")
+            logger.error(f"download_tasks migration error: {e}")
             # Hata durumunda tabloyu yeniden oluştur (verisiz)
             await self.sqlite_conn.execute("DROP TABLE IF EXISTS download_tasks")
             await self.sqlite_conn.execute("""
@@ -239,14 +239,14 @@ class DatabaseManager:
             try:
                 await self.sqlite_conn.execute("ALTER TABLE trades ADD COLUMN strategy_id TEXT")
                 await self.sqlite_conn.execute("ALTER TABLE trades ADD COLUMN closed_at TEXT")
-                logger.info("✅ trades tablosuna strategy_id ve closed_at sütunları eklendi (migration).")
+                logger.info("✅ Added strategy_id and closed_at columns to trades table (migration).")
             except:
                 pass  # Sütun zaten var
             
             # Migration: bot_id column if not exists (yeni duplicate önleme)
             try:
                 await self.sqlite_conn.execute("ALTER TABLE trades ADD COLUMN bot_id TEXT")
-                logger.info("✅ trades tablosuna bot_id sütunu eklendi (migration).")
+                logger.info("✅ Added bot_id column to trades table (migration).")
             except:
                 pass  # Sütun zaten var
 
@@ -281,9 +281,9 @@ class DatabaseManager:
                 await self.sqlite_conn.execute("DROP TABLE IF EXISTS trades")
                 await self.sqlite_conn.execute("ALTER TABLE trades_new RENAME TO trades")
 
-                logger.info("✅ trades tablosu leverage REAL olarak güncellendi")
+                logger.info("✅ trades table leverage column updated to REAL")
             except Exception as e:
-                logger.debug(f"Leverage migration atlandi: {e}")
+                logger.debug(f"Leverage migration skipped: {e}")
                 await self.sqlite_conn.execute("DROP TABLE IF EXISTS trades_new")
 
             await self.sqlite_conn.commit()
@@ -319,11 +319,11 @@ class DatabaseManager:
                     attempt += 1
                 else:
                     # Başka bir hata veya son deneme
-                    logger.error(f"❌ [DB] Database işlem hatası: {e}")
+                    logger.error(f"❌ [DB] Database operation error: {e}")
                     raise
             except Exception as e:
                 # Diğer hataları doğrudan fırlat
-                logger.error(f"❌ [DB] Beklenmeyen hata: {e}")
+                logger.error(f"❌ [DB] Unexpected error: {e}")
                 raise
         
         # Tüm denemeler başarısız
@@ -436,7 +436,7 @@ class DatabaseManager:
                     if val.tzinfo is None: val = val.replace(tzinfo=datetime.timezone.utc)
                     return int(val.timestamp() * 1000)
 
-                logger.debug(f"✅ DB Sembol eşleşti (get_candle_range): {symbol} → {sym_variant}")
+                logger.debug(f"✅ DB Symbol matched (get_candle_range): {symbol} → {sym_variant}")
                 return {
                     "start": to_ms(row['start_ts']),
                     "end": to_ms(row['end_ts'])
@@ -446,7 +446,7 @@ class DatabaseManager:
         if found_any_tf:
             logger.warning(f"⚠️ [DB] {symbol} bulundu ancak {timeframe} verisi yok. Mevcut timeframe'ler: {found_any_tf}")
         else:
-            logger.debug(f"⚠️ DB'de sembol bulunamadı: {symbol}")
+            logger.debug(f"⚠️ Symbol not found in DB: {symbol}")
         return None
 
     async def get_klines(self, symbol: str, timeframe: str = '1m', limit: int = 1000) -> list:
@@ -509,19 +509,19 @@ class DatabaseManager:
                     rows = await conn.fetch(sql, sym_variant, timeframe, limit)
                     result = [(row['timestamp'], row['open'], row['high'], row['low'], row['close'], row['volume']) for row in rows]
                     if len(result) > 0:
-                        logger.debug(f"✅ DB Sembol eşleşti (get_klines): {symbol} → {sym_variant} ({len(result)} mum)")
+                        logger.debug(f"✅ DB Symbol matched (get_klines): {symbol} → {sym_variant} ({len(result)} candles)")
                         return result
             else:
                 # SQLite bağlantısını kontrol et
                 if self.sqlite_conn is None:
-                    logger.debug(f"⚠️ SQLite bağlantısı yok ({sym_variant})")
+                    logger.debug(f"⚠️ No SQLite connection ({sym_variant})")
                     continue
                     
                 async with self.sqlite_conn.execute(sql, params) as cursor:
                     rows = await cursor.fetchall()
                     result = [(row[0], row[1], row[2], row[3], row[4], row[5]) for row in rows]
                     if len(result) > 0:
-                        logger.debug(f"✅ DB Sembol eşleşti (get_klines): {symbol} → {sym_variant} ({len(result)} mum)")
+                        logger.debug(f"✅ DB Symbol matched (get_klines): {symbol} → {sym_variant} ({len(result)} candles)")
                         return result
 
         # Hiçbir varyant bulunamadı
@@ -567,14 +567,14 @@ class DatabaseManager:
                     row = await conn.fetchrow(sql, sym_variant, timeframe)
                     cnt = row['cnt'] if row else 0
                     if cnt > 0:
-                        logger.debug(f"✅ DB Sembol eşleşti: {symbol} → {sym_variant} ({cnt} mum)")
+                        logger.debug(f"✅ DB Symbol matched: {symbol} → {sym_variant} ({cnt} candles)")
                         return cnt
             else:
                 async with self.sqlite_conn.execute(sql, params) as cursor:
                     row = await cursor.fetchone()
                     cnt = row[0] if row else 0
                     if cnt > 0:
-                        logger.debug(f"✅ DB Sembol eşleşti: {symbol} → {sym_variant} ({cnt} mum)")
+                        logger.debug(f"✅ DB Symbol matched: {symbol} → {sym_variant} ({cnt} candles)")
                         return cnt
 
         # Hiçbir varyant bulunamadı
@@ -657,14 +657,14 @@ class DatabaseManager:
                     row = await conn.fetchrow(sql, sym_variant, timeframe)
                     earliest_ts = row['earliest_ts'] if row else None
                     if earliest_ts:
-                        logger.debug(f"✅ DB İlk timestamp: {symbol} → {sym_variant} ({pd.to_datetime(earliest_ts, unit='ms')})")
+                        logger.debug(f"✅ DB Earliest timestamp: {symbol} → {sym_variant} ({pd.to_datetime(earliest_ts, unit='ms')})")
                         return earliest_ts
             else:
                 async with self.sqlite_conn.execute(sql, params) as cursor:
                     row = await cursor.fetchone()
                     earliest_ts = row[0] if row else None
                     if earliest_ts:
-                        logger.debug(f"✅ DB İlk timestamp: {symbol} → {sym_variant} ({pd.to_datetime(earliest_ts, unit='ms')})")
+                        logger.debug(f"✅ DB Earliest timestamp: {symbol} → {sym_variant} ({pd.to_datetime(earliest_ts, unit='ms')})")
                         return earliest_ts
 
         # Hiçbir varyant bulunamadı
@@ -758,7 +758,7 @@ class DatabaseManager:
                 await self.sqlite_conn.commit()
 
         if deleted_count > 0:
-            logger.info(f"🗑️ {symbol} için {deleted_count} mum silindi")
+            logger.info(f"🗑️ Deleted {deleted_count} candles for {symbol}")
 
         return deleted_count
 
@@ -804,7 +804,7 @@ class DatabaseManager:
             if self.engine_type == "sqlite":
                 async with self.sqlite_conn.execute(sql) as cursor:
                     rows = await cursor.fetchall()
-                    logger.info(f"📊 Envanter sorgusu: {len(rows)} kayıt bulundu")
+                    logger.info(f"📊 Inventory query: {len(rows)} records found")
 
                     for row in rows:
                         count = row[4] or 0
@@ -825,7 +825,7 @@ class DatabaseManager:
                             'count': count
                         })
 
-                    logger.info(f"📊 Toplam mum sayısı: {total_candles}")
+                    logger.info(f"📊 Total candle count: {total_candles}")
             else:
                 async with self.db_pool.acquire() as conn:
                     rows = await conn.fetch(sql)
@@ -875,7 +875,7 @@ class DatabaseManager:
                 'inventory': inventory
             }
         except Exception as e:
-            logger.error(f"❌ Envanter hatası: {e}")
+            logger.error(f"❌ Inventory error: {e}")
             logger.error(f"Exception type: {type(e).__name__}")
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
@@ -983,7 +983,7 @@ class DatabaseManager:
                 'total_symbols': len(stats)
             }
         except Exception as e:
-            logger.error(f"❌ Database stats hatası: {e}")
+            logger.error(f"❌ Database stats error: {e}")
             logger.error(f"Exception type: {type(e).__name__}")
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
@@ -1174,13 +1174,13 @@ class DatabaseManager:
             # WAL modunda checkpoint yap (journal dosyalarını temizle)
             try:
                 await self.sqlite_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-                logger.info("SQLite WAL checkpoint tamamlandı.")
+                logger.info("SQLite WAL checkpoint complete.")
             except Exception as e:
-                logger.warning(f"WAL checkpoint hatası: {e}")
+                logger.warning(f"WAL checkpoint error: {e}")
 
             # Bağlantıyı kapat
             await self.sqlite_conn.close()
-            logger.info("Veritabanı bağlantıları sonlandırıldı.")
+            logger.info("Database connections closed.")
 
 # Gereken Pandas importu (fonksiyon içinde)
 import pandas as pd

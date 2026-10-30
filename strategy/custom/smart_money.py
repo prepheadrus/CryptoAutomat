@@ -190,5 +190,5 @@ class SmartMoneyStrategy(BaseStrategy):
             return 1
 
         except Exception as e:
-            logger.error(f"❌ Smart Money sinyal hatası: {e}")
+            logger.error(f"❌ Smart Money signal error: {e}")
             return 1  # HOLD - Hata durumunda bekle

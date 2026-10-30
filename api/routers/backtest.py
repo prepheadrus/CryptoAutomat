@@ -122,7 +122,7 @@ async def fetch_real_data(
     🏗️ PARQUET DATA LAKE'den gerçek OHLCV verisi çek.
     SMART CACHE: Önce Parquet'ten yükle, eksik varsa SQLite'dan tamamla.
     """
-    logger.info(f"🏗️ [PARQUET LAKE] Veri çekiliyor: {symbol} ({timeframe}, {days} gün)")
+    logger.info(f"🏗️ [PARQUET LAKE] Fetching data: {symbol} ({timeframe}, {days} days)")
 
     try:
         # SMART CACHE kullan (data_service üzerinden)
@@ -156,13 +156,13 @@ async def fetch_real_data(
         from data.indicators import StrategyIndicators
         df['ATR_14'] = StrategyIndicators.atr(df['high'], df['low'], df['close'], 14)
 
-        logger.info(f"✅ [PARQUET LAKE] {symbol} {timeframe} → {len(df)} mum yüklendi ({days} gün)")
-        logger.info(f"📊 [PARQUET LAKE] İlk: {df.index[0]}, Son: {df.index[-1]}")
+        logger.info(f"✅ [PARQUET LAKE] {symbol} {timeframe} → {len(df)} candles loaded ({days} days)")
+        logger.info(f"📊 [PARQUET LAKE] First: {df.index[0]}, Last: {df.index[-1]}")
 
         return df
 
     except Exception as e:
-        logger.error(f"❌ [PARQUET LAKE] Veri çekme hatası: {e}")
+        logger.error(f"❌ [PARQUET LAKE] Data fetch error: {e}")
         raise ValueError(f"Veri çekilemedi: {str(e)}")
 
 
@@ -206,11 +206,11 @@ def calculate_signals(df: pd.DataFrame, strategy_data: Dict[str, Any]) -> pd.Ser
 
         # Eğer indikatör hesaplanmamışsa (JSON'da yoksa), yaygın indikatörleri otomatik hesapla
         if 'RSI_14' not in prepared_df.columns:
-            logger.warning("RSI_14 bulunamadı, otomatik hesaplanıyor...")
+            logger.warning("RSI_14 not found, calculating automatically...")
             prepared_df['RSI_14'] = StrategyIndicators.rsi(prepared_df['close'], 14)
 
         if 'MACD_12_26_9' not in prepared_df.columns:
-            logger.warning("MACD_12_26_9 bulunamadı, otomatik hesaplanıyor...")
+            logger.warning("MACD_12_26_9 not found, calculating automatically...")
             macd, signal, hist = StrategyIndicators.macd(prepared_df['close'], 12, 26, 9)
             prepared_df['MACD_12_26_9'] = macd
             prepared_df['MACD_Signal_12_26_9'] = signal
@@ -239,7 +239,7 @@ def calculate_signals(df: pd.DataFrame, strategy_data: Dict[str, Any]) -> pd.Ser
         return pd.Series(signals, index=df.index)
 
     except Exception as e:
-        logger.error(f"❌ Sinyal hesaplama hatası: {e}")
+        logger.error(f"❌ Signal calculation error: {e}")
         # Varsayılan: Hepsi BEKLE
         return pd.Series([1] * len(df), index=df.index)
 
@@ -263,7 +263,7 @@ async def run_backtest(request: BacktestRequest):
         HTTPException: Backtest başarısızsa
     """
     try:
-        logger.info(f"🧪 Backtest isteği: {request.symbol} ({request.timeframe}, {request.days} gün)")
+        logger.info(f"🧪 Backtest request: {request.symbol} ({request.timeframe}, {request.days} days)")
         
         # 1. Strateji JSON'u al
         if request.strategy_filename:

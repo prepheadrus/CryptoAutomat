@@ -45,7 +45,7 @@ class ModelDriftDetector:
         self.performance_history = {}  # symbol -> performance list
 
         logger.info("🤖 [MLOps] Drift Detector initialized")
-        logger.info("🎉 [MLOps & DRY-RUN] Sistem Canlı Ticarete (Live Trading) %100 Hazır")
+        logger.info("🎉 [MLOps & DRY-RUN] System is 100% Ready for Live Trading")
     
     def check_drift(
         self,
@@ -65,7 +65,7 @@ class ModelDriftDetector:
             True ise drift tespit edildi (yeniden eğitim gerekli)
         """
         if len(predictions) < 100:
-            logger.debug(f"⏭️ [MLOps] Yetersiz örnek: {len(predictions)}")
+            logger.debug(f"⏭️ [MLOps] Insufficient samples: {len(predictions)}")
             return False
         
         # Accuracy hesapla
@@ -120,15 +120,15 @@ class ModelDriftDetector:
         Returns:
             Eğitim metrikleri veya None
         """
-        logger.info(f"🔄 [MLOps] Otomatik yeniden eğitim başlatılıyor: {symbol} {timeframe}")
+        logger.info(f"🔄 [MLOps] Starting automated re-training: {symbol} {timeframe}")
         
         try:
             # 1. Geçmiş veriyi Parquet Lake'ten çek
-            logger.info(f"📊 [MLOps] Geçmiş veri çekiliyor: {self.RETRAIN_DAYS} gün")
+            logger.info(f"📊 [MLOps] Fetching historical data: {self.RETRAIN_DAYS} days")
             data = await self._fetch_data(symbol, timeframe, self.RETRAIN_DAYS)
             
             if data is None or len(data) < self.RETRAIN_MIN_SAMPLES:
-                logger.warning(f"⚠️ [MLOps] Yetersiz veri: {len(data) if data else 0} mum")
+                logger.warning(f"⚠️ [MLOps] Insufficient data: {len(data) if data else 0} candles")
                 return None
             
             # 2. Feature engineering
@@ -140,7 +140,7 @@ class ModelDriftDetector:
                 return None
             
             # 3. Model eğit
-            logger.info(f"🧠 [MLOps] Model eğitiliyor")
+            logger.info(f"🧠 [MLOps] Training model")
             from ml.model_training import ModelTrainer
             
             trainer = ModelTrainer()
@@ -161,13 +161,13 @@ class ModelDriftDetector:
                 }
             })
             
-            logger.info(f"✅ [MLOps] Model başarıyla güncellendi: {symbol}")
+            logger.info(f"✅ [MLOps] Model updated successfully: {symbol}")
             logger.info(f"   📊 Metrics: {metrics}")
             
             return metrics
             
         except Exception as e:
-            logger.error(f"❌ [MLOps] Yeniden eğitim hatası: {e}")
+            logger.error(f"❌ [MLOps] Re-training error: {e}")
             return None
     
     async def _fetch_data(

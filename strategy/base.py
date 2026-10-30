@@ -41,6 +41,6 @@ class BaseStrategy(ABC):
         """
         if hasattr(self, 'params'):
             self.params.update(params)
-            logger.info(f"📝 [WFO] {self.name()} parametreleri güncellendi: {params}")
+            logger.info(f"📝 [WFO] {self.name()} parameters updated: {params}")
         else:
             logger.warning(f"⚠️ [WFO] {self.name()} params attribute'u yok")

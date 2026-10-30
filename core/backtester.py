@@ -121,7 +121,7 @@ class VectorizedBacktester:
         self.trades: List[Trade] = []
         self.equity_curve: List[float] = []
         
-        logger.info(f"📊 Backtester başlatıldı: Başlangıç=${initial_balance:,.2f}")
+        logger.info(f"📊 Backtester initialized: Initial=${initial_balance:,.2f}")
 
 
     def run_backtest(
@@ -151,14 +151,14 @@ class VectorizedBacktester:
         
         # DataFrame kontrolü
         if df.empty:
-            logger.error("❌ DataFrame boş!")
+            logger.error("❌ DataFrame is empty!")
             return BacktestResult()
         
         if len(signals) != len(df):
-            logger.error(f"❌ Sinyal uzunluğu uyuşmuyor: {len(signals)} vs {len(df)}")
+            logger.error(f"❌ Signal length mismatch: {len(signals)} vs {len(df)}")
             return BacktestResult()
         
-        logger.info(f"📊 Backtest başlatıldı: {len(df)} mum, {signals.sum()} sinyal")
+        logger.info(f"📊 Backtest started: {len(df)} candles, {signals.sum()} signals")
         
         # Pozisyon takibi
         in_position = False
@@ -216,7 +216,7 @@ class VectorizedBacktester:
                 current_trade.take_profit = take_profit
                 current_trade.entry_fee = entry_fee
                 
-                logger.debug(f"🟢 LONG açıldı: {entry_price:.2f} @ {timestamp}")
+                logger.debug(f"🟢 LONG opened: {entry_price:.2f} @ {timestamp}")
             
             # Pozisyon kapatma (SAT sinyali veya stop/target)
             elif in_position and current_trade:
@@ -273,7 +273,7 @@ class VectorizedBacktester:
                     if drawdown > max_drawdown:
                         max_drawdown = drawdown
                     
-                    logger.debug(f"🔴 LONG kapatıldı: {exit_price:.2f} @ {timestamp} | PnL: ${net_pnl:.2f} ({exit_reason})")
+                    logger.debug(f"🔴 LONG closed: {exit_price:.2f} @ {timestamp} | PnL: ${net_pnl:.2f} ({exit_reason})")
                     
                     # Pozisyon kapatıldı
                     in_position = False
@@ -286,7 +286,7 @@ class VectorizedBacktester:
         # Sonuçları hesapla
         result = self._calculate_metrics(max_drawdown)
         
-        logger.info(f"✅ Backtest tamamlandı: {result.total_trades} işlem, Win Rate: {result.win_rate:.2f}%, Net PnL: ${result.net_pnl:.2f}")
+        logger.info(f"✅ Backtest completed: {result.total_trades} trades, Win Rate: {result.win_rate:.2f}%, Net PnL: ${result.net_pnl:.2f}")
         
         return result
 
@@ -345,7 +345,7 @@ class VectorizedBacktester:
         self.balance = self.initial_balance
         self.trades = []
         self.equity_curve = []
-        logger.info("🔄 Backtester sıfırlandı")
+        logger.info("🔄 Backtester reset")
 
 
     def get_trade_history(self) -> pd.DataFrame:
@@ -391,7 +391,7 @@ class VectorizedBacktester:
 
 if __name__ == "__main__":
     # Test DataFrame oluştur
-    print("[TEST] Test DataFrame oluşturuluyor...")
+    print("[TEST] Generating test DataFrame...")
     np.random.seed(42)
     n_rows = 1000
     
@@ -419,11 +419,11 @@ if __name__ == "__main__":
     test_signals.iloc[::50] = 2  # Her 50 mumda bir AL
     test_signals.iloc[51::50] = 0  # Bir sonraki mumda SAT
     
-    print(f"[OK] Test DataFrame: {len(test_df)} satır")
+    print(f"[OK] Test DataFrame: {len(test_df)} rows")
     print(f"     Sinyaller: {test_signals.sum()} AL")
     
     # Backtester'ı başlat
-    print("\n[TEST] Backtester başlatılıyor...")
+    print("\n[TEST] Initializing backtester...")
     backtester = VectorizedBacktester(
         initial_balance=10000,
         fee_rate=0.0004,
@@ -432,7 +432,7 @@ if __name__ == "__main__":
     )
     
     # Backtest çalıştır
-    print("\n[TEST] Backtest çalıştırılıyor...")
+    print("\n[TEST] Running backtest...")
     risk_params = {
         'stop_loss_atr_multiplier': 2.0,
         'take_profit_atr_multiplier': 4.0,
@@ -443,11 +443,11 @@ if __name__ == "__main__":
     
     # Sonuçları göster
     print("\n" + "="*60)
-    print("[OK] BACKTEST SONUÇLARI")
+    print("[OK] BACKTEST RESULTS")
     print("="*60)
-    print(f"Toplam İşlem:        {result.total_trades}")
-    print(f"Kazanan İşlem:       {result.winning_trades}")
-    print(f"Kaybeden İşlem:      {result.losing_trades}")
+    print(f"Total Trades:        {result.total_trades}")
+    print(f"Winning Trades:      {result.winning_trades}")
+    print(f"Losing Trades:       {result.losing_trades}")
     print(f"Win Rate:            {result.win_rate:.2f}%")
     print(f"Net PnL:             ${result.net_pnl:.2f}")
     print(f"Net PnL %:           {result.net_pnl_percent:.2f}%")
@@ -460,10 +460,10 @@ if __name__ == "__main__":
     
     # İşlem geçmişini göster
     if result.trades:
-        print(f"\n[OK] İlk 5 işlem:")
+        print(f"\n[OK] First 5 trades:")
         for i, trade in enumerate(result.trades[:5]):
             print(f"  {i+1}. {trade.direction} | Entry: ${trade.entry_price:.2f} | Exit: ${trade.exit_price:.2f} | PnL: ${trade.pnl:.2f} ({trade.exit_reason})")
     
     print("\n" + "="*60)
-    print("[OK] TÜM TESTLER BAŞARILI!")
+    print("[OK] ALL TESTS PASSED!")
     print("="*60)

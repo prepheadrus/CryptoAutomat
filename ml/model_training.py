@@ -223,19 +223,19 @@ class ModelTrainer:
             data_size: Eğitim veri seti boyutu (satır sayısı)
         """
         if not self.enable_auto_regularization:
-            logger.info("ℹ️ [ML] Auto regularization kapalı, varsayılan parametreler kullanılıyor")
+            logger.info("ℹ️ [ML] Auto regularization disabled, using default parameters")
             return
         
-        logger.info(f"📊 [ML] Veri boyutu: {data_size} satır")
+        logger.info(f"📊 [ML] Data size: {data_size} rows")
         
         # Complex model (5000+ satır)
         if data_size >= self.MIN_SAMPLES_FOR_COMPLEX_MODEL:
-            logger.info("✅ [ML] COMPLEX mod: Büyük veri seti, tam kapasite")
+            logger.info("✅ [ML] COMPLEX mode: Large dataset, full capacity")
             self._apply_params(self.base_params)
         
         # Medium model (2000-5000 satır)
         elif data_size >= self.MIN_SAMPLES_FOR_MEDIUM_MODEL:
-            logger.info("⚠️ [ML] MEDIUM mod: Orta veri seti, regularization artırılıyor")
+            logger.info("⚠️ [ML] MEDIUM mode: Medium dataset, increasing regularization")
             medium_params = self.base_params.copy()
             medium_params.update({
                 'n_estimators': 300,
@@ -252,7 +252,7 @@ class ModelTrainer:
         
         # Simple model (500-2000 satır)
         elif data_size >= self.MIN_SAMPLES_FOR_SIMPLE_MODEL:
-            logger.info("⚠️ [ML] SIMPLE mod: Küçük veri seti, güçlü regularization")
+            logger.info("⚠️ [ML] SIMPLE mode: Small dataset, strong regularization")
             simple_params = self.base_params.copy()
             simple_params.update({
                 'n_estimators': 200,
@@ -272,7 +272,7 @@ class ModelTrainer:
         # Too small (< 500 satır)
         else:
             logger.warning(f"⚠️ [ML] DATASET VERY SMALL ({data_size} rows)! Model training not recommended.")
-            logger.warning("   En az 500 satır önerilir, ideal 2000+ satır")
+            logger.warning("   Minimum 500 rows recommended, ideally 2000+ rows")
             ultra_simple_params = self.base_params.copy()
             ultra_simple_params.update({
                 'n_estimators': 100,
@@ -558,7 +558,7 @@ class ModelTrainer:
         # Yüzdelikleri 2 ondalığa yuvarla
         df['importance_pct'] = df['importance_pct'].round(2)
 
-        logger.debug(f"🧬 [XAI] Feature Importance hesaplandı: {len(df)} özellik, max={max_importance:.4f}")
+        logger.debug(f"🧬 [XAI] Feature Importance calculated: {len(df)} features, max={max_importance:.4f}")
 
         return df
 
@@ -755,9 +755,9 @@ class ModelTrainer:
         rf_model_path = model_path.replace('.json', '_rf.joblib')
         if os.path.exists(rf_model_path):
             self.rf_model = joblib.load(rf_model_path)
-            logger.info(f"✅ Random Forest model yüklendi: {rf_model_path}")
+            logger.info(f"✅ Random Forest model loaded: {rf_model_path}")
         else:
-            logger.warning(f"⚠️ Random Forest model bulunamadı: {rf_model_path}")
+            logger.warning(f"⚠️ Random Forest model not found: {rf_model_path}")
 
         self.is_trained = True
 
@@ -773,10 +773,10 @@ class ModelTrainer:
             }
             self.training_metrics = metadata.get('training_metrics', {})
 
-            logger.info(f"✅ XGBoost model yüklendi: {model_path}")
-            logger.info(f"📊 Özellik sayısı: {len(self.feature_names)}")
+            logger.info(f"✅ XGBoost model loaded: {model_path}")
+            logger.info(f"📊 Feature count: {len(self.feature_names)}")
         else:
-            logger.warning(f"⚠️ Metadata dosyası bulunamadı: {metadata_path}")
+            logger.warning(f"⚠️ Metadata file not found: {metadata_path}")
 
         return self
 
@@ -826,7 +826,7 @@ def run_training_pipeline(
     logger.info("=" * 60)
 
     # 1. Veri hazırlama
-    logger.info("\n[1/3] Veri hazırlanıyor...")
+    logger.info("\n[1/3] Preparing data...")
     X_train, X_test, y_train, y_test, scaler = prepare_ml_data(
         df,
         tp_multiplier=tp_multiplier,
@@ -871,12 +871,12 @@ if __name__ == "__main__":
     from core.database import Database
     import pandas as pd
 
-    logger.info("XGBoost Model Eğitim Testi")
+    logger.info("XGBoost Model Training Test")
     logger.info("=" * 60)
 
     try:
         # 1. Veritabanından veri çek
-        logger.info("\nVeritabanından veri çekiliyor...")
+        logger.info("\nFetching data from database...")
         db = Database()
 
         # Örnek: BTC/USDT verisi çek
@@ -884,17 +884,17 @@ if __name__ == "__main__":
         db.close()
 
         if df is None or len(df) == 0:
-            logger.error("Veri çekilemedi!")
+            logger.error("Data could not be fetched!")
             sys.exit(1)
 
-        logger.info(f"Çekilen veri: {len(df)} satır")
+        logger.info(f"Fetched data: {len(df)} rows")
 
         # 2. İndikatörleri ekle
-        logger.info("\nİndikatörler hesaplanıyor...")
+        logger.info("\nCalculating indicators...")
         df = StrategyIndicators.add_all_indicators(df)
 
         # 3. Eğitim pipeline'ını çalıştır
-        logger.info("\nEğitim pipeline'ı başlatılıyor...")
+        logger.info("\nStarting training pipeline...")
         trainer = run_training_pipeline(
             df,
             model_save_path="artifacts/models/xgb_model_btc.json",
@@ -905,7 +905,7 @@ if __name__ == "__main__":
         )
 
         # 4. Test tahmini
-        logger.info("\nTest tahmini yapılıyor...")
+        logger.info("\nRunning test prediction...")
         # Son 10 satırı test için kullan
         test_sample = df.iloc[-10:].copy()
 
@@ -915,17 +915,17 @@ if __name__ == "__main__":
 
         predictions, confidence, probs = trainer.predict_with_confidence(X_test_sample)
 
-        logger.info(f"\nSon 10 mum tahmini:")
+        logger.info(f"\nLast 10 candles prediction:")
         for i, (pred, conf) in enumerate(zip(predictions, confidence)):
             label = trainer.class_mapping.get(pred, f'Class_{pred}')
-            logger.info(f"  Mum {i+1}: {label} (Güven: {conf*100:.1f}%)")
+            logger.info(f"  Candle {i+1}: {label} (Confidence: {conf*100:.1f}%)")
 
         logger.info("\n" + "=" * 60)
-        logger.info("TEST BAŞARILI!")
+        logger.info("TEST PASSED!")
         logger.info("=" * 60)
 
     except Exception as e:
-        logger.error(f"Test başarısız: {str(e)}")
+        logger.error(f"Test failed: {str(e)}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

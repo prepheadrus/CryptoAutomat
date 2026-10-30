@@ -102,7 +102,7 @@ class ParquetPipelineTest:
 
             logger.info(f"✅ [PASS] Timezone standardization BAŞARILI!")
             logger.info(f"   ✅ Tüm timestamp'ler UTC (offset-aware)")
-            logger.info(f"   ✅ can't compare offset-naive and offset-aware hatası ÇÖZÜLDÜ")
+            logger.info(f"   ✅ can't compare offset-naive and offset-aware error RESOLVED")
 
             return True
 
@@ -164,7 +164,7 @@ class ParquetPipelineTest:
             logger.info(f"✅ [PASS] Async I/O isolation BAŞARILI!")
             logger.info(f"   ✅ asyncio.to_thread() doğru kullanılıyor")
             logger.info(f"   ✅ Coroutine sızıntısı YOK")
-            logger.info(f"   ✅ 'coroutine object has no attribute empty' hatası ÇÖZÜLDÜ")
+            logger.info(f"   ✅ 'coroutine object has no attribute empty' error RESOLVED")
             
             return True
             
@@ -337,7 +337,7 @@ class ParquetPipelineTest:
                 shutil.rmtree(test_path)
                 logger.info(f"🗑️ [CLEANUP] {test_path} silindi")
         except Exception as e:
-            logger.warning(f"⚠️ [CLEANUP] Temizlik hatası: {e}")
+            logger.warning(f"⚠️ [CLEANUP] Cleanup error: {e}")
 
     async def run_all_tests(self):
         """
@@ -365,7 +365,7 @@ class ParquetPipelineTest:
             status = "✅ PASS" if result else "❌ FAIL"
             logger.info(f"   {status}: {test_name}")
         
-        logger.info(f"\n📈 TOPLAM: {passed}/{total} test başarılı")
+        logger.info(f"\n📈 TOTAL: {passed}/{total} tests passed")
         
         if passed == total:
             logger.info(f"\n🎉 TÜM TESTLER BAŞARILI! Data Integrity doğrulandı.")
@@ -373,7 +373,7 @@ class ParquetPipelineTest:
             logger.info(f"   ✅ Async I/O: to_thread() ile sarılmış")
             logger.info(f"   ✅ Data Pipeline: Gap YOK")
         else:
-            logger.error(f"\n❌ BAZI TESTLER BAŞARISIZ! Lütfen hataları inceleyin.")
+            logger.error(f"\n❌ SOME TESTS FAILED! Please inspect errors.")
         
         return passed == total
 
