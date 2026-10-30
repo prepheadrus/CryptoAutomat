@@ -1,4 +1,4 @@
-"""
+﻿"""
 Position Manager
 
 Pozisyon lifecycle yönetimi.
@@ -199,7 +199,7 @@ class PositionManager:
             tp_str = f"{take_profit:.2f}" if take_profit is not None else "Yok"
 
             logger.info(
-                f"📊 Pozisyon açıldı: {bot_id} | {direction} | "
+                f"📊 Position opened: {bot_id} | {direction} | "
                 f"{symbol} @ {execution_price:.2f} | Lev: {leverage}x | "
                 f"SL: {sl_str} | TP: {tp_str}"
             )
@@ -362,9 +362,9 @@ class PositionManager:
                 pass
 
             logger.info(
-                f"❌ Pozisyon kapatıldı: {bot_id} | "
+                f"❌ Position closed: {bot_id} | "
                 f"PnL: ${trade.pnl:.2f} ({trade.pnl_percent:.2%}) | "
-                f"Neden: {reason}"
+                f"Reason: {reason}"
             )
 
             close_success = True  # Başarılı

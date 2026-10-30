@@ -1,4 +1,4 @@
-:root {
+﻿:root {
     /* Pro Trading Terminal Colors (e.g., Binance / TradingView style) */
     --bg-color: #0b0e11;
     --glass-bg: #1e2329;
@@ -3207,3 +3207,35 @@ select option {
 .auto-style-170 { padding: 10px; margin-bottom: 15px; }
 .auto-style-171 { height: 480px; width: 100%; position: relative; }
 .auto-style-172 { width: 100%; height: 100%; }
+
+
+/* Language Switcher Component */
+.lang-switcher {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    padding: 3px;
+    margin-right: 15px;
+    gap: 2px;
+}
+.lang-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.lang-btn:hover {
+    color: var(--text-main);
+}
+.lang-btn.active {
+    background: var(--neon-blue);
+    color: #ffffff;
+    box-shadow: 0 0 10px var(--neon-blue-glow);
+}

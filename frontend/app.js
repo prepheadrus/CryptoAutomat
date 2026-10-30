@@ -1,4 +1,4 @@
-/**
+﻿/**
  * CryptoAlgoBot - Main Application Coordinator
  *
  * Modern ES6 Module Architecture
@@ -15,6 +15,7 @@ import store from './state/store.js';
 import api from './services/api-client.js';
 import chartRenderer from './components/charts/chart-renderer.js';
 import botManager from './components/bots/bot-manager.js';
+import i18n from './js/i18n.js';
 
 // ============================================================================
 // APPLICATION STATE
@@ -34,10 +35,11 @@ const app = {
  * Initialize application
  */
 async function init() {
-    console.log('🚀 CryptoAlgoBot başlatılıyor...');
+    console.log('🚀 CryptoAutomat starting (i18n ready)...');
 
     try {
         // 1. Initialize components
+        i18n.init();
         botManager.init();
 
         // 2. Setup UI

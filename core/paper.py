@@ -1,4 +1,4 @@
-"""
+﻿"""
 PaperTrader - Refactored (Event-Driven Architecture)
 
 Eski 1,475 satırlık "God Object" iş mantığı temizlendi.
@@ -408,7 +408,7 @@ class PaperTrader:
         bot_id = payload.get('bot_id')
         symbol = payload.get('symbol')
         
-        logger.info(f"📊 Pozisyon açıldı: {bot_id} {symbol}")
+        logger.info(f"📊 Position opened: {bot_id} {symbol}")
         
         # Bot state güncelle
         self.bot_manager.update_bot_margin(bot_id, payload.get('margin', 0.0))
@@ -425,7 +425,7 @@ class PaperTrader:
         pnl = payload.get('pnl', 0.0)
         symbol = payload.get('symbol')
 
-        logger.info(f"❌ Pozisyon kapatıldı: {bot_id} PnL=${pnl:.2f}")
+        logger.info(f"❌ Position closed: {bot_id} PnL=${pnl:.2f}")
 
         # Bakiyeyi güncelle
         self.balance += pnl
@@ -483,12 +483,12 @@ class PaperTrader:
     async def on_bot_started(self, event):
         """Bot Started Event Handler"""
         payload = event.payload
-        logger.info(f"🚀 Bot başlatıldı: {payload.get('bot_id')}")
+        logger.info(f"🚀 Bot started: {payload.get('bot_id')}")
 
     async def on_bot_stopped(self, event):
         """Bot Stopped Event Handler"""
         payload = event.payload
-        logger.info(f"🛑 Bot durduruldu: {payload.get('bot_id')}")
+        logger.info(f"🛑 Bot stopped: {payload.get('bot_id')}")
 
     async def on_live_price_updated(self, event):
         """
@@ -575,7 +575,7 @@ class PaperTrader:
         strategy = StrategyManager.get_strategy(strategy_id)
         self.strategies[symbol] = strategy
         
-        logger.info(f"🚀 Bot başlatıldı: {bot_id}")
+        logger.info(f"🚀 Bot started: {bot_id}")
         return bot_id
     
     def stop_bot(self, bot_id: str) -> bool:

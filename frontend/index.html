@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 
-<html lang="tr">
+<html lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>CryptoAlgoBot | Pro Dashboard</title>
+<title data-i18n="app_title">CryptoAutomat | Pro Dashboard</title>
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Outfit:wght@500;600;700;800&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
@@ -22,28 +22,32 @@
 <h2>Algo<span>Bot</span></h2>
 </div>
 <div class="status-box">
-<p>Sistem Çevresi</p>
-<h3 class="neon-text" id="env-status">Yükleniyor...</h3>
+<p data-i18n="system_env">System Environment</p>
+<h3 class="neon-text" id="env-status" data-i18n="loading">Loading...</h3>
 </div>
 <nav class="menu" id="side-menu">
-<button class="menu-item active" data-target="tab-portfolio"><i class="lucide-icon" data-lucide="pie-chart"></i> Portföy Analizi</button>
-<button class="menu-item" data-target="tab-ml"><i class="lucide-icon" data-lucide="brain"></i> ML Karar Motoru</button>
-<button class="menu-item" data-target="tab-orders"><i class="lucide-icon" data-lucide="zap"></i> Aktif Emirler</button>
-<button class="menu-item" data-target="tab-history"><i class="lucide-icon" data-lucide="scroll-text"></i> İşlem Geçmişi</button>
-<button class="menu-item" data-target="tab-reports"><i class="lucide-icon" data-lucide="trending-up"></i> Performans Raporları</button>
-<button class="menu-item" data-target="tab-strategy-builder"><i class="lucide-icon" data-lucide="palette"></i> Strateji Oluşturucu</button>
-<button class="menu-item" data-target="tab-strategies"><i class="lucide-icon" data-lucide="library"></i> Strateji Kütüphanesi</button>
-<button class="menu-item" data-target="tab-settings"><i class="lucide-icon" data-lucide="settings"></i> Sistem Ayarları</button>
-<button class="menu-item" data-target="tab-data"><i class="lucide-icon" data-lucide="database"></i> Veri Laboratuvarı</button>
+<button class="menu-item active" data-target="tab-portfolio"><i class="lucide-icon" data-lucide="pie-chart"></i> <span data-i18n="nav_portfolio">Portfolio Analysis</span></button>
+<button class="menu-item" data-target="tab-ml"><i class="lucide-icon" data-lucide="brain"></i> <span data-i18n="nav_ml">ML Decision Engine</span></button>
+<button class="menu-item" data-target="tab-orders"><i class="lucide-icon" data-lucide="zap"></i> <span data-i18n="nav_orders">Active Orders</span></button>
+<button class="menu-item" data-target="tab-history"><i class="lucide-icon" data-lucide="scroll-text"></i> <span data-i18n="nav_history">Trade History</span></button>
+<button class="menu-item" data-target="tab-reports"><i class="lucide-icon" data-lucide="trending-up"></i> <span data-i18n="nav_reports">Performance Reports</span></button>
+<button class="menu-item" data-target="tab-strategy-builder"><i class="lucide-icon" data-lucide="palette"></i> <span data-i18n="nav_builder">Strategy Builder</span></button>
+<button class="menu-item" data-target="tab-strategies"><i class="lucide-icon" data-lucide="library"></i> <span data-i18n="nav_strategies">Strategy Library</span></button>
+<button class="menu-item" data-target="tab-settings"><i class="lucide-icon" data-lucide="settings"></i> <span data-i18n="nav_settings">System Settings</span></button>
+<button class="menu-item" data-target="tab-data"><i class="lucide-icon" data-lucide="database"></i> <span data-i18n="nav_data">Data Laboratory</span></button>
 </nav>
 <div class="bot-control">
-<button class="btn btn-danger" id="kill-switch">ACİL DURDURMA</button>
+<button class="btn btn-danger" id="kill-switch" data-i18n="emergency_stop">EMERGENCY STOP</button>
 </div>
 </aside>
 <!-- Ana İçerik -->
 <main class="main-content">
 <header class="top-nav glass-panel">
-<div class="metric"><span class="label">Borsa:</span> <strong id="exchange-val">--</strong></div>
+<div class="metric"><span class="label" data-i18n="exchange_label">Exchange:</span> <strong id="exchange-val">--</strong></div>
+<div class="lang-switcher">
+    <button class="lang-btn active" id="lang-btn-en">EN</button>
+    <button class="lang-btn" id="lang-btn-tr">TR</button>
+</div>
 <div class="user-profile"><img alt="Avatar" src="https://api.dicebear.com/7.x/identicon/svg?seed=CryptoAlgoBot"/></div>
 </header>
 <!-- SEKME 1: PORTFÖY ANALİZİ (Bento Box Düzeni) -->
@@ -53,30 +57,30 @@
     <div class="bento-kpi-row">
         <div class="card glass-panel">
             <div class="card-info">
-                <h3><i class="lucide-icon" data-lucide="coins"></i> Bakiye (Balance)</h3>
+                <h3><i class="lucide-icon" data-lucide="coins"></i> <span data-i18n="kpi_balance">Balance</span></h3>
                 <h1 id="balance-val">$0.00</h1>
-                <p class="auto-style-2">Cüzdan Bakiyesi</p>
+                <p class="auto-style-2" data-i18n="kpi_balance_sub">Wallet Balance</p>
             </div>
         </div>
         <div class="card glass-panel">
             <div class="card-info">
-                <h3><i class="lucide-icon" data-lucide="shield"></i> Serbest Marjin</h3>
+                <h3><i class="lucide-icon" data-lucide="shield"></i> <span data-i18n="kpi_free_margin">Free Margin</span></h3>
                 <h1 id="free-margin-val">$0.00</h1>
-                <p class="auto-style-2">Mevcut Nakit</p>
+                <p class="auto-style-2" data-i18n="kpi_free_margin_sub">Available Capital</p>
             </div>
         </div>
         <div class="card glass-panel">
             <div class="card-info">
-                <h3><i class="lucide-icon" data-lucide="pie-chart"></i> Kullanılan Marjin</h3>
+                <h3><i class="lucide-icon" data-lucide="pie-chart"></i> <span data-i18n="kpi_used_margin">Used Margin</span></h3>
                 <h1 id="used-margin-val">$0.00</h1>
-                <p class="auto-style-2">Açık Pozisyonlar</p>
+                <p class="auto-style-2" data-i18n="kpi_used_margin_sub">Open Positions</p>
             </div>
         </div>
         <div class="card glass-panel">
             <div class="card-info">
-                <h3><i class="lucide-icon" data-lucide="rocket"></i> Toplam P&amp;L (Live)</h3>
+                <h3><i class="lucide-icon" data-lucide="rocket"></i> <span data-i18n="kpi_total_pnl">Total P&amp;L (Live)</span></h3>
                 <h1 class="success-text" id="total-pnl-val">+$0.00</h1>
-                <p class="auto-style-2">Anlık Kâr/Zarar</p>
+                <p class="auto-style-2" data-i18n="kpi_total_pnl_sub">Real-time Profit/Loss</p>
             </div>
         </div>
     </div>

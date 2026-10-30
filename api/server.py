@@ -1,4 +1,4 @@
-"""
+﻿"""
 CryptoAlgoBot FastAPI Server
 
 Modern, modüler API sunucusu.
@@ -41,34 +41,34 @@ from api.routers.trades import router as trades_router
 async def lifespan(app: FastAPI):
     """FastAPI uygulama yaşam döngüsü."""
     # ===== STARTUP =====
-    logger.info("🚀 FastAPI Sunucusu başlatılıyor...")
+    logger.info("🚀 FastAPI Server starting...")
 
     # ========================================================================
     # KRİTİK: Event Handler'ları ÖNCE kaydet (Event Loss Önleme)
     # ========================================================================
     # 1. PaperTrader Handler'ları ÖNCE kaydet (event'ler başlamadan)
-    logger.info("📬 [CRITICAL] Event handler'lar kayıt ediliyor...")
+    logger.info("📬 [CRITICAL] Registering event handlers...")
     await paper_engine.start_event_handlers()
     
     # 2. Event Bus Başlat (handler'lar hazır)
-    logger.info("🚀 Event Bus başlatılıyor...")
+    logger.info("🚀 Starting Event Bus...")
     from shared.events import event_bus
     await event_bus.start(num_workers=5)
 
     # 3. Veritabanı bağlantısı
-    logger.info("💾 Veritabanı bağlantısı başlatılıyor...")
+    logger.info("💾 Connecting to database...")
     await db_manager.connect()
     
     # 4. Connection verify (2 saniye bekle - DB hazır olsun)
-    logger.info("⏳ Veritabanı bağlantısı doğrulanıyor (2s)...")
+    logger.info("⏳ Verifying database connection (2s)...")
     await asyncio.sleep(2)
 
     # 5. Yarım kalan indirme görevlerini geri yükle
-    logger.info("📁 İndirme görevleri yükleniyor...")
+    logger.info("📁 Restoring background download tasks...")
     await exchange_manager.load_tasks_from_db()
 
     # 6. Bot task'larını başlat
-    logger.info("🚀 Bot task'ları başlatılıyor...")
+    logger.info("🚀 Starting bot workers...")
     # ÖNCE: config.yaml'dan oku
     symbols = CONFIG.get('trading', {}).get('symbols', [])
 
@@ -96,11 +96,11 @@ async def lifespan(app: FastAPI):
         tasks.append(asyncio.create_task(exchange_manager.watch_ticker_loop(symbol)))
         tasks.append(asyncio.create_task(exchange_manager.run_strategy_poller(symbol)))
 
-    logger.info(f"✅ {len(tasks)} bot task'ı ve Event Engine başlatıldı")
+    logger.info(f"✅ {len(tasks)} bot tasks and Event Engine initialized")
 
     # ===== WFO (Walk-Forward Optimization) Başlat =====
     if CONFIG.get('wfo', {}).get('enabled', False):
-        logger.info("🧠 [WFO] Otonom optimizasyon sistemi başlatılıyor...")
+        logger.info("🧠 [WFO] Starting autonomous optimization system (WFO)...")
         try:
             from core.wfo_engine import start_wfo_background_task
             from strategy.manager import StrategyManager
@@ -135,30 +135,30 @@ async def lifespan(app: FastAPI):
 
     # ===== SHUTDOWN =====
     logger.info("")
-    logger.info("🛑 [API] GÜVENLI KAPATMA BAŞLATILIYOR...")
+    logger.info("🛑 [API] GRACEFUL SHUTDOWN INITIATED...")
     logger.info("=" * 60)
 
     # 1. Yeni işlem almayı durdur
-    logger.info("1️⃣ [API] Yeni işlem alımı durduruluyor...")
+    logger.info("1️⃣ [API] Halting new trade acceptance...")
     if hasattr(paper_engine, 'accepting_new_trades'):
         paper_engine.accepting_new_trades = False
-    logger.info("✅ [API] Yeni işlem alımı durduruldu")
+    logger.info("✅ [API] New trade acceptance halted")
 
     # 2. Event Bus Durdur
-    logger.info("2️⃣ [API] Event Bus durduruluyor...")
+    logger.info("2️⃣ [API] Stopping Event Bus...")
     from shared.events import event_bus
     await event_bus.stop()
-    logger.info("✅ [API] Event Bus durduruldu")
+    logger.info("✅ [API] Event Bus stopped")
 
     # 3. Borsa bağlantısını kapat
-    logger.info("3️⃣ [API] Borsa bağlantısı kapatılıyor...")
+    logger.info("3️⃣ [API] Closing exchange connections...")
     await exchange_manager.close()
-    logger.info("✅ [API] Borsa bağlantısı kapatıldı")
+    logger.info("✅ [API] Exchange connections closed")
 
     # 4. Veritabanı bağlantısını kapat
-    logger.info("4️⃣ [API] Veritabanı bağlantısı kapatılıyor...")
+    logger.info("4️⃣ [API] Closing database connection...")
     await db_manager.close()
-    logger.info("✅ [API] Veritabanı bağlantısı kapatıldı")
+    logger.info("✅ [API] Database connection closed")
 
     # 5. Circuit Breaker istatistikleri
     logger.info("5️⃣ [API] Circuit Breaker istatistikleri:")
@@ -175,7 +175,7 @@ async def lifespan(app: FastAPI):
         pass
 
     logger.info("=" * 60)
-    logger.info("✅ [API] GÜVENLİ KAPATMA TAMAMLANDI")
+    logger.info("✅ [API] GRACEFUL SHUTDOWN COMPLETE")
     logger.info("")
 
 
@@ -233,7 +233,7 @@ logger.info("✅ Trades router eklendi")
 
 try:
     app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
-    logger.info("✅ Frontend dosyaları mount edildi")
+    logger.info("✅ Frontend static files mounted")
 except Exception as e:
     logger.warning(f"⚠️ Frontend mount hatası: {e}")
 
