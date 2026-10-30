@@ -149,6 +149,11 @@ function switchTab(tabId) {
             } else if (tabId === 'tab-orders' || content.id === 'tab-orders') {
                 console.log('📋 [TAB] Orders tab activated, refreshing data...');
                 loadDashboard();
+            } else if (tabId === 'tab-reports' || content.id === 'tab-reports') {
+                console.log('📈 [TAB] Reports tab activated, loading strategy report...');
+                if (typeof loadStrategyReport === 'function') {
+                    loadStrategyReport();
+                }
             }
         } else {
             content.classList.remove('active-tab');
@@ -2852,6 +2857,12 @@ window.addEventListener('languageChanged', (e) => {
     loadTimeframesForBot();
     loadTradeHistory();
     if (typeof loadDashboard === 'function') loadDashboard();
+    if (typeof loadStrategyReport === 'function') {
+        const tabReports = document.getElementById('tab-reports');
+        if (tabReports && tabReports.classList.contains('active-tab')) {
+            loadStrategyReport();
+        }
+    }
     if (typeof loadMLTrainingHistory === 'function') loadMLTrainingHistory();
     if (typeof loadMLStrategies === 'function') loadMLStrategies();
     if (typeof loadMLSymbols === 'function') loadMLSymbols();

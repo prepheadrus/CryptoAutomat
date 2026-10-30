@@ -78,7 +78,7 @@ async def get_strategy_performance_report() -> Dict[str, Any]:
         report = await asyncio.to_thread(paper_engine.get_strategy_report)
         return {"status": "success", "report": report}
     except Exception as e:
-        logger.error(f"Strateji rapor hatası: {e}")
+        logger.error(f"Strategy report error: {e}")
         return {"status": "error", "message": str(e), "report": []}
 
 

@@ -22,50 +22,83 @@ class StrategyReporterService:
         return gross_profit / gross_loss
 
     @staticmethod
-    def _generate_recommendation(win_rate: float, profit_factor: float, total_trades: int, total_pnl: float, max_drawdown_pct: float, max_drawdown: float) -> str:
-        recommendation = ""
+    def _generate_recommendation(win_rate: float, profit_factor: float, total_trades: int, total_pnl: float, max_drawdown_pct: float, max_drawdown: float) -> Dict[str, str]:
         if profit_factor >= 2.0 and win_rate < 50 and total_trades >= 5:
-            recommendation = (
+            rec_tr = (
                 f"🎯 DÜŞÜK WIN RATE ({win_rate:.0f}%) AMA YÜKSEK KÂRLILIK! "
                 f"Profit Factor: {profit_factor:.2f}. "
                 f"Risk/Ödül dengesi muazzam - kayıplar küçük, kazançlar büyük. "
                 f"Strateji 'trend following' tarzı çalışıyor olabilir."
             )
+            rec_en = (
+                f"🎯 LOW WIN RATE ({win_rate:.0f}%) BUT HIGH PROFITABILITY! "
+                f"Profit Factor: {profit_factor:.2f}. "
+                f"Outstanding Risk/Reward balance - minimal losses, outsized gains. "
+                f"Strategy operates effectively as a trend-following system."
+            )
         elif win_rate < 40 and profit_factor < 1.2 and total_trades >= 3:
-            recommendation = (
+            rec_tr = (
                 f"⚠️ KRİTİK: Düşük başarı oranı ({win_rate:.0f}%) ve zayıf kâr faktörü ({profit_factor:.2f}). "
                 f"Stop-Loss seviyesi hatalı veya işlem yapılan pariteler bu botun tarzına uymuyor. "
                 f"Acil parametre optimizasyonu gerekli!"
             )
+            rec_en = (
+                f"⚠️ CRITICAL: Low win rate ({win_rate:.0f}%) and weak profit factor ({profit_factor:.2f}). "
+                f"Stop-Loss level may be inadequate or traded pairs do not fit this strategy profile. "
+                f"Immediate parameter optimization recommended!"
+            )
         elif win_rate >= 60 and profit_factor >= 1.5 and total_pnl > 0:
-            recommendation = (
+            rec_tr = (
                 f"🏆 MÜKEMMEL UYUM! Win Rate: %{win_rate:.0f}, Profit Factor: {profit_factor:.2f}. "
                 f"Kârlılık ve kazanma oranı muazzam. "
                 f"Kaldıraç oranı ufak çaplı artırılarak gelir katlanabilir."
             )
+            rec_en = (
+                f"🏆 EXCELLENT PERFORMANCE! Win Rate: {win_rate:.0f}%, Profit Factor: {profit_factor:.2f}. "
+                f"Outstanding profitability and consistency. "
+                f"Moderate leverage scaling may be considered to maximize returns."
+            )
         elif win_rate >= 50 and total_pnl < 0:
-            recommendation = (
+            rec_tr = (
                 f"⚠️ DİKKAT: Kazanma oranı iyi (%{win_rate:.0f}) fakat alınan risk (Stop Loss) kârı eritiyor. "
                 f"Profit Factor: {profit_factor:.2f}. "
                 f"Risk/Ödül oranı iyileştirilmeli (min 1:2) veya spread/fee kontrol edilmeli."
             )
+            rec_en = (
+                f"⚠️ CAUTION: Solid win rate ({win_rate:.0f}%) but downside risk (Stop Loss) erodes net profit. "
+                f"Profit Factor: {profit_factor:.2f}. "
+                f"Improve Risk/Reward ratio (min 1:2) or inspect slippage and exchange fees."
+            )
         elif max_drawdown_pct > 30 and total_trades >= 5:
-            recommendation = (
+            rec_tr = (
                 f"📉 YÜKSEK DRAWDOWN UYARISI: Maksimum düşüş %{max_drawdown:.1f}. "
                 f"Strateji büyük değer kaybı yaşamış. "
                 f"Pozisyon boyutu küçültülmeli veya kaldıraç düşürülmeli."
             )
+            rec_en = (
+                f"📉 HIGH DRAWDOWN WARNING: Peak drawdown reached {max_drawdown:.1f}%. "
+                f"Strategy experienced heavy equity swings. "
+                f"Reduce position sizing or lower leverage."
+            )
         elif total_trades < 3:
-            recommendation = (
+            rec_tr = (
                 f"ℹ️ İŞLEM HACMİ YETERSİZ: Sadece {total_trades} işlem. "
                 f"Simülasyon devam etmeli, en az 30 işlem sonrası değerlendirme yapılmalı."
             )
+            rec_en = (
+                f"ℹ️ INSUFFICIENT SAMPLE SIZE: Only {total_trades} executed trades. "
+                f"Continue trading simulation; evaluate robustly after at least 30 closed trades."
+            )
         else:
-            recommendation = (
+            rec_tr = (
                 f"📊 ORTALAMA PERFORMANS: Win Rate %{win_rate:.0f}, Profit Factor {profit_factor:.2f}. "
                 f"Risk toleransına göre makul sayılabilir."
             )
-        return recommendation
+            rec_en = (
+                f"📊 MODERATE PERFORMANCE: Win Rate {win_rate:.0f}%, Profit Factor {profit_factor:.2f}. "
+                f"Acceptable balance based on conservative risk tolerance."
+            )
+        return {"tr": rec_tr, "en": rec_en}
 
     def generate_report(self, trades_list: List[Any]) -> List[Dict[str, Any]]:
         report = []
@@ -75,9 +108,9 @@ class StrategyReporterService:
             return []
 
         for trade in trades_list:
-            strat = self._safe_get(trade, 'strategy_id') or self._safe_get(trade, 'strategy', 'Bilinmiyor')
+            strat = self._safe_get(trade, 'strategy_id') or self._safe_get(trade, 'strategy', 'Unknown')
             pnl = self._safe_get(trade, 'pnl') or self._safe_get(trade, 'pnl_usd', 0)
-            symbol = self._safe_get(trade, 'symbol', 'Bilinmiyor')
+            symbol = self._safe_get(trade, 'symbol', 'Unknown')
             timeframe = self._safe_get(trade, 'timeframe', '1m')
 
             strat_key = f"{strat}"
@@ -165,7 +198,7 @@ class StrategyReporterService:
                     "pnl": round(s_data["pnl"], 2)
                 })
 
-            recommendation = self._generate_recommendation(
+            recommendation_dict = self._generate_recommendation(
                 win_rate, profit_factor, data["total_trades"], data["total_pnl"], max_drawdown_pct, max_drawdown
             )
 
@@ -183,7 +216,9 @@ class StrategyReporterService:
                 "max_drawdown": round(max_drawdown, 2),
                 "max_drawdown_pct": round(max_drawdown_pct, 1),
                 "symbols": sym_perf,
-                "recommendation": recommendation
+                "recommendation": recommendation_dict["en"],
+                "recommendation_en": recommendation_dict["en"],
+                "recommendation_tr": recommendation_dict["tr"]
             })
 
         return sorted(report, key=lambda x: x['total_pnl'], reverse=True)
