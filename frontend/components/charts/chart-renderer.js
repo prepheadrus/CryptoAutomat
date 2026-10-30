@@ -92,7 +92,7 @@ class ChartRenderer {
     
     /**
      * Update candle data
-     * @param {Array} candles - OHLCV candles
+     * @param {Array} candles - OHLCV candles (array of arrays or array of objects)
      */
     updateCandles(candles) {
         if (!this.candleSeries) {
@@ -100,13 +100,18 @@ class ChartRenderer {
             return;
         }
         
-        const formattedCandles = candles.map(c => ({
-            time: c[0] / 1000, // Convert ms to seconds
-            open: c[1],
-            high: c[2],
-            low: c[3],
-            close: c[4]
-        }));
+        const formattedCandles = (candles || []).map(c => {
+            let t = Array.isArray(c) ? c[0] : (c.time ?? c.timestamp);
+            if (typeof t === 'string') t = new Date(t).getTime();
+            const timeSec = t > 1e10 ? Math.floor(t / 1000) : Math.floor(t);
+            const open = Number(Array.isArray(c) ? c[1] : c.open);
+            const high = Number(Array.isArray(c) ? c[2] : c.high);
+            const low = Number(Array.isArray(c) ? c[3] : c.low);
+            const close = Number(Array.isArray(c) ? c[4] : c.close);
+            return { time: timeSec, open, high, low, close };
+        }).filter(c => !isNaN(c.time) && !isNaN(c.close));
+
+        formattedCandles.sort((a, b) => a.time - b.time);
         
         this.candleSeries.setData(formattedCandles);
         console.debug(`📊 [CHART] Updated ${formattedCandles.length} candles`);
@@ -122,12 +127,21 @@ class ChartRenderer {
             return;
         }
         
-        const volumeData = candles.map(c => ({
-            time: c[0] / 1000,
-            value: c[5],
-            color: c[4] >= c[1] ? 'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)'
-        }));
-        
+        const volumeData = (candles || []).map(c => {
+            let t = Array.isArray(c) ? c[0] : (c.time ?? c.timestamp);
+            if (typeof t === 'string') t = new Date(t).getTime();
+            const timeSec = t > 1e10 ? Math.floor(t / 1000) : Math.floor(t);
+            const open = Number(Array.isArray(c) ? c[1] : c.open);
+            const close = Number(Array.isArray(c) ? c[4] : c.close);
+            const vol = Number(Array.isArray(c) ? c[5] : (c.volume ?? c.vol ?? 0));
+            return {
+                time: timeSec,
+                value: vol,
+                color: close >= open ? 'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)'
+            };
+        }).filter(v => !isNaN(v.time));
+
+        volumeData.sort((a, b) => a.time - b.time);
         this.volumeSeries.setData(volumeData);
     }
     
@@ -141,14 +155,20 @@ class ChartRenderer {
             return;
         }
         
-        const formattedMarkers = markers.map(m => ({
-            time: m.time / 1000,
-            position: m.position || 'aboveBar',
-            color: m.color || '#2196f3',
-            shape: m.shape || 'circle',
-            text: m.text
-        }));
-        
+        const formattedMarkers = (markers || []).map(m => {
+            let t = m.time;
+            if (typeof t === 'string') t = new Date(t).getTime();
+            const timeSec = t > 1e10 ? Math.floor(t / 1000) : Math.floor(t);
+            return {
+                time: timeSec,
+                position: m.position || 'aboveBar',
+                color: m.color || '#2196f3',
+                shape: m.shape || 'circle',
+                text: m.text || ''
+            };
+        }).filter(m => !isNaN(m.time));
+
+        formattedMarkers.sort((a, b) => a.time - b.time);
         this.candleSeries.setMarkers(formattedMarkers);
         console.debug(`📍 [CHART] Updated ${formattedMarkers.length} markers`);
     }

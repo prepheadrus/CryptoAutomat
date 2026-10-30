@@ -159,6 +159,13 @@ function switchTab(tabId) {
                 if (typeof loadStrategyLibrary === 'function') {
                     loadStrategyLibrary();
                 }
+            } else if (tabId === 'tab-ml' || content.id === 'tab-ml') {
+                console.log('🧠 [TAB] ML Decision Engine activated, refreshing ML data...');
+                if (typeof loadMLTrainingHistory === 'function') loadMLTrainingHistory();
+                if (typeof loadMLStrategies === 'function') loadMLStrategies();
+                if (typeof loadMLSymbols === 'function') loadMLSymbols();
+                if (typeof loadSymbolsForML === 'function') loadSymbolsForML();
+                if (typeof renderMLEmptyStates === 'function') renderMLEmptyStates();
             }
         } else {
             content.classList.remove('active-tab');
@@ -2202,7 +2209,7 @@ window.loadMLTrainingHistory = async function() {
             date: isTr ? 'Tarih' : 'Date',
             symbol: isTr ? 'Sembol' : 'Symbol',
             tf: 'TF',
-            dataset: 'Dataset',
+            dataset: isTr ? 'Veri Seti' : 'Dataset',
             feat: isTr ? 'Özellik' : 'Feat',
             metrics: isTr ? '📊 Metrikler' : '📊 Metrics',
             accuracy: isTr ? '🎯 Doğruluk' : '🎯 Accuracy',
@@ -2252,8 +2259,8 @@ window.loadMLTrainingHistory = async function() {
                                     <td>${item.feature_count || 0}</td>
                                     <td>
                                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 0.65rem;">
-                                            <div>Precision: <strong style="color: var(--neon-blue);">${(precision * 100).toFixed(1)}%</strong></div>
-                                            <div>Recall: <strong style="color: var(--neon-purple);">${(recall * 100).toFixed(1)}%</strong></div>
+                                            <div>${isTr ? 'Kesinlik' : 'Precision'}: <strong style="color: var(--neon-blue);">${(precision * 100).toFixed(1)}%</strong></div>
+                                            <div>${isTr ? 'Duyarlılık' : 'Recall'}: <strong style="color: var(--neon-purple);">${(recall * 100).toFixed(1)}%</strong></div>
                                             <div>F1-Score: <strong style="color: var(--neon-green);">${(f1 * 100).toFixed(1)}%</strong></div>
                                             <div>TP: <strong>${(item.tp_multiplier || 2.0).toFixed(1)}x</strong></div>
                                         </div>
@@ -2462,7 +2469,7 @@ async function loadMLStrategies() {
         console.log(`✅ [ML] ${strategies.length} strateji yüklendi`);
     } catch (error) {
         console.error('❌ [ML] Strateji yükleme hatası:', error);
-        select.innerHTML = '<option value="">Yükleme Hatası</option>';
+        const isTrErr = (window.i18n && window.i18n.currentLang === 'tr'); select.innerHTML = `<option value="">${isTrErr ? 'Yükleme Hatası' : 'Load Error'}</option>`;
     }
 }
 
@@ -2500,7 +2507,7 @@ async function loadMLSymbols() {
         console.log(`✅ [ML] ${symbols.length} sembol yüklendi`);
     } catch (error) {
         console.error('❌ [ML] Sembol yükleme hatası:', error);
-        select.innerHTML = '<option value="">Yükleme Hatası</option>';
+        const isTrErr = (window.i18n && window.i18n.currentLang === 'tr'); select.innerHTML = `<option value="">${isTrErr ? 'Yükleme Hatası' : 'Load Error'}</option>`;
     }
 }
 
@@ -2543,6 +2550,10 @@ async function runMLVisualAnalysis() {
 
         console.log(`📊 [XAI] ${candles.length} candles, ${markers.length} markers, ${feature_importance.length} feature importance loaded`);
 
+        window._lastMLCandles = candles;
+        window._lastMLMarkers = markers;
+        window._lastFeatureImportance = feature_importance;
+
         if (window.chartRenderer) {
             window.chartRenderer.destroy();
             window.chartRenderer.init('ml-analysis-chart', {
@@ -2550,15 +2561,7 @@ async function runMLVisualAnalysis() {
                 height: 450
             });
 
-            const formattedCandles = candles.map(c => ({
-                time: c.time / 1000,
-                open: c.open,
-                high: c.high,
-                low: c.low,
-                close: c.close
-            }));
-
-            window.chartRenderer.updateCandles(formattedCandles);
+            window.chartRenderer.updateCandles(candles);
 
             if (markers && markers.length > 0) {
                 window.chartRenderer.updateMarkers(markers);
@@ -2586,7 +2589,9 @@ async function runMLVisualAnalysis() {
  */
 function renderFeatureImportance(featureImportance) {
     const chartDiv = document.getElementById('feature-importance-chart');
-    if (!chartDiv) return;
+    if (!chartDiv || typeof Plotly === 'undefined') return;
+
+    window._lastFeatureImportance = featureImportance;
 
     const isTr = (window.i18n && window.i18n.currentLang === 'tr');
     const features = featureImportance.map(f => f.feature_name || f.feature || 'Unknown');
@@ -2632,11 +2637,53 @@ function renderFeatureImportance(featureImportance) {
         }
     };
 
-    Plotly.newPlot(chartDiv, [trace], layout, { responsive: true, displayModeBar: false });
+    Plotly.react(chartDiv, [trace], layout, { responsive: true, displayModeBar: false });
+}
+
+/**
+ * Render ML Empty States for simulation & feature importance
+ */
+function renderMLEmptyStates() {
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
+
+    const chartContainer = document.getElementById('ml-analysis-chart');
+    if (chartContainer && (!window._lastMLCandles || window._lastMLCandles.length === 0)) {
+        chartContainer.innerHTML = `
+            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:380px; color:var(--text-muted); text-align:center; padding:20px;">
+                <div style="font-size:2.5rem; margin-bottom:12px; opacity:0.6;">📈</div>
+                <h4 style="font-size:1rem; margin-bottom:6px; color:var(--text-main);">
+                    ${isTr ? 'Görsel Karar Simülasyonu Hazır' : 'Visual Decision Simulation Ready'}
+                </h4>
+                <p style="font-size:0.8rem; max-width:440px; line-height:1.5;">
+                    ${isTr 
+                        ? 'Yapay zeka ve teknik indikatör sinyallerini mum grafiğinde test etmek için yukarıdan Strateji ve Sembol seçip "Simülasyonu Başlat" butonuna tıklayın.' 
+                        : 'Select a Strategy and Symbol above, then click "Run Simulation" to visualize AI and technical indicator signals on the candlestick chart.'}
+                </p>
+            </div>
+        `;
+    }
+
+    const featureContainer = document.getElementById('feature-importance-chart');
+    if (featureContainer && (!window._lastFeatureImportance || window._lastFeatureImportance.length === 0)) {
+        featureContainer.innerHTML = `
+            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:280px; color:var(--text-muted); text-align:center; padding:20px;">
+                <div style="font-size:2.5rem; margin-bottom:12px; opacity:0.6;">🧬</div>
+                <h4 style="font-size:1rem; margin-bottom:6px; color:var(--text-main);">
+                    ${isTr ? 'Özellik Ağırlık Analizi Bekleniyor' : 'Feature Importance Awaiting Simulation'}
+                </h4>
+                <p style="font-size:0.8rem; max-width:440px; line-height:1.5;">
+                    ${isTr 
+                        ? 'Simülasyon çalıştırıldığında modelin karar verirken en çok ağırlık verdiği teknik göstergeler burada grafiklendirilecektir.' 
+                        : 'When simulation is executed, the technical features and indicators weighted by the model will be graphed here.'}
+                </p>
+            </div>
+        `;
+    }
 }
 
 window.runMLVisualAnalysis = runMLVisualAnalysis;
 window.renderFeatureImportance = renderFeatureImportance;
+window.renderMLEmptyStates = renderMLEmptyStates;
 
 // ============================================================================
 // EVENT LISTENERS
@@ -3073,6 +3120,11 @@ window.addEventListener('languageChanged', (e) => {
     if (typeof loadMLSymbols === 'function') loadMLSymbols();
     if (typeof loadSymbolsForML === 'function') loadSymbolsForML();
     if (typeof validateMumCount === 'function') validateMumCount();
+    if (window._lastFeatureImportance && window._lastFeatureImportance.length > 0) {
+        renderFeatureImportance(window._lastFeatureImportance);
+    } else {
+        renderMLEmptyStates();
+    }
     if (window._lastInventory) {
         renderDatabaseInventory(window._lastInventory, window._lastStats);
     }

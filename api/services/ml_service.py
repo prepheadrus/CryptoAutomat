@@ -61,7 +61,8 @@ class MLService:
         try:
             self.training_state["is_training"] = True
             self.training_state["progress"] = 5
-            self.training_state["message"] = "Veri çekiliyor..."
+            self.training_state["message"] = "Fetching and preparing data..."
+            self.training_state["message_tr"] = "Veri çekiliyor..."
             self.training_state["current_step"] = "Parquet Lake + Smart Cache"
 
             logger.info(f"🧠 [ML] Starting ML training: {request.symbol} ({request.timeframe}) - {request.limit} candles")
@@ -138,7 +139,8 @@ class MLService:
             logger.info("🎉 [DATA LAKE] Full transition to Parquet Engine active with risk guards")
             
             self.training_state["progress"] = 30
-            self.training_state["message"] = "Feature engineering ve etiketleme yapılıyor..."
+            self.training_state["message"] = "Feature engineering and labeling..."
+            self.training_state["message_tr"] = "Feature engineering ve etiketleme yapılıyor..."
             self.training_state["current_step"] = "ML pipeline"
             
             logger.info(f"📊 [ML] Starting ML pipeline...")
@@ -165,7 +167,8 @@ class MLService:
             
             # 4. Model eğit
             self.training_state["progress"] = 70
-            self.training_state["message"] = "XGBoost modeli eğitiliyor..."
+            self.training_state["message"] = "Training XGBoost & Ensemble models..."
+            self.training_state["message_tr"] = "XGBoost modeli eğitiliyor..."
             self.training_state["current_step"] = "Model training"
             
             from ml.model_training import ModelTrainer
@@ -185,7 +188,8 @@ class MLService:
             
             # 6. Modeli kaydet
             self.training_state["progress"] = 85
-            self.training_state["message"] = "Model kaydediliyor..."
+            self.training_state["message"] = "Saving model artifacts..."
+            self.training_state["message_tr"] = "Model kaydediliyor..."
             self.training_state["current_step"] = "Save model"
 
             # Merkezi path generator fonksiyonunu kullan
@@ -208,7 +212,8 @@ class MLService:
 
             # 7. Eğitim geçmişini güncelle
             self.training_state["progress"] = 95
-            self.training_state["message"] = "Geçmiş güncelleniyor..."
+            self.training_state["message"] = "Updating training history..."
+            self.training_state["message_tr"] = "Geçmiş güncelleniyor..."
             self.training_state["current_step"] = "Update history"
 
             self._save_training_history(
@@ -223,7 +228,8 @@ class MLService:
             # 8. Tamamlandı
             self.training_state["is_training"] = False
             self.training_state["progress"] = 100
-            self.training_state["message"] = f"✅ ML eğitimi tamamlandı: {request.symbol}"
+            self.training_state["message"] = f"✅ ML model training completed: {request.symbol}"
+            self.training_state["message_tr"] = f"✅ ML eğitimi tamamlandı: {request.symbol}"
             self.training_state["current_step"] = "Completed"
 
             logger.info(f"🎉 [ML] ML training completed successfully: {request.symbol}")
