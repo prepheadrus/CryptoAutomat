@@ -1,4 +1,4 @@
-"""
+﻿"""
 Strategy Builder Testleri
 """
 
@@ -145,6 +145,9 @@ def test_full_workflow():
     # 3. Executor ile calistir
     executor = StrategyExecutor()
     executor.load_strategy('rsi_macd_combo.json')
+    import os
+    if os.path.exists('rsi_macd_combo.json'):
+        os.remove('rsi_macd_combo.json')
 
     # Test data
     dates = pd.date_range('2024-01-01', periods=200, freq='1h')
