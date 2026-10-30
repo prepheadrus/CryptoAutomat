@@ -338,12 +338,13 @@ function updatePerformanceMetrics(portfolio) {
  * Close position
  */
 window.closePosition = function(botId, symbol) {
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
     if (!botId) {
-        showToast('❌ Bot ID bulunamadı', 'error');
+        showToast(isTr ? '❌ Bot ID bulunamadı' : '❌ Bot ID not found', 'error');
         return;
     }
 
-    if (!confirm(`⚠️ ${symbol} pozisyonunu kapatmak istediğinizden emin misiniz?`)) {
+    if (!confirm(isTr ? `⚠️ ${symbol} pozisyonunu kapatmak istediğinizden emin misiniz?` : `⚠️ Are you sure you want to close position for ${symbol}?`)) {
         return;
     }
 
@@ -354,18 +355,18 @@ window.closePosition = function(botId, symbol) {
         botManager.stopBot(botId)
             .then(result => {
                 if (result.status === 'success') {
-                    showToast(`✅ ${symbol} pozisyonu kapatıldı`, 'success');
+                    showToast(isTr ? `✅ ${symbol} pozisyonu kapatıldı` : `✅ Position closed for ${symbol}`, 'success');
                     // Refresh dashboard
                     setTimeout(() => loadDashboard(), 1000);
                 } else {
-                    showToast('❌ ' + (result.message || 'Kapatma başarısız'), 'error');
+                    showToast(isTr ? '❌ ' + (result.message || 'Kapatma başarısız') : '❌ ' + (result.message || 'Failed to close position'), 'error');
                 }
             })
             .catch(error => {
-                showToast('❌ Hata: ' + error.message, 'error');
+                showToast((isTr ? '❌ Hata: ' : '❌ Error: ') + error.message, 'error');
             });
     } else {
-        showToast('❌ Bot manager bulunamadı', 'error');
+        showToast(isTr ? '❌ Bot yöneticisi bulunamadı' : '❌ Bot manager not found', 'error');
     }
 };
 
@@ -1018,17 +1019,18 @@ async function handleBotSubmit(event) {
     console.log('   🏛️ Market:', botData.market_type);
     console.log('   🛡️ Margin:', botData.margin_type);
 
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
     if (!botData.symbol || !botData.strategy_id) {
-        showToast('❌ Lütfen sembol ve strateji seçin!', 'error');
+        showToast(isTr ? '❌ Lütfen sembol ve strateji seçin!' : '❌ Please select a symbol and strategy!', 'error');
         return;
     }
 
     try {
-        showToast(`🚀 ${botData.symbol} için bot başlatılıyor...`, 'info');
+        showToast(isTr ? `🚀 ${botData.symbol} için bot başlatılıyor...` : `🚀 Launching bot for ${botData.symbol}...`, 'info');
         const result = await botManager.startBot(botData);
-        showToast(`✅ Bot başlatıldı! ID: ${result.bot_id}`, 'success');
+        showToast(isTr ? `✅ Bot başlatıldı! ID: ${result.bot_id}` : `✅ Bot launched successfully! ID: ${result.bot_id}`, 'success');
     } catch (error) {
-        showToast(`❌ Hata: ${error.message}`, 'error');
+        showToast((isTr ? '❌ Hata: ' : '❌ Error: ') + error.message, 'error');
     }
 }
 

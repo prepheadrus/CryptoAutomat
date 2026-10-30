@@ -214,7 +214,7 @@ class PositionManager:
             return position
             
         except Exception as e:
-            logger.error(f"Pozisyon açma hatası: {e}")
+            logger.error(f"Position open error: {e}")
             return None
     
     def _calculate_liquidation_price(
@@ -316,14 +316,14 @@ class PositionManager:
             Trade object veya None
         """
         if bot_id not in self.positions:
-            logger.warning(f"Pozisyon bulunamadı: {bot_id}")
+            logger.warning(f"Position not found: {bot_id}")
             return None
 
         position = self.positions[bot_id]
 
         # Double close kilidi - Sadece logla, bloke ETME (zaten positions_to_close listesinde)
         if position.metadata.get('is_closing', False):
-            logger.warning(f"⚠️ Pozisyon zaten kapanıyor ama tekrar kapatma deneniyor: {bot_id}")
+            logger.warning(f"⚠️ Position already closing, ignoring duplicate close attempt: {bot_id}")
             # Bloke etme, devam et - belki önceki kapatma başarısız oldu
 
         # Kilit set et
@@ -400,7 +400,7 @@ class PositionManager:
             return trade
 
         except Exception as e:
-            logger.error(f"❌ Pozisyon kapatma hatası ({bot_id}): {e}")
+            logger.error(f"❌ Position close error ({bot_id}): {e}")
             logger.error(traceback.format_exc())
 
             # Hata durumunda kilidi AÇ (tekrar denenebilir olsun)
@@ -418,7 +418,7 @@ class PositionManager:
         finally:
             # Eğer kapatma başarısız olduysa, kilidi sıfırla (zombie önleme)
             if not close_success and bot_id in self.positions:
-                logger.warning(f"⚠️ [ZOMBIE KORUMA] {bot_id} kapatma başarısız, kilit sıfırlanıyor.")
+                logger.warning(f"⚠️ [ZOMBIE PROTECTION] Close failed for {bot_id}, resetting lock.")
                 self.positions[bot_id].metadata['is_closing'] = False
 
                 # Legacy position kilidini de sıfırla
@@ -451,14 +451,14 @@ class PositionManager:
                 if pos.get('bot_id') == bot_id:
                     if pos in self.legacy_positions:  # Güvenlik kontrolü (ValueError önleme)
                         self.legacy_positions.remove(pos)
-                        logger.debug(f"✅ Legacy pozisyon güvenli silindi: {bot_id}")
+                        logger.debug(f"✅ Legacy position safely removed: {bot_id}")
                     return True
 
-            logger.warning(f"⚠️ Legacy pozisyon bulunamadı: {bot_id}")
+            logger.warning(f"⚠️ Legacy position not found: {bot_id}")
             return False
 
         except Exception as e:
-            logger.error(f"❌ Legacy pozisyon silme hatası ({bot_id}): {e}")
+            logger.error(f"❌ Legacy position delete error ({bot_id}): {e}")
             return False
     
     def _update_statistics(self, trade: Trade):
@@ -598,13 +598,13 @@ class PositionManager:
                 # stop_loss None ise direkt set et
                 if pos['stop_loss'] is None or new_stop > pos['stop_loss']:
                     pos['stop_loss'] = new_stop
-                    logger.debug(f"[TRAILING STOP] {pos['symbol']} LONG stop yukarı: {pos['stop_loss']:.2f}")
+                    logger.debug(f"[TRAILING STOP] {pos['symbol']} LONG stop moved up: {pos['stop_loss']:.2f}")
 
             # Break-even: Kar PnL'ye geçince SL'yi giriş seviyesine taşı
             if pos['stop_loss'] is not None and pos['stop_loss'] < entry_price and current_price > entry_price:
                 old_sl = pos['stop_loss']
                 pos['stop_loss'] = entry_price
-                logger.debug(f"[BREAK-EVEN] {pos['symbol']} LONG SL giriş seviyesine taşındı: {old_sl:.2f} → {pos['stop_loss']:.2f}")
+                logger.debug(f"[BREAK-EVEN] {pos['symbol']} LONG SL moved to entry: {old_sl:.2f} → {pos['stop_loss']:.2f}")
 
         else:  # SHORT
             # SHORT: Yeni dip kontrolü
@@ -616,13 +616,13 @@ class PositionManager:
                 # stop_loss None ise direkt set et
                 if pos['stop_loss'] is None or new_stop < pos['stop_loss']:
                     pos['stop_loss'] = new_stop
-                    logger.debug(f"[TRAILING STOP] {pos['symbol']} SHORT stop aşağı: {pos['stop_loss']:.2f}")
+                    logger.debug(f"[TRAILING STOP] {pos['symbol']} SHORT stop moved down: {pos['stop_loss']:.2f}")
 
             # Break-even: Kar PnL'ye geçince SL'yi giriş seviyesine taşı
             if pos['stop_loss'] is not None and pos['stop_loss'] > entry_price and current_price < entry_price:
                 old_sl = pos['stop_loss']
                 pos['stop_loss'] = entry_price
-                logger.debug(f"[BREAK-EVEN] {pos['symbol']} SHORT SL giriş seviyesine taşındı: {old_sl:.2f} → {pos['stop_loss']:.2f}")
+                logger.debug(f"[BREAK-EVEN] {pos['symbol']} SHORT SL moved to entry: {old_sl:.2f} → {pos['stop_loss']:.2f}")
     
     # ========================================================================
     # PnL HESAPLAMA

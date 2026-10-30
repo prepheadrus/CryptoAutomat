@@ -451,7 +451,7 @@ class PaperTrader:
         if symbol and symbol in self.latest_decisions:
             self.latest_decisions[symbol]['has_position'] = False
             self.latest_decisions[symbol]['position_closed_at'] = datetime.utcnow().isoformat()
-            logger.debug(f"📊 [SİNYAL] {symbol}: Pozisyon kapandı, HOLD moduna geçildi")
+            logger.debug(f"📊 [SIGNAL] {symbol}: Position closed, switched to HOLD mode")
 
         # DATABASE'E KAYDET (TEK KAYNAK - SINGLE SOURCE OF TRUTH)
         # Bu handler DB'ye kaydeder, position_manager'da save_trade YOK
@@ -1021,12 +1021,12 @@ class PaperTrader:
         for bot_id, exit_price, reason in positions_to_close:
             # Bu bot zaten bu tick'te kapatıldı mı? (duplicate önleme)
             if bot_id in closed_bot_ids:
-                logger.debug(f"⚠️ {bot_id} bu tick'te zaten kapatıldı, atlanıyor.")
+                logger.debug(f"⚠️ {bot_id} already closed in this tick, skipping.")
                 continue
 
             # Position hala mevcut mu kontrol et (başka bir tick kapatmış olabilir)
             if bot_id not in self.position_manager.positions:
-                logger.debug(f"⚠️ {bot_id} pozisyonu zaten kapatılmış, atlanıyor.")
+                logger.debug(f"⚠️ {bot_id} position already closed, skipping.")
                 continue
 
             # ============================================
@@ -1061,7 +1061,7 @@ class PaperTrader:
 
                     # KRİTİK: Her kapatmadan SONRA hemen senkronize et (UI için)
                     self.open_positions = list(self.position_manager.legacy_positions)
-                    logger.debug(f"✅ Pozisyon kapandı, UI senkronize: {len(self.open_positions)} pozisyon")
+                    logger.debug(f"✅ Position closed, UI synchronized: {len(self.open_positions)} positions")
 
                     # Durum güncellemeleri artık on_position_closed event handler'ında yapılıyor (EDA)
                     # Buraya sadece nihai loglamayı bırakıyoruz
@@ -1071,10 +1071,10 @@ class PaperTrader:
                         logger.warning(f"⚠️ {reason}: ${trade.pnl:.2f} ({trade.pnl_percent:.2%}) ZARAR")
                 else:
                     # close_position None döndürdü - muhtemelen zaten kapanıyor veya hata
-                    logger.warning(f"⚠️ Pozisyon kapatılamadı: {bot_id} (zaten kapanıyor olabilir)")
+                    logger.warning(f"⚠️ Could not close position: {bot_id} (may already be closing)")
 
             except Exception as e:
-                logger.error(f"❌ Pozisyon kapatma hatası ({bot_id}): {e}")
+                logger.error(f"❌ Position close error ({bot_id}): {e}")
                 logger.debug(traceback.format_exc())
 
         # POZİSYON KAPANDIKTAN SONRA SENKRONİZASYON (KRİTİK!)

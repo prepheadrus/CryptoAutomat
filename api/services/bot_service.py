@@ -63,29 +63,29 @@ class BotService:
             self.paper_engine.strategies[request.symbol] = strategy_instance
             self.paper_engine.active_strategies[request.symbol] = request.strategy_id
 
-            logger.info(f"📚 [STRATEGY] {request.symbol} için {request.strategy_id} instance'ı kaydedildi")
+            logger.info(f"📚 [STRATEGY] Registered {request.strategy_id} instance for {request.symbol}")
 
             # Poller'ı başlat (eğer henüz çalışmıyorsa)
             if request.symbol not in self.exchange_manager.active_pollers:
-                logger.info(f"🚀 [POLLER] {request.symbol} için run_strategy_poller başlatılıyor...")
+                logger.info(f"🚀 [POLLER] Starting run_strategy_poller for {request.symbol}...")
 
                 poller_task = asyncio.create_task(
                     self.exchange_manager.run_strategy_poller(request.symbol, request.timeframe)
                 )
 
                 self.exchange_manager.active_pollers[request.symbol] = poller_task
-                logger.info(f"✅ [POLLER] {request.symbol} poller başlatıldı")
+                logger.info(f"✅ [POLLER] Poller started for {request.symbol}")
             else:
-                logger.debug(f"ℹ️ [POLLER] {request.symbol} için poller zaten çalışıyor")
+                logger.debug(f"ℹ️ [POLLER] Poller already running for {request.symbol}")
 
             return {
                 "status": "success",
                 "bot_id": bot_id,
-                "message": f"Bot başlatıldı: {bot_id}"
+                "message": f"Bot started: {bot_id}"
             }
 
         except Exception as e:
-            logger.error(f"Bot başlatma hatası: {e}")
+            logger.error(f"Bot start error: {e}")
             return {"status": "error", "message": str(e)}
     
     async def stop_bot(self, request: BotStopRequest) -> Dict[str, Any]:
@@ -102,12 +102,12 @@ class BotService:
             success = self.paper_engine.stop_bot(request.bot_id)
             
             if success:
-                return {"status": "success", "message": f"Bot durduruldu: {request.bot_id}"}
+                return {"status": "success", "message": f"Bot stopped: {request.bot_id}"}
             else:
-                return {"status": "error", "message": "Bot bulunamadı"}
+                return {"status": "error", "message": "Bot not found"}
                 
         except Exception as e:
-            logger.error(f"Bot durdurma hatası: {e}")
+            logger.error(f"Bot stop error: {e}")
             return {"status": "error", "message": str(e)}
     
     async def resume_bot(self, request: BotResumeRequest) -> Dict[str, Any]:
@@ -124,13 +124,13 @@ class BotService:
             success = self.paper_engine.resume_bot(request.bot_id)
             
             if success:
-                logger.info(f"▶️ Bot devam ettirildi: {request.bot_id}")
-                return {"status": "success", "message": f"Bot devam ettirildi: {request.bot_id}"}
+                logger.info(f"▶️ Bot resumed: {request.bot_id}")
+                return {"status": "success", "message": f"Bot resumed: {request.bot_id}"}
             else:
-                return {"status": "error", "message": "Bot bulunamadı veya devam ettirilemedi"}
+                return {"status": "error", "message": "Bot not found or could not be resumed"}
             
         except Exception as e:
-            logger.error(f"Bot devam ettirme hatası: {e}")
+            logger.error(f"Bot resume error: {e}")
             return {"status": "error", "message": str(e)}
     
     async def remove_bot(self, request: BotRemoveRequest) -> Dict[str, Any]:
@@ -148,13 +148,13 @@ class BotService:
             success = self.paper_engine.remove_bot(request.bot_id)
             
             if success:
-                logger.info(f"🗑️ Bot kaldırıldı: {request.bot_id}")
-                return {"status": "success", "message": f"Bot kaldırıldı: {request.bot_id}"}
+                logger.info(f"🗑️ Bot removed: {request.bot_id}")
+                return {"status": "success", "message": f"Bot removed: {request.bot_id}"}
             else:
-                return {"status": "error", "message": "Bot bulunamadı veya kaldırılamadı"}
+                return {"status": "error", "message": "Bot not found or could not be removed"}
             
         except Exception as e:
-            logger.error(f"Bot kaldırma hatası: {e}")
+            logger.error(f"Bot remove error: {e}")
             return {"status": "error", "message": str(e)}
     
     async def get_bot_status(self, bot_id: str) -> Dict[str, Any]:
@@ -171,7 +171,7 @@ class BotService:
             status = self.paper_engine.get_bot_status(bot_id)
             return {"status": "success", "bot": status}
         except Exception as e:
-            logger.error(f"Bot durum hatası: {e}")
+            logger.error(f"Bot status error: {e}")
             return {"status": "error", "message": str(e)}
     
     async def get_all_bots(self) -> Dict[str, Any]:
@@ -185,7 +185,7 @@ class BotService:
             bots = self.paper_engine.get_all_bots()
             return {"status": "success", "bots": bots}
         except Exception as e:
-            logger.error(f"Bot listesi hatası: {e}")
+            logger.error(f"Bot list error: {e}")
             return {"status": "error", "message": str(e)}
     
     def _bot_to_info(self, bot_data: Dict[str, Any]) -> BotInfo:
