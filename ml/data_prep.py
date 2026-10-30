@@ -48,7 +48,7 @@ def apply_triple_barrier(
     Returns:
         pd.DataFrame: Etiketler (target) ve bariyer bilgileri eklenmiş DataFrame
     """
-    logger.info(f"Triple Barrier etiketleme başlatılıyor: TP={tp_multiplier}, SL={sl_multiplier}, Horizon={time_horizon}")
+    logger.info(f"Starting Triple Barrier labeling: TP={tp_multiplier}, SL={sl_multiplier}, Horizon={time_horizon}")
     
     df = df.copy()
     
@@ -222,7 +222,7 @@ def engineer_features(
         df_scaled = df.copy()
         df_scaled[feature_cols] = scaler.fit_transform(df[feature_cols])
         
-        logger.info(f"Ölçeklendirme tamamlandı ({scaler_type})")
+        logger.info(f"Scaling completed ({scaler_type})")
         
         return df_scaled, scaler
     
@@ -316,7 +316,7 @@ def prepare_ml_data(
     Returns:
         Tuple: (X_train, X_test, y_train, y_test, scaler)
     """
-    logger.info("ML veri hazırlama pipeline'ı başlatılıyor...")
+    logger.info("Starting ML data preparation pipeline...")
 
     # 1. Triple Barrier etiketleme (skip_barrier=False ise)
     if not skip_barrier:
@@ -329,7 +329,7 @@ def prepare_ml_data(
         )
     else:
         df_labeled = df
-        logger.info("⏭️ [ML] Triple Barrier atlandı (zaten yapılmış)")
+        logger.info("⏭️ [ML] Skipped Triple Barrier (already computed)")
     
     # 2. Özellik mühendisliği ve ölçeklendirme
     df_processed, scaler = engineer_features(
@@ -368,9 +368,9 @@ def prepare_ml_data(
         # X için leakage kolonlarını çıkar
         feature_cols = [col for col in all_numeric_cols if col not in leakage_cols]
 
-        logger.info(f"🛡️ DATA LEAKAGE ÖNLEME: {len(leakage_cols)} leakage kolonu X'ten çıkarıldı")
-        logger.debug(f"   Çıkarılan kolonlar: {leakage_cols}")
-        logger.info(f"   X kolonları ({len(feature_cols)}): {feature_cols[:10]}...")
+        logger.info(f"🛡️ DATA LEAKAGE PREVENTION: Removed {len(leakage_cols)} leakage columns from X")
+        logger.debug(f"   Removed columns: {leakage_cols}")
+        logger.info(f"   X columns ({len(feature_cols)}): {feature_cols[:10]}...")
 
     # ÖNCE y'yi AYIR (target kolonu hala varken)
     y_train = train_df[target_col].copy()
@@ -381,13 +381,13 @@ def prepare_ml_data(
     X_test = test_df[feature_cols].copy()
 
     # [ML] Dampened Kalman & Triple Barrier Hazır log mesajı
-    logger.info("[ML] Dampened Kalman & Triple Barrier Hazır")
+    logger.info("[ML] Dampened Kalman & Triple Barrier Ready")
 
-    logger.info(f"ML veri hazırlığı tamamlandı:")
+    logger.info(f"ML data preparation completed:")
     logger.info(f"  X_train: {X_train.shape}, y_train: {y_train.shape}")
     logger.info(f"  X_test: {X_test.shape}, y_test: {y_test.shape}")
-    logger.info(f"  Feature sayısı: {len(feature_cols)}")
-    logger.info(f"  X kolonları: {feature_cols[:10]}... (ilk 10)")
+    logger.info(f"  Feature count: {len(feature_cols)}")
+    logger.info(f"  X columns: {feature_cols[:10]}... (first 10)")
 
     return X_train, X_test, y_train, y_test, scaler
 

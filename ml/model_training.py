@@ -271,7 +271,7 @@ class ModelTrainer:
         
         # Too small (< 500 satır)
         else:
-            logger.warning(f"⚠️ [ML] VERİ SETİ ÇOK KÜÇÜK ({data_size} satır)! Model eğitimi önerilmez.")
+            logger.warning(f"⚠️ [ML] DATASET VERY SMALL ({data_size} rows)! Model training not recommended.")
             logger.warning("   En az 500 satır önerilir, ideal 2000+ satır")
             ultra_simple_params = self.base_params.copy()
             ultra_simple_params.update({
@@ -357,10 +357,10 @@ class ModelTrainer:
         Returns:
             Dict[str, Any]: Eğitim metrikleri
         """
-        logger.info(f"🧠 Ensemble (XGBoost + RF) eğitimi başlatılıyor...")
-        logger.info(f"  Eğitim seti: {X_train.shape}")
-        logger.info(f"  Test seti: {X_test.shape}")
-        logger.info(f"  Sınıf dağılımı (train): {y_train.value_counts().to_dict()}")
+        logger.info(f"🧠 Starting Ensemble (XGBoost + RF) training...")
+        logger.info(f"  Training set: {X_train.shape}")
+        logger.info(f"  Test set: {X_test.shape}")
+        logger.info(f"  Class distribution (train): {y_train.value_counts().to_dict()}")
         
         # OVERFITTING PROTECTION: Veri boyutuna göre parametre ayarı
         data_size = len(X_train)
@@ -373,7 +373,7 @@ class ModelTrainer:
             self.feature_names = [f"feature_{i}" for i in range(X_train.shape[1])]
 
         # 1. XGBoost modelini eğit
-        logger.info("📊 XGBoost eğitiliyor...")
+        logger.info("📊 Training XGBoost...")
         eval_set = [(X_train, y_train), (X_test, y_test)]
         self.xgb_model.fit(
             X_train,
@@ -381,17 +381,17 @@ class ModelTrainer:
             eval_set=eval_set,
             verbose=verbose
         )
-        logger.info("✅ XGBoost eğitimi tamamlandı.")
+        logger.info("✅ XGBoost training completed.")
 
         # 2. Random Forest modelini eğit
-        logger.info("🌲 Random Forest eğitiliyor...")
+        logger.info("🌲 Training Random Forest...")
         self.rf_model.fit(X_train, y_train)
-        logger.info("✅ Random Forest eğitimi tamamlandı.")
+        logger.info("✅ Random Forest training completed.")
 
         self.is_trained = True
 
         # 3. Ensemble tahmini (Soft Voting)
-        logger.info("🔗 Ensemble tahminleri hesaplanıyor...")
+        logger.info("🔗 Calculating ensemble predictions...")
         xgb_proba = self.xgb_model.predict_proba(X_test)
         rf_proba = self.rf_model.predict_proba(X_test)
 
@@ -415,7 +415,7 @@ class ModelTrainer:
 
         # Sonuçları logla
         logger.info("=" * 60)
-        logger.info("EĞİTİM SONUÇLARI")
+        logger.info("TRAINING RESULTS")
         logger.info("=" * 60)
         logger.info(f"Accuracy:  {metrics['accuracy']:.4f}")
         logger.info(f"Precision: {metrics['precision']:.4f}")
@@ -583,7 +583,7 @@ class ModelTrainer:
                 - probabilities: Tüm sınıflar için olasılıklar
         """
         if not self.is_trained:
-            raise RuntimeError("Model henüz eğitilmedi!")
+            raise RuntimeError("Model has not been trained yet!")
 
         # Her iki modelin olasılıklarını al
         xgb_proba = self.xgb_model.predict_proba(X)
@@ -679,7 +679,7 @@ class ModelTrainer:
             str: Kaydedilen dosya yolu
         """
         if not self.is_trained:
-            raise RuntimeError("Model henüz eğitilmedi, kaydedilemez!")
+            raise RuntimeError("Model has not been trained yet, cannot save!")
 
         # Dizin oluştur
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
@@ -728,9 +728,9 @@ class ModelTrainer:
         with open(metadata_path, 'w') as f:
             json.dump(metadata, f, indent=2, default=str)
 
-        logger.info(f"✅ XGBoost model kaydedildi: {model_path}")
-        logger.info(f"✅ Random Forest model kaydedildi: {rf_model_path}")
-        logger.info(f"✅ Metadata kaydedildi: {metadata_path}")
+        logger.info(f"✅ XGBoost model saved: {model_path}")
+        logger.info(f"✅ Random Forest model saved: {rf_model_path}")
+        logger.info(f"✅ Metadata saved: {metadata_path}")
 
         return model_path
 
@@ -822,7 +822,7 @@ def run_training_pipeline(
     from ml.data_prep import prepare_ml_data
 
     logger.info("=" * 60)
-    logger.info("XGBOOST EĞİTİM PIPELINE'I BAŞLATILIYOR")
+    logger.info("STARTING XGBOOST TRAINING PIPELINE")
     logger.info("=" * 60)
 
     # 1. Veri hazırlama
@@ -837,7 +837,7 @@ def run_training_pipeline(
     )
 
     # 2. Model eğitimi
-    logger.info("\n[2/3] Model eğitiliyor...")
+    logger.info("\n[2/3] Training model...")
     trainer = ModelTrainer(
         n_estimators=500,
         max_depth=6,
@@ -854,7 +854,7 @@ def run_training_pipeline(
     trainer.save_model(model_save_path, timeframe=timeframe)
 
     logger.info("\n" + "=" * 60)
-    logger.info("EĞİTİM TAMAMLANDI")
+    logger.info("TRAINING COMPLETED")
     logger.info("=" * 60)
 
     return trainer

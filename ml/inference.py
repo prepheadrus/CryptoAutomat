@@ -70,7 +70,7 @@ def load_model(symbol: str, timeframe: str):
         return _model_cache[cache_key]
         
     except Exception as e:
-        print(f"❌ [ML] Model yükleme hatası: {e}")
+        print(f"❌ [ML] Model loading error: {e}")
         return None
 
 

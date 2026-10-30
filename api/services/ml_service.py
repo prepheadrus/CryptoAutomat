@@ -48,7 +48,7 @@ class MLService:
         if self.training_state["is_training"]:
             return {
                 "status": "error",
-                "message": "Eğitim zaten devam ediyor, lütfen bekleyin."
+                "message": "Training is already in progress, please wait."
             }
 
         # ÖNEMLİ: Arka plan görevi olarak başlatma - BEKLE!
@@ -64,7 +64,7 @@ class MLService:
             self.training_state["message"] = "Veri çekiliyor..."
             self.training_state["current_step"] = "Parquet Lake + Smart Cache"
 
-            logger.info(f"🧠 [ML] Eğitim başlatılıyor: {request.symbol} ({request.timeframe}) - {request.limit} mum")
+            logger.info(f"🧠 [ML] Starting ML training: {request.symbol} ({request.timeframe}) - {request.limit} candles")
 
             # ========================================================================
             # 🏗️ PARQUET DATA LAKE - SMART CACHE
@@ -97,8 +97,8 @@ class MLService:
             total_minutes = request.limit * minutes_per_candle
             start_date = end_date - timedelta(minutes=total_minutes)
 
-            logger.info(f"🏗️ [PARQUET LAKE] {request.symbol} {request.timeframe} için veri yükleniyor...")
-            logger.info(f"📅 [TIME RANGE] {start_date} - {end_date} ({request.limit} mum, ~{total_minutes} dakika)")
+            logger.info(f"🏗️ [PARQUET LAKE] Loading data for {request.symbol} {request.timeframe}...")
+            logger.info(f"📅 [TIME RANGE] {start_date} - {end_date} ({request.limit} candles, ~{total_minutes} minutes)")
 
             # SMART CACHE köprü fonksiyonu
             df = await data_service.get_cached_or_fetch_data(
@@ -109,7 +109,7 @@ class MLService:
             )
 
             if df is None or len(df) == 0:
-                raise ValueError(f"Parquet Lake'te yeterli veri yok: {request.symbol} {request.timeframe}")
+                raise ValueError(f"Insufficient data in Parquet Lake: {request.symbol} {request.timeframe}")
 
             # DataFrame'i ML formatına hazırla
             import pandas as pd
@@ -127,28 +127,28 @@ class MLService:
             # ⚠️ ÖNEMLİ: Kullanıcı limit'ini uygula
             # Data service fazla veri dönmüş olabilir, son N mumu al
             if len(df) > request.limit:
-                logger.info(f"✂️ [LIMIT] {len(df)} mum bulundu, son {request.limit} mum kullanılıyor")
+                logger.info(f"✂️ [LIMIT] {len(df)} candles found, using last {request.limit} candles")
                 df = df.tail(request.limit)
 
-            logger.info(f"✅ [PARQUET LAKE] {request.symbol} {request.timeframe} → {len(df)} mum yüklendi (limit: {request.limit})")
-            logger.info(f"📊 [PARQUET LAKE] İlk: {df.index[0]}, Son: {df.index[-1]}")
-            logger.info(f"🛡️ [ML] NaN temizliği: UTC sync + ffill + dropna uygulandı")
+            logger.info(f"✅ [PARQUET LAKE] {request.symbol} {request.timeframe} → {len(df)} candles loaded (limit: {request.limit})")
+            logger.info(f"📊 [PARQUET LAKE] First: {df.index[0]}, Last: {df.index[-1]}")
+            logger.info(f"🛡️ [ML] NaN clean: UTC sync + ffill + dropna applied")
 
             # Final log
-            logger.info("🎉 [DATA LAKE] Parquet Engine'e Tam Geçiş Sağlandı ve Risk Kalkanları Aktif")
+            logger.info("🎉 [DATA LAKE] Full transition to Parquet Engine active with risk guards")
             
             self.training_state["progress"] = 30
             self.training_state["message"] = "Feature engineering ve etiketleme yapılıyor..."
             self.training_state["current_step"] = "ML pipeline"
             
-            logger.info(f"📊 [ML] ML pipeline başlatılıyor...")
+            logger.info(f"📊 [ML] Starting ML pipeline...")
             
             # --- YENİ EKLENEN: ML İÇİN TEKNİK İNDİKATÖR HESAPLAMASI ---
             from data.indicators import StrategyIndicators
-            logger.info("🧠 [ML FEATURE ENGINEERING] Ham veriye 20+ teknik indikatör (RSI, MACD, OBV vb.) ekleniyor...")
+            logger.info("🧠 [ML FEATURE ENGINEERING] Adding 20+ technical indicators (RSI, MACD, OBV, etc.)...")
             df = StrategyIndicators.add_all_indicators(df)
             df = df.dropna()
-            logger.info(f"✅ [ML FEATURE ENGINEERING] İndikatörler başarıyla eklendi, yeni özellikler öğrenime hazır.")
+            logger.info(f"✅ [ML FEATURE ENGINEERING] Indicators successfully added, features ready for training.")
             # ----------------------------------------------------------
             
             # 2-3. Feature engineering + Triple Barrier + Train/test split (hepsi bir arada)
@@ -161,7 +161,7 @@ class MLService:
                 skip_barrier=False  # Triple Barrier uygula
             )
             
-            logger.info(f"✅ [ML] ML pipeline tamamlandı: {X_train.shape[0]} eğitim, {X_test.shape[0]} test örnek")
+            logger.info(f"✅ [ML] ML pipeline complete: {X_train.shape[0]} train, {X_test.shape[0]} test samples")
             
             # 4. Model eğit
             self.training_state["progress"] = 70
@@ -180,8 +180,8 @@ class MLService:
             # Modeli eğit (train metodu kullan)
             training_metrics = trainer.train(X_train, y_train, X_test, y_test)
             
-            logger.info(f"✅ [ML] Model eğitildi")
-            logger.info(f"📊 [ML] Eğitim metrikleri: {training_metrics}")
+            logger.info(f"✅ [ML] Model trained successfully")
+            logger.info(f"📊 [ML] Training metrics: {training_metrics}")
             
             # 6. Modeli kaydet
             self.training_state["progress"] = 85
@@ -201,7 +201,7 @@ class MLService:
                 timeframe=request.timeframe
             )
 
-            logger.info(f"💾 [ML] Ensemble modeller kaydedildi:")
+            logger.info(f"💾 [ML] Ensemble models saved:")
             logger.info(f"   XGBoost: {model_paths['xgboost_path']}")
             logger.info(f"   RF:      {model_paths['rf_path']}")
             logger.info(f"   Meta:    {model_paths['metadata_path']}")
@@ -226,7 +226,7 @@ class MLService:
             self.training_state["message"] = f"✅ ML eğitimi tamamlandı: {request.symbol}"
             self.training_state["current_step"] = "Completed"
 
-            logger.info(f"🎉 [ML] Eğitim başarıyla tamamlandı: {request.symbol}")
+            logger.info(f"🎉 [ML] ML training completed successfully: {request.symbol}")
 
             # ⚠️ ÖNEMLİ: Tüm NumPy tiplerini Python native tiplerine çevir (Pydantic JSON serialization)
             import numpy as np
@@ -250,7 +250,7 @@ class MLService:
             # Başarı yanıtı dön
             return {
                 "status": "success",
-                "message": f"ML modeli eğitildi ({request.symbol})",
+                "message": f"ML model trained successfully ({request.symbol})",
                 "model_path": model_paths['xgboost_path'],
                 "metrics": metrics_for_response,
                 "dataset_size": int(X_train.shape[0] + X_test.shape[0]),
@@ -258,10 +258,10 @@ class MLService:
             }
 
         except Exception as e:
-            logger.error(f"❌ [ML] Eğitim hatası: {e}")
+            logger.error(f"❌ [ML] Training error: {e}")
             logger.error(f"❌ [ML] Traceback: {traceback.format_exc()}")
             self.training_state["is_training"] = False
-            self.training_state["message"] = f"Hata: {str(e)}"
+            self.training_state["message"] = f"Error: {str(e)}"
             self.training_state["current_step"] = "Error"
 
             # Hata yanıtı dön
@@ -342,12 +342,12 @@ class MLService:
             with open(history_file, 'w') as f:
                 json.dump(history, f, indent=2)
 
-            logger.info(f"📝 [ML] Eğitim geçmişi güncellendi: {len(history)} kayıt")
-            logger.info(f"📊 [ML] Metrics kaydedildi: Acc={accuracy:.4f}, Prec={precision:.4f}, Rec={recall:.4f}, F1={f1_score:.4f}")
+            logger.info(f"📝 [ML] Training history updated: {len(history)} records")
+            logger.info(f"📊 [ML] Metrics saved: Acc={accuracy:.4f}, Prec={precision:.4f}, Rec={recall:.4f}, F1={f1_score:.4f}")
             logger.info(f"📊 [ML] Model Acc: XGB={xgb_accuracy:.4f}, RF={rf_accuracy:.4f}, Ens={ensemble_accuracy:.4f}")
 
         except Exception as e:
-            logger.error(f"❌ [ML] Geçmiş kaydetme hatası: {e}")
+            logger.error(f"❌ [ML] History save error: {e}")
             logger.error(f"❌ [ML] Traceback: {traceback.format_exc()}")
 
     def get_training_status(self) -> Dict[str, Any]:
@@ -391,7 +391,7 @@ class MLService:
             }
 
         except Exception as e:
-            logger.error(f"Eğitim geçmişi hatası: {e}")
+            logger.error(f"Training history error: {e}")
             return {"status": "error", "message": str(e)}
 
     def delete_training_history(self) -> Dict[str, Any]:
@@ -408,10 +408,10 @@ class MLService:
                 os.remove(history_file)
                 self.training_history = []
 
-            return {"status": "success", "message": "Geçmiş silindi"}
+            return {"status": "success", "message": "Training history cleared successfully"}
 
         except Exception as e:
-            logger.error(f"Geçmiş silme hatası: {e}")
+            logger.error(f"History deletion error: {e}")
             return {"status": "error", "message": str(e)}
 
     def delete_model(self, symbol: str, timeframe: str) -> Dict[str, Any]:
@@ -440,10 +440,10 @@ class MLService:
                     try:
                         os.remove(file_path)
                         deleted_files.append(file_path)
-                        logger.info(f"✅ [ML] Model dosyası silindi: {file_path}")
+                        logger.info(f"✅ [ML] Model file deleted: {file_path}")
                     except Exception as e:
                         errors.append(f"{file_path}: {str(e)}")
-                        logger.error(f"❌ [ML] Dosya silme hatası: {file_path} - {e}")
+                        logger.error(f"❌ [ML] File deletion error: {file_path} - {e}")
 
             # Training history'den de sil (eğer varsa)
             history_deleted = False
@@ -466,26 +466,26 @@ class MLService:
 
                     if len(history) < original_count:
                         history_deleted = True
-                        logger.info(f"✅ [ML] Training history'den {original_count - len(history)} kayıt silindi")
+                        logger.info(f"✅ [ML] Deleted {original_count - len(history)} records from training history")
             except Exception as e:
-                logger.warning(f"⚠️ [ML] Training history silme hatası: {e}")
+                logger.warning(f"⚠️ [ML] History deletion error: {e}")
 
             if deleted_files or history_deleted:
                 return {
                     "status": "success",
-                    "message": f"{len(deleted_files)} dosya ve {len([h for h in history if h.get('symbol') == symbol and h.get('timeframe') == timeframe])} history kaydı silindi" if history_deleted else f"{len(deleted_files)} dosya silindi",
+                    "message": f"{len(deleted_files)} files and history records deleted" if history_deleted else f"{len(deleted_files)} model files deleted",
                     "deleted_files": deleted_files,
                     "errors": errors if errors else None
                 }
             else:
                 return {
                     "status": "error",
-                    "message": "Silinecek dosya bulunamadı",
+                    "message": "No model files found to delete",
                     "errors": errors
                 }
 
         except Exception as e:
-            logger.error(f"Model silme hatası: {e}")
+            logger.error(f"Model deletion error: {e}")
             return {"status": "error", "message": str(e)}
 
     def check_model(self, symbol: str, timeframe: str) -> Dict[str, Any]:
@@ -512,7 +512,7 @@ class MLService:
             "status": "success",
             "model_exists": xgb_exists,
             "model_path": model_paths['xgboost_path'] if xgb_exists else None,
-            "message": "Model bulundu" if xgb_exists else "Model bulunamadı",
+            "message": "Model found" if xgb_exists else "Model not found",
             "ensemble_status": {
                 "xgboost": xgb_exists,
                 "random_forest": rf_exists,

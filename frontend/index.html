@@ -123,19 +123,18 @@
 <div class="card glass-panel auto-style-11">
 <h3 class="auto-style-12"><i class="lucide-icon" data-lucide="brain"></i> <span data-tr="ML Model Eğitimi" data-en="ML Model Training">ML Model Training</span></h3>
 <p class="auto-style-13">
-                        XGBoost modelinizi Triple Barrier Method ile eğitin. Model, strateji sinyallerini onaylamak ve
-                        dinamik kaldıraç için güven skoru üretmek için kullanılacaktır.
-                    </p>
+    <span data-tr="XGBoost modelinizi Triple Barrier Method ile eğitin. Model, strateji sinyallerini onaylamak ve dinamik kaldıraç için güven skoru üretmek için kullanılacaktır." data-en="Train your XGBoost model using the Triple Barrier Method. The model validates strategy signals and generates confidence scores for dynamic leverage.">Train your XGBoost model using the Triple Barrier Method. The model validates strategy signals and generates confidence scores for dynamic leverage.</span>
+</p>
 <div class="auto-style-14">
 <div class="auto-style-15">
 <label class="auto-style-16"><span data-i18n="k_sembol" data-tr="Sembol" data-en="Symbol">Symbol</span></label>
-<select class="strategy-select symbol-select auto-style-17" id="ml-train-symbol" onchange="validateMumCount()">
-<option value=""><span data-tr="Yükleniyor..." data-en="Loading...">Loading...</span></option>
+<select class="form-select symbol-select auto-style-17" id="ml-train-symbol" onchange="validateMumCount()">
+<option value="" data-tr="Yükleniyor..." data-en="Loading...">Loading...</option>
 </select>
 </div>
 <div class="auto-style-15">
 <label class="auto-style-16"><span data-i18n="k_zaman_dilimi" data-tr="Zaman Dilimi" data-en="Timeframe">Timeframe</span></label>
-<select class="timeframe-select auto-style-18" id="ml-train-timeframe" onchange="validateMumCount()">
+<select class="form-select timeframe-select auto-style-18" id="ml-train-timeframe" onchange="validateMumCount()">
 <option value="1m">1m</option>
 <option value="3m">3m</option>
 <option value="5m">5m</option>
@@ -156,13 +155,13 @@
 </div>
 <div class="auto-style-15">
 <label class="auto-style-16">
-                                Mum Sayısı
-                                <span class="auto-style-19" id="ml-db-count"></span>
+    <span data-tr="Mum Sayısı" data-en="Candle Count">Candle Count</span>
+    <span class="auto-style-19" id="ml-db-count"></span>
 </label>
 <input class="auto-style-20" id="ml-train-limit" min="100" onchange="validateMumCount()" oninput="validateMumCount()" step="100" type="number" value="5000"/>
-<span class="auto-style-21" id="ml-limit-warning">
-<i class="lucide-icon" data-lucide="alert-triangle"></i> DB'de bu sayıdan az mum var!
-                            </span>
+<span class="auto-style-21" id="ml-limit-warning" style="display:none;">
+    <i class="lucide-icon" data-lucide="alert-triangle"></i> <span data-tr="DB'de bu sayıdan az mum var!" data-en="Fewer candles available in DB than requested!">Fewer candles available in DB than requested!</span>
+</span>
 <span class="auto-style-22" id="ml-db-range"></span>
 </div>
 <div class="auto-style-15">
@@ -175,20 +174,20 @@
 </div>
 <button class="btn btn-primary auto-style-24" onclick="startMLTraining()">
 <i class="lucide-icon" data-lucide="rocket"></i> <span data-tr="Modeli Eğit" data-en="Train Model">Train Model</span>
-                        </button>
+</button>
 </div>
 <!-- İlerleme Çubuğu -->
-<div class="auto-style-25" id="ml-training-progress">
+<div class="auto-style-25" id="ml-training-progress" style="display:none;">
 <div class="auto-style-26">
 <div class="auto-style-27" id="ml-progress-bar">
 </div>
 </div>
 <p class="auto-style-28" id="ml-training-message">
-                            Eğitim başlatılıyor...
-                        </p>
+    <span data-tr="Eğitim başlatılıyor..." data-en="Initiating model training...">Initiating model training...</span>
+</p>
 </div>
 <!-- Sonuç Mesajı -->
-<div class="auto-style-29" id="ml-training-result">
+<div class="auto-style-29" id="ml-training-result" style="display:none;">
 </div>
 </div>
 <!-- EĞİTİM GEÇMİŞİ TABLOSU -->
@@ -198,22 +197,18 @@
 <div class="auto-style-33">
 <button class="btn btn-primary auto-style-34" onclick="loadMLTrainingHistory()">
 <i class="lucide-icon" data-lucide="refresh-cw"></i> <span data-tr="Yenile" data-en="Refresh">Refresh</span>
-                            </button>
+</button>
 <button class="btn btn-danger auto-style-34" onclick="clearTrainingHistory()">
 <i class="lucide-icon" data-lucide="trash-2"></i> <span data-tr="Geçmişi Temizle" data-en="Clear History">Clear History</span>
-                            </button>
+</button>
 </div>
 </div>
-<div class="auto-style-35" id="training-history-table">
-<p class="auto-style-36">
-                            <span data-tr="Yükleniyor..." data-en="Loading...">Loading...</span>
-                        </p>
+<div class="auto-style-36" id="training-history-table">
+    <p style="text-align: center; padding: 40px; color: var(--text-muted);"><span data-tr="Yükleniyor..." data-en="Loading...">Loading...</span></p>
 </div>
 <p class="auto-style-37">
-                        💡 <strong>Ensemble Learning:</strong> XGBoost + Random Forest modellerinin ortak kararı (Soft
-                        Voting).
-                        Ensemble accuracy genellikle tek modellerden daha yüksektir.
-                    </p>
+    💡 <strong>Ensemble Learning:</strong> <span data-tr="XGBoost + Random Forest modellerinin ortak kararı (Soft Voting). Ensemble accuracy genellikle tek modellerden daha yüksektir." data-en="Joint consensus of XGBoost + Random Forest models (Soft Voting). Ensemble accuracy is typically higher than individual models.">Joint consensus of XGBoost + Random Forest models (Soft Voting). Ensemble accuracy is typically higher than individual models.</span>
+</p>
 </div>
 <div class="header-row auto-style-30">
 <div class="auto-style-38">
@@ -222,13 +217,13 @@
 <p class="auto-style-39"><span data-tr="Yapay Zeka ve Teknik Stratejilerin Karşılaştırmalı Analizi." data-en="Comparative Analysis of AI and Technical Strategies.">Comparative Analysis of AI and Technical Strategies.</span></p>
 </div>
 <div class="auto-style-40">
-<select class="strategy-select auto-style-41" id="ml-analysis-strategy">
-<option value=""><span data-i18n="k_strateji_seçin___" data-tr="Strateji Seçin..." data-en="Select Strategy...">Select Strategy...</span></option>
+<select class="form-select strategy-select auto-style-41" id="ml-analysis-strategy">
+<option value="" data-tr="Strateji Seçin..." data-en="Select Strategy...">Select Strategy...</option>
 </select>
-<select class="strategy-select symbol-select auto-style-17" id="ml-analysis-symbol">
-<option value=""><span data-i18n="k_sembol_seçin___" data-tr="Sembol Seçin..." data-en="Select Symbol...">Select Symbol...</span></option>
+<select class="form-select symbol-select auto-style-17" id="ml-analysis-symbol">
+<option value="" data-tr="Sembol Seçin..." data-en="Select Symbol...">Select Symbol...</option>
 </select>
-<select class="strategy-select auto-style-42" id="ml-analysis-timeframe">
+<select class="form-select timeframe-select auto-style-42" id="ml-analysis-timeframe">
 <option value="1m">1m</option>
 <option value="3m">3m</option>
 <option value="5m">5m</option>
@@ -246,13 +241,13 @@
 <option value="12h">12h</option>
 <option value="1d">1d</option>
 </select>
-<select class="strategy-select auto-style-43" id="ml-analysis-market-type">
-<option selected="" value="swap"><span data-tr="Vadeli (Swap)" data-en="Futures (Swap)">Futures (Swap)</span></option>
-<option value="spot"><span data-tr="Spot Piyasa" data-en="Spot Market">Spot Market</span></option>
+<select class="form-select market-select auto-style-43" id="ml-analysis-market-type">
+<option selected="" value="swap" data-tr="Vadeli (Swap)" data-en="Futures (Swap)">Futures (Swap)</option>
+<option value="spot" data-tr="Spot Piyasa" data-en="Spot Market">Spot Market</option>
 </select>
-<select class="strategy-select auto-style-43" id="ml-analysis-margin-type">
-<option selected="" value="isolated"><span data-tr="İzole Marjin" data-en="Isolated Margin">Isolated Margin</span></option>
-<option value="cross"><span data-tr="Çapraz Marjin" data-en="Cross Margin">Cross Margin</span></option>
+<select class="form-select margin-select auto-style-43" id="ml-analysis-margin-type">
+<option selected="" value="isolated" data-tr="İzole Marjin" data-en="Isolated Margin">Isolated Margin</option>
+<option value="cross" data-tr="Çapraz Marjin" data-en="Cross Margin">Cross Margin</option>
 </select>
 <button class="btn btn-primary auto-style-44" onclick="runMLVisualAnalysis()"><i class="lucide-icon" data-lucide="rocket"></i> <span data-tr="Simülasyonu Başlat" data-en="Run Simulation">Run Simulation</span></button>
 </div>
@@ -286,8 +281,8 @@
 <div class="auto-style-58" id="feature-importance-chart">
 </div>
 <p class="auto-style-59">
-                            Modelin karar verirken en çok hangi indikatörleri dikkate aldığını (yüzdelik etki) gösterir.
-                        </p>
+    <span data-tr="Modelin karar verirken en çok hangi indikatörleri dikkate aldığını (yüzdelik etki) gösterir." data-en="Displays the percentage impact of features and indicators that the model relies upon when deciding.">Displays the percentage impact of features and indicators that the model relies upon when deciding.</span>
+</p>
 </div>
 </div>
 <div class="decision-grid" id="decision-grid">

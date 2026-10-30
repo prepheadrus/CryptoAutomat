@@ -1394,7 +1394,7 @@ async function loadStrategiesForBot() {
         const strategySelects = document.querySelectorAll('.strategy-select');
         strategySelects.forEach(select => {
             // ML training symbol selection should NOT be filled here
-            if (select.id !== 'ml-train-symbol') {
+            if (select.id !== 'ml-train-symbol' && select.id !== 'ml-analysis-symbol' && select.id !== 'ml-analysis-timeframe' && select.id !== 'ml-analysis-market-type' && select.id !== 'ml-analysis-margin-type') {
                 const selStratText = (window.i18n && window.i18n.currentLang === "tr") ? "Strateji Seçin..." : "Select Strategy...";
                 select.innerHTML = `<option value="">${selStratText}</option>` +
                     strategies.map(s => `<option value="${s.id || s.strategy_id}">${s.name || s.strategy_id}</option>`).join('');
@@ -1660,6 +1660,7 @@ window.validateMumCount = function() {
 
     const symbol = symbolSelect.value;
     const timeframe = timeframeSelect.value;
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
 
     if (!symbol) {
         if (dbCountEl) dbCountEl.textContent = '';
@@ -1671,7 +1672,7 @@ window.validateMumCount = function() {
     api.getDataStats().then(stats => {
         if (!stats || !stats.stats) {
             if (rangeEl) {
-                rangeEl.textContent = '❌ Veri sorgulanamadı!';
+                rangeEl.textContent = isTr ? '❌ Veri sorgulanamadı!' : '❌ Could not query data!';
                 rangeEl.style.color = 'var(--neon-red)';
             }
             return;
@@ -1691,13 +1692,19 @@ window.validateMumCount = function() {
             if (dbCountEl) dbCountEl.textContent = `(DB: ${(dbCount / 1000).toFixed(1)}K)`;
             if (rangeEl) {
                 if (limitValue > dbCount && dbCount > 0) {
-                    rangeEl.textContent = `⚠️ Veritabanında ${(dbCount / 1000).toFixed(1)}K mum var. ${limitValue} mum için önce veri indirin!`;
+                    rangeEl.textContent = isTr
+                        ? `⚠️ Veritabanında ${(dbCount / 1000).toFixed(1)}K mum var. ${limitValue} mum için önce veri indirin!`
+                        : `⚠️ Database only contains ${(dbCount / 1000).toFixed(1)}K candles. Ingest data first for ${limitValue} candles!`;
                     rangeEl.style.color = 'var(--neon-red)';
                 } else if (dbCount > 0) {
-                    rangeEl.textContent = `✅ Mevcut: ${(dbCount / 1000).toFixed(1)}K mum - ${Math.min(limitValue, dbCount)} mum kullanılacak`;
+                    rangeEl.textContent = isTr
+                        ? `✅ Mevcut: ${(dbCount / 1000).toFixed(1)}K mum - ${Math.min(limitValue, dbCount)} mum kullanılacak`
+                        : `✅ Available: ${(dbCount / 1000).toFixed(1)}K candles - will use ${Math.min(limitValue, dbCount)} candles`;
                     rangeEl.style.color = 'var(--neon-green)';
                 } else {
-                    rangeEl.textContent = '❌ Bu sembol/timeframe için veri bulunamadı!';
+                    rangeEl.textContent = isTr
+                        ? '❌ Bu sembol/timeframe için veri bulunamadı!'
+                        : '❌ No data found for this symbol/timeframe!';
                     rangeEl.style.color = 'var(--neon-red)';
                 }
             }
@@ -1706,7 +1713,9 @@ window.validateMumCount = function() {
             if (warningEl) {
                 if (limitValue > dbCount && dbCount > 0) {
                     warningEl.style.display = 'block';
-                    warningEl.textContent = `⚠️ DB'de sadece ${(dbCount / 1000).toFixed(1)}K mum var! Önce veri indirin.`;
+                    warningEl.textContent = isTr
+                        ? `⚠️ DB'de sadece ${(dbCount / 1000).toFixed(1)}K mum var! Önce veri indirin.`
+                        : `⚠️ Only ${(dbCount / 1000).toFixed(1)}K candles in DB! Ingest data first.`;
                     limitInput.style.borderColor = 'var(--neon-red)';
                 } else {
                     warningEl.style.display = 'none';
@@ -1715,22 +1724,19 @@ window.validateMumCount = function() {
             }
         } else {
             if (rangeEl) {
-                rangeEl.textContent = '⏳ Veri yükleniyor...';
+                rangeEl.textContent = isTr ? '⏳ Veri yükleniyor...' : '⏳ Ingesting data...';
                 rangeEl.style.color = 'var(--text-muted)';
             }
         }
     }).catch(err => {
         console.error('❌ [ML] DB stats error:', err);
         if (rangeEl) {
-            rangeEl.textContent = '❌ DB sorgusu başarısız!';
+            rangeEl.textContent = isTr ? '❌ DB sorgusu başarısız!' : '❌ DB query failed!';
             rangeEl.style.color = 'var(--neon-red)';
         }
     });
 };
 
-/**
- * Start ML model training
- */
 window.startMLTraining = async function() {
     const symbolSelect = document.getElementById('ml-train-symbol');
     const timeframeSelect = document.getElementById('ml-train-timeframe');
@@ -1744,24 +1750,26 @@ window.startMLTraining = async function() {
     const tpMultiplier = parseFloat(tpInput?.value) || 2.0;
     const slMultiplier = parseFloat(slInput?.value) || 2.0;
 
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
+
     // Validation
     if (!symbol || !timeframe) {
-        showToast('❌ Sembol ve zaman dilimi seçin!', 'error');
+        showToast(isTr ? '❌ Sembol ve zaman dilimi seçin!' : '❌ Please select a symbol and timeframe!', 'error');
         return;
     }
 
     if (limit < 100) {
-        showToast('❌ Mum sayısı en az 100 olmalı!', 'error');
+        showToast(isTr ? '❌ Mum sayısı en az 100 olmalı!' : '❌ Candle count must be at least 100!', 'error');
         return;
     }
 
     if (tpMultiplier < 0.5 || tpMultiplier > 10) {
-        showToast('❌ TP çarpanı 0.5 - 10 arasında olmalı!', 'error');
+        showToast(isTr ? '❌ TP çarpanı 0.5 - 10 arasında olmalı!' : '❌ TP multiplier must be between 0.5 and 10!', 'error');
         return;
     }
 
     if (slMultiplier < 0.5 || slMultiplier > 10) {
-        showToast('❌ SL çarpanı 0.5 - 10 arasında olmalı!', 'error');
+        showToast(isTr ? '❌ SL çarpanı 0.5 - 10 arasında olmalı!' : '❌ SL multiplier must be between 0.5 and 10!', 'error');
         return;
     }
 
@@ -1786,26 +1794,63 @@ window.startMLTraining = async function() {
 
     // Warn if limit > db count
     if (limit > dbCount && dbCount > 0) {
-        const confirmed = await new Promise(resolve => {
-            const result = confirm(
-                `⚠️ UYARI: Veritabanında sadece ${(dbCount / 1000).toFixed(1)}K (${dbCount}) mum var!\n\n` +
-                `Siz ${limit} mum istiyorsunuz.\n\n` +
-                `Seçenekler:\n` +
-                `1️⃣ Devam et (Mevcut ${dbCount} mum kullanılacak)\n` +
-                `2️⃣ İptal et ve önce veri indir\n\n` +
-                `Devam etmek istiyor musunuz?`
-            );
-            resolve(result);
-        });
+        const warnMessage = isTr
+            ? `⚠️ UYARI: Veritabanında sadece ${(dbCount / 1000).toFixed(1)}K (${dbCount}) mum var!
 
+` +
+              `Siz ${limit} mum istiyorsunuz.
+
+` +
+              `Seçenekler:
+` +
+              `1️⃣ Devam et (Mevcut ${dbCount} mum kullanılacak)
+` +
+              `2️⃣ İptal et ve önce veri indir
+
+` +
+              `Devam etmek istiyor musunuz?`
+            : `⚠️ WARNING: Database only contains ${(dbCount / 1000).toFixed(1)}K (${dbCount}) candles!
+
+` +
+              `You requested ${limit} candles.
+
+` +
+              `Options:
+` +
+              `1️⃣ Proceed (will use available ${dbCount} candles)
+` +
+              `2️⃣ Cancel and download more data first
+
+` +
+              `Do you wish to proceed?`;
+
+        const confirmed = confirm(warnMessage);
         if (!confirmed) {
-            showToast('ℹ️ Eğitim iptal edildi. Önce veri laboratuvarından veri indirebilirsiniz.', 'info');
+            showToast(isTr ? 'ℹ️ Eğitim iptal edildi. Önce veri laboratuvarından veri indirebilirsiniz.' : 'ℹ️ Training cancelled. You can ingest more data from Data Lab first.', 'info');
             return;
         }
     }
 
-    // Confirm
-    if (!confirm(`🧠 ${symbol} (${timeframe}) için ML modeli eğitilecek.\n\nParametreler:\n- Mum Sayısı: ${limit}${dbCount > 0 ? ` (Mevcut: ${(dbCount / 1000).toFixed(1)}K)` : ''}\n- TP Çarpan: ${tpMultiplier}\n- SL Çarpan: ${slMultiplier}\n\nDevam etmek istiyor musunuz?`)) {
+    // Confirmation
+    const proceedMessage = isTr
+        ? `🧠 ${symbol} (${timeframe}) için ML modeli eğitilecek.
+
+Parametreler:
+- Mum Sayısı: ${limit}${dbCount > 0 ? ` (Mevcut: ${(dbCount / 1000).toFixed(1)}K)` : ''}
+- TP Çarpan: ${tpMultiplier}
+- SL Çarpan: ${slMultiplier}
+
+Devam etmek istiyor musunuz?`
+        : `🧠 Train ML model for ${symbol} (${timeframe}).
+
+Parameters:
+- Candle Count: ${limit}${dbCount > 0 ? ` (Available: ${(dbCount / 1000).toFixed(1)}K)` : ''}
+- TP Multiplier: ${tpMultiplier}
+- SL Multiplier: ${slMultiplier}
+
+Do you want to proceed?`;
+
+    if (!confirm(proceedMessage)) {
         return;
     }
 
@@ -1817,11 +1862,10 @@ window.startMLTraining = async function() {
 
     if (progressDiv) progressDiv.style.display = 'block';
     if (progressBar) progressBar.style.width = '0%';
-    if (progressMsg) progressMsg.textContent = '📊 Veri hazırlanıyor...';
+    if (progressMsg) progressMsg.textContent = isTr ? '📊 Veri hazırlanıyor...' : '📊 Preparing dataset...';
     if (resultDiv) resultDiv.style.display = 'none';
 
     try {
-        // Start training - BEKLE!
         const data = {
             symbol: symbol,
             timeframe: timeframe,
@@ -1830,14 +1874,13 @@ window.startMLTraining = async function() {
             sl: slMultiplier
         };
 
-        console.log('🧠 [ML] Eğitim başlatılıyor...', data);
+        console.log('🧠 [ML] Starting training...', data);
 
         const result = await api.trainModel(data);
 
         if (result.status === 'success') {
-            // Show success
             if (progressBar) progressBar.style.width = '100%';
-            if (progressMsg) progressMsg.textContent = '✅ Eğitim tamamlandı!';
+            if (progressMsg) progressMsg.textContent = isTr ? '✅ Eğitim tamamlandı!' : '✅ Model training complete!';
 
             if (resultDiv) {
                 resultDiv.style.display = 'block';
@@ -1848,27 +1891,26 @@ window.startMLTraining = async function() {
                 const datasetSize = result.dataset_size || 0;
 
                 resultDiv.innerHTML = `
-                    <h4 style="color: var(--neon-green); margin-bottom: 10px;">🎉 ML Model Eğitimi Başarılı!</h4>
+                    <h4 style="color: var(--neon-green); margin-bottom: 10px;">${isTr ? '🎉 ML Model Eğitimi Başarılı!' : '🎉 ML Model Training Successful!'}</h4>
                     <div style="text-align: left; max-width: 500px; margin: 0 auto; color: var(--text-main);">
-                        <p><strong>Sembol:</strong> ${symbol}</p>
-                        <p><strong>Timeframe:</strong> ${timeframe}</p>
-                        <p><strong>Dataset:</strong> ${datasetSize.toLocaleString()} örnek</p>
-                        <p><strong>Accuracy:</strong> ${accuracy}%</p>
+                        <p><strong>${isTr ? 'Sembol' : 'Symbol'}:</strong> ${symbol}</p>
+                        <p><strong>${isTr ? 'Zaman Dilimi' : 'Timeframe'}:</strong> ${timeframe}</p>
+                        <p><strong>Dataset:</strong> ${datasetSize.toLocaleString()} ${isTr ? 'örnek' : 'samples'}</p>
+                        <p><strong>${isTr ? 'Doğruluk' : 'Accuracy'}:</strong> ${accuracy}%</p>
                         <p style="color: var(--neon-blue); margin-top: 15px;">
-                            Model artık Strateji Karar Merkezi'nde kullanıma hazır.
+                            ${(window.i18n ? window.i18n.t("ml_model_ready_for_hub") : "Model is now ready for use in Strategy Decision Hub.")}
                         </p>
                     </div>
                 `;
             }
 
-            showToast('✅ ML modeli eğitildi! Geçmiş yenileniyor...', 'success');
+            showToast(isTr ? '✅ ML modeli eğitildi! Geçmiş yenileniyor...' : '✅ ML model trained! Refreshing history...', 'success');
 
-            // Refresh history AFTER training completes
             setTimeout(() => {
                 loadMLTrainingHistory();
             }, 500);
         } else {
-            throw new Error(result.message || 'Eğitim başarısız');
+            throw new Error(result.message || (isTr ? 'Eğitim başarısız' : 'Training failed'));
         }
 
     } catch (error) {
@@ -1880,26 +1922,25 @@ window.startMLTraining = async function() {
             resultDiv.style.background = 'rgba(248, 83, 73, 0.1)';
             resultDiv.style.border = '1px solid var(--neon-red)';
             resultDiv.innerHTML = `
-                <h4 style="color: var(--neon-red); margin-bottom: 10px;">❌ Eğitim Hatası!</h4>
+                <h4 style="color: var(--neon-red); margin-bottom: 10px;">${isTr ? '❌ Eğitim Hatası!' : '❌ Training Error!'}</h4>
                 <p style="color: var(--text-main); font-size: 0.85rem;">
-                    ${error.message || 'Bilinmeyen hata'}
+                    ${error.message || (isTr ? 'Bilinmeyen hata' : 'Unknown error')}
                 </p>
                 <p style="color: var(--text-muted); font-size: 0.75rem; margin-top: 10px;">
-                    Server hatası olabilir. Console'u (F12) kontrol edin.
+                    ${isTr ? 'Server loglarını kontrol edin.' : 'Check server logs for details.'}
                 </p>
             `;
         }
 
-        showToast('❌ ML eğitimi hatası: ' + error.message, 'error');
+        showToast((isTr ? '❌ ML eğitimi hatası: ' : '❌ ML training error: ') + error.message, 'error');
     }
 };
 
-/**
- * Load ML training history
- */
 window.loadMLTrainingHistory = async function() {
     const container = document.getElementById('training-history-table');
     if (!container) return;
+
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
 
     try {
         const data = await api.get('/ml/training-history');
@@ -1908,25 +1949,36 @@ window.loadMLTrainingHistory = async function() {
         if (history.length === 0) {
             container.innerHTML = `
                 <p style="text-align: center; padding: 40px; color: var(--text-muted);">
-                    📭 Henüz eğitilmiş model yok
+                    📭 ${isTr ? 'Henüz eğitilmiş model yok' : 'No trained models available yet'}
                 </p>
             `;
             return;
         }
+
+        const headers = {
+            date: isTr ? 'Tarih' : 'Date',
+            symbol: isTr ? 'Sembol' : 'Symbol',
+            tf: 'TF',
+            dataset: 'Dataset',
+            feat: isTr ? 'Özellik' : 'Feat',
+            metrics: isTr ? '📊 Metrikler' : '📊 Metrics',
+            accuracy: isTr ? '🎯 Doğruluk' : '🎯 Accuracy',
+            action: isTr ? 'İşlem' : 'Action'
+        };
 
         container.innerHTML = `
             <div style="overflow-x: auto;">
                 <table class="positions-table" style="font-size: 0.7rem; min-width: 1200px;">
                     <thead>
                         <tr>
-                            <th style="min-width: 150px;">Tarih</th>
-                            <th>Sembol</th>
-                            <th>TF</th>
-                            <th>Dataset</th>
-                            <th>Feat</th>
-                            <th style="min-width: 200px;">📊 Metrikler</th>
-                            <th style="min-width: 150px;">🎯 Accuracy</th>
-                            <th>İşlem</th>
+                            <th style="min-width: 150px;">${headers.date}</th>
+                            <th>${headers.symbol}</th>
+                            <th>${headers.tf}</th>
+                            <th>${headers.dataset}</th>
+                            <th>${headers.feat}</th>
+                            <th style="min-width: 200px;">${headers.metrics}</th>
+                            <th style="min-width: 150px;">${headers.accuracy}</th>
+                            <th>${headers.action}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1935,19 +1987,15 @@ window.loadMLTrainingHistory = async function() {
                             const dateStr = typeof date === 'string' ? date.split('T')[0] : date;
                             const metrics = item.metrics || {};
 
-                            // Ana accuracy
                             const accuracy = (metrics.accuracy || 0) * 100;
                             const f1 = metrics.f1 || 0;
                             const precision = metrics.precision || 0;
                             const recall = metrics.recall || 0;
 
-                            // Model-specific accuracies
                             const xgbAcc = (metrics.xgb_accuracy || accuracy) * 100;
                             const rfAcc = (metrics.rf_accuracy || accuracy) * 100;
                             const ensembleAcc = (metrics.ensemble_accuracy || accuracy) * 100;
 
-                            // Color coding
-                            const accColor = accuracy >= 50 ? 'var(--neon-green)' : (accuracy >= 40 ? '#ffcc00' : 'var(--neon-red)');
                             const xgbColor = xgbAcc >= 50 ? 'var(--neon-green)' : (xgbAcc >= 40 ? '#ffcc00' : 'var(--neon-red)');
                             const rfColor = rfAcc >= 50 ? 'var(--neon-green)' : (rfAcc >= 40 ? '#ffcc00' : 'var(--neon-red)');
                             const ensembleColor = ensembleAcc >= 50 ? 'var(--neon-green)' : (ensembleAcc >= 40 ? '#ffcc00' : 'var(--neon-red)');
@@ -1977,7 +2025,7 @@ window.loadMLTrainingHistory = async function() {
                                     <td>
                                         <button onclick="deleteMLModel('${item.symbol || ''}', '${item.timeframe || ''}')"
                                             style="padding:4px 8px; background:rgba(255,255,255,0.1); color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:0.65rem;"
-                                            title="Modeli sil">
+                                            title="${isTr ? 'Modeli sil' : 'Delete model'}">
                                             🗑️
                                         </button>
                                     </td>
@@ -1989,13 +2037,13 @@ window.loadMLTrainingHistory = async function() {
             </div>
         `;
 
-        console.log(`✅ [ML] ${history.length} eğitim geçmişi yüklendi`);
+        console.log(`✅ [ML] ${history.length} training history items loaded`);
 
     } catch (error) {
         console.error('❌ [ML] History load error:', error);
         container.innerHTML = `
             <p style="text-align: center; padding: 40px; color: var(--neon-red);">
-                ❌ Geçmiş yüklenemedi: ${error.message}
+                ❌ ${isTr ? 'Geçmiş yüklenemedi: ' : 'Failed to load history: '} ${error.message}
             </p>
         `;
     }
@@ -2005,20 +2053,21 @@ window.loadMLTrainingHistory = async function() {
  * Clear ML training history
  */
 window.clearTrainingHistory = async function() {
-    if (!confirm('⚠️ Tüm ML eğitim geçmişini silmek istediğinizden emin misiniz?')) {
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
+    if (!confirm(isTr ? '⚠️ Tüm ML eğitim geçmişini silmek istediğinizden emin misiniz?' : '⚠️ Are you sure you want to clear all ML training history?')) {
         return;
     }
 
     try {
         const result = await api.delete('/ml/training-history');
         if (result.status === 'success') {
-            showToast('✅ Geçmiş temizlendi', 'success');
+            showToast(isTr ? '✅ Geçmiş temizlendi' : '✅ History cleared successfully', 'success');
             loadMLTrainingHistory();
         } else {
-            showToast('❌ ' + (result.message || 'Temizleme başarısız'), 'error');
+            showToast(isTr ? '❌ ' + (result.message || 'Temizleme başarısız') : '❌ ' + (result.message || 'Failed to clear history'), 'error');
         }
     } catch (error) {
-        showToast('❌ Hata: ' + error.message, 'error');
+        showToast((isTr ? '❌ Hata: ' : '❌ Error: ') + error.message, 'error');
     }
 };
 
@@ -2026,25 +2075,26 @@ window.clearTrainingHistory = async function() {
  * Delete ML model
  */
 window.deleteMLModel = async function(symbol, timeframe) {
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
     if (!symbol || !timeframe) {
-        showToast('❌ Sembol ve timeframe gerekli', 'error');
+        showToast(isTr ? '❌ Sembol ve timeframe gerekli' : '❌ Symbol and timeframe required', 'error');
         return;
     }
 
-    if (!confirm(`⚠️ ${symbol} (${timeframe}) ML modelini silmek istediğinizden emin misiniz?`)) {
+    if (!confirm(isTr ? `⚠️ ${symbol} (${timeframe}) ML modelini silmek istediğinizden emin misiniz?` : `⚠️ Are you sure you want to delete ML model for ${symbol} (${timeframe})?`)) {
         return;
     }
 
     try {
         const result = await api.deleteMLModel(symbol, timeframe);
         if (result.status === 'success') {
-            showToast('✅ Model silindi', 'success');
+            showToast(isTr ? '✅ Model silindi' : '✅ Model deleted successfully', 'success');
             loadMLTrainingHistory();
         } else {
-            showToast('❌ ' + (result.message || 'Silme başarısız'), 'error');
+            showToast(isTr ? '❌ ' + (result.message || 'Silme başarısız') : '❌ ' + (result.message || 'Deletion failed'), 'error');
         }
     } catch (error) {
-        showToast('❌ Hata: ' + error.message, 'error');
+        showToast((isTr ? '❌ Hata: ' : '❌ Error: ') + error.message, 'error');
     }
 };
 
@@ -2213,57 +2263,49 @@ async function loadMLSymbols() {
  * Global function (window objesine export edilir)
  */
 async function runMLVisualAnalysis() {
-    console.log('🚀 [XAI] ML Görsel Analizi başlatılıyor...');
+    console.log('🚀 [XAI] Initiating ML Visual Decision Simulation...');
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
 
-    // Form değerlerini al
     const strategyId = document.getElementById('ml-analysis-strategy')?.value;
     const symbol = document.getElementById('ml-analysis-symbol')?.value;
-    const timeframe = document.getElementById('ml-analysis-timeframe')?.value || '1h';
+    const timeframe = document.getElementById('ml-analysis-timeframe')?.value || '15m';
     const marketType = document.getElementById('ml-analysis-market-type')?.value || 'swap';
 
-    // Validasyon
     if (!strategyId) {
-        showToast('⚠️ Lütfen strateji seçin!', 'warning');
+        showToast(isTr ? '⚠️ Lütfen strateji seçin!' : '⚠️ Please select a strategy!', 'warning');
         return;
     }
 
     if (!symbol) {
-        showToast('⚠️ Lütfen sembol seçin!', 'warning');
+        showToast(isTr ? '⚠️ Lütfen sembol seçin!' : '⚠️ Please select a symbol!', 'warning');
         return;
     }
 
-    // Loading göster
     const chartContainer = document.getElementById('ml-analysis-chart');
     if (chartContainer) {
-        chartContainer.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100%;color:var(--neon-blue);">⏳ Analiz ediliyor...</div>';
+        chartContainer.innerHTML = `<div style="display:flex;justify-content:center;align-items:center;height:100%;color:var(--neon-blue);">⏳ ${isTr ? 'Simülasyon çalıştırılıyor...' : 'Running simulation...'}</div>`;
     }
 
     try {
-        // API'den veri çek
         const response = await api.get(`/api/v1/ml/visual-analysis?symbol=${encodeURIComponent(symbol)}&strategy_id=${encodeURIComponent(strategyId)}&timeframe=${timeframe}&limit=1000`);
 
         if (response.status !== 'success') {
-            throw new Error(response.detail || 'Analiz başarısız');
+            throw new Error(response.detail || (isTr ? 'Analiz başarısız' : 'Simulation failed'));
         }
 
         const { candles, markers, feature_importance } = response;
 
-        console.log(`📊 [XAI] ${candles.length} mum, ${markers.length} marker, ${feature_importance.length} feature importance yüklendi`);
+        console.log(`📊 [XAI] ${candles.length} candles, ${markers.length} markers, ${feature_importance.length} feature importance loaded`);
 
-        // 1. Chart'ı render et
         if (window.chartRenderer) {
-            // Destroy existing chart
             window.chartRenderer.destroy();
-
-            // Initialize new chart
             window.chartRenderer.init('ml-analysis-chart', {
                 width: chartContainer.clientWidth,
                 height: 450
             });
 
-            // Render candles
             const formattedCandles = candles.map(c => ({
-                time: c.time / 1000, // Unix timestamp (seconds)
+                time: c.time / 1000,
                 open: c.open,
                 high: c.high,
                 low: c.low,
@@ -2272,51 +2314,43 @@ async function runMLVisualAnalysis() {
 
             window.chartRenderer.updateCandles(formattedCandles);
 
-            // Render markers (ML + Strateji + Gerçek İşlemler)
             if (markers && markers.length > 0) {
                 window.chartRenderer.updateMarkers(markers);
-                console.log(`✅ [XAI] ${markers.length} marker render edildi`);
             }
         }
 
-        // 2. Feature Importance grafiğini çizdir (Plotly)
         if (feature_importance && feature_importance.length > 0) {
             renderFeatureImportance(feature_importance);
         }
 
-        showToast('✅ ML Görsel Analizi tamamlandı!', 'success');
+        showToast(isTr ? '✅ ML Görsel Analizi tamamlandı!' : '✅ Visual Decision Simulation complete!', 'success');
 
     } catch (error) {
-        console.error('❌ [XAI] Analiz hatası:', error);
-        showToast('❌ Analiz hatası: ' + error.message, 'error');
+        console.error('❌ [XAI] Simulation error:', error);
+        showToast((isTr ? '❌ Simülasyon hatası: ' : '❌ Simulation error: ') + error.message, 'error');
 
         if (chartContainer) {
-            chartContainer.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100%;color:var(--neon-red);">❌ Hata: ' + error.message + '</div>';
+            chartContainer.innerHTML = `<div style="display:flex;justify-content:center;align-items:center;height:100%;color:var(--neon-red);">❌ ${isTr ? 'Hata: ' : 'Error: '} ${error.message}</div>`;
         }
     }
 }
 
 /**
- * Feature Importance Grafiği (Plotly - XAI)
- * Yatay bar chart (barh) formatında
+ * Feature Importance Plotly Chart
  */
 function renderFeatureImportance(featureImportance) {
     const chartDiv = document.getElementById('feature-importance-chart');
-    if (!chartDiv) {
-        console.error('❌ [XAI] Feature importance chart div bulunamadı');
-        return;
-    }
+    if (!chartDiv) return;
 
-    // Data hazırla
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
     const features = featureImportance.map(f => f.feature_name || f.feature || 'Unknown');
     const importancePct = featureImportance.map(f => f.importance_pct || f.importance || 0);
 
-    // Plotly data
     const trace = {
         x: importancePct,
         y: features,
         type: 'bar',
-        orientation: 'h', // Horizontal bar
+        orientation: 'h',
         marker: {
             color: 'rgba(88, 166, 255, 0.8)',
             line: {
@@ -2327,7 +2361,7 @@ function renderFeatureImportance(featureImportance) {
     };
 
     const layout = {
-        title: '🧬 Model Ağırlık Analizi (Feature Importance)',
+        title: isTr ? '🧬 Model Ağırlık Analizi (Feature Importance)' : '🧬 Model Feature Importance',
         font: {
             family: 'Inter, sans-serif',
             size: 12,
@@ -2336,13 +2370,13 @@ function renderFeatureImportance(featureImportance) {
         paper_bgcolor: 'rgba(0,0,0,0)',
         plot_bgcolor: 'rgba(0,0,0,0)',
         margin: {
-            l: 150, // Left margin for feature names
+            l: 150,
             r: 20,
             t: 50,
             b: 50
         },
         xaxis: {
-            title: 'Önem Yüzdesi (%)',
+            title: isTr ? 'Önem Yüzdesi (%)' : 'Importance (%)',
             gridcolor: 'rgba(255,255,255,0.1)',
             zerolinecolor: 'rgba(255,255,255,0.2)'
         },
@@ -2352,21 +2386,9 @@ function renderFeatureImportance(featureImportance) {
         }
     };
 
-    const config = {
-        responsive: true,
-        displayModeBar: false,
-        scrollZoom: false
-    };
-
-    // Plotly.react kullan (memory leak önleme - newPlot yerine)
-    Plotly.react(chartDiv, [trace], layout, config);
-
-    console.log(`✅ [XAI] Feature Importance grafiği çizildi: ${features.length} özellik`);
+    Plotly.newPlot(chartDiv, [trace], layout, { responsive: true, displayModeBar: false });
 }
 
-// Export to window (global access)
-window.loadMLStrategies = loadMLStrategies;
-window.loadMLSymbols = loadMLSymbols;
 window.runMLVisualAnalysis = runMLVisualAnalysis;
 window.renderFeatureImportance = renderFeatureImportance;
 
@@ -2793,4 +2815,9 @@ window.addEventListener('languageChanged', (e) => {
     loadStrategiesForBot();
     loadTimeframesForBot();
     loadTradeHistory();
+    if (typeof loadMLTrainingHistory === 'function') loadMLTrainingHistory();
+    if (typeof loadMLStrategies === 'function') loadMLStrategies();
+    if (typeof loadMLSymbols === 'function') loadMLSymbols();
+    if (typeof loadSymbolsForML === 'function') loadSymbolsForML();
+    if (typeof validateMumCount === 'function') validateMumCount();
 });

@@ -107,7 +107,7 @@ async def delete_ml_model(symbol: str, timeframe: str) -> Dict[str, Any]:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Model silme hatası: {e}")
+        logger.error(f"Model deletion error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -150,7 +150,7 @@ async def run_visual_analysis(
         import numpy as np
         from data.indicators import StrategyIndicators
 
-        logger.info(f"🔍 [ML] Görsel analiz başlatılıyor: {symbol} ({timeframe})")
+        logger.info(f"🔍 [ML] Starting visual analysis: {symbol} ({timeframe})")
 
         # ========================================================================
         # YENİ: AKILLI CACHE LOADER (Superalgos Mimarisi)
@@ -174,7 +174,7 @@ async def run_visual_analysis(
             df_flat = storage.load_ohlcv(symbol, timeframe, start_date, end_date)
 
             if df_flat is not None and len(df_flat) > 0:
-                logger.info(f"📖 [STORAGE] Flat file'dan yüklendi: {symbol} {timeframe} ({len(df_flat)} mum)")
+                logger.info(f"📖 [STORAGE] Loaded from flat file: {symbol} {timeframe} ({len(df_flat)} candles)")
 
                 # DataFrame'i tuple formatına çevir
                 klines_data = []
@@ -188,11 +188,11 @@ async def run_visual_analysis(
                         row['volume']
                     ))
             else:
-                logger.info(f"⏭️ [STORAGE] Flat file bulunamadı, 1m'den resample yapılacak: {symbol} {timeframe}")
+                logger.info(f"⏭️ [STORAGE] Flat file not found, resampling from 1m: {symbol} {timeframe}")
 
         except Exception as e:
-            logger.warning(f"⚠️ [STORAGE] Flat file yükleme hatası: {e}")
-            logger.info(f"🔄 [STORAGE] 1m'den resample'a geçiliyor...")
+            logger.warning(f"⚠️ [STORAGE] Flat file load error: {e}")
+            logger.info(f"🔄 [STORAGE] Switching to resampling from 1m...")
 
         # Flat file yoksa, 1m'den çek + resample
         if not klines_data or len(klines_data) == 0:
@@ -202,14 +202,14 @@ async def run_visual_analysis(
             # Limit'i çarpanla çarp (1m'den resample için)
             adjusted_limit = limit * multiplier
 
-            logger.info(f"📊 [ML] Veri çekiliyor: {symbol}, 1m (ana veri), limit={adjusted_limit}")
-            logger.info(f"🔄 [ML] Resampling: {adjusted_limit:,} mum (1m) → {limit:,} mum ({timeframe})")
+            logger.info(f"📊 [ML] Ingesting data: {symbol}, 1m (primary), limit={adjusted_limit}")
+            logger.info(f"🔄 [ML] Resampling: {adjusted_limit:,} candles (1m) → {limit:,} candles ({timeframe})")
 
             # 1. Veritabanından veri çek (SADECE 1m - ana veri)
             klines_data = await db_manager.get_klines(symbol, '1m', limit=adjusted_limit)
 
             if not klines_data or len(klines_data) == 0:
-                raise HTTPException(status_code=404, detail=f"Veritabanında analiz için yeterli veri yok: {symbol} 1m")
+                raise HTTPException(status_code=404, detail=f"Insufficient data in database for analysis: {symbol} 1m")
 
             df = pd.DataFrame(klines_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 
@@ -229,7 +229,7 @@ async def run_visual_analysis(
             df = df.drop_duplicates(subset=['timestamp'], keep='first')
             df = df.sort_values('timestamp').reset_index(drop=True)
 
-            logger.info(f"✅ [ML] {len(df)} mum (1m) çekildi ve DataFrame'e çevrildi")
+            logger.info(f"✅ [ML] Ingested {len(df)} candles (1m) and converted to DataFrame")
 
             # ========================================================================
             # RESAMPLING (1m → Hedef Timeframe)
@@ -247,17 +247,17 @@ async def run_visual_analysis(
                 # Flat file'a kaydet (gelecek için)
                 try:
                     storage.save_ohlcv(symbol, timeframe, df)
-                    logger.info(f"💾 [STORAGE] Flat file kaydedildi: {symbol} {timeframe}")
+                    logger.info(f"💾 [STORAGE] Saved flat file: {symbol} {timeframe}")
                 except Exception as e:
-                    logger.warning(f"⚠️ [STORAGE] Flat file kaydetme hatası: {e}")
+                    logger.warning(f"⚠️ [STORAGE] Flat file save error: {e}")
             else:
-                logger.info(f"✅ [ML] 1m veri - Resampling gerek yok")
+                logger.info(f"✅ [ML] 1m data - No resampling needed")
         else:
             # Flat file'dan yüklendi, DataFrame'e çevir
             df = pd.DataFrame(klines_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 
         # 2. İndikatör ve Özellikleri Hesapla
-        logger.info(f"📊 [ML] İndikatörler ve özellikler hesaplanıyor...")
+        logger.info(f"📊 [ML] Calculating indicators and features...")
         df = StrategyIndicators.add_all_indicators(df)
 
         # [SYNC] LWC için saniye formatına kesin zorla (int64)
@@ -272,16 +272,16 @@ async def run_visual_analysis(
 
         # [DEBUG] Final veri aralığı kontrolü
         if not df.empty:
-            logger.info(f"📊 [ML] Zaman damgası aralığı: {df['timestamp'].min()} - {df['timestamp'].max()}")
+            logger.info(f"📊 [ML] Timestamp range: {df['timestamp'].min()} - {df['timestamp'].max()}")
         
         # Gelecekte FeatureEngineer eklenebilmesi için placeholder
         try:
             from data.features import FeatureEngineer
             df = FeatureEngineer().add_all_features(df)
         except (ImportError, AttributeError):
-            logger.debug("FeatureEngineer modülü bulunamadı, yalnızca indikatörler kullanılıyor.")
+            logger.debug("FeatureEngineer module not found, using indicators only.")
             
-        logger.info(f"📊 [ML] İndikatörler hesaplandı: {df.shape[1]} kolon")
+        logger.info(f"📊 [ML] Indicators computed: {df.shape[1]} columns")
 
         # 3. Modeli Yükle ve Tahmin Yap
         model_info = ml_service.check_model(symbol, timeframe)
@@ -300,12 +300,12 @@ async def run_visual_analysis(
                 model_feature_names = trainer.xgb_model.get_booster().feature_names
 
             if model_feature_names is None or len(model_feature_names) == 0:
-                raise ValueError("Modelden özellik (feature) isimleri alınamadı.")
+                raise ValueError("Failed to retrieve feature names from model.")
 
             # 4. Graceful Degradation: Eksik kolonları 0.0 ile doldur
             missing_cols = [col for col in model_feature_names if col not in df.columns]
             if missing_cols:
-                logger.warning(f"⚠️ [ML] {len(missing_cols)} adet eksik kolon tespit edildi. 0.0 ile dolduruluyor: {missing_cols[:10]}...")
+                logger.warning(f"⚠️ [ML] Detected {len(missing_cols)} missing columns. Filling with 0.0: {missing_cols[:10]}...")
                 for col in missing_cols:
                     df[col] = 0.0  # float64 olarak ekle
 
@@ -320,9 +320,9 @@ async def run_visual_analysis(
             for col in X.columns:
                 X[col] = pd.to_numeric(X[col], errors='coerce').astype(float)
 
-            logger.info(f"📊 [ML] Tahmin yapılıyor: {len(X)} satır, {X.shape[1]} özellik")
+            logger.info(f"📊 [ML] Predicting: {len(X)} rows, {X.shape[1]} features")
             predictions = trainer.xgb_model.predict(X)
-            logger.info(f"📊 [ML] Tahminler tamamlandı: {len(predictions)} adet, unique değerler: {np.unique(predictions)}")
+            logger.info(f"📊 [ML] Predictions complete: {len(predictions)} items, unique values: {np.unique(predictions)}")
 
             # Markers oluştur (Sadece değişim noktalarında ekle - Kalabalığı önlemek için)
             current_ml_state = None
@@ -334,11 +334,11 @@ async def run_visual_analysis(
                     ts = int(df['timestamp'].iloc[i])
                     
                     if pred_class == 1 and current_ml_state != 'LONG': # LONG Sinyali
-                        markers.append({'time': ts, 'position': 'belowBar', 'color': '#2ea043', 'shape': 'arrowUp', 'text': 'ML AL', 'size': 0.6})
+                        markers.append({'time': ts, 'position': 'belowBar', 'color': '#2ea043', 'shape': 'arrowUp', 'text': 'ML BUY', 'size': 0.6})
                         current_ml_state = 'LONG'
                         candles_since_last_ml = 0
                     elif pred_class == 0 and current_ml_state != 'SHORT': # SHORT Sinyali
-                        markers.append({'time': ts, 'position': 'aboveBar', 'color': '#f85149', 'shape': 'arrowDown', 'text': 'ML SAT', 'size': 0.6})
+                        markers.append({'time': ts, 'position': 'aboveBar', 'color': '#f85149', 'shape': 'arrowDown', 'text': 'ML SELL', 'size': 0.6})
                         current_ml_state = 'SHORT'
                         candles_since_last_ml = 0
                     else:
@@ -348,9 +348,9 @@ async def run_visual_analysis(
                         # Eğer çok uzun süre aynı sinyal gittiyse (1000 mum) ufak bir hatırlatıcı bas (çok gürültü yapmadan)
                         if candles_since_last_ml >= 1000:
                             if current_ml_state == 'LONG':
-                                markers.append({'time': ts, 'position': 'belowBar', 'color': 'rgba(46, 160, 67, 0.4)', 'shape': 'arrowUp', 'text': 'ML AL (DVM)', 'size': 0.3})
+                                markers.append({'time': ts, 'position': 'belowBar', 'color': 'rgba(46, 160, 67, 0.4)', 'shape': 'arrowUp', 'text': 'ML BUY (CONT)', 'size': 0.3})
                             elif current_ml_state == 'SHORT':
-                                markers.append({'time': ts, 'position': 'aboveBar', 'color': 'rgba(248, 81, 73, 0.4)', 'shape': 'arrowDown', 'text': 'ML SAT (DVM)', 'size': 0.3})
+                                markers.append({'time': ts, 'position': 'aboveBar', 'color': 'rgba(248, 81, 73, 0.4)', 'shape': 'arrowDown', 'text': 'ML SELL (CONT)', 'size': 0.3})
                             candles_since_last_ml = 0
 
             
@@ -358,10 +358,10 @@ async def run_visual_analysis(
             try:
                 feature_importance = trainer.get_feature_importance_df(top_n=10).to_dict('records')
             except Exception as e:
-                logger.warning(f"⚠️ [ML] Feature importance alınamadı: {e}")
+                logger.warning(f"⚠️ [ML] Could not obtain feature importance: {e}")
 
         else:
-            logger.warning(f"⚠️ [ML] Aktif model bulunamadı: {symbol} {timeframe}")
+            logger.warning(f"⚠️ [ML] Active model not found: {symbol} {timeframe}")
 
         # 5.5 Strateji Sinyallerini Hesapla (Karşılaştırma için Mor Sinyaller)
         try:
@@ -384,15 +384,15 @@ async def run_visual_analysis(
                 # Sadece pozisyon değişimlerinde marker ekle (AL'dan sonra tekrar AL basma)
                 if sig == 2 and current_strat_state != 'LONG':
                     ts = int(df['timestamp'].iloc[i])
-                    markers.append({'time': ts, 'position': 'belowBar', 'color': '#bc8cff', 'shape': 'circle', 'text': 'S.AL', 'size': 0.7})
+                    markers.append({'time': ts, 'position': 'belowBar', 'color': '#bc8cff', 'shape': 'circle', 'text': 'S.BUY', 'size': 0.7})
                     current_strat_state = 'LONG'
                 elif sig == 0 and current_strat_state != 'SHORT':
                     ts = int(df['timestamp'].iloc[i])
-                    markers.append({'time': ts, 'position': 'aboveBar', 'color': '#bc8cff', 'shape': 'circle', 'text': 'S.SAT', 'size': 0.7})
+                    markers.append({'time': ts, 'position': 'aboveBar', 'color': '#bc8cff', 'shape': 'circle', 'text': 'S.SELL', 'size': 0.7})
                     current_strat_state = 'SHORT'
                 
         except Exception as e:
-            logger.warning(f"⚠️ [ML] Strateji (karşılaştırma) sinyalleri hesaplanamadı: {e}")
+            logger.warning(f"⚠️ [ML] Strategy comparison signals could not be calculated: {e}")
 
         # 5.6 Gerçek İşlemleri Ekle (Bot çalıştığında gelen "GERÇEK AL / GERÇEK SAT")
         try:
@@ -456,7 +456,7 @@ async def run_visual_analysis(
                         current_real_state = None  # Pozisyon kapandığı için durumu sıfırla
                         
         except Exception as e:
-            logger.warning(f"⚠️ [ML] Gerçek işlemler hesaplanamadı/eklenemedi: {e}")
+            logger.warning(f"⚠️ [ML] Real trades could not be loaded: {e}")
 
         # 6. Candlestick verisini hazırla
         # [INTEGRITY] Candlestick verisini temizle ve LWC için hazırla
@@ -480,13 +480,13 @@ async def run_visual_analysis(
 
         # Tail(1500) - Son 1500 mumu al (OOM önleme)
         candles_df = candles_df.tail(1500)
-        logger.info(f"🛡️ [ML] OOM Koruması: {len(candles_df)} mum (tail 1500)")
+        logger.info(f"🛡️ [ML] OOM Protection: {len(candles_df)} candles (tail 1500)")
 
         # Markers'ları da sınırla (sadece son 1500 mum içindekiler)
         if len(candles_df) > 0:
             min_time = candles_df['time'].min()
             markers = [m for m in markers if m.get('time', 0) >= min_time]
-            logger.info(f"🛡️ [ML] Markers filtrelendi: {len(markers)} marker kaldı")
+            logger.info(f"🛡️ [ML] Filtered markers: {len(markers)} remaining")
 
         # NaN/Infinity temizliği (XAI standardı)
         for col in ['open', 'high', 'low', 'close', 'volume']:
@@ -502,7 +502,7 @@ async def run_visual_analysis(
 
         candles = candles_df.to_dict('records')
 
-        logger.info(f"✅ [ML] Görsel analiz tamamlandı: {len(candles)} mum, {len(markers)} marker")
+        logger.info(f"✅ [ML] Visual analysis complete: {len(candles)} candles, {len(markers)} markers")
 
         return {
             "status": "success",
@@ -512,6 +512,6 @@ async def run_visual_analysis(
         }
         
     except Exception as e:
-        logger.error(f"❌ [ML] Görsel analiz sırasında kritik hata: {e}")
+        logger.error(f"❌ [ML] Critical error during visual analysis: {e}")
         logger.error(f"❌ [ML] Traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Görsel analiz hatası: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Visual decision simulation error: {str(e)}")
