@@ -70,7 +70,7 @@ class StrategyManager:
                 "knn_quant_atr": KNNQuantATRShield()
             }
             
-            logger.info(f"✅ {len(cls.MANUALLY_IMPORTED)} manuel strateji yüklendi (backward compatibility)")
+            logger.info(f"✅ {len(cls.MANUALLY_IMPORTED)} manual strategies loaded (backward compatibility)")
             
         except Exception as e:
             logger.error(f"❌ Manuel strateji yükleme hatası: {e}")
@@ -142,7 +142,7 @@ class StrategyManager:
                         try:
                             instance = obj()
                             discovered[strategy_id] = instance
-                            logger.info(f"✅ Strateji bulundu: {strategy_id} ({name})")
+                            logger.info(f"✅ Discovered strategy: {strategy_id} ({name})")
                         except Exception as e:
                             logger.warning(f"⚠️ Strateji instance oluşturulamadı: {name} - {e}")
                 
@@ -284,7 +284,7 @@ class StrategyManager:
                 'type': 'custom',
                 'instance': instance
             }
-            logger.info(f"🎨 Custom strateji eklendi: {strategy_id}")
+            logger.info(f"🎨 Custom strategy registered: {strategy_id}")
         
         # JSON stratejiler
         for strategy_id, data in cls.DYNAMIC_STRATEGIES.items():
@@ -297,7 +297,7 @@ class StrategyManager:
                 'executor': data['executor']
             }
         
-        logger.info(f"📊 Toplam {len(all_strategies)} strateji bulundu")
+        logger.info(f"📊 Total {len(all_strategies)} strategies discovered")
         
         return all_strategies
 

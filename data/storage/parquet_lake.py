@@ -94,7 +94,7 @@ class ParquetDataLake:
 
         # Base directory oluştur
         self.BASE_DIR.mkdir(parents=True, exist_ok=True)
-        logger.info(f"🏗️ [PARQUET LAKE] Superalgos MTF Mimarisi Devrede")
+        logger.info(f"🏗️ [PARQUET LAKE] Superalgos MTF Architecture Active")
         logger.info(f"📁 [PARQUET LAKE] Base: {self.BASE_DIR.absolute()}")
         logger.info(f"🏢 [PARQUET LAKE] Exchange: {self.exchange}")
         logger.info(f"💾 [PARQUET LAKE] Compression: {self.COMPRESSION}")

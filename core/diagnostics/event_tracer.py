@@ -95,7 +95,7 @@ class EventTracer:
         self.start_time: Optional[datetime] = None
         self._running = False
         
-        logger.info("🔍 Event Tracer hazır")
+        logger.info("🔍 Event Tracer telemetry ready")
     
     async def start(self):
         """Event tracer'ı başlat"""
@@ -104,7 +104,7 @@ class EventTracer:
             return
         
         logger.info("=" * 70)
-        logger.info("🔍 EVENT TRACER BAŞLATILIYOR - Sistem Röntgeni")
+        logger.info("🔍 EVENT TRACER STARTING - Diagnostic Telemetry Active")
         logger.info("=" * 70)
         
         self.start_time = datetime.utcnow()
@@ -113,7 +113,7 @@ class EventTracer:
         # Tüm event kategorilerine abone ol
         self._subscribe_to_all_events()
         
-        logger.info("✅ Event Tracer aktif - Tüm event'ler dinleniyor")
+        logger.info("✅ Event Tracer active - Listening to all internal events")
         logger.info("-" * 70)
     
     async def stop(self):
@@ -358,7 +358,7 @@ async def start_event_tracer():
         await start_event_tracer()
     """
     await event_tracer.start()
-    logger.info("✅ Event Tracer başlatıldı")
+    logger.info("✅ Event Tracer telemetry loop started")
 
 
 async def stop_event_tracer():

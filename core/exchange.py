@@ -161,7 +161,7 @@ class ExchangeManager:
         self.local_active_strategies: Dict[str, Any] = {}  # symbol -> strategy
         self.local_active_timeframes: Dict[str, str] = {}  # symbol -> timeframe
 
-        logger.info("📦 [EDA] State Replication aktif (local_active_bots, local_active_strategies)")
+        logger.info("📦 [EDA] State Replication active (local_active_bots, local_active_strategies)")
 
         # Borsa parametrelerini hazırla
         exchange_args = {
@@ -178,7 +178,7 @@ class ExchangeManager:
             if BINANCE_API_KEY and BINANCE_API_SECRET:
                 exchange_args['apiKey'] = BINANCE_API_KEY
                 exchange_args['secret'] = BINANCE_API_SECRET
-                logger.info("✅ Binance API anahtarları yüklendi. Yüksek rate limit aktif.")
+                logger.info("✅ Binance API credentials loaded. High rate-limit tier active.")
             else:
                 logger.warning("Binance API bilgileri bulunamadı (.env)! Sadece genel piyasa izlemesi (Ticker) yapılacak, Emir verilemez.")
                 logger.warning("⚠️ Rate limit düşük olacak. API key eklemek için .env dosyasını düzenleyin.")
@@ -193,7 +193,7 @@ class ExchangeManager:
         self._setup_event_subscriptions()
 
         # Final log
-        logger.info("🎉 [EDA] Kısır Döngü Kırıldı - %100 Olay Güdümlü Mimari Aktif")
+        logger.info("🎉 [EDA] Decoupled Architecture - 100% Event-Driven Engine Active")
 
     def update_api_keys(self, api_key: str, api_secret: str):
         """Update API keys dynamically without restarting."""
@@ -209,7 +209,7 @@ class ExchangeManager:
             event_bus.subscribe("bot.started", self._on_bot_started)
             event_bus.subscribe("bot.stopped", self._on_bot_stopped)
 
-            logger.info("📬 [EDA] Event subscriptions kuruldu (bot.started, bot.stopped)")
+            logger.info("📬 [EDA] Event subscriptions configured (bot.started, bot.stopped)")
         except Exception as e:
             logger.warning(f"⚠️ [EDA] Event subscription hatası: {e}")
 
@@ -454,7 +454,7 @@ class ExchangeManager:
         # [WSS NORMALİZASYONU] Sembol CCXT formatına çevir
         # ========================================================================
         symbol = normalize_symbol(symbol)
-        logger.info(f"📡 [WSS] {symbol} için WebSocket Ticker akışı başlatıldı.")
+        logger.info(f"📡 [WSS] {symbol} WebSocket Ticker stream started.")
 
         # Throttle (geciktirici) mekanizması - CPU koruması
         last_update_time = {}  # {symbol: last_update_timestamp}
@@ -1125,7 +1125,7 @@ class ExchangeManager:
         symbol = normalize_symbol(symbol)
 
         # 🔥 KRITIK LOGLAMA - Poller başlangıcını izle
-        logger.info(f"🔥 [POLLER DEBUG] {symbol} run_strategy_poller BAŞLADI")
+        logger.info(f"🔥 [POLLER DEBUG] {symbol} run_strategy_poller started")
         logger.info(f"🔥 [POLLER DEBUG] symbol={symbol}, timeframe={timeframe}")
         logger.info(f"🚀 [FINAL HYBRID] {symbol} için strateji poller başlatılıyor ({timeframe})...")
 
@@ -1135,7 +1135,7 @@ class ExchangeManager:
         # ========================================================================
         # YENİ: VERİ BOŞLUĞU KONTROLÜ (Gap Detection & Auto-Fill) - Refactored
         # ========================================================================
-        logger.info(f"🔥 [GAP CHECK] check_and_fill_gap başlatılıyor...")
+        logger.info(f"🔥 [GAP CHECK] check_and_fill_gap executing...")
         try:
             # ARKA PLANDA ÇALIŞTIR - event loop'u kilitleme!
             await asyncio.wait_for(

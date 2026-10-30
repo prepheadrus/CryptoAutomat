@@ -68,10 +68,10 @@ class DataLakeStorage:
         """Data Lake storage'ı başlat."""
         # Base directory oluştur (yoksa)
         self.BASE_DIR.mkdir(parents=True, exist_ok=True)
-        logger.info(f"🏗️ [DATA LAKE] Resampling Dosya Sistemi (data/ohlcv/) Devrede")
+        logger.info(f"🏗️ [DATA LAKE] Resampling Flat Storage (data/ohlcv/) Active")
         logger.info(f"📁 [DATA LAKE] Base directory: {self.BASE_DIR.absolute()}")
         logger.info(f"💾 [DATA LAKE] Compression: {self.COMPRESSION}")
-        logger.info(f"🚀 [DATA LAKE] PyArrow: {'✅ Aktif' if PYARROW_AVAILABLE else '❌ Pasif'}")
+        logger.info(f"🚀 [DATA LAKE] PyArrow: {'✅ Active' if PYARROW_AVAILABLE else '❌ Pasif'}")
 
     def _symbol_to_path(self, symbol: str) -> str:
         """

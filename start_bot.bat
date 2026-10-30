@@ -1,10 +1,10 @@
-@echo off
+﻿@echo off
 title CryptoAlgoBot
 color 0A
 
 echo.
 echo ==========================================
-echo   CryptoAlgoBot - Windows Baslatma
+echo   CryptoAutomat - Windows Startup
 echo ==========================================
 echo.
 
@@ -13,41 +13,41 @@ cd /d %~dp0
 
 REM Virtual Environment kontrolu
 if not exist "venv\Scripts\python.exe" (
-    echo [HATA] Virtual environment bulunamadi!
-    echo [HATA] Lutfen once setup.bat dosyasini calistirin.
+    echo [HATA] Virtual environment not found!
+    echo [HATA] Please run setup.bat first.
     echo.
     pause
     exit /b 1
 )
 
-echo [OK] Virtual environment bulundu.
+echo [OK] Virtual environment detected.
 echo.
 
 REM .env kontrolu
 if not exist ".env" (
-    echo [UYARI] .env dosyasi yok! Otomatik olusturuluyor...
+    echo [UYARI] .env not found! Creating from template...
     copy .env.example .env >nul
-    echo [OK] .env olusturuldu. API anahtarlarini duzenleyin!
+    echo [OK] .env created. Please configure your API credentials!
     echo.
 )
 
 REM config.yaml kontrolu
 if not exist "config.yaml" (
-    echo [HATA] config.yaml bulunamadi!
-    echo [HATA] config.example.yaml'i config.yaml olarak kopyalayin.
+    echo [HATA] config.yaml not found!
+    echo [HATA] Please copy config.example.yaml to config.yaml.
     pause
     exit /b 1
 )
 
-echo [OK] Yapilandirma hazir.
+echo [OK] Configuration verified.
 echo.
 echo ==========================================
-echo   Bot baslatiliyor...
+echo   Starting trading engine...
 echo ==========================================
 echo.
-echo [BİLGİ] Dashboard: http://localhost:3000
-echo [BİLGİ] Tarayici otomatik acilacak...
-echo [BİLGİ] Durdurmak icin: Bu pencereyi kapat veya CTRL+C
+echo [INFO] Dashboard: http://localhost:3000
+echo [INFO] Launching browser...
+echo [INFO] To stop: Close this window or press CTRL+C
 echo.
 
 REM Botu arka planda baslat
@@ -57,15 +57,15 @@ REM 5 saniye bekle (bot baslasin)
 timeout /t 5 /nobreak >nul
 
 REM Tarayiciyi ac
-echo [OK] Dashboard aciliyor...
+echo [OK] Opening Dashboard...
 start http://localhost:3000
 
 echo.
 echo ==========================================
-echo   Bot calisiyor...
+echo   Engine running...
 echo ==========================================
 echo.
-echo NOT: Bot penceresini acik tutun!
-echo     Kapatmak icin pencereyi kapatin veya CTRL+C yapin.
+echo NOTE: Keep this console window open!
+echo     To stop, close this console or press CTRL+C.
 echo.
 pause

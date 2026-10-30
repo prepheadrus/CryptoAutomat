@@ -49,8 +49,8 @@ async def start_background_tasks():
                 # [SYMBOL FIX] Loaded gelen sembolleri normalize et (örn: /BTC → BTC/USDT)
                 symbols = [normalize_symbol(s) for s in stats['symbols'].keys()]
                 logger.info(f"✅ [AUTO-SYNC] Loaded {len(symbols)} symbols from Parquet Data Lake!")
-                logger.info(f"   Semboller: {', '.join(symbols[:5])}{'...' if len(symbols) > 5 else ''}")
-                logger.info(f"   Toplam dosya: {stats['total_files']}, Boyut: {stats['total_size_mb']:.2f} MB")
+                logger.info(f"   Symbols: {', '.join(symbols[:5])}{'...' if len(symbols) > 5 else ''}")
+                logger.info(f"   Total files: {stats['total_files']}, Size: {stats['total_size_mb']:.2f} MB")
             else:
                 logger.warning("⚠️ Parquet Data Lake is empty. Download historical data via Data Lab.")
         except Exception as e:
@@ -68,7 +68,7 @@ async def start_background_tasks():
 
     # Sembollerle botları başlat
     if symbols:
-        logger.info(f"📊 {len(symbols)} sembol için poller başlatılıyor...")
+        logger.info(f"📊 {len(symbols)} symbols queued for strategy pollers...")
 
         for symbol in symbols:
             try:
@@ -103,14 +103,14 @@ async def start_background_tasks():
                             n_trials=50
                         )
                     )
-                    logger.info(f"🧠 [WFO] {symbol} için optimizasyon task'ı başlatıldı")
+                    logger.info(f"🧠 [WFO] {symbol} WFO optimization worker started")
         except Exception as e:
             logger.warning(f"⚠️ WFO başlatma hatası: {e}")
             logger.warning("   Bot çalışmaya devam edecek, WFO olmadan")
 
     logger.info("=" * 60)
-    logger.info("✅ TÜM ARKA PLAN TASK'LARI BAŞLATILDI!")
-    logger.info("   Bot şimdi piyasayı dinliyor ve işlem yapıyor...")
+    logger.info("✅ ALL BACKGROUND WORKERS STARTED!")
+    logger.info("   Engine is now listening to live market feeds and executing signals...")
     logger.info("=" * 60)
     logger.info("")
 
@@ -185,7 +185,11 @@ if __name__ == "__main__":
             # 7. Event Tracer istatistiklerini göster
             logger.info("7️⃣ Event Tracer telemetry:")
             try:
-                loop = asyncio.get_event_loop()
+                try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
                 loop.run_until_complete(event_tracer.stop())
             except Exception:
                 pass
@@ -219,7 +223,11 @@ if __name__ == "__main__":
             asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
         # Ana event loop'u al
-        loop = asyncio.get_event_loop()
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
 
         # Event Tracer başlat (Event-Driven mimari diagnostik)
         logger.info("")

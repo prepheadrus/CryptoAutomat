@@ -40,7 +40,7 @@ ta = None
 # FINAL LOG
 # ============================================================================
 
-logger.info("🎉 [MİMARİ] Faz 4 Tamamlandı: İndikatör Kütüphanesi 5 Modüle Parçalandı")
+logger.info("🎉 [INDICATORS] Technical Indicator Suite Initialized (5 Modules Active)")
 
 
 # ============================================================================
