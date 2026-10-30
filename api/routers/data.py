@@ -25,7 +25,7 @@ data_service = DataService()
 @router.get("/history-status")
 async def get_history_status(symbol: str, timeframe: str = "1m") -> Dict[str, Any]:
     """
-    Seçili sembolün veritabanındaki tarih aralığını döner.
+    Returns date range in database for the selected symbol.
     """
     return await data_service.get_history_status(symbol, timeframe)
 
@@ -36,7 +36,7 @@ async def start_historical_download(
     background_tasks: BackgroundTasks
 ) -> Dict[str, Any]:
     """
-    Arka planda geçmiş veri indirme işlemini başlatır.
+    Starts background historical data ingestion.
     """
     return await data_service.start_download(request)
 
@@ -44,7 +44,7 @@ async def start_historical_download(
 @router.post("/stop-download")
 async def stop_historical_download(request: DataStopRequest) -> Dict[str, Any]:
     """
-    Devam eden indirme işlemini durdurur.
+    Stops ongoing data ingestion.
     """
     return await data_service.stop_download(request)
 
@@ -52,7 +52,7 @@ async def stop_historical_download(request: DataStopRequest) -> Dict[str, Any]:
 @router.post("/resume-download")
 async def resume_historical_download(request: DataResumeRequest) -> Dict[str, Any]:
     """
-    Duraklatılmış indirme işlemini devam ettirir.
+    Resumes paused data ingestion.
     """
     return await data_service.resume_download(request)
 
@@ -60,7 +60,7 @@ async def resume_historical_download(request: DataResumeRequest) -> Dict[str, An
 @router.get("/active-downloads")
 async def get_active_downloads() -> Dict[str, Any]:
     """
-    Aktif indirme görevlerini döner.
+    Returns active ingestion tasks.
     """
     return await data_service.get_active_downloads()
 
@@ -68,7 +68,7 @@ async def get_active_downloads() -> Dict[str, Any]:
 @router.get("/all-download-tasks")
 async def get_all_download_tasks() -> Dict[str, Any]:
     """
-    Tüm indirme görevlerini döner (aktif + tamamlanan).
+    Returns all ingestion tasks (active + completed).
     """
     return await data_service.get_all_download_tasks()
 
@@ -76,7 +76,7 @@ async def get_all_download_tasks() -> Dict[str, Any]:
 @router.post("/delete-task")
 async def delete_klines_data(request: DataDeleteRequest) -> Dict[str, Any]:
     """
-    Veritabanından klines verisini siler (symbol + timeframe).
+    Deletes klines data from database (symbol + timeframe).
     """
     return await data_service.delete_data(request)
 
@@ -84,8 +84,8 @@ async def delete_klines_data(request: DataDeleteRequest) -> Dict[str, Any]:
 @router.post("/delete-download-task")
 async def delete_download_task(request: DataDeleteRequest) -> Dict[str, Any]:
     """
-    Download tasks tablosundan görevi siler (symbol + market_type).
-    Tamamlanmış veya durdurulmuş görevleri temizlemek için kullanılır.
+    Deletes task from download tasks table (symbol + market_type).
+    Used to clean up completed or stopped tasks.
     """
     return await data_service.delete_download_task(request)
 
@@ -93,8 +93,8 @@ async def delete_download_task(request: DataDeleteRequest) -> Dict[str, Any]:
 @router.delete("/delete-all")
 async def delete_all_klines_data() -> Dict[str, Any]:
     """
-    Veritabanındaki TÜM klines verilerini siler.
-    DİKKAT: Geri alınamaz!
+    Deletes ALL klines data from database.
+    CAUTION: Irreversible!
     """
     return await data_service.delete_all_klines()
 
@@ -102,7 +102,7 @@ async def delete_all_klines_data() -> Dict[str, Any]:
 @router.delete("/delete-klines")
 async def delete_klines_by_symbol(request: DataDeleteRequest) -> Dict[str, Any]:
     """
-    Belirli bir sembole ait TÜM klines verilerini siler.
+    Deletes ALL klines data for a specific symbol.
     """
     return await data_service.delete_data(request)
 
@@ -110,7 +110,7 @@ async def delete_klines_by_symbol(request: DataDeleteRequest) -> Dict[str, Any]:
 @router.post("/toggle-pause")
 async def toggle_pause(request: DataPauseRequest) -> Dict[str, Any]:
     """
-    İndirme işlemini duraklatır/devam ettirir.
+    Pauses or resumes ingestion task.
     """
     return await data_service.pause_download(request)
 
@@ -118,7 +118,7 @@ async def toggle_pause(request: DataPauseRequest) -> Dict[str, Any]:
 @router.get("/symbols-with-data")
 async def get_symbols_with_data() -> Dict[str, Any]:
     """
-    Veritabanında verisi olan tüm sembolleri döner.
+    Returns all symbols with stored data in database.
     """
     return await data_service.get_symbols_with_data()
 
@@ -126,7 +126,7 @@ async def get_symbols_with_data() -> Dict[str, Any]:
 @router.get("/check-data-gaps")
 async def check_data_gaps(symbol: str = None) -> Dict[str, Any]:
     """
-    Tüm sembollerin veya belirli bir sembolün veri boşluklarını kontrol et.
+    Check data gaps for all symbols or a specific symbol.
 
     Args:
         symbol: Sembol (opsiyonel, yoksa tüm semboller)
@@ -151,7 +151,7 @@ async def check_data_gaps(symbol: str = None) -> Dict[str, Any]:
 @router.post("/fill-data-gaps")
 async def fill_data_gaps(symbol: str = None) -> Dict[str, Any]:
     """
-    Tüm sembollerin veya belirli bir sembolün veri boşluklarını otomatik doldur.
+    Automatically fill data gaps for all symbols or a specific symbol.
 
     Args:
         symbol: Sembol (opsiyonel, yoksa tüm semboller)
@@ -169,7 +169,7 @@ async def fill_data_gaps(symbol: str = None) -> Dict[str, Any]:
 @router.get("/data-count")
 async def get_data_count(symbol: str, timeframe: str = "1m") -> Dict[str, Any]:
     """
-    Belirli sembol/timeframe için mevcut mum sayısını döner.
+    Returns candle count for specific symbol and timeframe.
     
     Args:
         symbol: Sembol (örn: BTC/USDT)
@@ -214,7 +214,7 @@ async def get_data_count(symbol: str, timeframe: str = "1m") -> Dict[str, Any]:
 @router.get("/inventory")
 async def get_data_inventory() -> Dict[str, Any]:
     """
-    Veritabanı envanterini döner (toplam mum + sembol/timeframe bazlı detay).
+    Returns database inventory (total candles + symbol/timeframe breakdown).
     """
     return await data_service.get_data_inventory()
 
@@ -222,7 +222,7 @@ async def get_data_inventory() -> Dict[str, Any]:
 @router.get("/stats")
 async def get_database_stats() -> Dict[str, Any]:
     """
-    Veritabanı özet istatistiklerini döner (toplam mum + sembol bazlı özet).
+    Returns database summary statistics (total candles + symbol breakdown).
     """
     return await data_service.get_database_stats()
 

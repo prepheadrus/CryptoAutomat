@@ -1131,18 +1131,18 @@ Measurement Noise (R)
 <div class="data-card-header">
 <h3 class="data-card-title"><span class="step-number">1</span> <i class="lucide-icon" data-lucide="search"></i> <span data-tr="Piyasa Seçimi" data-en="Market Selection">Market Selection</span></h3>
 <button class="data-btn data-btn-primary auto-style-127" onclick="saveMarketSelection()">
-                                ✅ Takibi Güncelle
-                            </button>
+    ✅ <span data-tr="Takibi Güncelle" data-en="Update Tracking">Update Tracking</span>
+</button>
 </div>
 <div class="data-card-body">
 <div class="search-filter-row">
 <div style="position: relative; flex: 1; display: flex; align-items: center;">
     <i class="lucide-icon" data-lucide="search" style="position: absolute; left: 10px; color: #a0aec0; width: 16px; height: 16px;"></i>
-    <input type="text" id="market-search" placeholder="Coin Ara..." class="data-input" style="flex: 1; padding-left: 35px; width: 100%;">
+    <input type="text" id="market-search" data-tr-placeholder="Coin Ara..." data-en-placeholder="Search symbol..." placeholder="Search symbol..." class="data-input" style="flex: 1; padding-left: 35px; width: 100%;">
 </div>
-                                <select class="data-select auto-style-155" id="market-type-filter">
-<option value="all">Tümü</option>
-<option value="spot"><i class="lucide-icon" data-lucide="coins"></i> Spot</option>
+<select class="data-select auto-style-155" id="market-type-filter">
+<option value="all"><span data-tr="Tümü" data-en="All">All</span></option>
+<option value="spot">💰 Spot</option>
 <option value="swap">💹 Futures</option>
 </select>
 </div>
@@ -1152,39 +1152,38 @@ Measurement Noise (R)
 <!-- CARD 2: İNDİRME KONTROLÜ -->
 <div class="data-card download-card">
 <div class="data-card-header">
-<h3 class="data-card-title"><span class="step-number">2</span> <i class="lucide-icon" data-lucide="settings"></i> İndirme Kontrolü</h3>
+<h3 class="data-card-title"><span class="step-number">2</span> <i class="lucide-icon" data-lucide="settings"></i> <span data-tr="İndirme Kontrolü" data-en="Ingestion Control">Ingestion Control</span></h3>
 </div>
 <div class="data-card-body">
 <div class="selected-symbol-box" id="selected-symbol-container">
-<label class="mini-label">Seçili Sembol:</label>
-<strong class="selected-symbol" id="selected-symbol-val">-- SEÇİNİZ --</strong>
+<label class="mini-label"><span data-tr="Seçili Sembol:" data-en="Selected Symbol:">Selected Symbol:</span></label>
+<strong class="selected-symbol" id="selected-symbol-val" data-tr="-- SEÇİNİZ --" data-en="-- SELECT SYMBOL --">-- SELECT SYMBOL --</strong>
 </div>
-<!-- YENİ: SADECE 1m İNDİRİLİR (Resampling Mimarisi) -->
+<!-- SADECE 1m İNDİRİLİR (Resampling Mimarisi) -->
 <details class="resampling-info-details">
 <summary class="resampling-info-summary">
-                                    🏗️ Parquet Data Lake Mimarisi Detayları
-                                </summary>
+    🏗️ <span data-tr="Parquet Data Lake Mimarisi Detayları" data-en="Parquet Data Lake Architecture Details">Parquet Data Lake Architecture Details</span>
+</summary>
 <div class="resampling-info-box">
 <div class="auto-style-156">
 <span class="auto-style-157">🏗️</span>
 <div>
 <h4 class="auto-style-158">
-                                                🏗️ Parquet Data Lake Mimarisi Aktif
-                                            </h4>
+    🏗️ <span data-tr="Parquet Data Lake Mimarisi Aktif" data-en="Parquet Data Lake Architecture Active">Parquet Data Lake Architecture Active</span>
+</h4>
 <p class="auto-style-159">
-<strong class="auto-style-160">Sistem otomatik olarak SADECE 1 dakikalık mumları indirir ve Parquet formatında kaydeder.</strong>
+<strong class="auto-style-160"><span data-tr="Sistem otomatik olarak SADECE 1 dakikalık mumları indirir ve Parquet formatında kaydeder." data-en="System automatically ingests ONLY 1-minute candles and saves in Parquet format.">System automatically ingests ONLY 1-minute candles and saves in Parquet format.</span></strong>
 <br/><br/>
-                                                Diğer zaman dilimleri (5m, 15m, 1h, 4h, vb.) otomatik olarak oluşturulur ve
-                                                <strong class="auto-style-152">data/ohlcv/binance/</strong> klasörüne kaydedilir.
-                                                <br/><br/>
-                                                ✅ <strong>Avantajlar:</strong>
+<span data-tr="Diğer zaman dilimleri (5m, 15m, 1h, 4h, vb.) otomatik olarak oluşturulur ve data/ohlcv/binance/ klasörüne kaydedilir." data-en="Other timeframes (5m, 15m, 1h, 4h, etc.) are resampled on the fly and stored in data/ohlcv/binance/.">Other timeframes (5m, 15m, 1h, 4h, etc.) are resampled on the fly and stored in <code>data/ohlcv/binance/</code>.</span>
+<br/><br/>
+✅ <strong data-tr="Avantajlar:" data-en="Key Advantages:">Key Advantages:</strong>
 <ul class="auto-style-161">
-<li>Apache Parquet (columnar storage - %70 daha az yer)</li>
-<li>Snappy compression (hızlı okuma/yazma)</li>
-<li>MTF-Daily (1m, 5m, 15m) → Gün bazlı partition (YYYY/MM/DD/)</li>
-<li>MTF-Market (1h, 4h, 1d) → Tek dosya (market.parquet)</li>
+<li>Apache Parquet (<span data-tr="sütunsal depolama - %70 daha az yer" data-en="columnar storage - 70% space savings">columnar storage - 70% space savings</span>)</li>
+<li>Snappy compression (<span data-tr="yüksek hızlı okuma/yazma" data-en="fast I/O read/write">fast I/O read/write</span>)</li>
+<li>MTF-Daily (1m, 5m, 15m) → <span data-tr="Gün bazlı bölümleme" data-en="Day-partitioned storage">Day-partitioned storage</span> (YYYY/MM/DD/)</li>
+<li>MTF-Market (1h, 4h, 1d) → <span data-tr="Birleşik market dosyası" data-en="Consolidated market file">Consolidated market file</span> (market.parquet)</li>
 <li><span data-i18n="k_look_ahead_bias_koruması__gele" data-tr="Look-ahead bias koruması (gelecek mumlar düşürülür)" data-en="Look-ahead bias protection (future bars dropped)">Look-ahead bias protection (future bars dropped)</span></li>
-<li>OOM koruması (50k batch stream - RAM dostu)</li>
+<li>OOM <span data-tr="koruması (50k batch akış - RAM dostu)" data-en="protection (50k batch stream - memory efficient)">protection (50k batch stream - memory efficient)</span></li>
 </ul>
 </p>
 </div>
@@ -1196,13 +1195,12 @@ Measurement Noise (R)
 <label class="form-label"><span data-i18n="k_başlangıç_" data-tr="Başlangıç:" data-en="Start:">Start:</span></label>
 <input class="data-input" id="download-start-date" type="date" value="2025-01-01"/>
 </div>
-<!-- Timeframe seçimi KALDIRILDI - SADECE 1m -->
 <div class="form-group auto-style-162">
 <label class="form-label">
-                                        Zaman Dilimi
-                                        <span class="auto-style-163"> ✅ SADECE 1m</span>
+    <span data-tr="Zaman Dilimi" data-en="Timeframe">Timeframe</span>
+    <span class="auto-style-163" data-tr=" ✅ SADECE 1m" data-en=" ✅ 1m ONLY"> ✅ 1m ONLY</span>
 </label>
-<input class="data-input auto-style-164" disabled="" type="text" value="1m (Otomatik)"/>
+<input class="data-input auto-style-164" disabled="" type="text" data-tr-value="1m (Otomatik)" data-en-value="1m (Automatic)" value="1m (Automatic)"/>
 </div>
 </div>
 <!-- PROGRESS BAR -->
@@ -1220,17 +1218,17 @@ Measurement Noise (R)
 <div class="button-row">
 <button class="data-btn data-btn-success" id="start-download-btn" onclick="startDownload()">
 <i class="lucide-icon" data-lucide="rocket"></i> <span data-tr="İndirmeyi Başlat" data-en="Start Ingestion">Start Ingestion</span>
-                                </button>
+</button>
 <button class="data-btn data-btn-danger auto-style-10" id="stop-download-btn" onclick="stopDownload()">
-                                    🛑 Durdur
-                                </button>
-<button class="data-btn data-btn-info" onclick="checkHistoryStatus()" title="Veri durumunu yenile">
+🛑 <span data-tr="Durdur" data-en="Stop">Stop</span>
+</button>
+<button class="data-btn data-btn-info" onclick="checkHistoryStatus()" data-tr-title="Veri durumunu yenile" data-en-title="Refresh data status" title="Refresh data status">
 <i class="lucide-icon" data-lucide="refresh-cw"></i>
 </button>
 <div class="danger-zone-container">
-<button class="data-btn data-btn-danger" onclick="clearAllData()" title="Tüm veritabanını temizle (DİKKAT!)">
+<button class="data-btn data-btn-danger" onclick="clearAllData()" data-tr-title="Tüm veritabanını temizle (DİKKAT!)" data-en-title="Wipe entire database (CAUTION!)" title="Wipe entire database (CAUTION!)">
 <i class="lucide-icon" data-lucide="trash-2"></i> <span data-tr="Tüm Verileri Sil" data-en="Delete All Data">Delete All Data</span>
-                                    </button>
+</button>
 </div>
 </div>
 </div>
@@ -1239,7 +1237,7 @@ Measurement Noise (R)
 <div class="data-card tasks-card">
 <div class="data-card-header">
 <h3 class="data-card-title"><span class="step-number">3</span> <i class="lucide-icon" data-lucide="pie-chart"></i> <span data-tr="Aktif ve Geçmiş Görevler" data-en="Active & Completed Tasks">Active & Completed Tasks</span></h3>
-<div class="task-count-badge" id="active-tasks-count">0 Aktif / 0 Toplam</div>
+<div class="task-count-badge" id="active-tasks-count"><span data-tr="0 Aktif / 0 Toplam" data-en="0 Active / 0 Total">0 Active / 0 Total</span></div>
 </div>
 <div class="data-card-body">
 <div class="tasks-list" id="active-tasks-list"></div>
@@ -1250,7 +1248,6 @@ Measurement Noise (R)
 <div class="data-card inventory-card auto-style-165">
 <div class="data-card-header">
 <h3 class="data-card-title">🗄️ <span data-tr="Veritabanı Envanteri &amp; İstatistikler" data-en="Database Inventory &amp; Statistics">Database Inventory &amp; Statistics</span></h3>
-<!-- YENİ: Otomatik yenileme - butona gerek yok -->
 </div>
 <div class="data-card-body">
 <div class="stats-summary" id="data-stats-summary"></div>

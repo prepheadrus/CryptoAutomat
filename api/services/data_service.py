@@ -259,7 +259,7 @@ class DataService:
             task = self.exchange_manager.active_downloads[key]
             return {
                 "status": "exists",
-                "message": f"{key} için zaten bir kayıt ({task['status'].upper()}) bulunuyor.",
+                "message": f"A task ({task['status'].upper()}) already exists for {key}.",
                 "task": task
             }
 
@@ -286,7 +286,7 @@ class DataService:
 
         return {
             "status": "started",
-            "message": f"{key} ({market_type}) için {request.start_date} tarihinden itibaren SADECE 1m veri indirme görevi başlatıldı. Diğer TF'ler otomatik oluşturulacak."
+            "message": f"1m data ingestion task started for {key} ({market_type}) from {request.start_date}. Other timeframes will be generated automatically."
         }
     
     async def stop_download(self, request: DataStopRequest) -> Dict[str, Any]:
@@ -308,9 +308,9 @@ class DataService:
         
         if key in self.exchange_manager.download_stops:
             self.exchange_manager.download_stops[key] = True
-            return {"status": "success", "message": f"{symbol} için indirme durduruldu."}
+            return {"status": "success", "message": f"Ingestion stopped for {symbol}."}
         
-        return {"status": "error", "message": f"{symbol} için aktif indirme bulunamadı."}
+        return {"status": "error", "message": f"No active ingestion found for {symbol}."}
     
     async def resume_download(self, request: DataResumeRequest) -> Dict[str, Any]:
         """
@@ -323,7 +323,7 @@ class DataService:
             Devam ettirme yanıtı
         """
         # TODO: Implement resume logic
-        return {"status": "success", "message": f"{request.symbol} için indirme devam ettirildi."}
+        return {"status": "success", "message": f"Ingestion resumed for {request.symbol}."}
     
     async def delete_data(self, request: DataDeleteRequest) -> Dict[str, Any]:
         """
@@ -398,9 +398,9 @@ class DataService:
                     logger.warning(f"⚠️ [DELETE] DB silme hatası ({sym}): {db_err}")
 
             if total_deleted > 0:
-                db_message = f"{symbol_clean} için {total_deleted} mum silindi"
+                db_message = f"Deleted {total_deleted} candle(s) for {symbol_clean}"
             else:
-                db_message = f"{symbol_clean} için DB'de veri bulunamadı"
+                db_message = f"No DB records found for {symbol_clean}"
 
             # ========================================================================
             # 2. PARQUET LAKE TEMİZLİĞİ (YENİ MİMARİ)
@@ -454,7 +454,7 @@ class DataService:
             # ========================================================================
             return {
                 "status": "success",
-                "message": f"{db_message} (Parquet Lake'ten silindi)",
+                "message": f"{db_message} (Removed from Parquet Lake)",
                 "deleted_count": total_deleted
             }
         except Exception as e:
@@ -520,7 +520,7 @@ class DataService:
 
             return {
                 "status": "success",
-                "message": f"Tüm veritabanı ve Parquet dosyaları temizlendi: {deleted_count} satır (DB)",
+                "message": f"Entire database and Parquet storage wiped: {deleted_count} records (DB)",
                 "deleted_count": deleted_count
             }
         except Exception as e:
@@ -632,7 +632,7 @@ class DataService:
 
             return {
                 "status": "success",
-                "message": f"{request.symbol} için {deleted_count} görev silindi." +
+                "message": f"Deleted {deleted_count} task(s) for {request.symbol}." +
                           (f" Veri de temizlendi." if request.timeframe else "")
             }
         except Exception as e:
@@ -661,12 +661,12 @@ class DataService:
         if key in self.exchange_manager.download_pauses:
             if request.action == "pause":
                 self.exchange_manager.download_pauses[key] = True
-                return {"status": "success", "message": f"{symbol} için indirme duraklatıldı."}
+                return {"status": "success", "message": f"Ingestion paused for {symbol}."}
             else:
                 self.exchange_manager.download_pauses[key] = False
-                return {"status": "success", "message": f"{symbol} için indirme devam ettirildi."}
+                return {"status": "success", "message": f"Ingestion resumed for {symbol}."}
         
-        return {"status": "error", "message": f"{symbol} için aktif indirme bulunamadı."}
+        return {"status": "error", "message": f"No active ingestion found for {symbol}."}
     
     async def get_history_status(self, symbol: str, timeframe: str = "1m") -> Dict[str, Any]:
         """
@@ -839,7 +839,7 @@ class DataService:
             if not gaps:
                 return {
                     "status": "success",
-                    "message": "Hiç boşluk bulunamadı",
+                    "message": "No data gaps found",
                     "filled": []
                 }
 
@@ -877,7 +877,7 @@ class DataService:
 
             return {
                 "status": "success",
-                "message": f"{len(filled)} boşluk dolduruldu",
+                "message": f"Filled {len(filled)} data gap(s)",
                 "filled": filled
             }
 

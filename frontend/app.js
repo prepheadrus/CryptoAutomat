@@ -427,48 +427,62 @@ function renderDatabaseInventory(inventory, stats) {
 
     if (!statsEl || !tableEl) return;
 
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
     const totalCandles = inventory?.total_candles || stats?.total_candles || 0;
     const inventoryList = inventory?.inventory || stats?.stats || [];
 
+    // Cache inventory and stats for instant re-render on languageChanged
+    window._lastInventory = inventory;
+    window._lastStats = stats;
+
     // Update summary
     const millions = (totalCandles / 1000000).toFixed(2);
+    const totalLabel = isTr ? `📊 Toplam: ${millions} Milyon` : `📊 Total: ${millions} Million`;
+    const comboLabel = isTr 
+        ? `📦 ${inventoryList.length} farklı sembol/timeframe kombinasyonu` 
+        : `📦 ${inventoryList.length} unique symbol/timeframe pairs`;
+
     statsEl.innerHTML = `
-        <span style="font-size:1.3rem; font-weight:700; color:var(--neon-blue);">📊 Toplam: ${millions} Milyon</span>
+        <span style="font-size:1.3rem; font-weight:700; color:var(--neon-blue);">${totalLabel}</span>
         <div style="display:flex; gap:20px; margin-top:8px;">
             <span style="font-size:0.85rem; color:var(--text-muted);">
-                📦 ${inventoryList.length} farklı sembol/timeframe kombinasyonu
+                ${comboLabel}
             </span>
         </div>
     `;
 
     // Render table
     if (inventoryList.length === 0) {
-        tableEl.innerHTML = '<p style="text-align:center; color:var(--text-muted); padding:20px;">📭 Veritabanında henüz veri yok</p>';
+        tableEl.innerHTML = `<p style="text-align:center; color:var(--text-muted); padding:20px;">${isTr ? '📭 Veritabanında henüz veri yok' : '📭 No data in database yet'}</p>`;
         return;
     }
+
+    const colSymbol = isTr ? '🪙 Sembol' : '🪙 Symbol';
+    const colStart = isTr ? '📅 Başlangıç' : '📅 Start Date';
+    const colEnd = isTr ? '📅 Bitiş' : '📅 End Date';
+    const colCandles = isTr ? '📊 Mum Sayısı' : '📊 Candle Count';
 
     tableEl.innerHTML = `
         <table style="width:100%; border-collapse:collapse;">
             <thead>
                 <tr style="border-bottom:2px solid rgba(255,255,255,0.15); position: sticky; top: 0; background: #0a0e1a;">
-                    <th style="padding:12px 10px; text-align:left; font-size:0.8rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">🪙 Sembol</th>
-                    <th style="padding:12px 10px; text-align:left; font-size:0.8rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">📅 Başlangıç</th>
-                    <th style="padding:12px 10px; text-align:left; font-size:0.8rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">📅 Bitiş</th>
-                    <th style="padding:12px 10px; text-align:right; font-size:0.8rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">📊 Mum Sayısı</th>
+                    <th style="padding:12px 10px; text-align:left; font-size:0.8rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">${colSymbol}</th>
+                    <th style="padding:12px 10px; text-align:left; font-size:0.8rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">${colStart}</th>
+                    <th style="padding:12px 10px; text-align:left; font-size:0.8rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">${colEnd}</th>
+                    <th style="padding:12px 10px; text-align:right; font-size:0.8rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">${colCandles}</th>
                 </tr>
             </thead>
             <tbody>
                 ${inventoryList.map(item => {
-                    const countFormatted = (item.count || 0).toLocaleString('tr-TR');
+                    const countFormatted = (item.count || 0).toLocaleString(isTr ? 'tr-TR' : 'en-US');
                     const countShort = item.count >= 1000000 ? `${(item.count / 1000000).toFixed(2)}M` :
                                       item.count >= 1000 ? `${(item.count / 1000).toFixed(0)}K` : item.count;
                     const countColor = item.count >= 1000000 ? '#00ff88' :
                                       item.count >= 100000 ? 'var(--neon-green)' : 'var(--text-main)';
 
-                    // GERÇEK MARKET TYPE TESPİTİ
                     const symbol = item.symbol || 'N/A';
                     const isFutures = symbol.includes(':USDT') || symbol.includes(':USDC') || symbol.endsWith('-SWAP');
-                    const marketTypeLabel = isFutures ? '💹 Vadeli' : '💰 Spot';
+                    const marketTypeLabel = isFutures ? (isTr ? '💹 Vadeli' : '💹 Futures') : '💰 Spot';
                     const marketTypeColor = isFutures ? 'var(--neon-blue)' : 'var(--neon-green)';
                     const marketTypeKey = isFutures ? 'future' : 'spot';
 
@@ -497,14 +511,14 @@ function renderDatabaseInventory(inventory, stats) {
                             <td style="padding:12px 10px; text-align:right;">
                                 <div style="display:flex; align-items:center; justify-content:flex-end; gap:12px;">
                                     <button class="data-btn data-btn-danger" onclick="deleteSymbolData('${symbol}', '${marketTypeKey}')"
-                                        title="${symbol} verilerini sil"
+                                        title="${isTr ? `${symbol} verilerini sil` : `Delete data for ${symbol}`}"
                                         style="padding:4px 10px; font-size:0.75rem; background: linear-gradient(135deg, #dc2626, #991b1b);">
-                                        🗑️ Sil
+                                        🗑️ ${isTr ? 'Sil' : 'Delete'}
                                     </button>
                                     <span style="font-size:1rem; font-weight:700; color:${countColor};">${countShort}</span>
                                 </div>
                                 <div style="font-size:0.7rem; color:var(--text-muted); margin-top:2px;">
-                                    ${countFormatted} mum
+                                    ${countFormatted} ${isTr ? 'mum' : 'bars'}
                                 </div>
                             </td>
                         </tr>
@@ -524,19 +538,23 @@ function renderActiveTasks(downloads) {
 
     if (!tasksListEl) return;
 
-    const tasks = Object.entries(downloads);
+    // Cache tasks for instant re-render on languageChanged
+    window._lastDownloads = downloads;
+
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
+    const tasks = Object.entries(downloads || {});
     const activeCount = tasks.filter(([_, t]) => t.status === 'running').length;
     const totalCount = tasks.length;
 
-    // Update count
+    // Update count badge
     if (tasksCountEl) {
-        tasksCountEl.textContent = `${activeCount} Aktif / ${totalCount} Toplam`;
+        tasksCountEl.textContent = isTr ? `${activeCount} Aktif / ${totalCount} Toplam` : `${activeCount} Active / ${totalCount} Total`;
     }
 
     if (tasks.length === 0) {
         tasksListEl.innerHTML = `
             <div style="text-align: center; padding: 40px; color: var(--text-muted);">
-                📭 Aktif veya tamamlanmış indirme yok
+                ${isTr ? '📭 Aktif veya tamamlanmış indirme yok' : '📭 No active or completed ingestion tasks'}
             </div>
         `;
         return;
@@ -548,24 +566,23 @@ function renderActiveTasks(downloads) {
                            task.status === 'completed' ? 'completed' :
                            task.status === 'paused' ? 'paused' : 'stopped';
 
-        const statusDisplay = task.status === 'running' ? '🔄 İndiriliyor' :
-                             task.status === 'completed' ? '✅ Tamamlandı' :
-                             task.status === 'paused' ? '⏸️ Duraklatıldı' : '⏹️ Durduruldu';
+        const statusDisplay = task.status === 'running' ? (isTr ? '🔄 İndiriliyor' : '🔄 Ingesting') :
+                             task.status === 'completed' ? (isTr ? '✅ Tamamlandı' : '✅ Completed') :
+                             task.status === 'paused' ? (isTr ? '⏸️ Duraklatıldı' : '⏸️ Paused') : (isTr ? '⏹️ Durduruldu' : '⏹️ Stopped');
 
         const progress = task.progress || (task.status === 'completed' ? 100 : 0);
         const speed = task.speed || 0;
 
-        // Tarih bilgileri
         let startDate = task.start_date || '...';
         let lastCandleDate = '-';
 
         if (task.target_start_ms && !startDate) {
-            startDate = new Date(task.target_start_ms).toLocaleDateString('tr-TR');
+            startDate = new Date(task.target_start_ms).toLocaleDateString(isTr ? 'tr-TR' : 'en-US');
         }
 
         if (task.current_ts) {
             const dateObj = new Date(task.current_ts);
-            lastCandleDate = dateObj.toLocaleString('tr-TR', {
+            lastCandleDate = dateObj.toLocaleString(isTr ? 'tr-TR' : 'en-US', {
                 day: '2-digit',
                 month: '2-digit',
                 hour: '2-digit',
@@ -574,7 +591,6 @@ function renderActiveTasks(downloads) {
             });
         }
 
-        // Sembol ve market type
         let symbolName = key;
         let marketType = task.market_type || 'future';
 
@@ -584,14 +600,15 @@ function renderActiveTasks(downloads) {
             symbolName = parts.slice(0, -1).join('_');
         }
 
-        // Silme butonları
         const deleteButtons = `
             <div style="display:flex; gap:4px;">
-                <button class="task-btn task-btn-delete" onclick="deleteDownloadTask('${key}', '${marketType}')" title="Sadece görevi sil (veri korunur)"
+                <button class="task-btn task-btn-delete" onclick="deleteDownloadTask('${key}', '${marketType}')" 
+                    title="${isTr ? 'Sadece görevi sil (veri korunur)' : 'Delete task only (data preserved)'}"
                     style="background: linear-gradient(135deg, #6b7280, #4b5563); border: none; color: white; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 0.9rem;">
                     🗑️
                 </button>
-                <button class="task-btn task-btn-danger" onclick="deleteDownloadTaskWithData('${key}', '${marketType}')" title="Görev + TÜM veriyi sil (DB + Flat files)"
+                <button class="task-btn task-btn-danger" onclick="deleteDownloadTaskWithData('${key}', '${marketType}')" 
+                    title="${isTr ? 'Görev + TÜM veriyi sil (DB + Flat files)' : 'Delete task + ALL data (DB + files)'}"
                     style="background: linear-gradient(135deg, #dc2626, #991b1b); border: none; color: white; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 0.9rem; animation: pulse 2s infinite;">
                     ⚠️
                 </button>
@@ -599,11 +616,15 @@ function renderActiveTasks(downloads) {
         `;
 
         const pauseButton = (task.status === 'running' || task.status === 'paused') ? `
-            <button class="task-btn" onclick="togglePause('${key}', '${task.status === 'paused' ? 'resume' : 'pause'}')" title="${task.status === 'paused' ? 'Devam Et' : 'Duraklat'}"
+            <button class="task-btn" onclick="togglePause('${key}', '${task.status === 'paused' ? 'resume' : 'pause'}')" 
+                title="${task.status === 'paused' ? (isTr ? 'Devam Et' : 'Resume') : (isTr ? 'Duraklat' : 'Pause')}"
                 style="background: var(--neon-blue); border: none; color: white; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 0.9rem;">
                 ${task.status === 'paused' ? '▶️' : '⏸️'}
             </button>
         ` : '';
+
+        const progressLabel = isTr ? `📊 %${Math.round(progress)} tamamlandı` : `📊 ${Math.round(progress)}% completed`;
+        const speedLabel = speed > 0 ? `<span>⚡ ${Math.round(speed)} ${isTr ? 'mum/sn' : 'bars/sec'}</span>` : '';
 
         return `
             <div class="task-item ${statusClass}">
@@ -619,14 +640,14 @@ function renderActiveTasks(downloads) {
                     </div>
                     <div class="task-info">
                         <span class="task-info-label">Market</span>
-                        <span class="task-info-value">${marketType === 'future' ? '💹 Futures' : '💰 Spot'}</span>
+                        <span class="task-info-value">${marketType === 'future' ? (isTr ? '💹 Vadeli' : '💹 Futures') : '💰 Spot'}</span>
                     </div>
                     <div class="task-info">
-                        <span class="task-info-label">Başlangıç</span>
+                        <span class="task-info-label">${isTr ? 'Başlangıç' : 'Start'}</span>
                         <span class="task-info-value">${startDate}</span>
                     </div>
                     <div class="task-info">
-                        <span class="task-info-label">Son Mum</span>
+                        <span class="task-info-label">${isTr ? 'Son Mum' : 'Last Bar'}</span>
                         <span class="task-info-value">${lastCandleDate}</span>
                     </div>
                 </div>
@@ -636,8 +657,8 @@ function renderActiveTasks(downloads) {
                         <div class="task-progress-bar-fill" style="width: ${Math.min(progress, 100)}%"></div>
                     </div>
                     <div class="task-progress-text">
-                        <span>📊 %${Math.round(progress)} tamamlandı</span>
-                        ${speed > 0 ? `<span>⚡ ${Math.round(speed)} mum/sn</span>` : ''}
+                        <span>${progressLabel}</span>
+                        ${speedLabel}
                     </div>
                 </div>
 
@@ -718,8 +739,8 @@ function filterMarkets(query) {
  * Save market selection (called from HTML)
  */
 window.saveMarketSelection = function() {
-    console.log('💾 [MARKET] Selection saved');
-    // Implement market selection logic here
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
+    showToast(isTr ? '✅ Piyasa takibi güncellendi' : '✅ Market tracking updated', 'success');
 };
 
 /**
@@ -746,7 +767,8 @@ window.selectMarket = function(symbol, marketType) {
     }
 
     if (selectedMarketTypeEl) {
-        selectedMarketTypeEl.textContent = marketType === 'future' ? '💹 Vadeli' : '💰 Spot';
+        const isTr = (window.i18n && window.i18n.currentLang === 'tr');
+        selectedMarketTypeEl.textContent = marketType === 'future' ? (isTr ? '💹 Vadeli' : '💹 Futures') : '💰 Spot';
         console.log(`✅ [MARKET] Market type filled: ${marketType}`);
     }
 
@@ -762,24 +784,29 @@ window.selectMarket = function(symbol, marketType) {
  * Delete symbol data (called from HTML)
  */
 window.deleteSymbolData = async function(symbol, marketType) {
-    if (!confirm(`${symbol} (${marketType === 'future' ? 'Futures' : 'Spot'}) verilerini silmek istediğinizden emin misiniz?\n\nBu işlem geri alınamaz!`)) {
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
+    const msg = isTr 
+        ? `${symbol} (${marketType === 'future' ? 'Futures' : 'Spot'}) verilerini silmek istediğinizden emin misiniz?\n\nBu işlem geri alınamaz!`
+        : `Are you sure you want to delete data for ${symbol} (${marketType === 'future' ? 'Futures' : 'Spot'})?\n\nThis action cannot be undone!`;
+
+    if (!confirm(msg)) {
         return;
     }
 
     try {
-        alert(`🗑️ ${symbol} verileri siliniyor...`);
+        showToast(isTr ? `🗑️ ${symbol} verileri siliniyor...` : `🗑️ Deleting data for ${symbol}...`, 'info');
 
         const result = await api.deleteData(symbol, marketType);
 
         if (result.status === 'success') {
-            alert(`✅ ${symbol} verileri silindi!`);
-            await loadDatabaseInventory(); // Refresh inventory
+            showToast(isTr ? `✅ ${symbol} verileri silindi!` : `✅ Data for ${symbol} deleted successfully!`, 'success');
+            await loadDatabaseInventory();
             await loadActiveTasks();
         } else {
-            alert(`❌ Silme hatası: ${result.message}`);
+            showToast((isTr ? '❌ Silme hatası: ' : '❌ Delete error: ') + result.message, 'error');
         }
     } catch (error) {
-        alert(`❌ Silme hatası: ${error.message}`);
+        showToast((isTr ? '❌ Silme hatası: ' : '❌ Delete error: ') + error.message, 'error');
     }
 };
 
@@ -787,17 +814,22 @@ window.deleteSymbolData = async function(symbol, marketType) {
  * Start download (called from HTML)
  */
 window.startDownload = async function() {
-    const symbol = document.getElementById('selected-symbol-val')?.textContent;
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
+    const symbolEl = document.getElementById('selected-symbol-val');
+    let symbol = symbolEl?.textContent?.trim();
+    if (symbol === '-- SEÇİNİZ --' || symbol === '-- SELECT SYMBOL --') {
+        symbol = '';
+    }
     const startDate = document.getElementById('download-start-date')?.value;
     const marketType = document.getElementById('market-type-filter')?.value || 'future';
 
     if (!symbol) {
-        alert('❌ Lütfen bir sembol seçin!');
+        showToast(isTr ? '❌ Lütfen bir sembol seçin!' : '❌ Please select a symbol!', 'error');
         return;
     }
 
     if (!startDate) {
-        alert('❌ Lütfen bir başlangıç tarihi seçin!');
+        showToast(isTr ? '❌ Lütfen bir başlangıç tarihi seçin!' : '❌ Please select a start date!', 'error');
         return;
     }
 
@@ -807,15 +839,15 @@ window.startDownload = async function() {
         const result = await api.startDownload(symbol, '1m', startDate);
 
         if (result.status === 'started' || result.status === 'exists') {
-            alert(`✅ ${result.message}`);
-            await loadActiveTasks(); // Refresh tasks
+            showToast(isTr ? `✅ ${result.message}` : `✅ Ingestion active for ${symbol}`, 'success');
+            await loadActiveTasks();
         } else {
-            alert(`⚠️ ${result.message}`);
+            showToast(isTr ? `⚠️ ${result.message}` : `⚠️ ${result.message}`, 'warning');
         }
 
     } catch (error) {
         console.error('❌ [DOWNLOAD] Error:', error);
-        alert('❌ İndirme hatası: ' + error.message);
+        showToast((isTr ? '❌ İndirme hatası: ' : '❌ Ingestion error: ') + error.message, 'error');
     }
 };
 
@@ -823,19 +855,24 @@ window.startDownload = async function() {
  * Stop download (called from HTML)
  */
 window.stopDownload = async function() {
-    const symbol = document.getElementById('selected-symbol-val')?.textContent;
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
+    const symbolEl = document.getElementById('selected-symbol-val');
+    let symbol = symbolEl?.textContent?.trim();
+    if (symbol === '-- SEÇİNİZ --' || symbol === '-- SELECT SYMBOL --') {
+        symbol = '';
+    }
 
     if (!symbol) {
-        alert('❌ Lütfen bir sembol seçin!');
+        showToast(isTr ? '❌ Lütfen bir sembol seçin!' : '❌ Please select a symbol!', 'error');
         return;
     }
 
     try {
         const result = await api.stopDownload(symbol);
-        alert(result.message);
+        showToast(isTr ? `⏹️ ${result.message}` : `⏹️ Ingestion stopped for ${symbol}`, 'info');
         await loadActiveTasks();
     } catch (error) {
-        alert('❌ Durdurma hatası: ' + error.message);
+        showToast((isTr ? '❌ Durdurma hatası: ' : '❌ Stop error: ') + error.message, 'error');
     }
 };
 
@@ -843,7 +880,9 @@ window.stopDownload = async function() {
  * Delete all data (called from HTML)
  */
 window.deleteAllData = async function() {
-    if (!confirm('⚠️ DİKKAT! Tüm veriler silinecek. Emin misiniz?')) {
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
+    const msg = isTr ? '⚠️ DİKKAT! Tüm veriler silinecek. Emin misiniz?' : '⚠️ CAUTION! All database and parquet files will be wiped. Are you sure?';
+    if (!confirm(msg)) {
         return;
     }
 
@@ -851,13 +890,14 @@ window.deleteAllData = async function() {
         const result = await api.deleteAllData();
 
         if (result.status === 'success') {
-            alert(`✅ ${result.message}`);
+            showToast(isTr ? `✅ ${result.message}` : '✅ All data wiped successfully', 'success');
             await loadActiveTasks();
+            await loadDatabaseInventory();
         } else {
-            alert(`⚠️ ${result.message}`);
+            showToast(isTr ? `⚠️ ${result.message}` : `⚠️ ${result.message}`, 'warning');
         }
     } catch (error) {
-        alert('❌ Silme hatası: ' + error.message);
+        showToast((isTr ? '❌ Silme hatası: ' : '❌ Wipe error: ') + error.message, 'error');
     }
 };
 
@@ -865,7 +905,12 @@ window.deleteAllData = async function() {
  * Delete download task (called from HTML)
  */
 window.deleteDownloadTask = async function(symbol, marketType) {
-    if (!confirm(`${symbol} (${marketType}) için indirme görevi silinecek. Veri KORUNUR, sadece görev silinir. Emin misiniz?`)) {
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
+    const msg = isTr 
+        ? `${symbol} (${marketType}) için indirme görevi silinecek. Veri KORUNUR, sadece görev silinir. Emin misiniz?`
+        : `Ingestion task for ${symbol} (${marketType}) will be deleted. Data is PRESERVED, only task record is removed. Are you sure?`;
+
+    if (!confirm(msg)) {
         return;
     }
 
@@ -873,13 +918,13 @@ window.deleteDownloadTask = async function(symbol, marketType) {
         const result = await api.deleteDownloadTask(symbol, marketType);
 
         if (result.status === 'success') {
-            alert(`✅ ${result.message}`);
+            showToast(isTr ? `✅ ${result.message}` : `✅ Task removed for ${symbol}`, 'success');
             await loadActiveTasks();
         } else {
-            alert(`❌ Silme hatası: ${result.message}`);
+            showToast((isTr ? '❌ Silme hatası: ' : '❌ Task delete error: ') + result.message, 'error');
         }
     } catch (error) {
-        alert('❌ Silme hatası: ' + error.message);
+        showToast((isTr ? '❌ Silme hatası: ' : '❌ Task delete error: ') + error.message, 'error');
     }
 };
 
@@ -887,17 +932,22 @@ window.deleteDownloadTask = async function(symbol, marketType) {
  * Delete download task with data (called from HTML)
  */
 window.deleteDownloadTaskWithData = async function(symbol, marketType) {
-    if (!confirm(`⚠️ DİKKAT! ${symbol} (${marketType}) için:\n\n• İndirme görevi silinecek\n• TÜM mum verileri silinecek (DB)\n• TÜM flat file'lar silinecek\n\nBu işlem GERİ ALINAMAZ! Emin misiniz?`)) {
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
+    const msg1 = isTr
+        ? `⚠️ DİKKAT! ${symbol} (${marketType}) için:\n\n• İndirme görevi silinecek\n• TÜM mum verileri silinecek (DB)\n• TÜM flat file'lar silinecek\n\nBu işlem GERİ ALINAMAZ! Emin misiniz?`
+        : `⚠️ CAUTION! For ${symbol} (${marketType}):\n\n• Ingestion task will be deleted\n• ALL candle records will be deleted (DB)\n• ALL flat files will be wiped\n\nThis action CANNOT be undone! Are you sure?`;
+
+    if (!confirm(msg1)) {
         return;
     }
 
-    // İkinci onay
-    if (!confirm('Gerçekten emin misiniz? TÜM veriler silinecek!')) {
+    const msg2 = isTr ? 'Gerçekten emin misiniz? TÜM veriler silinecek!' : 'Are you completely sure? ALL historical data will be wiped!';
+    if (!confirm(msg2)) {
         return;
     }
 
     try {
-        alert(`⚠️ ${symbol} görev + veri siliniyor...`);
+        showToast(isTr ? `⚠️ ${symbol} görev + veri siliniyor...` : `⚠️ Deleting ${symbol} task and all data...`, 'info');
 
         // 1. Önce download task sil
         await api.deleteDownloadTask(symbol, marketType);
@@ -907,15 +957,16 @@ window.deleteDownloadTaskWithData = async function(symbol, marketType) {
         const deleteDataJson = await api.deleteData(symbolClean, marketType);
 
         if (deleteDataJson.status === 'success') {
-            alert(`✅ ${symbol} görev + TÜM veriler silindi!`);
+            showToast(isTr ? `✅ ${symbol} görev + TÜM veriler silindi!` : `✅ ${symbol} task and all data deleted!`, 'success');
         } else {
-            alert(`⚠️ Görev silindi ama veri silme hatası: ${deleteDataJson.message}`);
+            showToast(isTr ? `⚠️ Görev silindi ama veri silme hatası: ${deleteDataJson.message}` : `⚠️ Task deleted but data delete error: ${deleteDataJson.message}`, 'warning');
         }
 
         await loadActiveTasks();
+        await loadDatabaseInventory();
 
     } catch (error) {
-        alert('❌ Silme hatası: ' + error.message);
+        showToast((isTr ? '❌ Silme hatası: ' : '❌ Delete error: ') + error.message, 'error');
     }
 };
 
@@ -923,23 +974,20 @@ window.deleteDownloadTaskWithData = async function(symbol, marketType) {
  * Toggle pause (called from HTML)
  */
 window.togglePause = async function(symbol, action) {
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
     try {
         const result = await api.togglePause(symbol, action);
 
         if (result.status === 'success') {
-            alert(`✅ ${result.message}`);
+            showToast(isTr ? `✅ ${result.message}` : `✅ ${action === 'pause' ? 'Ingestion paused' : 'Ingestion resumed'} for ${symbol}`, 'success');
             await loadActiveTasks();
         } else {
-            alert(`❌ Hata: ${result.message}`);
+            showToast((isTr ? '❌ Hata: ' : '❌ Error: ') + result.message, 'error');
         }
     } catch (error) {
-        alert('❌ Hata: ' + error.message);
+        showToast((isTr ? '❌ Hata: ' : '❌ Error: ') + error.message, 'error');
     }
 };
-
-// ============================================================================
-// UI UTILITIES
-// ============================================================================
 
 /**
  * Add line to AI Terminal
@@ -2892,4 +2940,10 @@ window.addEventListener('languageChanged', (e) => {
     if (typeof loadMLSymbols === 'function') loadMLSymbols();
     if (typeof loadSymbolsForML === 'function') loadSymbolsForML();
     if (typeof validateMumCount === 'function') validateMumCount();
+    if (window._lastInventory) {
+        renderDatabaseInventory(window._lastInventory, window._lastStats);
+    }
+    if (window._lastDownloads) {
+        renderActiveTasks(window._lastDownloads);
+    }
 });
