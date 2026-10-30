@@ -11,6 +11,18 @@
 <script charset="utf-8" src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
 <script src="lightweight-charts.js"></script>
 <link href="style.css" rel="stylesheet"/>
+<script>
+    // Immediate language setup & bridge
+    window.__appLang = (typeof localStorage !== 'undefined' && localStorage.getItem('app_lang')) || 'en';
+    window.setLang = function(lang) {
+        if (window.i18n && typeof window.i18n.setLanguage === 'function') {
+            window.i18n.setLanguage(lang);
+        } else if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('app_lang', lang);
+            location.reload();
+        }
+    };
+</script>
 <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
@@ -43,10 +55,10 @@
 <!-- Ana İçerik -->
 <main class="main-content">
 <header class="top-nav glass-panel">
-<div class="metric"><span class="label" data-i18n="exchange_label">Exchange:</span> <strong id="exchange-val">--</strong></div>
+<div class="metric"><span class="label" data-i18n="exchange_label" data-en="Exchange:" data-tr="Borsa:">Exchange:</span> <strong id="exchange-val">--</strong></div>
 <div class="lang-switcher">
-    <button class="lang-btn active" id="lang-btn-en" onclick="window.setLang ? window.setLang('en') : (window.i18n && window.i18n.setLanguage('en'))">EN</button>
-    <button class="lang-btn" id="lang-btn-tr" onclick="window.setLang ? window.setLang('tr') : (window.i18n && window.i18n.setLanguage('tr'))">TR</button>
+    <button class="lang-btn active" id="lang-btn-en" onclick="window.setLang('en')">EN</button>
+    <button class="lang-btn" id="lang-btn-tr" onclick="window.setLang('tr')">TR</button>
 </div>
 <div class="user-profile"><img alt="Avatar" src="https://api.dicebear.com/7.x/identicon/svg?seed=CryptoAlgoBot"/></div>
 </header>
@@ -57,30 +69,30 @@
     <div class="bento-kpi-row">
         <div class="card glass-panel">
             <div class="card-info">
-                <h3><i class="lucide-icon" data-lucide="coins"></i> <span data-i18n="kpi_balance">Balance</span></h3>
+                <h3><i class="lucide-icon" data-lucide="coins"></i> <span data-i18n="kpi_balance" data-en="Balance" data-tr="Bakiye">Balance</span></h3>
                 <h1 id="balance-val">$0.00</h1>
-                <p class="auto-style-2" data-i18n="kpi_balance_sub">Wallet Balance</p>
+                <p class="auto-style-2" data-i18n="kpi_balance_sub" data-en="Wallet Balance" data-tr="Cüzdan Bakiyesi">Wallet Balance</p>
             </div>
         </div>
         <div class="card glass-panel">
             <div class="card-info">
-                <h3><i class="lucide-icon" data-lucide="shield"></i> <span data-i18n="kpi_free_margin">Free Margin</span></h3>
+                <h3><i class="lucide-icon" data-lucide="shield"></i> <span data-i18n="kpi_free_margin" data-en="Free Margin" data-tr="Serbest Marjin">Free Margin</span></h3>
                 <h1 id="free-margin-val">$0.00</h1>
-                <p class="auto-style-2" data-i18n="kpi_free_margin_sub">Available Capital</p>
+                <p class="auto-style-2" data-i18n="kpi_free_margin_sub" data-en="Available Capital" data-tr="Kullanılabilir Sermaye">Available Capital</p>
             </div>
         </div>
         <div class="card glass-panel">
             <div class="card-info">
-                <h3><i class="lucide-icon" data-lucide="pie-chart"></i> <span data-i18n="kpi_used_margin">Used Margin</span></h3>
+                <h3><i class="lucide-icon" data-lucide="pie-chart"></i> <span data-i18n="kpi_used_margin" data-en="Used Margin" data-tr="Kullanılan Marjin">Used Margin</span></h3>
                 <h1 id="used-margin-val">$0.00</h1>
-                <p class="auto-style-2" data-i18n="kpi_used_margin_sub">Open Positions</p>
+                <p class="auto-style-2" data-i18n="kpi_used_margin_sub" data-en="Open Positions" data-tr="Açık Pozisyonlar">Open Positions</p>
             </div>
         </div>
         <div class="card glass-panel">
             <div class="card-info">
-                <h3><i class="lucide-icon" data-lucide="rocket"></i> <span data-i18n="kpi_total_pnl">Total P&amp;L (Live)</span></h3>
+                <h3><i class="lucide-icon" data-lucide="rocket"></i> <span data-i18n="kpi_total_pnl" data-en="Total P&amp;L (Live)" data-tr="Toplam K/Z (Canlı)">Total P&amp;L (Live)</span></h3>
                 <h1 class="success-text" id="total-pnl-val">+$0.00</h1>
-                <p class="auto-style-2" data-i18n="kpi_total_pnl_sub">Real-time Profit/Loss</p>
+                <p class="auto-style-2" data-i18n="kpi_total_pnl_sub" data-en="Real-time Profit/Loss" data-tr="Anlık Kâr/Zarar">Real-time Profit/Loss</p>
             </div>
         </div>
     </div>
@@ -297,12 +309,12 @@
 <div class="auto-style-61" id="system-status-summary">
 <!-- Dinamik olarak doldurulacak -->
 <div class="auto-style-62" id="system-loading-msg">
-<i class="lucide-icon" data-lucide="hourglass"></i> Sistem yükleniyor...
+<i class="lucide-icon" data-lucide="hourglass"></i> <span data-tr="Sistem yükleniyor..." data-en="System loading...">System loading...</span>
                         </div>
 </div>
 </div>
 <div class="auto-style-63">
-<h3 class="auto-style-64"><i class="lucide-icon" data-lucide="pie-chart"></i> Paper Trading - Canlı Performans</h3>
+<h3 class="auto-style-64"><i class="lucide-icon" data-lucide="pie-chart"></i> <span data-tr="Paper Trading - Canlı Performans" data-en="Paper Trading - Live Performance">Paper Trading - Live Performance</span></h3>
 <div class="kpi-dashboard auto-style-65">
 <!-- Bakiye -->
 <div class="kpi-card glass-panel auto-style-66">
@@ -369,13 +381,13 @@
 <table class="positions-table auto-style-78">
 <thead>
 <tr>
-<th class="auto-style-79"><i class="lucide-icon" data-lucide="library"></i> Strateji / TF</th>
-<th>Yön / Parite</th>
+<th class="auto-style-79"><i class="lucide-icon" data-lucide="library"></i> <span data-tr="Strateji / TF" data-en="Strategy / TF">Strategy / TF</span></th>
+<th><span data-tr="Yön / Parite" data-en="Direction / Pair">Direction / Pair</span></th>
 <th><span data-i18n="k_miktar___kaldıraç" data-tr="Miktar / Kaldıraç" data-en="Amount / Leverage">Amount / Leverage</span></th>
 <th><span data-i18n="k_giriş___pozisyon_değeri" data-tr="Giriş / Pozisyon Değeri" data-en="Entry / Position Value">Entry / Position Value</span></th>
-<th>Mevcut / P&amp;L ($)</th>
-<th>ROE (%)</th>
-<th>SL / TP / Liq</th>
+<th><span data-tr="Mevcut / P&amp;L ($)" data-en="Current / P&amp;L ($)">Current / P&amp;L ($)</span></th>
+<th><span data-tr="ROE (%)" data-en="ROE (%)">ROE (%)</span></th>
+<th><span data-tr="SL / TP / Likidasyon" data-en="SL / TP / Liq">SL / TP / Liq</span></th>
 <th><span data-tr="İşlem" data-en="Actions">Actions</span></th>
 </tr>
 </thead>
@@ -412,8 +424,7 @@
 <div class="header-row auto-style-30">
 <div>
 <h2><i class="lucide-icon" data-lucide="scroll-text"></i> <span data-tr="İşlem Geçmişi" data-en="Trade History">Trade History</span></h2>
-<p class="auto-style-39">Veritabanına kaydedilen tüm geçmiş işlemler ve detaylı
-                            performans analizi.</p>
+<p class="auto-style-39"><span data-tr="Veritabanına kaydedilen tüm geçmiş işlemler ve detaylı performans analizi." data-en="All past trades recorded in the database and comprehensive performance analysis.">All past trades recorded in the database and comprehensive performance analysis.</span></p>
 </div>
 <div class="auto-style-80">
 <button class="btn btn-primary" onclick="loadTradeHistory()"><i class="lucide-icon" data-lucide="refresh-cw"></i> <span data-tr="Yenile" data-en="Refresh">Refresh</span></button>
@@ -465,9 +476,7 @@
 <div class="auto-style-85">
 <h3><i class="lucide-icon" data-lucide="clipboard-list"></i> <span data-tr="Detaylı İşlem Listesi" data-en="Detailed Trade Audit">Detailed Trade Audit</span></h3>
 <div class="auto-style-40">
-<input type="text" id="hist-filter-symbol" class="settings-form-input" data-en-ph="Search Symbol..." data-tr-ph="Sembol Ara..." placeholder="Search Symbol..." style="padding:8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff;" oninput="filterHistoryTable()"> Sembol Ara..."
-                                style="padding:8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff;"
-                                oninput="filterHistoryTable()"&gt;
+<input type="text" id="hist-filter-symbol" class="settings-form-input" data-en-ph="Search Symbol..." data-tr-ph="Sembol Ara..." placeholder="Search Symbol..." style="padding:8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff;" oninput="filterHistoryTable()"/>
                         </div>
 </div>
 <div class="table-container">
@@ -488,9 +497,7 @@
 </thead>
 <tbody id="history-body">
 <tr>
-<td class="auto-style-86" colspan="10">
-                                        Henüz işlem geçmişi yok veya yükleniyor...
-                                    </td>
+<td class="auto-style-86" colspan="10"><span data-tr="Henüz işlem geçmişi yok veya yükleniyor..." data-en="No trade history available yet or loading...">No trade history available yet or loading...</span></td>
 </tr>
 </tbody>
 </table>
@@ -501,8 +508,7 @@
 <div class="tab-content auto-style-10" id="tab-strategies">
 <div class="header-row auto-style-30">
 <h2><i class="lucide-icon" data-lucide="library"></i> Strateji Kütüphanesi &amp; Çalışma Mantığı</h2>
-<p class="auto-style-39">Sistemdeki uzmanların çalışma prensiplerini ve teknik
-                        reçetelerini inceleyin.</p>
+<p class="auto-style-39"><span data-tr="Sistemdeki uzmanların çalışma prensiplerini ve teknik reçetelerini inceleyin." data-en="Review the working principles and technical configurations of system strategies.">Review the working principles and technical configurations of system strategies.</span></p>
 </div>
 <div class="strategy-grid" id="strategy-library-container">
 <div class="auto-style-87">
@@ -815,7 +821,7 @@
 <div class="settings-form-group auto-style-9">
 <label class="settings-form-label auto-style-128">
 <input checked="" class="auto-style-129" id="risk-kill-switch-enabled" type="checkbox"/>
-                                        🚨 Kill Switch Aktif
+                                        <span data-tr="🚨 Kill Switch Aktif" data-en="🚨 Kill Switch Active">🚨 Kill Switch Active</span>
                                     </label>
 <p class="auto-style-130">
                                         Kill Switch, ardışık kayıp limitine ulaşıldığında yeni pozisyon açmayı durdurur.
@@ -836,7 +842,7 @@
 <div class="settings-card bot-card">
 <div class="settings-card-header">
 <div>
-<h3 class="settings-card-title">🤖 Bot Yapılandırması</h3>
+<h3 class="settings-card-title">🤖 <span data-tr="Bot Yapılandırması" data-en="Bot Configuration">Bot Configuration</span></h3>
 <p class="settings-card-description"><span data-i18n="k_borsa_ve_sistem_ayarları" data-tr="Borsa ve sistem ayarları" data-en="Exchange & system configuration">Exchange & system configuration</span></p>
 </div>
 <button class="settings-save-btn" onclick="saveBotConfig()">
@@ -1343,7 +1349,7 @@
 <div class="drawer-overlay" id="drawer-overlay" onclick="closeStrategyDrawer()"></div>
 
 <!-- ES6 Modules -->
-<script src="app.js?v=2026031521" type="module"></script>
+<script src="app.js?v=1793346818" type="module"></script>
 <script src="/js/strategy_report.js"></script>
 <script src="strategy-builder.js?v=2026031011"></script>
 <script>lucide.createIcons();</script>

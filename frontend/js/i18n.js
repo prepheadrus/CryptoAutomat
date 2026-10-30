@@ -5,7 +5,7 @@
 
 class I18nManager {
     constructor() {
-        const savedLang = localStorage.getItem('app_lang');
+        const savedLang = typeof localStorage !== 'undefined' ? localStorage.getItem('app_lang') : null;
         this.currentLang = (savedLang === 'tr' || savedLang === 'en') ? savedLang : 'en';
 
         // Translation dictionary for dynamic JS calls & toast notifications
@@ -16,6 +16,7 @@ class I18nManager {
                 "system_env": "System Environment",
                 "loading": "Loading...",
                 "emergency_stop": "EMERGENCY STOP",
+                "exchange_label": "Exchange:",
                 "nav_portfolio": "Portfolio Analysis",
                 "nav_ml": "ML Decision Engine",
                 "nav_orders": "Active Orders",
@@ -38,6 +39,63 @@ class I18nManager {
                 "metrics": "Metrics",
                 "features": "Features",
 
+                // Portfolio & KPIs
+                "kpi_balance": "Balance",
+                "kpi_balance_sub": "Wallet Balance",
+                "kpi_free_margin": "Free Margin",
+                "kpi_free_margin_sub": "Available Capital",
+                "kpi_used_margin": "Used Margin",
+                "kpi_used_margin_sub": "Open Positions",
+                "kpi_total_pnl": "Total P&L (Live)",
+                "kpi_total_pnl_sub": "Real-time Profit/Loss",
+                "k_sembol": "Symbol",
+                "k_zaman_dilimi": "Timeframe",
+                "k_bakiye": "Balance",
+                "k_komisyon": "Fee",
+                "k_miktar___kaldıraç": "Amount / Leverage",
+                "k_giriş___pozisyon_değeri": "Entry / Position Value",
+                "k_başarı_oranı": "Win Rate",
+                "k_tarih": "Date",
+                "k_strateji": "Strategy",
+                "k_kâr____": "Profit (%)",
+                "k_açıklama": "Description",
+                "k_ve__and_": "AND",
+                "k_veya__or_": "OR",
+                "k_vazgeç": "Cancel",
+                "k_ekle": "Add",
+                "k_bot_başlatın__yönetin_ve_siste": "Deploy, manage and configure autonomous bots and settings.",
+                "k_isolated__izole_": "Isolated",
+                "k_cross__çapraz_": "Cross",
+                "k_isolated__i̇zole_": "Isolated",
+                "k_trading_risk_parametrelerini_y": "Configure trading risk boundaries",
+                "k_borsa_ve_sistem_ayarları": "Exchange & system configuration",
+                "k_otonom_optimizasyon_ve_yapay_z": "Autonomous optimization and intelligence",
+                "k_eğitim_günleri": "Training Days",
+                "k_test_günleri": "Test Days",
+                "k_trend_metodu": "Trend Method",
+                "k_hızlı_ema": "Fast EMA",
+                "k_yavaş_ema": "Slow EMA",
+                "k_fiyat_gürültüsünü_azalt__false": "Filter false signals and reduce price noise",
+                "k_binance_api_anahtarlarını_güve": "Safely manage Binance API credentials",
+                "k_yapay_zekayı_eğitmek_için_bina": "Ingest historical bars from Binance to train models.",
+                "k_look_ahead_bias_koruması__gele": "Look-ahead bias protection (future bars dropped)",
+                "k_başlangıç_": "Start:",
+                "k_hazırlanıyor___": "Preparing...",
+                "k_strateji_detayı": "Strategy Details",
+
+                // Open Positions & Orders
+                "open_positions_title": "Open Positions",
+                "no_open_positions": "No open positions",
+                "close_position_btn": "Close",
+                "th_strategy": "Strategy",
+                "th_direction_pair": "Direction / Pair",
+                "th_size_leverage": "Size / Leverage",
+                "th_entry_val": "Entry / Value",
+                "th_current_pnl": "Current / P&L ($)",
+                "th_roe": "ROE (%)",
+                "th_sltp": "SL / TP / Liq",
+                "th_action": "Action",
+
                 // Bot Operations
                 "bot_started_success": "Bot launched successfully!",
                 "bot_stopped_success": "Bot has been stopped.",
@@ -45,6 +103,9 @@ class I18nManager {
                 "bot_removed_success": "Bot removed.",
                 "no_active_bots": "No active bots. You can start a new bot above.",
                 "confirm_kill": "Are you sure you want to trigger EMERGENCY STOP? All bots will be halted.",
+                "btn_start_bot": "▶ Start Bot",
+                "active_bots": "Active Bots",
+                "btn_save": "SAVE",
 
                 // Settings & API
                 "api_saved_success": "API credentials encrypted and saved successfully.",
@@ -64,6 +125,8 @@ class I18nManager {
 
                 // Trade History
                 "no_trade_history": "No trade history available yet.",
+                "th_exit": "Exit Price",
+                "th_reason": "Reason",
 
                 // ML Decision Engine
                 "ml_training_started": "ML model training pipeline initiated...",
@@ -97,6 +160,7 @@ class I18nManager {
                 "system_env": "Sistem Durumu",
                 "loading": "Yükleniyor...",
                 "emergency_stop": "ACİL DURDURMA",
+                "exchange_label": "Borsa:",
                 "nav_portfolio": "Portföy Analizi",
                 "nav_ml": "ML Karar Motoru",
                 "nav_orders": "Aktif Emirler",
@@ -119,6 +183,63 @@ class I18nManager {
                 "metrics": "Metrikler",
                 "features": "Özellikler",
 
+                // Portfolio & KPIs
+                "kpi_balance": "Bakiye",
+                "kpi_balance_sub": "Cüzdan Bakiyesi",
+                "kpi_free_margin": "Serbest Marjin",
+                "kpi_free_margin_sub": "Kullanılabilir Sermaye",
+                "kpi_used_margin": "Kullanılan Marjin",
+                "kpi_used_margin_sub": "Açık Pozisyonlar",
+                "kpi_total_pnl": "Toplam K/Z (Canlı)",
+                "kpi_total_pnl_sub": "Anlık Kâr/Zarar",
+                "k_sembol": "Sembol",
+                "k_zaman_dilimi": "Zaman Dilimi",
+                "k_bakiye": "Bakiye",
+                "k_komisyon": "Komisyon",
+                "k_miktar___kaldıraç": "Miktar / Kaldıraç",
+                "k_giriş___pozisyon_değeri": "Giriş / Pozisyon Değeri",
+                "k_başarı_oranı": "Başarı Oranı",
+                "k_tarih": "Tarih",
+                "k_strateji": "Strateji",
+                "k_kâr____": "Kâr (%)",
+                "k_açıklama": "Açıklama",
+                "k_ve__and_": "VE",
+                "k_veya__or_": "VEYA",
+                "k_vazgeç": "Vazgeç",
+                "k_ekle": "Ekle",
+                "k_bot_başlatın__yönetin_ve_siste": "Bot başlatın, yönetin ve sistem ayarlarını yapılandırın.",
+                "k_isolated__izole_": "İzole",
+                "k_cross__çapraz_": "Çapraz",
+                "k_isolated__i̇zole_": "İzole",
+                "k_trading_risk_parametrelerini_y": "Trading risk parametrelerini yapılandır",
+                "k_borsa_ve_sistem_ayarları": "Borsa ve sistem ayarları",
+                "k_otonom_optimizasyon_ve_yapay_z": "Otonom optimizasyon ve yapay zeka",
+                "k_eğitim_günleri": "Eğitim Günleri",
+                "k_test_günleri": "Test Günleri",
+                "k_trend_metodu": "Trend Metodu",
+                "k_hızlı_ema": "Hızlı EMA",
+                "k_yavaş_ema": "Yavaş EMA",
+                "k_fiyat_gürültüsünü_azalt__false": "Fiyat gürültüsünü azalt, false sinyalleri filtrele",
+                "k_binance_api_anahtarlarını_güve": "Binance API anahtarlarını güvenli şekilde yönet",
+                "k_yapay_zekayı_eğitmek_için_bina": "Yapay zekayı eğitmek için Binance üzerinden veri toplayın.",
+                "k_look_ahead_bias_koruması__gele": "Look-ahead bias koruması (gelecek mumlar düşürülür)",
+                "k_başlangıç_": "Başlangıç:",
+                "k_hazırlanıyor___": "Hazırlanıyor...",
+                "k_strateji_detayı": "Strateji Detayı",
+
+                // Open Positions & Orders
+                "open_positions_title": "Açık Pozisyonlar",
+                "no_open_positions": "Açık pozisyon yok",
+                "close_position_btn": "Kapat",
+                "th_strategy": "Strateji",
+                "th_direction_pair": "Yön / Parite",
+                "th_size_leverage": "Miktar / Kaldıraç",
+                "th_entry_val": "Giriş / Pozisyon Değeri",
+                "th_current_pnl": "Mevcut / K/Z ($)",
+                "th_roe": "ROE (%)",
+                "th_sltp": "SL / TP / Likidasyon",
+                "th_action": "İşlem",
+
                 // Bot Operations
                 "bot_started_success": "Bot başarıyla başlatıldı!",
                 "bot_stopped_success": "Bot durduruldu.",
@@ -126,6 +247,9 @@ class I18nManager {
                 "bot_removed_success": "Bot kaldırıldı.",
                 "no_active_bots": "Aktif bot yok. Yukarıdan yeni bot başlatabilirsiniz.",
                 "confirm_kill": "ACİL DURDURMAYI tetiklemek istediğinizden emin misiniz? Tüm botlar durdurulacak.",
+                "btn_start_bot": "▶ Bot Başlat",
+                "active_bots": "Aktif Botlar",
+                "btn_save": "KAYDET",
 
                 // Settings & API
                 "api_saved_success": "API anahtarları şifrelenerek başarıyla kaydedildi.",
@@ -145,6 +269,8 @@ class I18nManager {
 
                 // Trade History
                 "no_trade_history": "Henüz işlem geçmişi yok veya yükleniyor...",
+                "th_exit": "Çıkış Fiyatı",
+                "th_reason": "Neden",
 
                 // ML Decision Engine
                 "ml_training_started": "Makine öğrenimi modeli eğitim süreci başlatıldı...",
@@ -176,6 +302,7 @@ class I18nManager {
     }
 
     t(key) {
+        if (!key) return '';
         const langData = this.messages[this.currentLang] || this.messages.en;
         return langData[key] || this.messages.en[key] || key;
     }
@@ -183,23 +310,44 @@ class I18nManager {
     setLanguage(lang) {
         if (lang !== 'en' && lang !== 'tr') return;
         this.currentLang = lang;
-        localStorage.setItem('app_lang', lang);
-        document.documentElement.lang = lang;
-        this.applyLanguageToDOM();
-        this.updateSwitcherUI();
-        this.updateDynamicDropdowns();
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('app_lang', lang);
+        }
+        if (typeof document !== 'undefined') {
+            document.documentElement.lang = lang;
+            this.applyLanguageToDOM();
+            this.updateSwitcherUI();
+            this.updateDynamicDropdowns();
 
-        // Dispatch language change event for dynamic components
-        window.dispatchEvent(new CustomEvent('languageChanged', { detail: { lang } }));
+            // Dispatch language change event for dynamic components
+            window.dispatchEvent(new CustomEvent('languageChanged', { detail: { lang } }));
+        }
 
         console.log(`🌐 [i18n] Language switched to: ${lang.toUpperCase()}`);
     }
 
+    decodeHtmlEntities(str) {
+        if (!str || typeof str !== 'string') return '';
+        return str
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'");
+    }
+
     applyLanguageToDOM() {
+        if (typeof document === 'undefined') return;
+
         // 1. Process elements with explicit [data-en] and [data-tr]
         document.querySelectorAll('[data-en][data-tr]').forEach(el => {
-            const val = this.currentLang === 'tr' ? el.getAttribute('data-tr') : el.getAttribute('data-en');
-            if (val) {
+            const rawVal = this.currentLang === 'tr' ? el.getAttribute('data-tr') : el.getAttribute('data-en');
+            if (rawVal !== null) {
+                const val = this.decodeHtmlEntities(rawVal);
+                if (el.tagName === 'OPTION') {
+                    el.textContent = val;
+                    return;
+                }
                 const icon = el.querySelector('i, svg');
                 if (icon) {
                     el.innerHTML = '';
@@ -213,9 +361,9 @@ class I18nManager {
 
         // 2. Process placeholder translations
         document.querySelectorAll('[data-en-ph][data-tr-ph]').forEach(el => {
-            const val = this.currentLang === 'tr' ? el.getAttribute('data-tr-ph') : el.getAttribute('data-en-ph');
-            if (val) {
-                el.setAttribute('placeholder', val);
+            const rawVal = this.currentLang === 'tr' ? el.getAttribute('data-tr-ph') : el.getAttribute('data-en-ph');
+            if (rawVal !== null) {
+                el.setAttribute('placeholder', this.decodeHtmlEntities(rawVal));
             }
         });
 
@@ -224,6 +372,10 @@ class I18nManager {
             const key = el.getAttribute('data-i18n');
             const translation = this.t(key);
             if (translation && translation !== key) {
+                if (el.tagName === 'OPTION') {
+                    el.textContent = translation;
+                    return;
+                }
                 const icon = el.querySelector('i, svg');
                 if (icon) {
                     el.innerHTML = '';
@@ -237,6 +389,7 @@ class I18nManager {
     }
 
     updateDynamicDropdowns() {
+        if (typeof document === 'undefined') return;
         const symbolText = this.currentLang === 'tr' ? 'Sembol Seçin...' : 'Select Symbol...';
         const stratText = this.currentLang === 'tr' ? 'Strateji Seçin...' : 'Select Strategy...';
         const tfText = this.currentLang === 'tr' ? 'Timeframe Seçin...' : 'Select Timeframe...';
@@ -261,6 +414,7 @@ class I18nManager {
     }
 
     updateSwitcherUI() {
+        if (typeof document === 'undefined') return;
         const btnEn = document.getElementById('lang-btn-en');
         const btnTr = document.getElementById('lang-btn-tr');
         if (btnEn && btnTr) {
@@ -270,6 +424,7 @@ class I18nManager {
     }
 
     init() {
+        if (typeof document === 'undefined') return;
         document.documentElement.lang = this.currentLang;
         this.applyLanguageToDOM();
         this.updateSwitcherUI();

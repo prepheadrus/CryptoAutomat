@@ -136,6 +136,10 @@ function switchTab(tabId) {
             // ============================================
             // TAB-SPECIFIC DATA LOADING
             // ============================================
+            if (window.i18n && typeof window.i18n.applyLanguageToDOM === 'function') {
+                window.i18n.applyLanguageToDOM();
+            }
+
             if (tabId === 'tab-history' || content.id === 'tab-history') {
                 console.log('📜 [TAB] History tab activated, loading trade history...');
                 loadTradeHistory();
@@ -209,8 +213,10 @@ function renderPositions(positions) {
     const tbody = document.getElementById('positions-body');
     if (!tbody) return;
 
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
+
     if (positions.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:40px; color:var(--text-muted);">📭 Açık pozisyon yok</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:40px; color:var(--text-muted);">${isTr ? '📭 Açık pozisyon yok' : '📭 No open positions'}</td></tr>`;
         return;
     }
 
@@ -259,7 +265,7 @@ function renderPositions(positions) {
                 <td>
                     <button onclick="closePosition('${pos.bot_id || pos.id || ''}', '${pos.symbol || ''}')"
                         style="padding:4px 8px; background:var(--neon-red); color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:0.7rem; font-weight:600;">
-                        🚫 Kapat
+                        ${(window.i18n && window.i18n.currentLang === 'tr') ? '🚫 Kapat' : '🚫 Close'}
                     </button>
                 </td>
             </tr>
@@ -2815,6 +2821,7 @@ window.addEventListener('languageChanged', (e) => {
     loadStrategiesForBot();
     loadTimeframesForBot();
     loadTradeHistory();
+    if (typeof loadDashboard === 'function') loadDashboard();
     if (typeof loadMLTrainingHistory === 'function') loadMLTrainingHistory();
     if (typeof loadMLStrategies === 'function') loadMLStrategies();
     if (typeof loadMLSymbols === 'function') loadMLSymbols();
