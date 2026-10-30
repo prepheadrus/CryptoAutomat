@@ -154,6 +154,11 @@ function switchTab(tabId) {
                 if (typeof loadStrategyReport === 'function') {
                     loadStrategyReport();
                 }
+            } else if (tabId === 'tab-strategies' || content.id === 'tab-strategies') {
+                console.log('📚 [TAB] Strategies tab activated, refreshing library...');
+                if (typeof loadStrategyLibrary === 'function') {
+                    loadStrategyLibrary();
+                }
             }
         } else {
             content.classList.remove('active-tab');
@@ -1457,13 +1462,15 @@ async function loadTimeframesForML() {
 /**
  * Load strategy library (detailed strategy info with logic)
  */
+let _currentStrategyLibraryCache = [];
+
 async function loadStrategyLibrary() {
     try {
         const data = await api.getStrategies();
-        const strategies = data.strategies || [];
+        _currentStrategyLibraryCache = data.strategies || [];
 
-        console.log(`📚 [LIBRARY] ${strategies.length} strateji yüklendi`);
-        renderStrategyLibrary(strategies);
+        console.log(`📚 [LIBRARY] ${_currentStrategyLibraryCache.length} strategies loaded`);
+        renderStrategyLibrary(_currentStrategyLibraryCache);
     } catch (error) {
         console.error('❌ [LIBRARY] Load error:', error);
     }
@@ -2146,20 +2153,23 @@ function renderStrategyLibrary(strategies) {
     const container = document.getElementById('strategy-library-container');
     if (!container) return;
 
-    if (strategies.length === 0) {
+    const list = strategies || _currentStrategyLibraryCache || [];
+    const isTr = (typeof window !== 'undefined' && window.i18n && window.i18n.currentLang === 'tr');
+
+    if (list.length === 0) {
         container.innerHTML = `
             <div style="text-align: center; padding: 40px; color: var(--text-muted); grid-column: span 3;">
-                📭 Henüz strateji bulunmuyor
+                ${isTr ? '📭 Henüz strateji bulunmuyor' : '📭 No strategies available yet'}
             </div>
         `;
         return;
     }
 
     // Strateji bilgilerini detaylı göster
-    container.innerHTML = strategies.map(strategy => {
+    container.innerHTML = list.map(strategy => {
         const strategyId = strategy.id || strategy.strategy_id || strategy.filename || 'unknown';
         const name = strategy.name || strategy.strategy_id || strategyId;
-        const description = strategy.description || strategy.info || 'Açıklama yok';
+        const description = strategy.description || strategy.info || (isTr ? 'Açıklama yok' : 'No description available');
         const indicators = strategy.indicators || [];
         const longConditions = strategy.conditions?.LONG || [];
         const shortConditions = strategy.conditions?.SHORT || [];
@@ -2169,7 +2179,7 @@ function renderStrategyLibrary(strategies) {
                 <div class="strategy-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                     <h3 style="color: var(--neon-blue); margin: 0;">${name}</h3>
                     <span style="font-size: 0.75rem; padding: 4px 8px; background: rgba(88, 166, 255, 0.1); color: var(--neon-blue); border-radius: 4px;">
-                        ${indicators.length} İndikatör
+                        ${indicators.length} ${isTr ? 'İndikatör' : 'Indicators'}
                     </span>
                 </div>
 
@@ -2178,7 +2188,7 @@ function renderStrategyLibrary(strategies) {
                 </p>
 
                 <div style="margin-bottom: 15px;">
-                    <h4 style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;">📊 İndikatörler:</h4>
+                    <h4 style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;">📊 ${isTr ? 'İndikatörler:' : 'Indicators:'}</h4>
                     <div style="display: flex; flex-wrap: wrap; gap: 6px;">
                         ${indicators.map(ind => `
                             <span style="font-size: 0.75rem; padding: 4px 8px; background: rgba(255,255,255,0.05); border-radius: 4px; color: var(--text-main);">
@@ -2190,33 +2200,33 @@ function renderStrategyLibrary(strategies) {
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                     <div style="background: rgba(46, 220, 135, 0.05); padding: 12px; border-radius: 8px; border: 1px solid rgba(46, 220, 135, 0.2);">
-                        <h4 style="font-size: 0.8rem; color: var(--neon-green); margin-bottom: 8px;">🟢 LONG Koşulları</h4>
+                        <h4 style="font-size: 0.8rem; color: var(--neon-green); margin-bottom: 8px;">🟢 ${isTr ? 'LONG Koşulları' : 'LONG Conditions'}</h4>
                         <div style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.6;">
-                            ${longConditions.length > 0 ? longConditions.map(c => `• ${c.description || c}`).join('<br>') : 'ℹ️ Koşul tanımlanmamış'}
+                            ${longConditions.length > 0 ? longConditions.map(c => `• ${c.description || c}`).join('<br>') : (isTr ? 'ℹ️ Koşul tanımlanmamış' : 'ℹ️ No conditions defined')}
                         </div>
                     </div>
 
                     <div style="background: rgba(248, 83, 73, 0.05); padding: 12px; border-radius: 8px; border: 1px solid rgba(248, 83, 73, 0.2);">
-                        <h4 style="font-size: 0.8rem; color: var(--neon-red); margin-bottom: 8px;">🔴 SHORT Koşulları</h4>
+                        <h4 style="font-size: 0.8rem; color: var(--neon-red); margin-bottom: 8px;">🔴 ${isTr ? 'SHORT Koşulları' : 'SHORT Conditions'}</h4>
                         <div style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.6;">
-                            ${shortConditions.length > 0 ? shortConditions.map(c => `• ${c.description || c}`).join('<br>') : 'ℹ️ Koşul tanımlanmamış'}
+                            ${shortConditions.length > 0 ? shortConditions.map(c => `• ${c.description || c}`).join('<br>') : (isTr ? 'ℹ️ Koşul tanımlanmamış' : 'ℹ️ No conditions defined')}
                         </div>
                     </div>
                 </div>
 
                 <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--glass-border); display: flex; gap: 8px;">
                     <button onclick="useStrategy('${strategyId}')" style="flex: 1; padding: 8px 12px; background: var(--neon-blue); color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem;">
-                        🚀 Bu Stratejiyi Kullan
+                        🚀 ${isTr ? 'Bu Stratejiyi Kullan' : 'Use This Strategy'}
                     </button>
                     <button onclick="editStrategy('${strategyId}')" style="padding: 8px 12px; background: rgba(255,255,255,0.1); color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
-                        ✏️ Düzenle
+                        ✏️ ${isTr ? 'Düzenle' : 'Edit'}
                     </button>
                 </div>
             </div>
         `;
     }).join('');
 
-    console.log('✅ [LIBRARY] Stratejiler render edildi');
+    console.log('✅ [LIBRARY] Strategies rendered');
 }
 
 // ============================================================================
@@ -2441,6 +2451,7 @@ window.renderFeatureImportance = renderFeatureImportance;
  * Use strategy (navigate to bot launcher with pre-selected strategy)
  */
 window.useStrategy = function(strategyId) {
+    const isTr = (typeof window !== 'undefined' && window.i18n && window.i18n.currentLang === 'tr');
     console.log('🚀 [STRATEGY] Using strategy:', strategyId);
 
     // Navigate to settings tab
@@ -2451,9 +2462,8 @@ window.useStrategy = function(strategyId) {
         const strategySelect = document.querySelector('.strategy-select');
         if (strategySelect) {
             strategySelect.value = strategyId;
-            // Trigger change event
             strategySelect.dispatchEvent(new Event('change'));
-            showToast(`✅ ${strategyId} stratejisi seçildi`, 'success');
+            showToast(isTr ? `✅ ${strategyId} stratejisi seçildi` : `✅ Strategy ${strategyId} selected`, 'success');
         }
     }, 300);
 };
@@ -2462,15 +2472,14 @@ window.useStrategy = function(strategyId) {
  * Edit strategy (navigate to strategy builder)
  */
 window.editStrategy = function(strategyId) {
+    const isTr = (typeof window !== 'undefined' && window.i18n && window.i18n.currentLang === 'tr');
     console.log('✏️ [STRATEGY] Editing strategy:', strategyId);
 
     // Navigate to strategy builder tab
     switchTab('tab-strategy-builder');
 
-    // Load strategy into builder
     setTimeout(() => {
-        showToast(`ℹ️ ${strategyId} düzenleme moduna geçildi`, 'info');
-        // Strategy builder will handle loading
+        showToast(isTr ? `ℹ️ ${strategyId} düzenleme moduna geçildi` : `ℹ️ Switched to edit mode for ${strategyId}`, 'info');
     }, 300);
 };
 
@@ -2857,6 +2866,7 @@ window.addEventListener('languageChanged', (e) => {
     loadTimeframesForBot();
     loadTradeHistory();
     if (typeof loadDashboard === 'function') loadDashboard();
+    if (typeof renderStrategyLibrary === 'function') renderStrategyLibrary();
     if (typeof loadStrategyReport === 'function') {
         const tabReports = document.getElementById('tab-reports');
         if (tabReports && tabReports.classList.contains('active-tab')) {

@@ -69,7 +69,7 @@ class StrategyService:
                         elif hasattr(strategy_instance, 'conditions'):
                             conditions = strategy_instance.conditions
                 except Exception as e:
-                    logger.debug(f"Strateji detayları okunamadı {strategy_id}: {e}")
+                    logger.debug(f"Could not read strategy details {strategy_id}: {e}")
 
                 strategies_list.append({
                     'id': strategy_id,
@@ -85,7 +85,7 @@ class StrategyService:
             return {"status": "success", "strategies": strategies_list}
 
         except Exception as e:
-            logger.error(f"Strateji listesi hatası: {e}")
+            logger.error(f"Strategy list error: {e}")
             import traceback
             logger.error(traceback.format_exc())
             return {"status": "error", "message": str(e)}
@@ -113,14 +113,14 @@ class StrategyService:
         """
         from core.paper import paper_engine
         
-        logger.info(f"📥 Strateji isteği alındı: symbol={symbol}, strategy_id={strategy_id}")
+        logger.info(f"📥 Strategy selection request: symbol={symbol}, strategy_id={strategy_id}")
         
         # Strateji başlat
         paper_engine.set_market_type(symbol, market_type)
         paper_engine.set_margin_type(symbol, margin_type)
         paper_engine.set_strategy(strategy_id, symbol, timeframe)
         
-        logger.info(f"▶️ {symbol} için strateji başlatıldı: {strategy_id}")
+        logger.info(f"▶️ Strategy started for {symbol}: {strategy_id}")
         
         return {
             "status": "success",
@@ -147,7 +147,7 @@ class StrategyService:
         paper_engine.strategies[symbol] = None
         paper_engine.active_strategies[symbol] = ""
         
-        logger.info(f"⏹️ {symbol} için strateji durduruldu")
+        logger.info(f"⏹️ Strategy stopped for {symbol}")
         
         return {
             "status": "success",
@@ -247,17 +247,17 @@ class StrategyService:
 
                 if df is not None and not df.empty:
                     klines = df[['timestamp', 'open', 'high', 'low', 'close', 'volume']].values.tolist()
-                    logger.info(f"  ✅ {len(klines)} mum flat file'dan yüklendi")
+                    logger.info(f"  ✅ Loaded {len(klines)} candles from flat file")
                 else:
                     # Flat file yoksa DB'den çek
                     klines = await db_manager.get_klines(symbol, timeframe, limit=1000)
                     # Eğer seçilen timeframe boşsa (örn: default 1h ama veri sadece 1m ise), 1m dene
                     if not klines and timeframe != "1m":
-                        logger.info(f"ℹ️ {timeframe} için veri bulunamadı, 1m deneniyor: {symbol}")
+                        logger.info(f"ℹ️ No data found for {timeframe}, falling back to 1m: {symbol}")
                         timeframe = "1m"
                         klines = await db_manager.get_klines(symbol, timeframe, limit=1000)
             except Exception as e:
-                logger.warning(f"  ⚠️ Flat file okuma hatası, DB'den çekiliyor: {e}")
+                logger.warning(f"  ⚠️ Flat file read error, falling back to DB: {e}")
                 klines = await db_manager.get_klines(symbol, timeframe, limit=1000)
 
             
