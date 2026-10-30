@@ -249,6 +249,18 @@ async def get_dashboard_metrics() -> Dict[str, Any]:
         # Paper engine'den stats al
         stats = paper_engine.get_stats()
 
+        # Calculate performance ratios from trade history
+        trades = paper_engine.trade_history if isinstance(paper_engine.trade_history, list) else getattr(paper_engine.trade_history, 'trades', [])
+        wins = [t.pnl for t in trades if hasattr(t, 'pnl') and t.pnl > 0]
+        losses = [abs(t.pnl) for t in trades if hasattr(t, 'pnl') and t.pnl < 0]
+        total_win = sum(wins) if wins else 0.0
+        total_loss = sum(losses) if losses else 0.0
+        profit_factor = (total_win / total_loss) if total_loss > 0 else (1.0 if not wins else 99.0)
+
+        max_drawdown = 0.0
+        if hasattr(paper_engine, 'risk_engine') and hasattr(paper_engine.risk_engine, 'max_drawdown'):
+            max_drawdown = paper_engine.risk_engine.max_drawdown
+
         # Portfolio bilgisi (NaN/Infinity koruması)
         portfolio = {
             "balance": sanitize_value(stats.get('balance', 0.0)),
@@ -261,6 +273,9 @@ async def get_dashboard_metrics() -> Dict[str, Any]:
             "win_rate": sanitize_value(stats.get('win_rate', 0.0)),
             "total_commission": sanitize_value(stats.get('total_commission', 0.0)),
             "total_notional": sanitize_value(stats.get('total_notional', 0.0)),
+            "profit_factor": sanitize_value(profit_factor),
+            "max_drawdown": sanitize_value(max_drawdown),
+            "sharpe_ratio": 0.0,
         }
 
         # Aktif pozisyonlar (NaN/Infinity koruması)

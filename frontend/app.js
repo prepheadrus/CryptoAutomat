@@ -193,11 +193,11 @@ async function loadDashboard() {
         // ============================================
         // SYMBOL CONFIGURATION CHECK
         // ============================================
-        // İlk yüklemede sembol kontrolü yap
         if (!window._symbolCheckDone) {
             const symbols = await api.getTrackedSymbols();
             if (!symbols || symbols.length === 0) {
-                showToast('⚠️ Hiçbir sembol yapılandırılmamış! Veri Laboratuvarı\'ndan sembol ekleyin.', 'warning');
+                const isTr = (window.i18n && window.i18n.currentLang === 'tr');
+                showToast(isTr ? '⚠️ Hiçbir sembol yapılandırılmamış! Veri Laboratuvarı\'ndan sembol ekleyin.' : '⚠️ No symbols configured! Add symbols from Data Laboratory.', 'warning');
                 window._symbolCheckDone = true;
             }
         }
@@ -275,7 +275,7 @@ function renderPositions(positions) {
                 <td>
                     <button onclick="closePosition('${pos.bot_id || pos.id || ''}', '${pos.symbol || ''}')"
                         style="padding:4px 8px; background:var(--neon-red); color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:0.7rem; font-weight:600;">
-                        ${(window.i18n && window.i18n.currentLang === 'tr') ? '🚫 Kapat' : '🚫 Close'}
+                        ${isTr ? '🚫 Kapat' : '🚫 Close'}
                     </button>
                 </td>
             </tr>
@@ -286,9 +286,126 @@ function renderPositions(positions) {
 }
 
 /**
- * Update performance metrics (KPI dashboard)
+ * Render Equity Growth Curve (Plotly chart in Portfolio Analysis)
+ */
+function renderEquityGrowthChart(portfolio) {
+    const chartDiv = document.getElementById('plotly-chart');
+    if (!chartDiv || typeof Plotly === 'undefined') return;
+
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
+    const balance = portfolio?.balance || 10000;
+    const equity = portfolio?.equity || balance;
+
+    const now = new Date();
+    const timestamps = [];
+    const values = [];
+
+    if (window._tradeHistory && window._tradeHistory.length > 0) {
+        let runningEquity = 10000;
+        timestamps.push(new Date(window._tradeHistory[window._tradeHistory.length - 1].close_time || (now.getTime() - 86400000)).toISOString());
+        values.push(runningEquity);
+
+        const sortedTrades = [...window._tradeHistory].reverse();
+        sortedTrades.forEach(t => {
+            runningEquity += (t.pnl_usd || t.pnl || 0);
+            timestamps.push(t.close_time || new Date().toISOString());
+            values.push(runningEquity);
+        });
+    } else {
+        for (let i = 5; i >= 0; i--) {
+            timestamps.push(new Date(now.getTime() - i * 3600000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+            values.push(i === 0 ? equity : balance);
+        }
+    }
+
+    const isPositive = equity >= balance;
+    const trace = {
+        x: timestamps,
+        y: values,
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: isTr ? 'Bakiye' : 'Equity',
+        line: { color: isPositive ? '#00e676' : '#ff5252', width: 2.5, shape: 'spline' },
+        marker: { size: 5, color: isPositive ? '#00e676' : '#ff5252' },
+        fill: 'tozeroy',
+        fillcolor: isPositive ? 'rgba(0, 230, 118, 0.08)' : 'rgba(255, 82, 82, 0.08)',
+        hoverinfo: 'x+y'
+    };
+
+    const layout = {
+        paper_bgcolor: 'transparent',
+        plot_bgcolor: 'transparent',
+        margin: { l: 45, r: 20, t: 15, b: 35 },
+        xaxis: {
+            showgrid: true,
+            gridcolor: 'rgba(255,255,255,0.05)',
+            tickfont: { color: '#718096', size: 10 }
+        },
+        yaxis: {
+            showgrid: true,
+            gridcolor: 'rgba(255,255,255,0.05)',
+            tickfont: { color: '#718096', size: 10 },
+            tickprefix: '$'
+        },
+        autosize: true
+    };
+
+    Plotly.react(chartDiv, [trace], layout, { responsive: true, displayModeBar: false });
+}
+
+/**
+ * Render Market Watchlist (in Portfolio Analysis)
+ */
+async function renderMarketWatchlist() {
+    const container = document.getElementById('market-heatmap');
+    if (!container) return;
+
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
+
+    try {
+        const tracked = await api.getTrackedSymbols();
+        const symbols = (tracked && tracked.symbols && tracked.symbols.length > 0)
+            ? tracked.symbols
+            : ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT'];
+
+        container.innerHTML = `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; padding-top: 10px;">
+                ${symbols.map(s => `
+                    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px; text-align: center; transition: all 0.2s;"
+                         onmouseover="this.style.borderColor='var(--neon-blue)'; this.style.background='rgba(88,166,255,0.08)'"
+                         onmouseout="this.style.borderColor='rgba(255,255,255,0.08)'; this.style.background='rgba(255,255,255,0.03)'">
+                        <div style="font-weight: 700; font-size: 0.9rem; color: var(--text-main);">${s}</div>
+                        <div style="font-size: 0.75rem; color: var(--neon-green); font-weight: 600; margin-top: 4px;">
+                            ● ${isTr ? 'Aktif' : 'Active'}
+                        </div>
+                        <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 4px;">
+                            ${isTr ? 'Futures Takip' : 'Futures Tracking'}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    } catch (e) {
+        console.error('Error rendering market watchlist:', e);
+    }
+}
+
+/**
+ * Update performance metrics (KPI dashboard & Portfolio Analysis)
  */
 function updatePerformanceMetrics(portfolio) {
+    const isTr = (window.i18n && window.i18n.currentLang === 'tr');
+
+    // Tab 1: Bento Dashboard (Portfolio Analysis) elements
+    const bentoBalance = document.getElementById('balance-val');
+    const bentoFreeMargin = document.getElementById('free-margin-val');
+    const bentoUsedMargin = document.getElementById('used-margin-val');
+    const bentoTotalPnl = document.getElementById('total-pnl-val');
+    const bentoProfitFactor = document.getElementById('stat-profit-factor');
+    const bentoDrawdown = document.getElementById('stat-drawdown');
+    const bentoSharpe = document.getElementById('stat-sharpe');
+
+    // Tab 3: Active Orders & Risk Usage elements
     const elBalance = document.getElementById('perf-balance');
     const elEquity = document.getElementById('perf-equity');
     const elWinRate = document.getElementById('perf-winrate');
@@ -312,10 +429,22 @@ function updatePerformanceMetrics(portfolio) {
     const fees = portfolio.total_commission || 0;
     const notional = portfolio.total_notional || 0;
 
-    // Calculate average leverage (approximate)
     const avgLeverage = notional > 0 && usedMargin > 0 ? (notional / usedMargin).toFixed(1) : '1.0';
 
-    // Update DOM
+    // Update Tab 1: Bento Dashboard elements
+    if (bentoBalance) bentoBalance.textContent = `$${balance.toLocaleString(isTr ? 'tr-TR' : 'en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    if (bentoFreeMargin) bentoFreeMargin.textContent = `$${freeMargin.toLocaleString(isTr ? 'tr-TR' : 'en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    if (bentoUsedMargin) bentoUsedMargin.textContent = `$${usedMargin.toLocaleString(isTr ? 'tr-TR' : 'en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    if (bentoTotalPnl) {
+        const sign = totalPnl >= 0 ? '+' : '';
+        bentoTotalPnl.textContent = `${sign}$${totalPnl.toLocaleString(isTr ? 'tr-TR' : 'en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        bentoTotalPnl.className = totalPnl >= 0 ? 'success-text' : 'danger-text';
+    }
+    if (bentoProfitFactor) bentoProfitFactor.textContent = (portfolio.profit_factor || 1.0).toFixed(2);
+    if (bentoDrawdown) bentoDrawdown.textContent = `${(portfolio.max_drawdown || 0.0).toFixed(1)}%`;
+    if (bentoSharpe) bentoSharpe.textContent = (portfolio.sharpe_ratio || 0.0).toFixed(2);
+
+    // Update Tab 3: Active Orders tab elements
     if (elBalance) elBalance.textContent = `$${balance.toFixed(2)}`;
     if (elEquity) elEquity.textContent = `$${equity.toFixed(2)}`;
     if (elWinRate) {
@@ -340,6 +469,10 @@ function updatePerformanceMetrics(portfolio) {
     }
     if (elNotional) elNotional.textContent = `$${notional.toFixed(2)}`;
     if (elLeverage) elLeverage.textContent = `${avgLeverage}x`;
+
+    // Render charts & watchlist in Portfolio tab
+    renderEquityGrowthChart(portfolio);
+    renderMarketWatchlist();
 
     console.log('📊 [PERF] Metrics updated');
 }
